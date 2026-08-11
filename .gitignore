@@ -1,0 +1,24 @@
+# secrets - never commit
+config.php
+
+# third-party dependencies - regenerate with `composer install`
+/vendor/
+
+# our own pre-edit backup snapshots (hundreds of these accumulate over time)
+*.bak_*
+
+# runtime logs
+log.txt
+error_log
+
+# OS/editor cruft
+.DS_Store
+Thumbs.db
+# db backup artifacts (empty right now, but matching "code, not database")
+cronbot/backup_*.sql
+
+# runtime cache
+/storage/cache/
+
+# stray temp files from earlier ad hoc scripts
+*.findinsettmp
