@@ -5448,7 +5448,7 @@ n2  = 具有更多功能的代理',
 🧑‍🦯 您可以通过按下方按钮并选择您的操作系统来获取连接方法',
     'agentPanel' => '👨‍💻 代理面板',
     'agentRequestDesc' => '📌 请发送您的说明以提交代理申请。',
-    'aqayePardakht' => '🔵 Aghaye Pardakht 网关',
+    'aqayePardakht' => 'Aghaye Pardakht 网关',
     'botOff' => '❌ 机器人已关闭，请几分钟后再试',
     'cart' => '<b>发票已生成</b>
 
@@ -5471,12 +5471,12 @@ n2  = 具有更多功能的代理',
 💰请准确存入上述金额，以便即时批准。
 ‼️无法从钱包中提取资金。
 🔝无需发送收据，但如果一段时间后您的存款未获批准，请发送您的收据图片。',
-    'cartToCart' => '💳 卡对卡',
+    'cartToCart' => '卡对卡',
     'channel' => '   
         ⚠️ 尊敬的用户；您不是我们频道的成员
 请通过下方按钮加入频道
 加入后，点击检查成员资格按钮',
-    'cryptoPayment' => '💰 使用 NowPayments 支付加密货币',
+    'cryptoPayment' => '使用 NowPayments 支付加密货币',
     'discount' => '🎁 礼品码',
     'extend' => '♻️ 续费服务',
     'faq' => '❓ 常见问题',
@@ -5521,9 +5521,9 @@ n2  = 具有更多功能的代理',
 
 💡 如果您没有得到问题的答案，可以联系 «客服»。',
     'help' => '📚 教程',
-    'iranPay1' => '💸 里亚尔支付网关',
-    'iranPay2' => '💸 第二里亚尔支付网关',
-    'iranPay3' => '💸 第三里亚尔支付网关',
+    'iranPay1' => '里亚尔支付网关',
+    'iranPay2' => '第二里亚尔支付网关',
+    'iranPay3' => '第三里亚尔支付网关',
     'manual' => '✅ 服务创建成功
 
 👤 服务用户名：{username}
@@ -5533,8 +5533,8 @@ n2  = 具有更多功能的代理',
  服务信息：
 {config}
 🧑‍🦯 您可以通过按下方按钮并选择您的操作系统来获取连接方法',
-    'nowPayment' => '💰 使用 Plisio 支付加密货币',
-    'nowPaymentTron' => '💵 Tron 加密货币充值',
+    'nowPayment' => '使用 Plisio 支付加密货币',
+    'nowPaymentTron' => 'Tron 加密货币充值',
     'paymentNotVerify' => '里亚尔网关',
     'preInvoice' => '🌐 确认购买
 
@@ -5559,7 +5559,7 @@ n2  = 具有更多功能的代理',
 ',
     'selectLocation' => '📌 请选择服务位置。',
     'sell' => '🔐 购买订阅',
-    'starTelegram' => '💫 Star Telegram',
+    'starTelegram' => 'Star Telegram',
     'support' => '☎️ 客服',
     'tariffList' => '💵 订阅资费',
     'tariffListDesc' => '未设置',
@@ -5578,7 +5578,7 @@ n2  = 具有更多功能的代理',
 
 🧑‍🦯 您可以通过按下方按钮并选择您的操作系统来获取连接方法',
     'wheelLuck' => '🎲 幸运转盘',
-    'zarinPal' => '🟡 ZarinPal',
+    'zarinPal' => 'ZarinPal',
   ),
   'keyboard' => 
   array (

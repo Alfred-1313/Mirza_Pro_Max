@@ -20,10 +20,12 @@ $stmt->execute();
 
 while ($result = $stmt->fetch(PDO::FETCH_ASSOC)) {
     $expire_minutes = $default_expire_minutes;
-    if ($result['Payment_Method'] === 'cart to cart') {
+    $payer_lang = null;
+    if ($result['Payment_Method'] === 'cart to cart' || $result['Payment_Method'] === 'plisio') {
         $payer = select('user', 'lang', 'id', $result['id_user'], 'select');
         $payer_lang = is_array($payer) && !empty($payer['lang']) ? $payer['lang'] : 'fa';
-        $expire_minutes = (int) pay_value('cardInvoiceExpireMinutes', $payer_lang, $default_expire_minutes);
+        $expireField = $result['Payment_Method'] === 'cart to cart' ? 'cardInvoiceExpireMinutes' : 'plisioInvoiceExpireMinutes';
+        $expire_minutes = (int) pay_value($expireField, $payer_lang, $default_expire_minutes);
         if ($expire_minutes < 1) {
             $expire_minutes = $default_expire_minutes;
         }
@@ -69,6 +71,9 @@ if ($result['Payment_Method'] === 'cart to cart') {
     $reissueBtn = topup_styled_button($cardExpireLang['users']['Balance']['reissueInvoiceBtn'], $reissueStyle, "cardreissue:{$result['id_order']}", 'danger');
     $reissueKb = json_encode(['inline_keyboard' => [[$reissueBtn]]]);
     Editmessagetext($result['id_user'], $result['message_id'], $expiredCaption, $reissueKb, 'HTML');
+} elseif ($result['Payment_Method'] === 'plisio') {
+    // now shared with cronbot/plisio.php - see plisio_expire_notify()
+    plisio_expire_notify($result['id_user'], $result['id_order'], $result['price'], $result['message_id'], $payer_lang);
 } else {
     deletemessage($result['id_user'], $result['message_id']);
 }

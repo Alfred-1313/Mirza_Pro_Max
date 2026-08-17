@@ -125,6 +125,7 @@ if (!function_exists('bottext_extras_for_text')) {
 function sendmessage($chat_id,$text,$keyboard,$parse_mode,$bot_token = null,$entities = null){
     if(intval($chat_id) == 0)return ['ok' => false];
     static $bts_sent = [];
+    $bts_sticker_message_id = null;
     $bts_extras = bottext_extras_for_text($text);
     if ($bts_extras !== null) {
         $bts_uid = $bts_extras['key'] . '|' . $chat_id;
@@ -142,10 +143,11 @@ function sendmessage($chat_id,$text,$keyboard,$parse_mode,$bot_token = null,$ent
                 }
             }
             if ($bts_extras['sticker'] !== '') {
-                telegram('sendSticker', [
+                $bts_sticker_resp = telegram('sendSticker', [
                     'chat_id' => $chat_id,
                     'sticker' => $bts_extras['sticker'],
                 ], $bot_token);
+                $bts_sticker_message_id = $bts_sticker_resp['result']['message_id'] ?? null;
             }
         }
     }
@@ -159,7 +161,11 @@ function sendmessage($chat_id,$text,$keyboard,$parse_mode,$bot_token = null,$ent
     } else {
         $send_params['parse_mode'] = $parse_mode;
     }
-    return telegram('sendmessage', $send_params, $bot_token);
+    $bts_main_result = telegram('sendmessage', $send_params, $bot_token);
+    if (!empty($bts_sticker_message_id)) {
+        $bts_main_result['_sticker_message_id'] = $bts_sticker_message_id;
+    }
+    return $bts_main_result;
 }
 function sendDocument($chat_id, $documentPath, $caption) {
         return telegram('sendDocument',[

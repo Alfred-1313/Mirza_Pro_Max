@@ -5448,7 +5448,7 @@ Connection link:
 🧑‍🦯 You can get the connection method by pressing the button below and selecting your operating system',
     'agentPanel' => '👨‍💻 Agency panel',
     'agentRequestDesc' => '📌 Send your description to submit an agency request.',
-    'aqayePardakht' => '🔵 Aghaye Pardakht gateway',
+    'aqayePardakht' => 'Aghaye Pardakht gateway',
     'botOff' => '❌ The bot is off, please check back in a few minutes',
     'cart' => '<b>Invoice created</b>
 
@@ -5471,12 +5471,12 @@ This card number is valid for only <b>30</b> minutes, just for this invoice; the
 💰Deposit exactly the amount mentioned above so it is approved instantly.
 ‼️Withdrawing money from the wallet is not possible.
 🔝There is no need to send a receipt, but if your deposit is not approved after some time, send your receipt image.',
-    'cartToCart' => '💳 Card to card',
+    'cartToCart' => 'Card to card',
     'channel' => '   
         ⚠️ Dear user; you are not a member of our channel
 Join the channel via the button below
 After joining, click the check membership button',
-    'cryptoPayment' => '💰 Crypto Payment with NowPayments',
+    'cryptoPayment' => 'Crypto Payment with NowPayments',
     'discount' => '🎁 Gift code',
     'extend' => '♻️ Renew service',
     'faq' => '❓ FAQ',
@@ -5521,9 +5521,9 @@ After joining, click the check membership button',
 
 💡 If you didn\'t get the answer to your question, you can contact «support».',
     'help' => '📚 Tutorial',
-    'iranPay1' => '💸 Rial payment gateway',
-    'iranPay2' => '💸 Second Rial payment gateway',
-    'iranPay3' => '💸 Third Rial payment gateway',
+    'iranPay1' => 'Rial payment gateway',
+    'iranPay2' => 'Second Rial payment gateway',
+    'iranPay3' => 'Third Rial payment gateway',
     'manual' => '✅ Service was created successfully
 
 👤 Service username : {username}
@@ -5533,8 +5533,8 @@ After joining, click the check membership button',
  Service information :
 {config}
 🧑‍🦯 You can get the connection method by pressing the button below and selecting your operating system',
-    'nowPayment' => '💰 Crypto Payment with Plisio',
-    'nowPaymentTron' => '💵 Tron crypto deposit',
+    'nowPayment' => 'Crypto Payment with Plisio',
+    'nowPaymentTron' => 'Tron crypto deposit',
     'paymentNotVerify' => 'Rial gateway',
     'preInvoice' => '🌐 Confirm purchase
 
@@ -5559,7 +5559,7 @@ After joining, click the check membership button',
 ',
     'selectLocation' => '📌 Select the service location.',
     'sell' => '🔐 Buy subscription',
-    'starTelegram' => '💫 Star Telegram',
+    'starTelegram' => 'Star Telegram',
     'support' => '☎️ Support',
     'tariffList' => '💵 Subscription rates',
     'tariffListDesc' => 'Not set',
@@ -5578,7 +5578,7 @@ We hope you had a good experience with the ease and speed of your service. If yo
 
 🧑‍🦯 You can get the connection method by pressing the button below and selecting your operating system',
     'wheelLuck' => '🎲 Wheel of fortune',
-    'zarinPal' => '🟡 ZarinPal',
+    'zarinPal' => 'ZarinPal',
   ),
   'keyboard' => 
   array (

@@ -224,6 +224,11 @@ timeauto_not_verify,status_keyboard_config,cron_status
     } else {
         addFieldToTable("setting", "cron_status", $status_cron, "TEXT");
         addFieldToTable("setting", "text_edit", "{}", "JSON");
+        addFieldToTable("setting", "button_edit", null, "TEXT");
+        addFieldToTable("setting", "configColOrder", null, "VARCHAR(20)");
+        addFieldToTable("setting", "backup_db_password", null, "VARCHAR(255)");
+        addFieldToTable("setting", "backup_bot_password", null, "VARCHAR(255)");
+        addFieldToTable("setting", "configGetBtnStyle", null, "VARCHAR(20)");
         addFieldToTable("setting", "lang_switch", null, "TEXT");
         addFieldToTable("setting", "help_layout", null, "TEXT");
         addFieldToTable("setting", "status_keyboard_config", "1", "varchar(20)");
@@ -269,6 +274,7 @@ timeauto_not_verify,status_keyboard_config,cron_status
         addFieldToTable("setting", "iran_number", "offAuthenticationiran", "VARCHAR(200)");
         addFieldToTable("setting", "get_number", "onAuthenticationphone", "VARCHAR(200)");
         addFieldToTable("setting", "limit_usertest_all", "1", "VARCHAR(200)");
+    addFieldToTable("setting", "usertest_auto_reset", "{}", "JSON");
         addFieldToTable("setting", "Channel_Report", "0", "VARCHAR(200)");
         addFieldToTable("setting", "Bot_Status", "botstatuson", "VARCHAR(200)");
         addFieldToTable("setting", "roll_Status", "rolleon", "VARCHAR(200)");
@@ -429,6 +435,7 @@ try {
         addFieldToTable("marzban_panel", "datelogin", null, "TEXT");
         addFieldToTable("marzban_panel", "val_usertest", "100", "VARCHAR(50)");
         addFieldToTable("marzban_panel", "time_usertest", "1", "VARCHAR(50)");
+        addFieldToTable("marzban_panel", "del_usertest", "0", "VARCHAR(50)");
         addFieldToTable("marzban_panel", "secret_code", null, "VARCHAR(200)");
         addFieldToTable("marzban_panel", "inboundstatus", "offinbounddisable", "VARCHAR(50)");
         addFieldToTable("marzban_panel", "inbound_deactive", "0", "VARCHAR(100)");

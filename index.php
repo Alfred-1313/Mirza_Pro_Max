@@ -114,6 +114,13 @@ if ($user == false) {
         'limitchangeloc' => ''
     );
 }
+// if the incoming tap is a recognized main-menu button (user OR admin side)
+// while the user is genuinely mid-flow somewhere else, silently cancel that
+// flow first so the tapped button runs normally instead of being swallowed
+// by a stale step-gated branch further down this same dispatch chain
+if (is_main_menu_trigger($text, $datain, $textbotlang)) {
+    preempt_active_session($user, $from_id);
+}
 $admin_ids = select("admin", "id_admin", null, null, "FETCH_COLUMN");
 if (!is_array($admin_ids)) {
     $admin_ids = [];
@@ -242,7 +249,7 @@ if (strpos($text, "/start ") !== false && $user['step'] != "gettextSystemMessage
             $type_gift = false;
             $stmt->execute([$from_id, $type_gift, $dateacc, $affiliatesid]);
         } else {
-            sendmessage($from_id, $textbotlang['users']['text_start'], $keyboard, 'html');
+            sendmessage($from_id, strtr($textbotlang['users']['text_start'], bottext_user_placeholders($user, $from_id)), $keyboard, 'html');
             update("user", "Processing_value", "0", "id", $from_id);
             update("user", "Processing_value_one", "0", "id", $from_id);
             update("user", "Processing_value_tow", "0", "id", $from_id);
@@ -284,7 +291,7 @@ if ($user['joinchannel'] != "active") {
         if ($datain == "confirmchannel") {
             if (count($channels) == 0) {
                 deletemessage($from_id, $message_id);
-                sendmessage($from_id, $textbotlang['users']['text_start'], $keyboard, 'html');
+                sendmessage($from_id, strtr($textbotlang['users']['text_start'], bottext_user_placeholders($user, $from_id)), $keyboard, 'html');
                 telegram('answerCallbackQuery', [
                     'callback_query_id' => $callback_query_id,
                     'text' => $textbotlang['users']['channel']['confirmed'],
@@ -338,7 +345,7 @@ if ($user['joinchannel'] != "active") {
                     $addbalancediscount = number_format($marzbanDiscountaffiliates['price_Discount'], 0);
                     sendmessage($affiliatesid, strtr($textbotlang['users']['affiliates']['balanceGift'], ['{addbalancediscount}' => $addbalancediscount, '{from_id}' => $from_id]), null, 'html');
                 }
-                sendmessage($from_id, $textbotlang['users']['text_start'], $keyboard, 'html');
+                sendmessage($from_id, strtr($textbotlang['users']['text_start'], bottext_user_placeholders($user, $from_id)), $keyboard, 'html');
                 $addcountaffiliates = intval($useraffiliates['affiliatescount']) + 1;
                 update("user", "affiliates", $affiliatesid, "id", $from_id);
                 update("user", "Processing_value_four", "none", "id", $from_id);
@@ -371,7 +378,7 @@ if ($user['joinchannel'] != "active") {
     }
 }
 if ($text == "/start" || $datain == "start" || $text == "start") {
-    sendmessage($from_id, $textbotlang['users']['text_start'], $keyboard, "html");
+    sendmessage($from_id, strtr($textbotlang['users']['text_start'], bottext_user_placeholders($user, $from_id)), $keyboard, "html");
     update("user", "Processing_value", "0", "id", $from_id);
     update("user", "Processing_value_one", "0", "id", $from_id);
     update("user", "Processing_value_tow", "0", "id", $from_id);
@@ -417,19 +424,10 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         return;
     }
     sendmessage($from_id, $textbotlang['users']['number']['active'], json_encode(['inline_keyboard' => [], 'remove_keyboard' => true]), 'html');
-    sendmessage($from_id, $textbotlang['users']['text_start'], $keyboard, 'html');
+    sendmessage($from_id, strtr($textbotlang['users']['text_start'], bottext_user_placeholders($user, $from_id)), $keyboard, 'html');
     update("user", "number", $user_phone, "id", $from_id);
     step('home', $from_id);
 } elseif ($text == $textbotlang['textbot']['purchasedServices'] || $datain == "backorder" || $text == "/services") {
-    $stmt = $pdo->prepare("SELECT * FROM invoice WHERE id_user = :id_user AND (status = 'active' OR status = 'end_of_time'  OR status = 'end_of_volume' OR status = 'sendedwarn' OR Status = 'send_on_hold')");
-    $stmt->bindParam(':id_user', $from_id);
-    $stmt->execute();
-    $invoices = $stmt->fetch(PDO::FETCH_ASSOC);
-    if (is_null($invoices) && $setting['NotUser'] == "offnotuser") {
-        sendmessage($from_id, $textbotlang['users']['sell']['service_not_available'], null, 'html');
-        return;
-    }
-
     $pages = 1;
     update("user", "pagenumber", $pages, "id", $from_id);
     $page = 1;
@@ -445,6 +443,11 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $stmt->execute();
     if ($setting['statusnamecustom'] == 'onnamecustom') {
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $rowDataUserOut = $ManagePanel->DataUser($row['Service_location'], $row['username']);
+            if (isset($rowDataUserOut['msg']) && strcasecmp(trim((string) $rowDataUserOut['msg']), "user not found") === 0) {
+                update("invoice", "Status", "disabledn", "id_invoice", $row['id_invoice']);
+                continue;
+            }
             $data = "";
             if ($row != null)
                 $data = " | {$row['note']}";
@@ -457,6 +460,11 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         }
     } else {
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $rowDataUserOut = $ManagePanel->DataUser($row['Service_location'], $row['username']);
+            if (isset($rowDataUserOut['msg']) && strcasecmp(trim((string) $rowDataUserOut['msg']), "user not found") === 0) {
+                update("invoice", "Status", "disabledn", "id_invoice", $row['id_invoice']);
+                continue;
+            }
             $keyboardlists['inline_keyboard'][] = [
                 [
                     'text' => "✨" . $row['username'] . "✨",
@@ -464,6 +472,19 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
                 ],
             ];
         }
+    }
+    // nothing survived the live panel check (or the user never had a service):
+    // show the buy prompt instead of an empty list carrying only pagination
+    if (count($keyboardlists['inline_keyboard']) === 0 && $setting['NotUser'] == "offnotuser") {
+        $noServiceKb = json_encode(['inline_keyboard' => [[['text' => $textbotlang['users']['sell']['buySubscriptionBtn'], 'callback_data' => 'buyfresh', 'style' => 'primary']]]]);
+        if ($datain == "backorder") {
+            Editmessagetext($from_id, $message_id, $textbotlang['users']['sell']['service_not_available'], $noServiceKb);
+        } else {
+            // remove the user's own button tap so the chat keeps only this answer
+            deletemessage($from_id, $message_id);
+            sendmessage($from_id, $textbotlang['users']['sell']['service_not_available'], $noServiceKb, 'html');
+        }
+        return;
     }
     $pagination_buttons = [
         [
@@ -510,6 +531,11 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $stmt->execute();
     if ($setting['statusnamecustom'] == 'onnamecustom') {
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $rowDataUserOut = $ManagePanel->DataUser($row['Service_location'], $row['username']);
+            if (isset($rowDataUserOut['msg']) && strcasecmp(trim((string) $rowDataUserOut['msg']), "user not found") === 0) {
+                update("invoice", "Status", "disabledn", "id_invoice", $row['id_invoice']);
+                continue;
+            }
             $data = "";
             if ($row != null)
                 $data = " | {$row['note']}";
@@ -522,6 +548,11 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         }
     } else {
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $rowDataUserOut = $ManagePanel->DataUser($row['Service_location'], $row['username']);
+            if (isset($rowDataUserOut['msg']) && strcasecmp(trim((string) $rowDataUserOut['msg']), "user not found") === 0) {
+                update("invoice", "Status", "disabledn", "id_invoice", $row['id_invoice']);
+                continue;
+            }
             $keyboardlists['inline_keyboard'][] = [
                 [
                     'text' => "✨" . $row['username'] . "✨",
@@ -576,6 +607,11 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $stmt->execute();
     if ($setting['statusnamecustom'] == 'onnamecustom') {
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $rowDataUserOut = $ManagePanel->DataUser($row['Service_location'], $row['username']);
+            if (isset($rowDataUserOut['msg']) && strcasecmp(trim((string) $rowDataUserOut['msg']), "user not found") === 0) {
+                update("invoice", "Status", "disabledn", "id_invoice", $row['id_invoice']);
+                continue;
+            }
             $data = "";
             if ($row != null)
                 $data = " | {$row['note']}";
@@ -588,6 +624,11 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         }
     } else {
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $rowDataUserOut = $ManagePanel->DataUser($row['Service_location'], $row['username']);
+            if (isset($rowDataUserOut['msg']) && strcasecmp(trim((string) $rowDataUserOut['msg']), "user not found") === 0) {
+                update("invoice", "Status", "disabledn", "id_invoice", $row['id_invoice']);
+                continue;
+            }
             $keyboardlists['inline_keyboard'][] = [
                 [
                     'text' => "✨" . $row['username'] . "✨",
@@ -1243,7 +1284,11 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         sendmessage($from_id, $textbotlang['users']['status']['configReadError'], null, 'html');
         return;
     }
-    Editmessagetext($from_id, $message_id, $textbotlang['users']['status']['selectConfig'], keyboard_config($DataUserOut['links'], $nameloc['id_invoice']));
+    $cc_hintText = strtr($textbotlang['users']['status']['getConfigHint'], [
+        '{testtime}' => $nameloc['Service_time'] ?? '',
+        '{testvolume}' => $nameloc['Volume'] ?? '',
+    ]);
+    Editmessagetext($from_id, $message_id, $cc_hintText, keyboard_config($DataUserOut['links'], $nameloc['id_invoice']));
 } elseif (preg_match('/configget_(.*)_(.*)/', $datain, $dataget)) {
     $id_invoice = $dataget[1];
     $nameloc = select("invoice", "*", "id_invoice", $id_invoice, "select");
@@ -2859,7 +2904,9 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         sendmessage($from_id, $textbotlang['users']['sell']['nullPanel'], null, 'HTML');
         return;
     }
-    if ($locationproduct != 1) {
+    // panel selection is now always shown, even with a single active test panel, instead
+    // of silently auto-picking it - mirrors the purchase flow's "if (false && ...)" fix
+    if (true || $locationproduct != 1) {
         if ($setting['get_number'] == "onAuthenticationphone" && $user['step'] != "get_number" && $user['number'] == "none") {
             sendmessage($from_id, $textbotlang['users']['number']['confirming'], $request_contact, 'HTML');
             step('get_number', $from_id);
@@ -2870,10 +2917,26 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             sendmessage($from_id, $textbotlang['users']['usertest']['limitwarning'], $keyboard_buy, 'html');
             return;
         }
-        sendmessage($from_id, $textbotlang['textbot']['selectLocation'], $list_marzban_usertest, 'html');
+        $usertestLocationMsg = sendmessage($from_id, $textbotlang['textbot']['selectLocation'], $list_marzban_usertest, 'html');
+        if (!empty($usertestLocationMsg['_sticker_message_id'])) {
+            update("user", "Processing_value_tow", (string) $usertestLocationMsg['_sticker_message_id'], "id", $from_id);
+        }
     }
 }
 if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $datain, $dataget) || ($text == $textbotlang['textbot']['userTest'] || $datain == "usertestbtn" || $text == "usertest")) {
+    if ($datain == "ucancel") {
+        deletemessage($from_id, $message_id);
+        step('home', $from_id);
+        update("user", "Processing_value", "0", "id", $from_id);
+        update("user", "Processing_value_one", "0", "id", $from_id);
+        update("user", "Processing_value_tow", "0", "id", $from_id);
+        update("user", "Processing_value_four", "0", "id", $from_id);
+        sendmessage($from_id, $textbotlang['users']['back'], $keyboard, 'html');
+        return;
+    }
+    if ($datain == "usedefaultname") {
+        $text = 'user' . substr(bin2hex(random_bytes(4)), 0, 8);
+    }
     if (!check_active_btn($setting['keyboardmain'], "text_usertest")) {
         sendmessage($from_id, $textbotlang['users']['usertest']['unavailable'], null, 'HTML');
         return;
@@ -2890,7 +2953,10 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     if ($user['number'] == "none" && $setting['get_number'] == "onAuthenticationphone")
         return;
     $locationproduct = select("marzban_panel", "*", "TestAccount", "ONTestAccount", "count");
-    if ($locationproduct == 1) {
+    // disabled (was auto-picking the single panel and skipping the picker entirely) -
+    // pairs with the always-show-picker fix above so a single-panel setup still waits
+    // for the explicit locationtest_{code} tap like the multi-panel case does
+    if (false && $locationproduct == 1) {
         $panel = select("marzban_panel", "*", "TestAccount", "ONTestAccount", "select");
         if ($panel['hide_user'] != null) {
             $list_user = json_decode($panel['hide_user'], true);
@@ -2902,6 +2968,14 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         $location = $panel['code_panel'];
     } else {
         if (isset($dataget[1])) {
+            // a panel was just picked from the list - clean up any message stashed in
+            // Processing_value_tow (e.g. a sticker sent alongside the panel list), same
+            // as the regular purchase flow's location_ handler does
+            if (ctype_digit((string) $user['Processing_value_tow'])) {
+                deletemessage($from_id, (int) $user['Processing_value_tow']);
+                update("user", "Processing_value_tow", "", "id", $from_id);
+                $user['Processing_value_tow'] = "";
+            }
             $location = $dataget[1];
         } else {
             if ($user['step'] != "createusertest") {
@@ -2914,9 +2988,22 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     $marzban_list_get = select("marzban_panel", "*", "code_panel", $location, "select");
     if ($marzban_list_get['MethodUsername'] == $textbotlang['users']['customusername'] || $marzban_list_get['MethodUsername'] == $textbotlang['keyboard']['customUsernameRandom']) {
         if ($user['step'] != "createusertest") {
+            // the custom-username panels send the prompt as a brand new message
+            // instead of editing in place, so the "select a panel" message (with
+            // its now-stale panel-list keyboard) has to be deleted explicitly here -
+            // the default-username panels already get this via the deletemessage()
+            // in the final else below
+            deletemessage($from_id, $message_id);
             step('createusertest', $from_id);
             update("user", "Processing_value_one", $location, "id", $from_id);
-            sendmessage($from_id, $textbotlang['users']['selectusername'], $backuser, 'html');
+            $usertestPromptLang = $user['lang'] ?? 'fa';
+            $usertestPromptText = strtr($textbotlang['users']['usertest']['selectUsernamePrompt'], [
+                '{testtime}' => $marzban_list_get['time_usertest'],
+                '{testvolume}' => $marzban_list_get['val_usertest'],
+            ]);
+            $usertestPromptKb = usertest_selectUsername_kb($usertestPromptLang, $textbotlang);
+            $usernamePromptMsg = sendmessage($from_id, $usertestPromptText, $usertestPromptKb, 'html');
+            update("user", "Processing_value_tow", (string) ($usernamePromptMsg['result']['message_id'] ?? 0), "id", $from_id);
             return;
         }
     } else {
@@ -2925,8 +3012,18 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     if ($user['step'] == "createusertest") {
         $name_panel = $user['Processing_value_one'];
         if (!preg_match('~(?!_)^[a-z][a-z\d_]{2,32}(?<!_)$~i', $text)) {
-            sendmessage($from_id, $textbotlang['users']['invalidusername'], $backuser, 'HTML');
+            sendmessage($from_id, $textbotlang['users']['invalidusername'], usertest_selectUsername_kb($user['lang'] ?? 'fa', $textbotlang), 'HTML');
             return;
+        }
+        if (ctype_digit((string) $user['Processing_value_tow'])) {
+            deletemessage($from_id, (int) $user['Processing_value_tow']);
+        }
+        if ($datain === '') {
+            // the user typed their own name (not a پیش‌فرض/ucancel callback
+            // tap) - $message_id here is THAT typed message, not the prompt
+            // (already handled above via Processing_value_tow) - clean it up
+            // too so no trace of the raw typed username is left in the chat
+            deletemessage($from_id, $message_id);
         }
     } else {
         deletemessage($from_id, $message_id);
@@ -3316,7 +3413,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     }
     step('home', $from_id);
     return;
-} elseif (($text == $textbotlang['textbot']['sell'] || $datain == "buy" || $datain == "buyback" || $text == "/buy" || $text == "buy") && $statusnote) {
+} elseif (($text == $textbotlang['textbot']['sell'] || $datain == "buy" || $datain == "buyback" || $datain == "buyfresh" || $text == "/buy" || $text == "buy") && $statusnote) {
     if ($setting['get_number'] == "onAuthenticationphone" && $user['step'] != "get_number" && $user['number'] == "none") {
         sendmessage($from_id, $textbotlang['users']['number']['confirming'], $request_contact, 'HTML');
         step('get_number', $from_id);
@@ -3329,7 +3426,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     }
     if ($datain == "buy") {
         Editmessagetext($from_id, $message_id, $textbotlang['users']['sell']['notestep'], $backuser);
-    } elseif ($datain == "buyback") {
+    } elseif ($datain == "buyback" || $datain == "buyfresh") {
         deletemessage($from_id, $message_id);
         sendmessage($from_id, $textbotlang['users']['sell']['notestep'], $backuser, 'HTML');
     } else {
@@ -3337,17 +3434,14 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     }
     step("statusnamecustom", $from_id);
     return;
-} elseif ($text == $textbotlang['textbot']['sell'] || $datain == "buy" || $datain == "buybacktow" || $datain == "buyback" || $datain == "ucancel" || $text == "/buy" || $text == "buy" || $user['step'] == "statusnamecustom") {
-    if ($datain == "ucancel") {
-        // کنسل کن on the username prompt: delete that prompt (this callback's
-        // own message_id), then fall through to the exact same "back to the
-        // plan list" behaviour buybacktow already provides
-        deletemessage($from_id, $message_id);
-        $datain = "buybacktow";
-    }
+} elseif ($text == $textbotlang['textbot']['sell'] || $datain == "buy" || $datain == "buybacktow" || $datain == "buyback" || $datain == "buyfresh" || $text == "/buy" || $text == "buy" || $user['step'] == "statusnamecustom") {
     if (!check_active_btn($setting['keyboardmain'], "text_sell")) {
         sendmessage($from_id, $textbotlang['users']['buttonDisabled'], null, 'HTML');
         return;
+    }
+    if ($datain == "buyfresh") {
+        // the no-service message is being replaced by a brand new screen, not edited
+        deletemessage($from_id, $message_id);
     }
     $locationproduct = $pdo->prepare("SELECT * FROM marzban_panel  WHERE status = 'active' AND (agent = ? OR agent = 'all')");
     $locationproduct->bindValue(1, $user['agent'], PDO::PARAM_STR);
@@ -3363,7 +3457,10 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     if ($user['number'] == "none" && $setting['get_number'] == "onAuthenticationphone")
         return;
     #-----------------------#
-    if (($locationproduct)->rowCount() == 1) {
+    // panel selection is now always shown to the user before category/products,
+    // even with a single active panel, instead of silently auto-picking it - falls
+    // through to the $list_marzban_panel_user block below, same as multi-panel
+    if (false && ($locationproduct)->rowCount() == 1) {
         $location = ($locationproduct)->fetch(PDO::FETCH_ASSOC)['name_panel'];
         $locationproduct = select("marzban_panel", "*", "name_panel", $location, "select");
         if ($locationproduct['hide_user'] != null) {
@@ -3478,6 +3575,13 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         sendmessage($from_id, $textbotlang['textbot']['selectLocation'], $list_marzban_panel_user, 'HTML');
     }
 } elseif (preg_match('/^location_(.*)/', $datain, $dataget) || $datain == "backproduct") {
+    // the 🔐 خرید اشتراک sticker belongs to the panel list only - once a panel
+    // is chosen and the category/product screen takes over, remove it
+    if (ctype_digit((string) $user['Processing_value_tow'])) {
+        deletemessage($from_id, (int) $user['Processing_value_tow']);
+        update("user", "Processing_value_tow", "", "id", $from_id);
+        $user['Processing_value_tow'] = "";
+    }
     $userdate = json_decode($user['Processing_value'], true);
     if ($datain != "backproduct") {
         $location = select("marzban_panel", "*", "code_panel", $dataget[1], "select")['name_panel'];
@@ -3536,11 +3640,10 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
             } else {
                 $statuscustom = false;
             }
-            if (isset($userdate['nameconfig'])) {
-                $back = "buybacktow";
-            } else {
-                $back = "buyback";
-            }
+            // back here restarts the panel step cleanly: buyfresh drops this
+            // message and re-sends the sticker + panel menu, rather than editing
+            // this message in place (which showed no sticker)
+            $back = "buyfresh";
             Editmessagetext($from_id, $message_id, $textbotlang['users']['sell']['serviceSelect'], KeyboardProduct($marzban_list_get['name_panel'], $query, $user['pricediscount'], $datakeyboard, $statuscustom, $back));
         }
     } else {
@@ -3557,13 +3660,8 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         Editmessagetext($from_id, $message_id, $textbotlang['users']['sell']['selectDuration'], $monthkeyboard);
     }
 } elseif (preg_match('/^categorynames_(.*)/', $datain, $dataget)) {
-    // a sticker sent for 🔐 خرید اشتراک stays up WHILE the category list is
-    // shown (unchanged from before) and is only cleaned up once the user
-    // actually picks a category, together with the category message itself
-    if (ctype_digit((string) $user['Processing_value_tow'])) {
-        deletemessage($from_id, (int) $user['Processing_value_tow']);
-        update("user", "Processing_value_tow", "", "id", $from_id);
-    }
+    // the buy sticker is already gone by now (removed when the panel was
+    // picked); this only clears the category message it replaces
     deletemessage($from_id, $message_id);
     $categorynames = $dataget[1];
     $categorynames = select("category", "remark", "id", $categorynames, "select")['remark'];
@@ -3691,6 +3789,20 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     $usernamePromptMsg = sendmessage($from_id, $textbotlang['users']['sell']['selectUsernamePrompt'], $selectUsernameKb, 'html');
     update("user", "Processing_value_tow", (string) ($usernamePromptMsg['result']['message_id'] ?? 0), "id", $from_id);
 } elseif ($user['step'] == "endstepuser" || $user['step'] == "endstepusers" || preg_match('/prodcutservice_(.*)/', $datain, $dataget) || $user['step'] == "getvolumecustomuser") {
+    if ($datain == "ucancel") {
+        // ucancel used to be (mis-)handled inside the earlier statusnamecustom
+        // branch, which no longer matches the REAL step active when this
+        // button is actually shown (endstepuser/endstepusers) - that mismatch
+        // is exactly why step('home', ...) never ran and the user got stuck
+        deletemessage($from_id, $message_id);
+        step('home', $from_id);
+        update("user", "Processing_value", "0", "id", $from_id);
+        update("user", "Processing_value_one", "0", "id", $from_id);
+        update("user", "Processing_value_tow", "0", "id", $from_id);
+        update("user", "Processing_value_four", "0", "id", $from_id);
+        sendmessage($from_id, $textbotlang['users']['back'], $keyboard, 'html');
+        return;
+    }
     if ($datain == "usedefaultname") {
         // "پیش‌فرض" button: bot picks a random name itself, valid against the
         // same ^[a-z][a-z\d_]{2,32}$ rule the typed-input path enforces below
@@ -3731,6 +3843,13 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         }
         if (ctype_digit((string) $user['Processing_value_tow'])) {
             deletemessage($from_id, (int) $user['Processing_value_tow']);
+        }
+        if ($datain === '') {
+            // the user typed their own name (not a پیش‌فرض/ucancel callback
+            // tap) - $message_id here is THAT typed message, not the prompt
+            // (already handled above via Processing_value_tow) - clean it up
+            // too so no trace of the raw typed username is left in the chat
+            deletemessage($from_id, $message_id);
         }
         $loc = $user['Processing_value_one'];
     } else {
@@ -3788,8 +3907,9 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         '{note}' => $info_product['note'],
         '{price}' => $info_product_price_product,
         '{Volume}' => $info_product['Volume_constraint'],
-        '{userBalance}' => $userBalance
+        '{userBalance}' => $userBalance,
     ];
+    $replacements = array_merge($replacements, bottext_user_placeholders($user, $from_id));
     $textin = strtr($textbotlang['textbot']['preInvoice'], $replacements);
     if (intval($info_product['Volume_constraint']) == 0) {
         $textin = str_replace($textbotlang['common']['units']['gb'], "", $textin);
@@ -4327,6 +4447,20 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     $usernamePromptMsg = sendmessage($from_id, $textbotlang['users']['sell']['selectUsernamePrompt'], $selectUsernameKb, 'html');
     update("user", "Processing_value_tow", (string) ($usernamePromptMsg['result']['message_id'] ?? 0), "id", $from_id);
 } elseif ($user['step'] == "endstepuserom" || $user['step'] == "endstepusersom" || preg_match('/prodcutserviceom_(.*)/', $datain, $dataget) || $user['step'] == "getvolumecustomuserom") {
+    if ($datain == "ucancel") {
+        // ucancel used to be (mis-)handled inside the earlier statusnamecustom
+        // branch, which no longer matches the REAL step active when this
+        // button is actually shown (endstepuser/endstepusers) - that mismatch
+        // is exactly why step('home', ...) never ran and the user got stuck
+        deletemessage($from_id, $message_id);
+        step('home', $from_id);
+        update("user", "Processing_value", "0", "id", $from_id);
+        update("user", "Processing_value_one", "0", "id", $from_id);
+        update("user", "Processing_value_tow", "0", "id", $from_id);
+        update("user", "Processing_value_four", "0", "id", $from_id);
+        sendmessage($from_id, $textbotlang['users']['back'], $keyboard, 'html');
+        return;
+    }
     if ($datain == "usedefaultname") {
         $text = 'user' . substr(bin2hex(random_bytes(4)), 0, 8);
     }
@@ -4359,6 +4493,13 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         }
         if (ctype_digit((string) $user['Processing_value_tow'])) {
             deletemessage($from_id, (int) $user['Processing_value_tow']);
+        }
+        if ($datain === '') {
+            // the user typed their own name (not a پیش‌فرض/ucancel callback
+            // tap) - $message_id here is THAT typed message, not the prompt
+            // (already handled above via Processing_value_tow) - clean it up
+            // too so no trace of the raw typed username is left in the chat
+            deletemessage($from_id, $message_id);
         }
         $loc = $user['Processing_value_one'];
     } else {
@@ -4589,19 +4730,23 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         return;
     }
     $tp_kb = ['inline_keyboard' => []];
-    foreach (array_chunk(topup_packages_for($tp_lang, $tp_key), topup_columns_for($tp_lang, $tp_key), true) as $tp_row) {
+    foreach (array_chunk(topup_packages_for($tp_lang, $tp_key, true), topup_columns_for($tp_lang, $tp_key), true) as $tp_row) {
         $tp_kbRow = [];
         foreach ($tp_row as $tp_i => $tp_p) {
             $tp_kbRow[] = topup_package_button($tp_p, $tp_lang, "toppick:{$tp_i}");
         }
         $tp_kb['inline_keyboard'][] = $tp_kbRow;
     }
-    $tp_customStyle = topup_btnstyle_for($tp_lang, $tp_key, 'custom');
-    $tp_backStyle = topup_btnstyle_for($tp_lang, $tp_key, 'back');
-    $tp_kb['inline_keyboard'][] = [
+    $tp_customStyle = topup_btnstyle_for($tp_lang, $tp_key, 'custom', true);
+    $tp_backStyle = topup_btnstyle_for($tp_lang, $tp_key, 'back', true);
+    $tp_customBackRow = [
         topup_styled_button($textbotlang['users']['Balance']['customAmountBtn'], $tp_customStyle, 'topup_custom_start', 'primary'),
         topup_styled_button($textbotlang['users']['Balance']['backToMethodBtn'], $tp_backStyle, 'topup_back_methods', 'danger'),
     ];
+    if (topup_custom_back_swapped($tp_lang, $tp_key)) {
+        $tp_customBackRow = array_reverse($tp_customBackRow);
+    }
+    $tp_kb['inline_keyboard'][] = $tp_customBackRow;
     step("topup_pkg:{$tp_key}", $from_id);
     Editmessagetext($from_id, $message_id, topup_caption_for($tp_lang, $tp_key, $textbotlang['users']['Balance']['pkgPromptTitle']), json_encode($tp_kb), 'HTML');
 } elseif ($datain == "topup_back_methods" && (preg_match('/^topup_pkg:/', (string) $user['step']) || preg_match('/^topup_custom:/', (string) $user['step']))) {
@@ -4616,7 +4761,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     step("topup_custom:{$tp_m[1]}", $from_id);
     $tp_lang = $user['lang'] ?? 'fa';
     $tp_key = $tp_m[1];
-    $tp_backStyle = topup_btnstyle_for($tp_lang, $tp_key, 'back');
+    $tp_backStyle = topup_btnstyle_for($tp_lang, $tp_key, 'back', true);
     $tp_customCap = topup_custom_caption_for($tp_lang, $tp_key, $textbotlang['users']['Balance']['customAmountPromptTitle']);
     Editmessagetext($from_id, $message_id, strtr($tp_customCap, ['{currency}' => currency_get(currency_for_lang($tp_lang))['title'] ?? currency_for_lang($tp_lang)]), json_encode([
         'inline_keyboard' => [[
@@ -4628,19 +4773,23 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     $tp_key = $tp_m[1];
     $tp_lang = $user['lang'] ?? 'fa';
     $tp_kb = ['inline_keyboard' => []];
-    foreach (array_chunk(topup_packages_for($tp_lang, $tp_key), topup_columns_for($tp_lang, $tp_key), true) as $tp_row) {
+    foreach (array_chunk(topup_packages_for($tp_lang, $tp_key, true), topup_columns_for($tp_lang, $tp_key), true) as $tp_row) {
         $tp_kbRow = [];
         foreach ($tp_row as $tp_i => $tp_p) {
             $tp_kbRow[] = topup_package_button($tp_p, $tp_lang, "toppick:{$tp_i}");
         }
         $tp_kb['inline_keyboard'][] = $tp_kbRow;
     }
-    $tp_customStyle = topup_btnstyle_for($tp_lang, $tp_key, 'custom');
-    $tp_backStyle = topup_btnstyle_for($tp_lang, $tp_key, 'back');
-    $tp_kb['inline_keyboard'][] = [
+    $tp_customStyle = topup_btnstyle_for($tp_lang, $tp_key, 'custom', true);
+    $tp_backStyle = topup_btnstyle_for($tp_lang, $tp_key, 'back', true);
+    $tp_customBackRow = [
         topup_styled_button($textbotlang['users']['Balance']['customAmountBtn'], $tp_customStyle, 'topup_custom_start', 'primary'),
         topup_styled_button($textbotlang['users']['Balance']['backToMethodBtn'], $tp_backStyle, 'topup_back_methods', 'danger'),
     ];
+    if (topup_custom_back_swapped($tp_lang, $tp_key)) {
+        $tp_customBackRow = array_reverse($tp_customBackRow);
+    }
+    $tp_kb['inline_keyboard'][] = $tp_customBackRow;
     step("topup_pkg:{$tp_key}", $from_id);
     Editmessagetext($from_id, $message_id, topup_caption_for($tp_lang, $tp_key, $textbotlang['users']['Balance']['pkgPromptTitle']), json_encode($tp_kb), 'HTML');
 } elseif (preg_match('/^topup_pkg:([a-z0-9]+)$/', (string) $user['step'], $tp_m) && preg_match('/^toppick:([0-9]{1,3})$/', (string) $datain, $tp_pick)) {
@@ -4657,11 +4806,16 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         topup_card_invoice_generate($from_id, $user, $message_id, $textbotlang, $setting);
         return;
     }
+    if ($tp_key === 'plisio') {
+        $user['Processing_value'] = $tp_pkg['amount'];
+        topup_plisio_invoice_generate($from_id, $user, $message_id, $textbotlang, $setting);
+        return;
+    }
     $tp_label = gateway_registry($textbotlang)[$tp_key] ?? $tp_key;
     Editmessagetext($from_id, $message_id, sprintf($textbotlang['users']['Balance']['confirmContinueCaption'], topup_package_label($tp_pkg, $tp_lang), $tp_label), json_encode([
         'inline_keyboard' => [
             [['text' => sprintf($textbotlang['users']['Balance']['confirmContinueBtn'], $tp_label), 'callback_data' => $tp_key]],
-            [topup_styled_button($textbotlang['users']['Balance']['backToMethodBtn'], topup_btnstyle_for($tp_lang, $tp_key, 'back'), 'topup_back_methods', 'danger')],
+            [topup_styled_button($textbotlang['users']['Balance']['backToMethodBtn'], topup_btnstyle_for($tp_lang, $tp_key, 'back', true), 'topup_back_methods', 'danger')],
         ],
     ]), 'HTML');
 } elseif (preg_match('/^topup_custom:([a-z0-9]+)$/', (string) $user['step'], $tp_m) && $datain == '' && preg_match('/[0-9۰-۹]/u', (string) $text)) {
@@ -4687,11 +4841,16 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         topup_card_invoice_generate($from_id, $user, $message_id, $textbotlang, $setting);
         return;
     }
+    if ($tp_key === 'plisio') {
+        $user['Processing_value'] = $tp_amt;
+        topup_plisio_invoice_generate($from_id, $user, $message_id, $textbotlang, $setting);
+        return;
+    }
     $tp_label = gateway_registry($textbotlang)[$tp_key] ?? $tp_key;
     sendmessage($from_id, sprintf($textbotlang['users']['Balance']['confirmContinueCaption'], money($tp_amt, currency_for_lang($tp_lang)), $tp_label), json_encode([
         'inline_keyboard' => [
             [['text' => sprintf($textbotlang['users']['Balance']['confirmContinueBtn'], $tp_label), 'callback_data' => $tp_key]],
-            [topup_styled_button($textbotlang['users']['Balance']['backToMethodBtn'], topup_btnstyle_for($tp_lang, $tp_key, 'back'), 'topup_back_methods', 'danger')],
+            [topup_styled_button($textbotlang['users']['Balance']['backToMethodBtn'], topup_btnstyle_for($tp_lang, $tp_key, 'back', true), 'topup_back_methods', 'danger')],
         ],
     ]), 'HTML');
 } elseif ($user['step'] == "getprice") {
@@ -4841,76 +5000,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         $message_id = sendmessage($from_id, $textnowpayments, $paymentkeyboard, 'HTML');
         updatePaymentMessageId($message_id, $randomString);
     } elseif ($datain == "plisio") {
-        $rates = rate_arze();
-        if ($rates === null) {
-            sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
-            step('home', $from_id);
-            return;
-        }
-        $trx = $rates['TRX'];
-        $usd = $rates['USD'];
-        $trxprice = $user['Processing_value'] / $trx;
-        $usdprice = $user['Processing_value'] / $usd;
-        if ($usdprice <= 1) {
-            sendmessage($from_id, $textbotlang['users']['Balance']['nowpayments'], null, 'HTML');
-            return;
-        }
-        $mainbalanceplisio = pay_value("minbalanceplisio", $user['lang'] ?? null);
-        $maxbalanceplisio = pay_value("maxbalanceplisio", $user['lang'] ?? null);
-        if ($user['Processing_value'] < $mainbalanceplisio || $user['Processing_value'] > $maxbalanceplisio) {
-            $mainbalanceplisio = number_format($mainbalanceplisio);
-            $maxbalanceplisio = number_format($maxbalanceplisio);
-            sendmessage($from_id, strtr($textbotlang['users']['Balance']['depositRangePlisio'], ['{mainbalance}' => $mainbalanceplisio, '{maxbalance}' => $maxbalanceplisio]), null, 'HTML');
-            return;
-        }
-        deletemessage($from_id, $message_id);
-        sendmessage($from_id, $textbotlang['users']['Balance']['linkpayments'], $keyboard, 'HTML');
-        $dateacc = date('Y/m/d H:i:s');
-        $randomString = bin2hex(random_bytes(5));
-        $invoice = "{$user['Processing_value_tow']}|{$user['Processing_value_one']}";
-        $pay = plisio($randomString, $usdprice, $from_id);
-        $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice,dec_not_confirmed) VALUES (?,?,?,?,?,?,?,?)");
-        $payment_Status = "Unpaid";
-        $Payment_Method = "plisio";
-        $stmt->execute([$from_id, $randomString, $dateacc, $user['Processing_value'], $payment_Status, $Payment_Method, $invoice, $pay['txn_id']]);
-        if (isset($pay['message'])) {
-            $text_error = $pay['message'];
-            sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
-            step('home', $from_id);
-            $ErrorsLinkPayment = sprintf($textbotlang['Admin']['reportgroup']['errorCryptoLink'], $text_error, $from_id, $username);
-            if (strlen($setting['Channel_Report']) > 0) {
-                telegram('sendmessage', [
-                    'chat_id' => $setting['Channel_Report'],
-                    'message_thread_id' => $errorreport,
-                    'text' => $ErrorsLinkPayment,
-                    'parse_mode' => "HTML"
-                ]);
-            }
-            return;
-        }
-        $paymentkeyboard = json_encode([
-            'inline_keyboard' => [
-                [
-                    ['text' => $textbotlang['users']['Balance']['payments'], 'url' => $pay['invoice_url']],
-                ]
-            ]
-        ]);
-        $price_format = number_format($user['Processing_value'], 0);
-        $USD = number_format($usd);
-        $textnowpayments = sprintf($textbotlang['users']['Balance']['cryptoInstruction'], $randomString, $price_format, $USD);
-        $gethelp = select("PaySetting", "ValuePay", "NamePay", "helpplisio", "select")['ValuePay'];
-        if ($gethelp != 2) {
-            $data = json_decode($gethelp, true);
-            if ($data['type'] == "text") {
-                sendmessage($from_id, $data['text'], null, 'HTML');
-            } elseif ($data['type'] == "photo") {
-                sendphoto($from_id, $data['photoid'], null);
-            } elseif ($data['type'] == "video") {
-                sendvideo($from_id, $data['videoid'], null);
-            }
-        }
-        $message_id = sendmessage($from_id, $textnowpayments, $paymentkeyboard, 'HTML');
-        updatePaymentMessageId($message_id, $randomString);
+        topup_plisio_invoice_generate($from_id, $user, $message_id, $textbotlang, $setting);
     } elseif ($datain == "nowpayment") {
         $rates = rate_arze();
         if ($rates === null) {
@@ -5454,6 +5544,36 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     $built = card_invoice_build($from_id, $user['lang'] ?? 'fa', $oldRow['price'], $oldRow['id_invoice'], $textbotlang, $setting);
     if ($built === null) {
         Editmessagetext($from_id, $message_id, $textbotlang['users']['Balance']['noActiveCard'], null, 'HTML');
+        return;
+    }
+    Editmessagetext($from_id, $message_id, $built['text'], $built['keyboard'], 'HTML');
+    update("Payment_report", "message_id", (int) $message_id, "id_order", $built['randomString']);
+} elseif (preg_match('/^plisioreissue:(.+)$/', $datain, $prm)) {
+    // same reissue mechanism as cardreissue:, adapted for plisio's richer
+    // 3-way error shape (rate fetch failed / amount below plisio's $1
+    // floor / the plisio API itself returned an error) - each needs its
+    // own message, same as the original amount-pick flow shows.
+    $oldRow = select("Payment_report", "*", "id_order", $prm[1], "select");
+    if (!is_array($oldRow) || (string) $oldRow['id_user'] !== (string) $from_id || $oldRow['payment_Status'] !== 'expire') {
+        return;
+    }
+    Editmessagetext($from_id, $message_id, $textbotlang['users']['Balance']['linkpayments'], null, 'HTML');
+    $built = plisio_invoice_build($from_id, $user['lang'] ?? 'fa', $oldRow['price'], $oldRow['id_invoice'], $textbotlang, $setting);
+    if ($built['error'] === 'rate' || $built['error'] === 'api') {
+        Editmessagetext($from_id, $message_id, $textbotlang['users']['Balance']['errorLinkPayment'], null, 'HTML');
+        if ($built['error'] === 'api' && strlen($setting['Channel_Report']) > 0) {
+            $ErrorsLinkPayment = sprintf($textbotlang['Admin']['reportgroup']['errorCryptoLink'], $built['apiMessage'], $from_id, $username);
+            telegram('sendmessage', [
+                'chat_id' => $setting['Channel_Report'],
+                'message_thread_id' => $errorreport,
+                'text' => $ErrorsLinkPayment,
+                'parse_mode' => "HTML"
+            ]);
+        }
+        return;
+    }
+    if ($built['error'] === 'toolow') {
+        Editmessagetext($from_id, $message_id, $textbotlang['users']['Balance']['nowpayments'], null, 'HTML');
         return;
     }
     Editmessagetext($from_id, $message_id, $built['text'], $built['keyboard'], 'HTML');
@@ -6715,7 +6835,7 @@ if (isset($update['message']['successful_payment'])) {
     deletemessage($from_id, $message_id);
     $textbotlang = languagechange();
     $keyboard = build_main_keyboard();
-    sendmessage($from_id, $textbotlang['users']['text_start'], $keyboard, 'html');
+    sendmessage($from_id, strtr($textbotlang['users']['text_start'], bottext_user_placeholders($user, $from_id)), $keyboard, 'html');
     step('home', $from_id);
     return;
 }

@@ -1661,6 +1661,7 @@ if (!function_exists('gw_field_registry')) {
             'plisio' => [
                 ['field' => 'apinowpayment', 'type' => 'text', 'label' => 'apiKeyLabel', 'scope' => 'global'],
                 ['field' => 'chashbackplisio', 'type' => 'text', 'label' => 'cashbackLabel', 'scope' => 'global'],
+                ['field' => 'plisioInvoiceExpireMinutes', 'type' => 'number', 'label' => 'invoiceExpireLabel'],
             ],
             'nowpayment' => [
                 ['field' => 'marchent_tronseller', 'type' => 'text', 'label' => 'apiKeyLabel', 'scope' => 'global'],
@@ -1868,12 +1869,52 @@ if (!function_exists('topup_packages_save')) {
         topup_packages_map(true);
     }
 }
+if (!function_exists('topup_emoji_simple_for')) {
+    function topup_emoji_simple_for($lang, $gatewayKey)
+    {
+        $m = topup_btnstyle_map();
+        return !empty($m[$lang][$gatewayKey]['_emojiSimple']);
+    }
+}
+if (!function_exists('topup_emoji_simple_toggle')) {
+    function topup_emoji_simple_toggle($lang, $gatewayKey)
+    {
+        $m = topup_btnstyle_map();
+        if (!empty($m[$lang][$gatewayKey]['_emojiSimple'])) {
+            unset($m[$lang][$gatewayKey]['_emojiSimple']);
+        } else {
+            $m[$lang][$gatewayKey]['_emojiSimple'] = true;
+        }
+        topup_btnstyle_save($m);
+    }
+}
+if (!function_exists('topup_emoji_pos_bulk_set')) {
+    function topup_emoji_pos_bulk_set($lang, $gatewayKey, $pos)
+    {
+        $pos = $pos === 'left' ? 'left' : 'right';
+        foreach (array_keys(topup_packages_for($lang, $gatewayKey)) as $i) {
+            topup_packages_set_style($lang, $gatewayKey, $i, null, null, null, $pos);
+        }
+        foreach (['custom', 'back'] as $which) {
+            $style = topup_btnstyle_for($lang, $gatewayKey, $which);
+            $style['pos'] = $pos;
+            topup_btnstyle_set($lang, $gatewayKey, $which, $style);
+        }
+    }
+}
 if (!function_exists('topup_packages_for')) {
-    function topup_packages_for($lang, $gatewayKey)
+        function topup_packages_for($lang, $gatewayKey, $forRender = false)
     {
         $m = topup_packages_map();
         $list = $m[$lang][$gatewayKey] ?? [];
-        return is_array($list) ? array_values($list) : [];
+        $list = is_array($list) ? array_values($list) : [];
+        if ($forRender && topup_emoji_simple_for($lang, $gatewayKey)) {
+            foreach ($list as &$p) {
+                $p['noEmoji'] = true;
+            }
+            unset($p);
+        }
+        return $list;
     }
 }
 if (!function_exists('topup_packages_set')) {
@@ -1896,8 +1937,8 @@ if (!function_exists('topup_packages_set')) {
                 $entry['emojiIcon'] = $emojiIcon;
             }
             $pos = (string) ($p['pos'] ?? '');
-            if ($pos === 'left') {
-                $entry['pos'] = 'left';
+            if (in_array($pos, ['left', 'right'], true)) {
+                $entry['pos'] = $pos;
             }
             $color = (string) ($p['color'] ?? '');
             if (in_array($color, ['success', 'danger', 'primary'], true)) {
@@ -1986,18 +2027,44 @@ if (!function_exists('topup_packages_remove')) {
     }
 }
 
+if (!function_exists('topup_extract_leading_emoji')) {
+    function topup_extract_leading_emoji($s)
+    {
+        $s = (string) $s;
+        $pattern = '/^[\x{203C}\x{2049}\x{2139}\x{2194}-\x{2199}\x{21A9}-\x{21AA}\x{231A}-\x{231B}\x{23E9}-\x{23EC}\x{23F0}\x{23F3}\x{24C2}\x{25AA}-\x{25AB}\x{25B6}\x{25C0}\x{25FB}-\x{25FE}\x{2600}-\x{27BF}\x{2934}-\x{2935}\x{2B05}-\x{2B07}\x{2B1B}-\x{2B1C}\x{2B50}\x{2B55}\x{3030}\x{303D}\x{3297}\x{3299}\x{FE0E}\x{FE0F}\x{200D}\x{2764}\x{20E3}\x{1F000}-\x{1FAFF}\x{1F1E6}-\x{1F1FF}\s]*/u';
+        preg_match($pattern, $s, $m);
+        $emoji = trim($m[0] ?? '');
+        $remainder = trim(preg_replace($pattern, '', $s));
+        return [$emoji, $remainder];
+    }
+}
 if (!function_exists('topup_styled_button')) {
     // Shared button-builder for anything on the topup screens that can carry
     // an admin-set label/emoji(+premium)/position/color override: real
     // packages AND the fixed "custom amount"/"back" buttons on the same
     // screen (see topup_btnstyle_* below). One definition so رنگ/ایموجی/جای
     // ایموجی always render identically everywhere they're used.
-    function topup_styled_button($defaultLabel, array $style, $callbackData, $defaultColor = '')
+        function topup_styled_button($defaultLabel, array $style, $callbackData, $defaultColor = '')
     {
         $label = trim((string) ($style['label'] ?? ''));
-        $text = $label !== '' ? $label : $defaultLabel;
+        $baseText = $label !== '' ? $label : $defaultLabel;
+        $noEmoji = !empty($style['noEmoji']);
         $emoji = trim((string) ($style['emoji'] ?? ''));
+        $emojiIcon = trim((string) ($style['emojiIcon'] ?? ''));
+        if ($noEmoji) {
+            $emoji = '';
+            $emojiIcon = '';
+            $fallback = topup_extract_leading_emoji($baseText);
+            $baseText = $fallback[1];
+        } elseif ($emoji === '' && $emojiIcon === '') {
+            $fallback = topup_extract_leading_emoji($baseText);
+            if ($fallback[0] !== '') {
+                $emoji = $fallback[0];
+                $baseText = $fallback[1];
+            }
+        }
         $pos = ($style['pos'] ?? 'right') === 'left' ? 'left' : 'right';
+        $text = $baseText;
         if ($emoji !== '') {
             $text = $pos === 'left' ? ($text . ' ' . $emoji) : ($emoji . ' ' . $text);
         }
@@ -2005,7 +2072,6 @@ if (!function_exists('topup_styled_button')) {
         if ($callbackData !== '') {
             $btn['callback_data'] = $callbackData;
         }
-        $emojiIcon = trim((string) ($style['emojiIcon'] ?? ''));
         if ($emojiIcon !== '') {
             $btn['icon_custom_emoji_id'] = $emojiIcon;
         }
@@ -2078,15 +2144,19 @@ if (!function_exists('topup_btnstyle_save')) {
     }
 }
 if (!function_exists('topup_btnstyle_for')) {
-    function topup_btnstyle_for($lang, $gatewayKey, $which)
+        function topup_btnstyle_for($lang, $gatewayKey, $which, $forRender = false)
     {
         $m = topup_btnstyle_map();
         $v = $m[$lang][$gatewayKey][$which] ?? [];
-        return is_array($v) ? $v : [];
+        $v = is_array($v) ? $v : [];
+        if ($forRender && topup_emoji_simple_for($lang, $gatewayKey)) {
+            $v['noEmoji'] = true;
+        }
+        return $v;
     }
 }
 if (!function_exists('topup_btnstyle_set')) {
-    function topup_btnstyle_set($lang, $gatewayKey, $which, array $style)
+        function topup_btnstyle_set($lang, $gatewayKey, $which, array $style)
     {
         $m = topup_btnstyle_map();
         $clean = [];
@@ -2102,9 +2172,12 @@ if (!function_exists('topup_btnstyle_set')) {
         if ($emojiIcon !== '') {
             $clean['emojiIcon'] = $emojiIcon;
         }
+        if (!empty($style['noEmoji'])) {
+            $clean['noEmoji'] = true;
+        }
         $pos = (string) ($style['pos'] ?? '');
-        if ($pos === 'left') {
-            $clean['pos'] = 'left';
+        if (in_array($pos, ['left', 'right'], true)) {
+            $clean['pos'] = $pos;
         }
         $color = (string) ($style['color'] ?? '');
         if (in_array($color, ['success', 'danger', 'primary'], true)) {
@@ -2182,6 +2255,148 @@ if (!function_exists('topup_card_invoice_generate')) {
             'randomString' => $randomString,
         ];
     }
+    function plisio_invoice_caption_get()
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $data = json_decode((string) ($setting['plisio_invoice_caption'] ?? ''), true);
+        return is_array($data) ? $data : [];
+    }
+    function plisio_invoice_caption_for($lang, $default)
+    {
+        $m = plisio_invoice_caption_get();
+        $v = trim((string) ($m[$lang] ?? ''));
+        return $v !== '' ? $v : $default;
+    }
+    function plisio_invoice_caption_set($lang, $text)
+    {
+        $m = plisio_invoice_caption_get();
+        $text = trim((string) $text);
+        if ($text === '') {
+            unset($m[$lang]);
+        } else {
+            $m[$lang] = $text;
+        }
+        update("setting", "plisio_invoice_caption", empty($m) ? '{}' : json_encode($m, JSON_UNESCAPED_UNICODE), null, null);
+    }
+    function plisio_invoice_expired_caption_get()
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $data = json_decode((string) ($setting['plisio_invoice_expired_caption'] ?? ''), true);
+        return is_array($data) ? $data : [];
+    }
+    function plisio_invoice_expired_caption_for($lang, $default)
+    {
+        $m = plisio_invoice_expired_caption_get();
+        $v = trim((string) ($m[$lang] ?? ''));
+        return $v !== '' ? $v : $default;
+    }
+    function plisio_invoice_expired_caption_set($lang, $text)
+    {
+        $m = plisio_invoice_expired_caption_get();
+        $text = trim((string) $text);
+        if ($text === '') {
+            unset($m[$lang]);
+        } else {
+            $m[$lang] = $text;
+        }
+        update("setting", "plisio_invoice_expired_caption", empty($m) ? '{}' : json_encode($m, JSON_UNESCAPED_UNICODE), null, null);
+    }
+    function plisio_invoice_btnstyle_map($fresh = false)
+    {
+        static $cache = null;
+        if ($cache !== null && !$fresh) {
+            return $cache;
+        }
+        $setting = select("setting", "*", null, null, "select");
+        $m = json_decode((string) ($setting['plisio_invoice_btnstyle'] ?? ''), true);
+        $cache = is_array($m) ? $m : [];
+        return $cache;
+    }
+    function plisio_invoice_btnstyle_save(array $map)
+    {
+        foreach ($map as $lang => $byWhich) {
+            foreach ((array) $byWhich as $which => $style) {
+                if (empty($style)) {
+                    unset($map[$lang][$which]);
+                }
+            }
+            if (empty($map[$lang])) {
+                unset($map[$lang]);
+            }
+        }
+        update("setting", "plisio_invoice_btnstyle", empty($map) ? '{}' : json_encode($map, JSON_UNESCAPED_UNICODE), null, null);
+        plisio_invoice_btnstyle_map(true);
+    }
+    function plisio_invoice_btnstyle_for($lang, $which)
+    {
+        return plisio_invoice_btnstyle_map()[$lang][$which] ?? [];
+    }
+    function plisio_invoice_btnstyle_set($lang, $which, array $style)
+    {
+        $map = plisio_invoice_btnstyle_map(true);
+        $map[$lang][$which] = $style;
+        plisio_invoice_btnstyle_save($map);
+    }
+    function plisio_invoice_btnstyle_items($textbotlang)
+    {
+        return [
+            'pay' => $textbotlang['users']['Balance']['payments'],
+            'reissue' => $textbotlang['users']['Balance']['reissueInvoiceBtn'],
+        ];
+    }
+    // Extracted from the inline "plisio" handler in index.php, same shape/
+    // reasoning as card_invoice_build(): a pure builder with no Telegram API
+    // calls of its own (though it DOES call the real rate_arze()/plisio()
+    // external HTTP APIs - never execute this in a test, source-verify only,
+    // same rule already established for topup_card_invoice_generate()).
+    // Shared by the original amount-pick flow AND the "ساخت فاکتور جدید"
+    // reissue flow. Returns ['error' => null|'rate'|'toolow'|'api', ...] -
+    // richer than card_invoice_build()'s plain null because plisio has 3
+    // distinct failure modes, each needing its own user-facing message.
+    function plisio_invoice_build($from_id, $lang, $amount, $idInvoice, $textbotlang, array $setting)
+    {
+        global $pdo;
+        $rates = rate_arze();
+        if ($rates === null) {
+            return ['error' => 'rate'];
+        }
+        $usd = $rates['USD'];
+        $usdprice = $amount / $usd;
+        if ($usdprice <= 1) {
+            return ['error' => 'toolow'];
+        }
+        $randomString = bin2hex(random_bytes(5));
+        $pay = plisio($randomString, $usdprice, $from_id);
+        if (isset($pay['message'])) {
+            return ['error' => 'api', 'apiMessage' => $pay['message']];
+        }
+        $dateacc = date('Y/m/d H:i:s');
+        $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice,dec_not_confirmed) VALUES (?,?,?,?,?,?,?,?)");
+        $payment_Status = "Unpaid";
+        $Payment_Method = "plisio";
+        $stmt->execute([$from_id, $randomString, $dateacc, $amount, $payment_Status, $Payment_Method, $idInvoice, $pay['txn_id']]);
+        $expireMinutes = (int) pay_value('plisioInvoiceExpireMinutes', $lang, 30);
+        if ($expireMinutes < 1) {
+            $expireMinutes = 30;
+        }
+        $captionTemplate = plisio_invoice_caption_for($lang, $textbotlang['users']['Balance']['cryptoInstruction']);
+        $textnowpayments = strtr($captionTemplate, [
+            '{order}' => $randomString,
+            '{price}' => number_format($amount, 0),
+            '{usd}' => number_format($usd),
+            '{minutes}' => $expireMinutes,
+        ]);
+        $payStyle = plisio_invoice_btnstyle_for($lang, 'pay');
+        $payBtn = topup_styled_button($textbotlang['users']['Balance']['payments'], $payStyle, '', '');
+        $payBtn['url'] = $pay['invoice_url'];
+        $paymentkeyboard = json_encode(['inline_keyboard' => [[$payBtn]]]);
+        return [
+            'error' => null,
+            'text' => $textnowpayments,
+            'keyboard' => $paymentkeyboard,
+            'randomString' => $randomString,
+        ];
+    }
     function topup_card_invoice_generate($from_id, array $user, $message_id, $textbotlang, array $setting)
     {
         global $pdo;
@@ -2225,6 +2440,108 @@ if (!function_exists('topup_card_invoice_generate')) {
             'parse_mode' => "html",
         ]);
         updatePaymentMessageId($newMessageId, $built['randomString']);
+    }
+}
+if (!function_exists('topup_plisio_invoice_generate')) {
+    // The real plisio full flow: min/max balance check, plisio_invoice_build()
+    // call, 3-way error dispatch, helpplisio extra content, invoice send +
+    // track. Extracted verbatim from the old inline "$datain == 'plisio'"
+    // handler body so both that original confirm-tap trigger AND the new
+    // confirm-skip branches (toppick:/topup_custom:, mirroring card) share it.
+    function topup_plisio_invoice_generate($from_id, array $user, $message_id, $textbotlang, array $setting)
+    {
+        global $pdo, $keyboard, $username, $errorreport;
+        $mainbalanceplisio = pay_value("minbalanceplisio", $user['lang'] ?? null);
+        $maxbalanceplisio = pay_value("maxbalanceplisio", $user['lang'] ?? null);
+        if ($user['Processing_value'] < $mainbalanceplisio || $user['Processing_value'] > $maxbalanceplisio) {
+            $mainbalanceplisio = number_format($mainbalanceplisio);
+            $maxbalanceplisio = number_format($maxbalanceplisio);
+            sendmessage($from_id, strtr($textbotlang['users']['Balance']['depositRangePlisio'], ['{mainbalance}' => $mainbalanceplisio, '{maxbalance}' => $maxbalanceplisio]), null, 'HTML');
+            return;
+        }
+        deletemessage($from_id, $message_id);
+        sendmessage($from_id, $textbotlang['users']['Balance']['linkpayments'], $keyboard, 'HTML');
+        $invoice = "{$user['Processing_value_tow']}|{$user['Processing_value_one']}";
+        $built = plisio_invoice_build($from_id, $user['lang'] ?? 'fa', $user['Processing_value'], $invoice, $textbotlang, $setting);
+        if ($built['error'] === 'rate') {
+            sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
+            step('home', $from_id);
+            return;
+        }
+        if ($built['error'] === 'toolow') {
+            sendmessage($from_id, $textbotlang['users']['Balance']['nowpayments'], null, 'HTML');
+            return;
+        }
+        if ($built['error'] === 'api') {
+            sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
+            step('home', $from_id);
+            $ErrorsLinkPayment = sprintf($textbotlang['Admin']['reportgroup']['errorCryptoLink'], $built['apiMessage'], $from_id, $username);
+            if (strlen($setting['Channel_Report']) > 0) {
+                telegram('sendmessage', [
+                    'chat_id' => $setting['Channel_Report'],
+                    'message_thread_id' => $errorreport,
+                    'text' => $ErrorsLinkPayment,
+                    'parse_mode' => "HTML"
+                ]);
+            }
+            return;
+        }
+        $gethelp = select("PaySetting", "ValuePay", "NamePay", "helpplisio", "select")['ValuePay'];
+        if ($gethelp != 2) {
+            $data = json_decode($gethelp, true);
+            if ($data['type'] == "text") {
+                sendmessage($from_id, $data['text'], null, 'HTML');
+            } elseif ($data['type'] == "photo") {
+                sendphoto($from_id, $data['photoid'], null);
+            } elseif ($data['type'] == "video") {
+                sendvideo($from_id, $data['videoid'], null);
+            }
+        }
+        $message_id = sendmessage($from_id, $built['text'], $built['keyboard'], 'HTML');
+        updatePaymentMessageId($message_id, $built['randomString']);
+    }
+}
+if (!function_exists('plisio_expire_notify')) {
+    // shared by cronbot/payment_expire.php's time-based check AND
+    // cronbot/plisio.php's Plisio-API-status check, so whichever one
+    // actually catches a given row first, the user sees the identical
+    // edit-in-place + reissue-button treatment (not the old plain text)
+    function plisio_expire_notify($id_user, $id_order, $price, $message_id, $payer_lang)
+    {
+        $plisioExpireLang = languagechange(null, $payer_lang);
+        $expiredCapTemplate = plisio_invoice_expired_caption_for($payer_lang, $plisioExpireLang['users']['Balance']['plisioInvoiceExpiredCaption']);
+        $expiredCaption = strtr($expiredCapTemplate, ['{price}' => number_format($price)]);
+        $reissueStyle = plisio_invoice_btnstyle_for($payer_lang, 'reissue');
+        $reissueBtn = topup_styled_button($plisioExpireLang['users']['Balance']['reissueInvoiceBtn'], $reissueStyle, "plisioreissue:{$id_order}", 'danger');
+        $reissueKb = json_encode(['inline_keyboard' => [[$reissueBtn]]]);
+        Editmessagetext($id_user, $message_id, $expiredCaption, $reissueKb, 'HTML');
+    }
+}
+if (!function_exists('topup_custom_back_swapped')) {
+    // whether the مبلغ دلخواه/بازگشت pair's LEFT/RIGHT order has been
+    // flipped from the default - lives in the same reserved-key style as
+    // _columns (topup_btnstyle_save() only strips a $which entry when
+    // empty($style); this key is always either absent or literal true, so
+    // it's never ambiguously "empty")
+    function topup_custom_back_swapped($lang, $gatewayKey)
+    {
+        $m = topup_btnstyle_map();
+        return !empty($m[$lang][$gatewayKey]['_customBackSwapped']);
+    }
+    function topup_custom_back_toggle($lang, $gatewayKey)
+    {
+        $m = topup_btnstyle_map();
+        if (!empty($m[$lang][$gatewayKey]['_customBackSwapped'])) {
+            unset($m[$lang][$gatewayKey]['_customBackSwapped']);
+        } else {
+            $m[$lang][$gatewayKey]['_customBackSwapped'] = true;
+        }
+        topup_btnstyle_save($m);
+    }
+    function topup_columns_toggle_full($lang, $gatewayKey)
+    {
+        $cur = topup_columns_for($lang, $gatewayKey);
+        topup_columns_set($lang, $gatewayKey, $cur === 1 ? 3 : 1);
     }
 }
 if (!function_exists('topup_columns_for')) {
@@ -3038,6 +3355,269 @@ function publickey()
         'preshared_key' => $presharedKey
     ];
 }
+if (!function_exists('bottext_user_placeholders')) {
+    // {tg_username}/{userid} - the person's Telegram identity, distinct from the
+    // pre-existing {username} token (which means the newly-provisioned VPN/panel
+    // service username in afterPay/afterText/preInvoice/testExpired - a different
+    // thing entirely, so this deliberately does NOT reuse that token name)
+    function bottext_user_placeholders($user, $from_id)
+    {
+        $tgUsername = trim((string) (is_array($user) ? ($user['username'] ?? '') : ''));
+        if ($tgUsername === '' || strtolower($tgUsername) === 'none') {
+            $tgUsername = '';
+        }
+        return [
+            '{tg_username}' => $tgUsername,
+            '{userid}' => (string) $from_id,
+        ];
+    }
+}
+if (!function_exists('usertest_reset_now')) {
+    // applies $limitValue to EVERY user's remaining test-account allowance and
+    // saves it as the new default for future signups - shared by both the
+    // one-tap manual reset and the periodic automatic reset
+    function usertest_reset_now($limitValue)
+    {
+        $limitValue = (int) $limitValue;
+        update("user", "limit_usertest", $limitValue);
+        update("setting", "limit_usertest_all", $limitValue);
+    }
+}
+if (!function_exists('usertest_auto_reset_config')) {
+    function usertest_auto_reset_config()
+    {
+        $raw = select("setting", "usertest_auto_reset", null, null, "select")['usertest_auto_reset'] ?? null;
+        $cfg = is_string($raw) ? json_decode($raw, true) : null;
+        if (!is_array($cfg)) {
+            $cfg = [];
+        }
+        return [
+            'enabled' => !empty($cfg['enabled']),
+            'unit' => $cfg['unit'] ?? null,
+            'amount' => isset($cfg['amount']) ? (int) $cfg['amount'] : null,
+            'last_reset' => isset($cfg['last_reset']) ? (int) $cfg['last_reset'] : null,
+        ];
+    }
+}
+if (!function_exists('usertest_auto_reset_save')) {
+    function usertest_auto_reset_save(array $cfg)
+    {
+        update("setting", "usertest_auto_reset", json_encode($cfg, JSON_UNESCAPED_UNICODE), null, null);
+    }
+}
+if (!function_exists('usertest_auto_reset_set')) {
+    function usertest_auto_reset_set($unit, $amount)
+    {
+        usertest_auto_reset_save([
+            'enabled' => true,
+            'unit' => $unit,
+            'amount' => (int) $amount,
+            'last_reset' => time(),
+        ]);
+    }
+}
+if (!function_exists('usertest_auto_reset_disable')) {
+    function usertest_auto_reset_disable()
+    {
+        $cfg = usertest_auto_reset_config();
+        $cfg['enabled'] = false;
+        usertest_auto_reset_save($cfg);
+    }
+}
+if (!function_exists('usertest_auto_reset_unit_seconds')) {
+    function usertest_auto_reset_unit_seconds($unit)
+    {
+        $map = ['minute' => 60, 'hour' => 3600, 'week' => 604800, 'month' => 2592000, 'year' => 31536000];
+        return $map[$unit] ?? null;
+    }
+}
+if (!function_exists('usertest_auto_reset_unit_label')) {
+    function usertest_auto_reset_unit_label($unit, $textbotlang)
+    {
+        $labels = [
+            'minute' => $textbotlang['Admin']['usertestReset']['unitMinute'],
+            'hour' => $textbotlang['Admin']['usertestReset']['unitHour'],
+            'week' => $textbotlang['Admin']['usertestReset']['unitWeek'],
+            'month' => $textbotlang['Admin']['usertestReset']['unitMonth'],
+            'year' => $textbotlang['Admin']['usertestReset']['unitYear'],
+        ];
+        return $labels[$unit] ?? $unit;
+    }
+}
+if (!function_exists('usertest_maybe_auto_reset')) {
+    // called from cronbot/configtest.php every 2 minutes - a plain, safe no-op
+    // whenever auto-reset is off or the configured interval hasn't elapsed yet
+    function usertest_maybe_auto_reset()
+    {
+        $cfg = usertest_auto_reset_config();
+        if (!$cfg['enabled'] || $cfg['unit'] === null || $cfg['amount'] === null || $cfg['amount'] <= 0) {
+            return;
+        }
+        $secondsPerUnit = usertest_auto_reset_unit_seconds($cfg['unit']);
+        if ($secondsPerUnit === null) {
+            return;
+        }
+        $intervalSeconds = $secondsPerUnit * $cfg['amount'];
+        $lastReset = $cfg['last_reset'] ?? 0;
+        if (time() - $lastReset < $intervalSeconds) {
+            return;
+        }
+        $currentLimit = select("setting", "limit_usertest_all", null, null, "select")['limit_usertest_all'] ?? '';
+        if ($currentLimit === null || $currentLimit === '') {
+            $currentLimit = 1;
+        }
+        usertest_reset_now($currentLimit);
+        $cfg['last_reset'] = time();
+        usertest_auto_reset_save($cfg);
+    }
+}
+if (!function_exists('usertest_auto_unit_picker_payload')) {
+    function usertest_auto_unit_picker_payload($textbotlang)
+    {
+        $t = $textbotlang['Admin']['usertestReset'];
+        return json_encode(['inline_keyboard' => [
+            [['text' => $t['unitMinute'], 'callback_data' => 'usertestrst_autounit_minute'], ['text' => $t['unitHour'], 'callback_data' => 'usertestrst_autounit_hour']],
+            [['text' => $t['unitWeek'], 'callback_data' => 'usertestrst_autounit_week'], ['text' => $t['unitMonth'], 'callback_data' => 'usertestrst_autounit_month']],
+            [['text' => $t['unitYear'], 'callback_data' => 'usertestrst_autounit_year']],
+            [['text' => $t['backBtn'], 'callback_data' => 'usertestrst_back']],
+        ]]);
+    }
+}
+if (!function_exists('usertest_reset_hub_payload')) {
+    function usertest_reset_hub_payload($textbotlang)
+    {
+        $t = $textbotlang['Admin']['usertestReset'];
+        $currentLimit = select("setting", "limit_usertest_all", null, null, "select")['limit_usertest_all'] ?? '';
+        $currentLimit = ($currentLimit === null || $currentLimit === '') ? $t['notSetYet'] : $currentLimit;
+        $cfg = usertest_auto_reset_config();
+        if ($cfg['enabled'] && $cfg['unit'] !== null && $cfg['amount'] !== null) {
+            $unitLabel = usertest_auto_reset_unit_label($cfg['unit'], $textbotlang);
+            $autoStatus = strtr($t['autoOnStatus'], ['{amount}' => $cfg['amount'], '{unit}' => $unitLabel]);
+            $autoBtnLabel = strtr($t['autoBtnOn'], ['{amount}' => $cfg['amount'], '{unit}' => $unitLabel]);
+        } else {
+            $autoStatus = $t['autoOffStatus'];
+            $autoBtnLabel = $t['autoBtnOff'];
+        }
+        $lastResetLine = $cfg['last_reset'] ? strtr($t['lastResetLine'], ['{date}' => jdate('Y/m/d H:i', $cfg['last_reset'])]) : $t['lastResetNever'];
+        $caption = strtr($t['hubCaption'], [
+            '{limit}' => $currentLimit,
+            '{autoStatus}' => $autoStatus,
+            '{lastReset}' => $lastResetLine,
+        ]);
+        $kb = ['inline_keyboard' => [
+            [['text' => $t['setNumberBtn'], 'callback_data' => 'usertestrst_set']],
+            [['text' => $t['resetNowBtn'], 'callback_data' => 'usertestrst_now']],
+            [['text' => $autoBtnLabel, 'callback_data' => 'usertestrst_auto']],
+            [['text' => $t['closeBtn'], 'callback_data' => 'usertestrst_close']],
+        ]];
+        return [$caption, json_encode($kb)];
+    }
+}
+if (!function_exists('main_menu_triggers')) {
+    // every "start something fresh" entry point across the whole bot - the
+    // user-facing main keyboard (both its plain-text label form and its
+    // inline/glass callback form, see build_main_keyboard()'s own
+    // $replacements + callback_data assignments in keyboard.php) plus the
+    // admin panel's own top-level keyboard across all 3 rule tiers
+    // (administrator/Seller/support - admin buttons have no inline variant).
+    // Deliberately does NOT reach into any deeper sub-menu - "main buttons"
+    // only, matching what was actually asked for.
+    function main_menu_triggers($textbotlang)
+    {
+        $texts = [
+            $textbotlang['textbot']['userTest'] ?? null,
+            $textbotlang['textbot']['purchasedServices'] ?? null,
+            $textbotlang['textbot']['support'] ?? null,
+            $textbotlang['textbot']['help'] ?? null,
+            $textbotlang['textbot']['accountWallet'] ?? null,
+            $textbotlang['textbot']['addBalance'] ?? null,
+            $textbotlang['textbot']['sell'] ?? null,
+            $textbotlang['textbot']['tariffList'] ?? null,
+            $textbotlang['textbot']['affiliates'] ?? null,
+            $textbotlang['textbot']['wheelLuck'] ?? null,
+            $textbotlang['textbot']['extend'] ?? null,
+            $textbotlang['language']['changeButton'] ?? null,
+            $textbotlang['textbot']['agentPanel'] ?? null,
+            $textbotlang['textbot']['requestAgent'] ?? null,
+            $textbotlang['Admin']['panelAdmin'] ?? null,
+            $textbotlang['Admin']['Status']['btn'] ?? null,
+            $textbotlang['Admin']['btnKeyboard']['managementPanel'] ?? null,
+            $textbotlang['Admin']['btnKeyboard']['addPanel'] ?? null,
+            $textbotlang['keyboard']['quickSetTimePrice'] ?? null,
+            $textbotlang['keyboard']['quickSetVolumePrice'] ?? null,
+            $textbotlang['Admin']['btnKeyboard']['manageUser'] ?? null,
+            $textbotlang['keyboard']['manageUser'] ?? null,
+            $textbotlang['keyboard']['shopSettings'] ?? null,
+            $textbotlang['keyboard']['supportSection'] ?? null,
+            $textbotlang['keyboard']['educationSection'] ?? null,
+            $textbotlang['keyboard']['botReport'] ?? null,
+            $textbotlang['keyboard']['panelFeatures'] ?? null,
+            $textbotlang['keyboard']['generalSettings'] ?? null,
+            $textbotlang['keyboard']['pendingReceipts'] ?? null,
+            $textbotlang['bottext']['open_button'] ?? null,
+            $textbotlang['users']['backbtn'] ?? null,
+        ];
+        $callbacks = [
+            'usertestbtn', 'backorder', 'supportbtns', 'helpbtns', 'account',
+            'Add_Balance', 'buy', 'Tariff_list', 'affiliatesbtn', 'wheel_luck',
+            'extendbtn', 'change_language', 'agentpanel', 'requestagent', 'admin',
+        ];
+        $texts = array_values(array_unique(array_filter($texts, function ($v) {
+            return $v !== null && $v !== '';
+        })));
+        return ['texts' => $texts, 'callbacks' => array_values(array_unique($callbacks))];
+    }
+}
+if (!function_exists('is_main_menu_trigger')) {
+    function is_main_menu_trigger($text, $datain, $textbotlang)
+    {
+        $triggers = main_menu_triggers($textbotlang);
+        if ((string) $datain !== '' && in_array((string) $datain, $triggers['callbacks'], true)) {
+            return true;
+        }
+        if ((string) $text !== '' && in_array((string) $text, $triggers['texts'], true)) {
+            return true;
+        }
+        return false;
+    }
+}
+if (!function_exists('preempt_active_session')) {
+    // cancels whatever multi-step flow the user was mid-way through - both
+    // in the DB and in the already-loaded $user array, so the REST of this
+    // same request sees a clean 'home' step and the real dispatch for the
+    // tapped button runs normally instead of being swallowed by a stale
+    // step-gated branch. never touches anything if the user was already home.
+    function preempt_active_session(&$user, $from_id)
+    {
+        $activeStep = (string) ($user['step'] ?? '');
+        if ($activeStep === '' || $activeStep === 'none' || $activeStep === 'home') {
+            return false;
+        }
+        // deliberately does NOT delete whatever Processing_value_tow currently
+        // points to - keyboard.php's own top-level code (required before this
+        // function ever runs) already re-purposes that same field for the
+        // NEWLY-tapped button's own legitimate use (e.g. a freshly-sent
+        // sticker's message id) before we get here, so its value can no
+        // longer be trusted to mean "a stale message from the flow being
+        // cancelled" - confirmed live: this is what was deleting the buy
+        // button's own just-sent sticker. Only the DB/state gets reset here.
+        step('home', $from_id);
+        update("user", "Processing_value", "0", "id", $from_id);
+        update("user", "Processing_value_one", "0", "id", $from_id);
+        update("user", "Processing_value_four", "0", "id", $from_id);
+        $user['step'] = 'home';
+        $user['Processing_value'] = '0';
+        $user['Processing_value_one'] = '0';
+        $user['Processing_value_four'] = '0';
+        // Processing_value_tow is deliberately left untouched - confirmed
+        // that keyboard.php's own top-level code (required earlier in the
+        // SAME request, before this function ever runs) already re-purposes
+        // it for the newly-tapped button's own fresh use (e.g. text_sell's
+        // sticker-message-id stash) - clearing or reading it here would
+        // stomp on or misinterpret a value that isn't ours to touch
+        return true;
+    }
+}
 if (!function_exists('bt_lang_fill_defaults')) {
     // fills any key missing from a (possibly incomplete) translation with the Persian default,
     // recursively, so a partially-translated lang file never produces blank/broken messages
@@ -3085,20 +3665,357 @@ function bottext_apply_overrides(array &$base, $lang)
     $langMap = $map[$lang] ?? null;
     if (!is_array($langMap))
         return;
-    foreach ($langMap as $group => $pairs) {
-        if (!is_array($pairs))
-            continue;
-        if (!isset($base[$group]) || !is_array($base[$group]))
-            $base[$group] = [];
-        foreach ($pairs as $k => $v) {
-            if (is_string($v))
-                $base[$group][$k] = $v;
+    bottext_merge_overrides($base, $langMap);
+}
+if (!function_exists('bottext_merge_overrides')) {
+    // recursively merges an arbitrary-depth override tree into $base, stopping
+    // at string leaves - equivalent to the old single-level (group => {key:
+    // value}) merge when the override is exactly 2 levels deep, but also
+    // correctly reaches deeper keys like users.sell.selectCategory
+    function bottext_merge_overrides(array &$base, array $overrides)
+    {
+        foreach ($overrides as $k => $v) {
+            if (is_string($v)) {
+                $base[$k] = $v;
+            } elseif (is_array($v)) {
+                if (!isset($base[$k]) || !is_array($base[$k])) {
+                    $base[$k] = [];
+                }
+                bottext_merge_overrides($base[$k], $v);
+            }
         }
     }
 }
-if (!function_exists('help_resolve_lang')) {
-    // resolves a tutorial ("help" row) for a given viewer language: returns
-    // the translated name/description/media/media_type/entities if one was
+if (!function_exists('bottext_dotted_isset')) {
+    // true if $arr[$part1][$part2]...[$partN] exists, for a "a.b.c" style key
+    function bottext_dotted_isset($arr, $key)
+    {
+        if (!is_array($arr)) {
+            return false;
+        }
+        $node = $arr;
+        foreach (explode('.', $key) as $p) {
+            if (!is_array($node) || !array_key_exists($p, $node)) {
+                return false;
+            }
+            $node = $node[$p];
+        }
+        return true;
+    }
+}
+if (!function_exists('bottext_dotted_set')) {
+    // sets $arr[$part1][$part2]...[$partN] = $value, creating intermediate
+    // arrays as needed, for a "a.b.c" style key
+    function bottext_dotted_set(array &$arr, $key, $value)
+    {
+        $parts = explode('.', $key);
+        $last = array_pop($parts);
+        $node = &$arr;
+        foreach ($parts as $p) {
+            if (!isset($node[$p]) || !is_array($node[$p])) {
+                $node[$p] = [];
+            }
+            $node = &$node[$p];
+        }
+        $node[$last] = $value;
+    }
+}
+if (!function_exists('bottext_dotted_unset_walk')) {
+    function bottext_dotted_unset_walk($node, $parts)
+    {
+        if (!is_array($node) || empty($parts)) {
+            return $node;
+        }
+        $p = array_shift($parts);
+        if (!array_key_exists($p, $node)) {
+            return $node;
+        }
+        if (empty($parts)) {
+            unset($node[$p]);
+        } else {
+            $node[$p] = bottext_dotted_unset_walk($node[$p], $parts);
+            if (is_array($node[$p]) && empty($node[$p])) {
+                unset($node[$p]);
+            }
+        }
+        return $node;
+    }
+}
+if (!function_exists('bottext_dotted_unset')) {
+    // unsets $arr[$part1][$part2]...[$partN] for a "a.b.c" style key, and
+    // prunes any intermediate array left empty by the removal
+    function bottext_dotted_unset(array &$arr, $key)
+    {
+        $arr = bottext_dotted_unset_walk($arr, explode('.', $key));
+    }
+}
+if (!function_exists('usertest_prompt_button_defs')) {
+    // the 2 buttons on the usertest username-prompt screen (users.usertest.selectUsernamePrompt) -
+    // hardcoded to this one item rather than a generic registry since it's the only item that
+    // currently needs per-button label/colour overrides
+    function usertest_prompt_button_defs($textbotlang)
+    {
+        return [
+            0 => ['name' => '🔴 دکمه انصراف', 'text' => $textbotlang['keyboard']['cancelUsernameBtn'], 'style' => 'danger', 'callback_data' => 'ucancel'],
+            1 => ['name' => '🟢 دکمه استفاده از پیش‌فرض', 'text' => $textbotlang['keyboard']['useDefaultUsernameBtn'], 'style' => 'success', 'callback_data' => 'usedefaultname'],
+        ];
+    }
+}
+if (!function_exists('usertest_prompt_button_override')) {
+    function usertest_prompt_button_override($lang, $idx)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
+        return (is_array($be) && isset($be[$lang]['users.usertest.selectUsernamePrompt'][$idx]) && is_array($be[$lang]['users.usertest.selectUsernamePrompt'][$idx]))
+            ? $be[$lang]['users.usertest.selectUsernamePrompt'][$idx]
+            : [];
+    }
+}
+if (!function_exists('usertest_selectUsername_kb')) {
+    // renders the usertest flow's own copy of the cancel/use-default inline keyboard, applying
+    // any per-language button overrides - the sell flow keeps using the shared $selectUsernameKb
+    // untouched, so these overrides never leak into the (separate) purchase flow
+    function usertest_selectUsername_kb($lang, $textbotlang)
+    {
+        $defs = usertest_prompt_button_defs($textbotlang);
+        $buttons = [];
+        foreach ($defs as $idx => $d) {
+            $ov = usertest_prompt_button_override($lang, $idx);
+            $text = (isset($ov['text']) && $ov['text'] !== '') ? $ov['text'] : $d['text'];
+            $style = (isset($ov['style']) && in_array($ov['style'], ['primary', 'success', 'danger'], true)) ? $ov['style'] : $d['style'];
+            $buttons[] = ['text' => $text, 'callback_data' => $d['callback_data'], 'style' => $style];
+        }
+        return json_encode(['inline_keyboard' => [$buttons]]);
+    }
+}
+if (!function_exists('usertest_prompt_buttons_payload')) {
+    function usertest_prompt_buttons_payload($lang, $textbotlang)
+    {
+        $defs = usertest_prompt_button_defs($textbotlang);
+        $info = "🔘 <b>دکمه‌های اکانت تست</b>\n➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= "این ۲ دکمه، زیر کپشن اکانت تست به کاربر نشون داده می‌شن.\n";
+        $info .= "➖➖➖➖➖➖➖➖➖➖\n👁 پیش‌نمایش زنده - دقیقاً همینی که کاربر می‌بینه؛ روی هرکدوم بزن تا متن یا رنگش رو تغییر بدی 👇";
+        $kb = ['inline_keyboard' => []];
+        foreach ($defs as $idx => $d) {
+            $ov = usertest_prompt_button_override($lang, $idx);
+            $curText = (isset($ov['text']) && $ov['text'] !== '') ? $ov['text'] : $d['text'];
+            $curStyle = (isset($ov['style']) && in_array($ov['style'], ['primary', 'success', 'danger'], true)) ? $ov['style'] : $d['style'];
+            $kb['inline_keyboard'][] = [['text' => $curText, 'callback_data' => "btact|btn|{$lang}|{$idx}", 'style' => $curStyle]];
+        }
+        $kb['inline_keyboard'][] = [['text' => '🔁 ریست همه به پیش‌فرض', 'callback_data' => "btact|btnsrstall|{$lang}", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "bt_edit|{$lang}|users.usertest.selectUsernamePrompt"]];
+        return [$info, json_encode($kb)];
+    }
+}
+if (!function_exists('usertest_prompt_button_detail_payload')) {
+    function usertest_prompt_button_detail_payload($lang, $idx, $textbotlang)
+    {
+        $defs = usertest_prompt_button_defs($textbotlang);
+        $d = $defs[$idx] ?? $defs[0];
+        $ov = usertest_prompt_button_override($lang, $idx);
+        $curText = (isset($ov['text']) && $ov['text'] !== '') ? $ov['text'] : $d['text'];
+        $curStyle = (isset($ov['style']) && in_array($ov['style'], ['primary', 'success', 'danger'], true)) ? $ov['style'] : $d['style'];
+        $info = "🔘 <b>ویرایش {$d['name']}</b>\n➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= "👁 پیش‌نمایش زنده 👇";
+        $kb = ['inline_keyboard' => []];
+        $kb['inline_keyboard'][] = [['text' => $curText, 'callback_data' => 'none', 'style' => $curStyle]];
+        $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش متن', 'callback_data' => "btact|btntext|{$lang}|{$idx}"]];
+        $kb['inline_keyboard'][] = [
+            ['text' => ($curStyle === 'primary' ? '✅ ' : '') . '🔵 آبی', 'callback_data' => "btact|btnstyle|{$lang}|{$idx}|primary", 'style' => 'primary'],
+            ['text' => ($curStyle === 'success' ? '✅ ' : '') . '🟢 سبز', 'callback_data' => "btact|btnstyle|{$lang}|{$idx}|success", 'style' => 'success'],
+            ['text' => ($curStyle === 'danger' ? '✅ ' : '') . '🔴 قرمز', 'callback_data' => "btact|btnstyle|{$lang}|{$idx}|danger", 'style' => 'danger'],
+        ];
+        $kb['inline_keyboard'][] = [['text' => '🔁 ریست این دکمه', 'callback_data' => "btact|btnrst|{$lang}|{$idx}", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "btact|btns|{$lang}"]];
+        return [$info, json_encode($kb)];
+    }
+}
+if (!function_exists('config_col_order_payload')) {
+    // controls which column comes first on the per-service config-list screen
+    // (keyboard_config() in keyboard.php): the "دریافت کانفیگ" button, or the
+    // config's display name - shows a live 2-row preview so the admin can see
+    // exactly what the header + a sample row will look like before saving
+    function config_col_order_payload($textbotlang, $originLang = null, $originKey = null)
+    {
+        $lang = $originLang ?? 'fa';
+        $setting = select("setting", "*", null, null, "select");
+        $nameFirst = (($setting['configColOrder'] ?? '') === 'name_first');
+        $get = configdisplay_element_current($lang, 0, $textbotlang);
+        $hConfig = configdisplay_element_current($lang, 1, $textbotlang);
+        $hName = configdisplay_element_current($lang, 2, $textbotlang);
+        $headerConfig = ['text' => $hConfig['text'], 'callback_data' => "cfgcolel-1-{$lang}"];
+        if ($hConfig['style'] !== '') {
+            $headerConfig['style'] = $hConfig['style'];
+        }
+        $headerName = ['text' => $hName['text'], 'callback_data' => "cfgcolel-2-{$lang}"];
+        if ($hName['style'] !== '') {
+            $headerName['style'] = $hName['style'];
+        }
+        $sampleGet = ['text' => $get['text'], 'callback_data' => "cfgcolel-0-{$lang}"];
+        if ($get['style'] !== '') {
+            $sampleGet['style'] = $get['style'];
+        }
+        $sampleName = ['text' => '🇩🇪 Germany #1', 'callback_data' => 'none'];
+        $getAll = configdisplay_element_current($lang, 3, $textbotlang);
+        $getAllBtn = ['text' => $getAll['text'], 'callback_data' => "cfgcolel-3-{$lang}"];
+        if ($getAll['style'] !== '') {
+            $getAllBtn['style'] = $getAll['style'];
+        }
+        // callback_data must stay under Telegram's 64-byte limit - the full dotted key
+        // pushed this over (69 bytes), so the bt-flavored toggle drops it and the handler
+        // hardcodes the one key this is reachable from instead. ALSO: the token must never
+        // contain the substring "config_" - index.php has a pre-existing, unanchored
+        // preg_match('/config_(\w+)/', $datain, ...) branch (an unrelated "look up an
+        // invoice's config list" feature) that intercepts ANY callback_data containing it,
+        // before admin.php's own handlers ever run - learned this the hard way.
+        $cbConfigFirst = ($originLang !== null) ? "cfgcolbt-getfirst-{$originLang}" : 'configcolorder-config_first';
+        $cbNameFirst = ($originLang !== null) ? "cfgcolbt-namefirst-{$originLang}" : 'configcolorder-name_first';
+        $info = "🗂 <b>تنظیم نمایش و کپشن کانفیگ</b>\n➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= "این بخش، نمایشِ صفحه‌ی کانفیگ‌های هر سرویس رو کنترل می‌کنه: ترتیب ستون‌ها، و متن/رنگ هرکدوم از دکمه‌ها.\n";
+        $info .= "حالت فعلی ترتیب: <b>" . ($nameFirst ? "اول نام کانفیگ، بعد دکمه‌ی دریافت" : "اول دکمه‌ی دریافت، بعد نام کانفیگ (پیش‌فرض)") . "</b>\n";
+        $info .= "➖➖➖➖➖➖➖➖➖➖\n🔹 راهنما:\n• روی متنِ هرکدوم از دکمه‌های پیش‌نمایش بزن → صفحه‌ی ویرایش همون دکمه باز می‌شه\n• اونجا هم می‌تونی متنش رو عوض کنی (✏️ ویرایش متن)، هم رنگش رو (🔵 آبی / 🟢 سبز / 🔴 قرمز)\n• برای برگردوندن یه دکمه به حالت پیش‌فرض، همونجا 🔁 ریست رو بزن\n";
+        $info .= "➖➖➖➖➖➖➖➖➖➖\n👁 پیش‌نمایش زنده 👇";
+        $kb = ['inline_keyboard' => []];
+        $kb['inline_keyboard'][] = $nameFirst ? [$headerName, $headerConfig] : [$headerConfig, $headerName];
+        $kb['inline_keyboard'][] = $nameFirst ? [$sampleName, $sampleGet] : [$sampleGet, $sampleName];
+        $kb['inline_keyboard'][] = [$getAllBtn];
+        $kb['inline_keyboard'][] = [['text' => 'عملیات', 'callback_data' => "cfgcoldemo-{$lang}"]];
+        $kb['inline_keyboard'][] = [[
+            'text' => (!$nameFirst ? '✅ ' : '') . 'دکمه‌ی دریافت، بعد نام کانفیگ',
+            'callback_data' => $cbConfigFirst,
+            'style' => (!$nameFirst ? 'success' : 'primary'),
+        ]];
+        $kb['inline_keyboard'][] = [[
+            'text' => ($nameFirst ? '✅ ' : '') . 'نام کانفیگ، بعد دکمه‌ی دریافت',
+            'callback_data' => $cbNameFirst,
+            'style' => ($nameFirst ? 'success' : 'primary'),
+        ]];
+        if ($originLang !== null) {
+            $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش کپشن این بخش', 'callback_data' => "bt_edit|{$originLang}|users.status.getConfigHint"]];
+            $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "bt_edit|{$originLang}|{$originKey}"]];
+        }
+        return [$info, json_encode($kb)];
+    }
+}
+if (!function_exists('configdisplay_element_defs')) {
+    // the 3 visible elements on the per-service config-list screen (keyboard_config() in
+    // keyboard.php) that can be renamed/recolored: the real "دریافت کانفیگ" button, and the
+    // 2 static header labels ("کانفیگ" / "نام کانفیگ") - hardcoded to these 3, same reasoning
+    // as usertest_prompt_button_defs(): nothing else needs this shape yet
+    function configdisplay_element_defs($textbotlang)
+    {
+        return [
+            0 => ['name' => 'دکمه‌ی «دریافت کانفیگ»', 'text' => $textbotlang['keyboard']['getConfig']],
+            1 => ['name' => 'ستون «کانفیگ»', 'text' => $textbotlang['keyboard']['config']],
+            2 => ['name' => 'ستون «نام کانفیگ»', 'text' => $textbotlang['keyboard']['configName']],
+            3 => ['name' => 'دکمه‌ی «دریافت همه کانفیگ‌ها»', 'text' => $textbotlang['keyboard']['getAllConfigs']],
+        ];
+    }
+}
+if (!function_exists('configdisplay_element_override')) {
+    function configdisplay_element_override($lang, $idx)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
+        return (is_array($be) && isset($be[$lang]['configDisplay'][$idx]) && is_array($be[$lang]['configDisplay'][$idx]))
+            ? $be[$lang]['configDisplay'][$idx]
+            : [];
+    }
+}
+if (!function_exists('configdisplay_element_current')) {
+    function configdisplay_element_current($lang, $idx, $textbotlang)
+    {
+        $defs = configdisplay_element_defs($textbotlang);
+        $d = $defs[$idx] ?? $defs[0];
+        $ov = configdisplay_element_override($lang, $idx);
+        $text = (isset($ov['text']) && $ov['text'] !== '') ? $ov['text'] : $d['text'];
+        $style = (isset($ov['style']) && in_array($ov['style'], ['primary', 'success', 'danger'], true)) ? $ov['style'] : '';
+        return ['text' => $text, 'style' => $style, 'name' => $d['name']];
+    }
+}
+if (!function_exists('configdisplay_element_set_text')) {
+    function configdisplay_element_set_text($lang, $idx, $text)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
+        if (!is_array($be)) {
+            $be = [];
+        }
+        $be[$lang]['configDisplay'][$idx]['text'] = $text;
+        update("setting", "button_edit", json_encode($be, JSON_UNESCAPED_UNICODE), null, null);
+    }
+}
+if (!function_exists('configdisplay_element_set_style')) {
+    function configdisplay_element_set_style($lang, $idx, $style)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
+        if (!is_array($be)) {
+            $be = [];
+        }
+        $be[$lang]['configDisplay'][$idx]['style'] = $style;
+        update("setting", "button_edit", json_encode($be, JSON_UNESCAPED_UNICODE), null, null);
+    }
+}
+if (!function_exists('configdisplay_element_reset')) {
+    function configdisplay_element_reset($lang, $idx)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
+        if (is_array($be) && isset($be[$lang]['configDisplay'][$idx])) {
+            unset($be[$lang]['configDisplay'][$idx]);
+            if (empty($be[$lang]['configDisplay'])) {
+                unset($be[$lang]['configDisplay']);
+            }
+            if (empty($be[$lang])) {
+                unset($be[$lang]);
+            }
+            update("setting", "button_edit", empty($be) ? null : json_encode($be, JSON_UNESCAPED_UNICODE), null, null);
+        }
+    }
+}
+if (!function_exists('configdisplay_element_payload')) {
+    function configdisplay_element_payload($lang, $idx, $textbotlang)
+    {
+        $cur = configdisplay_element_current($lang, $idx, $textbotlang);
+        $info = "🔘 <b>{$cur['name']}</b>\n➖➖➖➖➖➖➖➖➖➖\n👁 پیش‌نمایش زنده 👇";
+        $previewBtn = ['text' => $cur['text'], 'callback_data' => 'none'];
+        if ($cur['style'] !== '') {
+            $previewBtn['style'] = $cur['style'];
+        }
+        $kb = ['inline_keyboard' => []];
+        $kb['inline_keyboard'][] = [$previewBtn];
+        $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش متن', 'callback_data' => "cfgcoltext-{$idx}-{$lang}"]];
+        $kb['inline_keyboard'][] = [
+            ['text' => ($cur['style'] === 'primary' ? '✅ ' : '') . '🔵 آبی', 'callback_data' => "cfgcolelstyle-{$idx}-primary-{$lang}", 'style' => 'primary'],
+            ['text' => ($cur['style'] === 'success' ? '✅ ' : '') . '🟢 سبز', 'callback_data' => "cfgcolelstyle-{$idx}-success-{$lang}", 'style' => 'success'],
+            ['text' => ($cur['style'] === 'danger' ? '✅ ' : '') . '🔴 قرمز', 'callback_data' => "cfgcolelstyle-{$idx}-danger-{$lang}", 'style' => 'danger'],
+        ];
+        $kb['inline_keyboard'][] = [['text' => '🔁 ریست این المان', 'callback_data' => "cfgcolelrst-{$idx}-{$lang}", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "btact|cfgcol|{$lang}|users.usertest.selectUsernamePrompt"]];
+        return [$info, json_encode($kb)];
+    }
+}
+if (!function_exists('backup_settings_hub_payload')) {
+    function backup_settings_hub_payload($textbotlang)
+    {
+        $t = $textbotlang['Admin']['BackupSettings'];
+        $setting = select("setting", "*", null, null, "select");
+        $dbSet = !empty($setting['backup_db_password']);
+        $botSet = !empty($setting['backup_bot_password']);
+        $caption = strtr($t['hubCaption'], [
+            '{dbStatus}' => $dbSet ? $t['setStatus'] : $t['notSetStatus'],
+            '{botStatus}' => $botSet ? $t['setStatus'] : $t['notSetStatus'],
+        ]);
+        $kb = ['inline_keyboard' => [
+            [['text' => ($dbSet ? '🔐 ' : '🔓 ') . $t['dbPasswordBtn'], 'callback_data' => 'backupset_db', 'style' => ($dbSet ? 'success' : 'primary')]],
+            [['text' => ($botSet ? '🔐 ' : '🔓 ') . $t['botPasswordBtn'], 'callback_data' => 'backupset_bot', 'style' => ($botSet ? 'success' : 'primary')]],
+            [['text' => $t['closeBtn'], 'callback_data' => 'backupset_close', 'style' => 'danger']],
+        ]];
+        return [$caption, json_encode($kb)];
+    }
+}
+if (!function_exists('help_resolve_lang')) {    // resolves a tutorial ("help" row) for a given viewer language: returns    // the translated name/description/media/media_type/entities if one was
     // set for that language, otherwise falls back to the Persian base row
     function help_resolve_lang($row, $lang)
     {
@@ -3313,7 +4230,7 @@ if (!function_exists('help_layout_items')) {
             // is guaranteed loaded; $lang may differ from the admin's own display
             // language, so its OWN translation file is loaded fresh rather than
             // assuming the caller's $textbotlang matches
-            if (!function_exists('gateway_registry') || !function_exists('gateway_applicable_for_lang')) {
+            if (!function_exists('gateway_registry') || !function_exists('gateway_applicable_for_lang') || !function_exists('gateway_allowed_for_lang') || !function_exists('gateway_globally_on')) {
                 return [];
             }
             $gwLangFile = __DIR__ . "/lang/$lang.php";
@@ -3322,6 +4239,9 @@ if (!function_exists('help_layout_items')) {
             $items = [];
             foreach (gateway_registry($gwTextbotlang) as $key => $label) {
                 if (!gateway_applicable_for_lang($key, $lang)) {
+                    continue;
+                }
+                if (!gateway_allowed_for_lang($key, $lang) || !gateway_globally_on($key)) {
                     continue;
                 }
                 $items[$key] = $gwSection['rename'][$key] ?? $label;

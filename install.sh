@@ -214,7 +214,7 @@ _link_mirza() {
 function self_update_script() {
     local MASTER_PATH="/root/install.sh"
     local BIN_LINK="/usr/local/bin/mirza"
-    local URL="https://raw.githubusercontent.com/mahdiMGF2/mirzabot/main/install.sh"
+    local URL="https://raw.githubusercontent.com/Alfred-1313/Mirza_Pro_Max/master/install.sh"
     local TEMP_FILE="/tmp/mirzabot_update.sh"
 
     # Make sure DNS works before reaching GitHub
@@ -280,7 +280,7 @@ self_update_script "$@"
 # ── Repo / paths ─────────────────────────────────────────────
 BOT_DIR_DEFAULT="/var/www/html/mirzaprobotconfig"
 CONFIG_FILE_DEFAULT="$BOT_DIR_DEFAULT/config.php"
-GIT_REPO="mahdiMGF2/mirzabot"
+GIT_REPO="Alfred-1313/Mirza_Pro_Max"
 LATEST_CACHE="/tmp/.mirza_latest_version"
 IP_CACHE="/tmp/.mirza_server_ip"
 
@@ -631,7 +631,7 @@ list_tags_desc() {
 # Returns: 0 = chosen, 1 = error, 2 = back to menu
 choose_source() {
     SRC_ZIP_URL=""; SRC_LABEL=""
-    local beta="https://github.com/${GIT_REPO}/archive/refs/heads/main.zip"
+    local beta="https://github.com/${GIT_REPO}/archive/refs/heads/master.zip"
     local tagbase="https://github.com/${GIT_REPO}/archive/refs/tags"
 
     # ── Non-interactive (flags) ──────────────────────────────
@@ -2365,7 +2365,7 @@ function migrate_to_pro() {
     NEW_BOT_DIR="/var/www/html/mirzaprobotconfig"
     rm -rf "$OLD_BOT_DIR"
     mkdir -p "$NEW_BOT_DIR"
-    ZIP_URL="https://github.com/mahdiMGF2/mirzabot/archive/refs/heads/main.zip"
+    ZIP_URL="https://github.com/Alfred-1313/Mirza_Pro_Max/archive/refs/heads/master.zip"
     TEMP_DIR="/tmp/mirzabot_mig"
     mkdir -p "$TEMP_DIR"
     run_step "Downloading Mirza source" "wget -q -O '$TEMP_DIR/bot.zip' '$ZIP_URL'" \

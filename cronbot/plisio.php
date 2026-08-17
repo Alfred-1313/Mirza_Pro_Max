@@ -41,9 +41,20 @@ while ($row = ($list_service)->fetch(PDO::FETCH_ASSOC)) {
         continue;
     $StatusPayment = statusplisio($Payment_report['id_order']);
     if ($StatusPayment['data']['operations'][0]['status'] == null || $StatusPayment['data']['operations'][0]['status'] == "cancelled") {
-        $textexpire = sprintf($textbotlang['hardcoded']['plisioTransactionExpired'], $Payment_report['id_order'], $Payment_report['price']);
-        sendmessage($Payment_report['id_user'], $textexpire, null, 'html');
-        update("Payment_report", "payment_Status", "expire", "id_order", $Payment_report['id_order']);
+        // a brand-new invoice naturally has no operations yet (status also
+        // reads as null) - don't treat that as "expired" before our own
+        // configured per-language window has actually elapsed
+        $payer = select('user', 'lang', 'id', $Payment_report['id_user'], 'select');
+        $payer_lang = is_array($payer) && !empty($payer['lang']) ? $payer['lang'] : 'fa';
+        $expire_minutes = (int) pay_value('plisioInvoiceExpireMinutes', $payer_lang, 30);
+        if ($expire_minutes < 1) {
+            $expire_minutes = 30;
+        }
+        $row_ts = strtotime((string) $Payment_report['time']);
+        if ($row_ts === false || $row_ts < time() - ($expire_minutes * 60)) {
+            plisio_expire_notify($Payment_report['id_user'], $Payment_report['id_order'], $Payment_report['price'], $Payment_report['message_id'], $payer_lang);
+            update("Payment_report", "payment_Status", "expire", "id_order", $Payment_report['id_order']);
+        }
     }
     if (isset($StatusPayment['data']['operations'][0]['status']) && $StatusPayment['data']['operations'][0]['status'] == "completed") {
         DirectPayment($Payment_report['id_order'], "../images.jpg");

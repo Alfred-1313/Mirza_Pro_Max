@@ -96,7 +96,8 @@ if (!function_exists('langscope_hub_payload')) {
             [['text' => $textbotlang['Admin']['LangScope']['productsBtn'], 'callback_data' => 'langscope_list:product']],
             [['text' => $textbotlang['Admin']['LangScope']['categoriesBtn'], 'callback_data' => 'langscope_list:category']],
             [['text' => $textbotlang['Admin']['LangScope']['cascadeBtn'], 'callback_data' => 'langscope_casc_hub', 'style' => 'danger']],
-            [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'langscope_close']],
+            [['text' => $textbotlang['Admin']['LangScope']['backToHubBtn'], 'callback_data' => 'displayhub_back']],
+            [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'langscope_close', 'style' => 'danger']],
         ]];
         return json_encode($kb);
     }
@@ -236,7 +237,7 @@ if (!function_exists('moveprod_hub_payload')) {
                 $kb['inline_keyboard'][] = [['text' => "{$c['remark']} ({$pc})", 'callback_data' => "moveprod_src:{$c['id']}"]];
             }
         }
-        $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'displayhub_close']];
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'displayhub_close', 'style' => 'danger']];
         return json_encode($kb);
     }
 }
@@ -321,19 +322,23 @@ if (!function_exists('bottext_item_menu_payload')) {
     function bottext_item_menu_payload($bt_key, $bt_lang, $textbotlang)
     {
         $bt_label = $bt_key;
+        $bt_item_group = '';
         if ($bt_key === 'users.unknownMsg') {
             $bt_label = '💬 پیام نام‌شناس';
+        }
+        if ($bt_key === 'users.status.getConfigHint') {
+            $bt_label = '📌 کپشن صفحه‌ی دریافت کانفیگ';
         }
         foreach (($textbotlang['bottext']['items'] ?? []) as $bt_it) {
             if (($bt_it['key'] ?? '') === $bt_key) {
                 $bt_label = $bt_it['label'];
+                $bt_item_group = $bt_it['group'] ?? '';
                 break;
             }
         }
         $bt_setting = select("setting", "*", null, null, "select");
-        $bt_parts = explode('.', $bt_key);
         $bt_te = json_decode((string) ($bt_setting['text_edit'] ?? ''), true);
-        $bt_custom = is_array($bt_te) && isset($bt_te[$bt_lang][$bt_parts[0]][$bt_parts[1]]);
+        $bt_custom = is_array($bt_te) && isset($bt_te[$bt_lang]) && bottext_dotted_isset($bt_te[$bt_lang], $bt_key);
         $bt_layout = json_decode((string) ($bt_setting['keyboardmain'] ?? ''), true);
         $bt_st = (is_array($bt_layout) && isset($bt_layout['text_stickers']) && is_array($bt_layout['text_stickers'])) ? $bt_layout['text_stickers'] : [];
         $bt_re = (is_array($bt_layout) && isset($bt_layout['text_reactions']) && is_array($bt_layout['text_reactions'])) ? $bt_layout['text_reactions'] : [];
@@ -341,11 +346,17 @@ if (!function_exists('bottext_item_menu_payload')) {
         $bt_react = bt_media_lookup($bt_re, $bt_key, $bt_lang);
         // reaction needs a triggering user message — only these keys have one
         $bt_can_react = in_array($bt_key, ['users.text_start', 'textbot.faqDesc', 'textbot.tariffListDesc', 'textbot.rules', 'users.unknownMsg'], true);
+        $bt_has_buttons = ($bt_key === 'users.usertest.selectUsernamePrompt');
         $info = "📝 <b>{$bt_label}</b>\n➖➖➖➖➖➖➖➖➖➖\n";
         $info .= "✏️ متن: " . ($bt_custom ? "سفارشی ✅" : "پیش‌فرض") . "\n";
         $info .= "🖼 استیکر: " . ($bt_sticker !== '' ? "ست شده ✅" : "ندارد ❌") . "\n";
         if ($bt_can_react) {
             $info .= "❤️ ری‌اکشن: " . ($bt_react !== '' ? $bt_react : "ندارد ❌") . "\n";
+        }
+        if ($bt_has_buttons) {
+            $bt_be = json_decode((string) ($bt_setting['button_edit'] ?? ''), true);
+            $bt_btn_custom = is_array($bt_be) && !empty($bt_be[$bt_lang]['users.usertest.selectUsernamePrompt']);
+            $info .= "🔘 دکمه‌های انصراف/پیش‌فرض: " . ($bt_btn_custom ? "سفارشی ✅" : "پیش‌فرض") . "\n";
         }
         $info .= "➖➖➖➖➖➖➖➖➖➖\n👇 بخشی که می‌خوای تنظیم کنی رو انتخاب کن:";
         $kb = ['inline_keyboard' => []];
@@ -355,8 +366,17 @@ if (!function_exists('bottext_item_menu_payload')) {
             $bt_row[] = ['text' => '❤️ ری‌اکشن', 'callback_data' => "btact|react|{$bt_lang}|{$bt_key}"];
         }
         $kb['inline_keyboard'][] = $bt_row;
+        if ($bt_has_buttons) {
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های انصراف/پیش‌فرض', 'callback_data' => "btact|btns|{$bt_lang}"]];
+            $kb['inline_keyboard'][] = [['text' => '🗂 تنظیم نمایش و کپشن کانفیگ', 'callback_data' => "btact|cfgcol|{$bt_lang}|{$bt_key}"]];
+        }
         $kb['inline_keyboard'][] = [['text' => '👁 پیش‌نمایش', 'callback_data' => "btact|prev|{$bt_lang}|{$bt_key}"]];
         $kb['inline_keyboard'][] = [['text' => '🔁 ریست به پیش‌فرض', 'callback_data' => "btact|rstall|{$bt_lang}|{$bt_key}"]];
+        if ($bt_item_group !== '') {
+            $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "bt_group|{$bt_lang}|{$bt_item_group}"]];
+        } elseif ($bt_key === 'users.status.getConfigHint') {
+            $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "btact|cfgcol|{$bt_lang}|users.usertest.selectUsernamePrompt"]];
+        }
         $kb['inline_keyboard'][] = [['text' => '🔙 برگشت به لیست', 'callback_data' => "btact|back|{$bt_lang}"]];
         return [$info, json_encode($kb)];
     }
@@ -659,7 +679,7 @@ if (!function_exists('help_home_payload')) {
         $kb['inline_keyboard'][] = [['text' => $help_add_label, 'callback_data' => 'help_add']];
         $kb['inline_keyboard'][] = [['text' => $help_list_label, 'callback_data' => "help_view_list:{$lang}", 'style' => $help_style]];
         $kb['inline_keyboard'][] = [['text' => $help_display_label, 'callback_data' => "help_disp:{$lang}"]];
-        $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'help_close']];
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'help_close', 'style' => 'danger']];
         $help_caption_tpl = $help_tab_texts['Admin']['Help']['homeCaption'] ?? $textbotlang['Admin']['Help']['homeCaption'];
         $help_caption = strtr($help_caption_tpl, ['{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang]);
         return [$help_caption, json_encode($kb)];
@@ -848,7 +868,7 @@ if (!function_exists('gateway_hub_payload')) {
         }
         $kb['inline_keyboard'][] = [['text' => $t['disableAll'], 'callback_data' => "gwall:{$lang}:0"]];
         $kb['inline_keyboard'][] = [['text' => $t['enableAll'], 'callback_data' => "gwall:{$lang}:1"]];
-        $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'gwlang_close']];
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'gwlang_close', 'style' => 'danger']];
         return json_encode($kb);
     }
 }
@@ -906,7 +926,8 @@ if (!function_exists('topup_hub_payload')) {
             }
             $kb['inline_keyboard'][] = [$btn];
         }
-        $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'topup_close']];
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['gatewaysBtn'], 'callback_data' => "btnstyle_kindhub:gateway:{$lang}"]];
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'topup_close', 'style' => 'danger']];
         return json_encode($kb);
     }
 }
@@ -926,17 +947,17 @@ if (!function_exists('topup_packages_payload')) {
     function topup_packages_payload($lang, $key, $textbotlang)
     {
         $t = $textbotlang['Admin']['TopupPkg'];
-        $packages = topup_packages_for($lang, $key);
+        $packages = topup_packages_for($lang, $key, true);
         $slots = [];
         foreach ($packages as $i => $p) {
             $slots[] = topup_package_button($p, $lang, "topuppick:{$lang}:{$key}:{$i}");
         }
         $slots[] = ['text' => '➕', 'callback_data' => "topupadd:{$lang}:{$key}"];
         $kb = ['inline_keyboard' => array_chunk($slots, topup_columns_for($lang, $key))];
-        $tp_customStyle = topup_btnstyle_for($lang, $key, 'custom');
-        $tp_backStyle = topup_btnstyle_for($lang, $key, 'back');
+        $tp_customStyle = topup_btnstyle_for($lang, $key, 'custom', true);
+        $tp_backStyle = topup_btnstyle_for($lang, $key, 'back', true);
         $kb['inline_keyboard'][] = [
-            topup_styled_button($textbotlang['users']['Balance']['customAmountBtn'], $tp_customStyle, "topuphelphub:{$lang}:{$key}", 'primary'),
+            topup_styled_button($textbotlang['users']['Balance']['customAmountBtn'], $tp_customStyle, "topupminmax:{$lang}:{$key}", 'primary'),
             topup_styled_button($textbotlang['users']['Balance']['backToMethodBtn'], $tp_backStyle, "topuphelphub:{$lang}:{$key}", 'danger'),
         ];
         $kb['inline_keyboard'][] = [
@@ -976,8 +997,34 @@ if (!function_exists('topup_packages_payload')) {
                 $expCapBtn,
             ];
         }
+        if ($key === 'plisio') {
+            // same 3-row family as card (caption/button-style/expired-
+            // caption), plisio's own storage - synced here 2026-08-10 per
+            // explicit request to bring پلیسیو up to parity with کارت‌به‌کارت
+            $gwT = $textbotlang['Admin']['GatewayLang'];
+            $pCapBtn = ['text' => $gwT['plisioCapBtn'], 'callback_data' => "plisiocap:{$lang}"];
+            if (trim((string) (plisio_invoice_caption_get()[$lang] ?? '')) !== '') {
+                $pCapBtn['style'] = 'success';
+            }
+            $kb['inline_keyboard'][] = [
+                ['text' => $gwT['plisioCapDefaultBtn'], 'callback_data' => "plisiocapdefault:{$lang}"],
+                $pCapBtn,
+            ];
+            $pBtnStyleBtn = ['text' => $gwT['plisioBtnStyleBtn'], 'callback_data' => "plisiobtn:{$lang}"];
+            if (!empty(plisio_invoice_btnstyle_map()[$lang])) {
+                $pBtnStyleBtn['style'] = 'success';
+            }
+            $kb['inline_keyboard'][] = [$pBtnStyleBtn];
+            $pExpCapBtn = ['text' => $gwT['plisioExpCapBtn'], 'callback_data' => "plisioexpcap:{$lang}"];
+            if (trim((string) (plisio_invoice_expired_caption_get()[$lang] ?? '')) !== '') {
+                $pExpCapBtn['style'] = 'success';
+            }
+            $kb['inline_keyboard'][] = [
+                ['text' => $gwT['plisioExpCapDefaultBtn'], 'callback_data' => "plisioexpcapdefault:{$lang}"],
+                $pExpCapBtn,
+            ];
+        }
         $kb['inline_keyboard'][] = [['text' => $t['displayBtn'], 'callback_data' => "topupdisp:{$lang}:{$key}"]];
-        $kb['inline_keyboard'][] = [['text' => $t['minmaxBtn'], 'callback_data' => "topupminmax:{$lang}:{$key}"]];
         return json_encode($kb);
     }
 }
@@ -987,6 +1034,33 @@ if (!function_exists('topup_packages_caption')) {
         // exactly what a real user of this language/gateway would see - the
         // admin edits it right here (topupcap:) with an immediate live preview
         return topup_caption_for($lang, $key, $textbotlang['users']['Balance']['pkgPromptTitle']);
+    }
+    // topup_packages_caption_with_preview() alone stays a pure passthrough of the package
+    // caption (existing override/reset round-trip tests depend on that exact
+    // contract) - every real screen-render call site uses THIS wrapper
+    // instead, which adds quoted previews of the invoice/expired-invoice
+    // captions too (card/plisio only - other gateways have neither concept)
+    function topup_packages_caption_preview_quote($text)
+    {
+        // Telegram's HTML parser support for a <blockquote> nested inside
+        // another <blockquote> is unverified/risky - some caption defaults
+        // (e.g. plisio's cryptoInstruction) already contain their own, so
+        // strip any inner ones before wrapping to guarantee this never nests
+        return '<blockquote>' . str_replace(['<blockquote>', '</blockquote>'], '', $text) . '</blockquote>';
+    }
+    function topup_packages_caption_with_preview($lang, $key, $textbotlang)
+    {
+        $t = $textbotlang['Admin']['TopupPkg'];
+        $out = $t['captionPreviewPackagesLabel'] . "\n" . topup_packages_caption_preview_quote(topup_packages_caption($lang, $key, $textbotlang));
+        if ($key === 'card') {
+            $out .= "\n\n" . $t['captionPreviewInvoiceLabel'] . "\n" . topup_packages_caption_preview_quote(card_invoice_caption_for($lang, $textbotlang['textbot']['cart']));
+            $out .= "\n\n" . $t['captionPreviewExpiredLabel'] . "\n" . topup_packages_caption_preview_quote(card_invoice_expired_caption_for($lang, $textbotlang['users']['Balance']['cardInvoiceExpiredCaption']));
+        }
+        if ($key === 'plisio') {
+            $out .= "\n\n" . $t['captionPreviewInvoiceLabel'] . "\n" . topup_packages_caption_preview_quote(plisio_invoice_caption_for($lang, $textbotlang['users']['Balance']['cryptoInstruction']));
+            $out .= "\n\n" . $t['captionPreviewExpiredLabel'] . "\n" . topup_packages_caption_preview_quote(plisio_invoice_expired_caption_for($lang, $textbotlang['users']['Balance']['plisioInvoiceExpiredCaption']));
+        }
+        return $out;
     }
 }
 if (!function_exists('topup_help_hub_payload')) {
@@ -1016,7 +1090,7 @@ if (!function_exists('topup_help_grid_rows')) {
     // custom/back. چیدمان does NOT use this helper (see topup_help_layout_payload).
     function topup_help_grid_rows($lang, $key, $textbotlang, $cbPrefix, ?callable $decorate = null)
     {
-        $pkgs = topup_packages_for($lang, $key);
+        $pkgs = topup_packages_for($lang, $key, true);
         $cols = topup_columns_for($lang, $key);
         $rows = [];
         foreach (array_chunk($pkgs, $cols, true) as $rowPkgs) {
@@ -1030,8 +1104,8 @@ if (!function_exists('topup_help_grid_rows')) {
             }
             $rows[] = $row;
         }
-        $tp_customStyle = topup_btnstyle_for($lang, $key, 'custom');
-        $tp_backStyle = topup_btnstyle_for($lang, $key, 'back');
+        $tp_customStyle = topup_btnstyle_for($lang, $key, 'custom', true);
+        $tp_backStyle = topup_btnstyle_for($lang, $key, 'back', true);
         $customBtn = topup_styled_button($textbotlang['users']['Balance']['customAmountBtn'], $tp_customStyle, "{$cbPrefix}:{$lang}:{$key}:custom", 'primary');
         $backBtn = topup_styled_button($textbotlang['users']['Balance']['backToMethodBtn'], $tp_backStyle, "{$cbPrefix}:{$lang}:{$key}:back", 'danger');
         if ($decorate !== null) {
@@ -1062,10 +1136,16 @@ if (!function_exists('topup_help_emoji_payload')) {
     // live-preview emoji picker, mirroring help_emoji_editor_payload: the
     // button already shows its own current emoji (topup_package_button /
     // topup_styled_button render it), no extra decoration needed
-    function topup_help_emoji_payload($lang, $key, $textbotlang)
+        function topup_help_emoji_payload($lang, $key, $textbotlang)
     {
         $t = $textbotlang['Admin']['TopupPkg'];
         $rows = topup_help_grid_rows($lang, $key, $textbotlang, 'topuphelpemopick');
+        $rows[] = [
+            ['text' => $t['emojiPosLeftBtn'], 'callback_data' => "topuphelpemopos:{$lang}:{$key}:left"],
+            ['text' => $t['emojiPosRightBtn'], 'callback_data' => "topuphelpemopos:{$lang}:{$key}:right"],
+        ];
+        $es_simple_state = topup_emoji_simple_for($lang, $key) ? $textbotlang['Admin']['Status']['statuson'] : $textbotlang['Admin']['Status']['statusoff'];
+        $rows[] = [['text' => strtr($textbotlang['Admin']['Help']['simpleModeBtn'], ['{state}' => $es_simple_state]), 'callback_data' => "topuphelpemosimple:{$lang}:{$key}"]];
         $rows[] = [['text' => $textbotlang['Admin']['Help']['resetEmojiBtn'], 'callback_data' => "topuphelpemoreset:{$lang}:{$key}"]];
         $rows[] = [['text' => $t['backBtn'], 'callback_data' => "topuphelphub:{$lang}:{$key}"]];
         return json_encode(['inline_keyboard' => $rows]);
@@ -1102,19 +1182,25 @@ if (!function_exists('topup_help_layout_payload')) {
     function topup_help_layout_payload($lang, $key, $textbotlang, $selectedIdx = null)
     {
         $t = $textbotlang['Admin']['TopupPkg'];
-        $pkgs = topup_packages_for($lang, $key);
+        $pkgs = topup_packages_for($lang, $key, true);
         $cols = topup_columns_for($lang, $key);
+        $pkgSelected = (is_int($selectedIdx) || ctype_digit((string) $selectedIdx)) ? (int) $selectedIdx : null;
         $rows = [];
         foreach (array_chunk($pkgs, $cols, true) as $rowPkgs) {
             $row = [];
             foreach ($rowPkgs as $i => $p) {
                 $default = money($p['amount'] ?? '0', currency_for_lang($lang));
                 $btn = topup_styled_button($default, $p, '');
-                if ($selectedIdx !== null && $i === $selectedIdx) {
+                if ($pkgSelected !== null && $i === $pkgSelected) {
                     $btn['text'] = '🔵 ' . $btn['text'];
                     $btn['callback_data'] = "topuphelplaycancel:{$lang}:{$key}";
-                } elseif ($selectedIdx !== null) {
-                    $btn['callback_data'] = "topuphelplayswap:{$lang}:{$key}:{$selectedIdx}:{$i}";
+                } elseif ($pkgSelected !== null) {
+                    $btn['callback_data'] = "topuphelplayswap:{$lang}:{$key}:{$pkgSelected}:{$i}";
+                } elseif ($selectedIdx === 'custom' || $selectedIdx === 'back') {
+                    // مبلغ دلخواه/بازگشت is pending - packages are not a
+                    // valid swap target for it, so stay inert (symmetric
+                    // with custom/back going inert while a package is picked)
+                    $btn['callback_data'] = "topuphelplaynoop:{$lang}:{$key}";
                 } else {
                     $btn['callback_data'] = "topuphelplaypick:{$lang}:{$key}:{$i}";
                 }
@@ -1122,12 +1208,38 @@ if (!function_exists('topup_help_layout_payload')) {
             }
             $rows[] = $row;
         }
-        $tp_customStyle = topup_btnstyle_for($lang, $key, 'custom');
-        $tp_backStyle = topup_btnstyle_for($lang, $key, 'back');
-        $rows[] = [
-            topup_styled_button($textbotlang['users']['Balance']['customAmountBtn'], $tp_customStyle, "topuphelplaynoop:{$lang}:{$key}", 'primary'),
-            topup_styled_button($textbotlang['users']['Balance']['backToMethodBtn'], $tp_backStyle, "topuphelplaynoop:{$lang}:{$key}", 'danger'),
-        ];
+        $tp_customStyle = topup_btnstyle_for($lang, $key, 'custom', true);
+        $tp_backStyle = topup_btnstyle_for($lang, $key, 'back', true);
+        $customBtn = topup_styled_button($textbotlang['users']['Balance']['customAmountBtn'], $tp_customStyle, '', 'primary');
+        $backBtn = topup_styled_button($textbotlang['users']['Balance']['backToMethodBtn'], $tp_backStyle, '', 'danger');
+        // مبلغ دلخواه/بازگشت are only ever swappable with EACH OTHER, never
+        // with a real package - and a real package is only ever swappable
+        // with another real package, never with these two
+        if ($selectedIdx === 'custom') {
+            $customBtn['text'] = '🔵 ' . $customBtn['text'];
+            $customBtn['callback_data'] = "topuphelplaycancel:{$lang}:{$key}";
+            $backBtn['callback_data'] = "topuphelplayswap:{$lang}:{$key}:custom:back";
+        } elseif ($selectedIdx === 'back') {
+            $backBtn['text'] = '🔵 ' . $backBtn['text'];
+            $backBtn['callback_data'] = "topuphelplaycancel:{$lang}:{$key}";
+            $customBtn['callback_data'] = "topuphelplayswap:{$lang}:{$key}:back:custom";
+        } elseif ($selectedIdx === null) {
+            $customBtn['callback_data'] = "topuphelplaypick:{$lang}:{$key}:custom";
+            $backBtn['callback_data'] = "topuphelplaypick:{$lang}:{$key}:back";
+        } else {
+            $customBtn['callback_data'] = "topuphelplaynoop:{$lang}:{$key}";
+            $backBtn['callback_data'] = "topuphelplaynoop:{$lang}:{$key}";
+        }
+        $pair = [$customBtn, $backBtn];
+        if (topup_custom_back_swapped($lang, $key)) {
+            $pair = array_reverse($pair);
+        }
+        $rows[] = $pair;
+        $fullWidthBtn = ['text' => $t['fullWidthBtn'], 'callback_data' => "topuphelpfullwidth:{$lang}:{$key}"];
+        if ($cols === 1) {
+            $fullWidthBtn['style'] = 'success';
+        }
+        $rows[] = [$fullWidthBtn];
         $rows[] = [['text' => $t['backBtn'], 'callback_data' => "topuphelphub:{$lang}:{$key}"]];
         return json_encode(['inline_keyboard' => $rows]);
     }
@@ -1278,6 +1390,50 @@ if (!function_exists('card_invoice_btnrename_payload')) {
         }
         $rows[] = [['text' => $textbotlang['Admin']['BtnStyle']['resetRenameBtn'], 'callback_data' => "cardbtnrenreset:{$lang}"]];
         $rows[] = [['text' => $textbotlang['Admin']['GatewayLang']['backBtn'], 'callback_data' => "cardbtn:{$lang}"]];
+        return json_encode(['inline_keyboard' => $rows]);
+    }
+}
+if (!function_exists('plisio_invoice_btnstyle_hub_payload')) {
+    function plisio_invoice_btnstyle_hub_payload($lang, $textbotlang)
+    {
+        $kb = ['inline_keyboard' => [
+            [['text' => $textbotlang['Admin']['Help']['colorBtn'], 'callback_data' => "plisiobtncol:{$lang}"]],
+            [['text' => $textbotlang['Admin']['BtnStyle']['renameBtn'], 'callback_data' => "plisiobtnren:{$lang}"]],
+            [['text' => $textbotlang['Admin']['GatewayLang']['backBtn'], 'callback_data' => "topupset:{$lang}:plisio"]],
+        ]];
+        return json_encode($kb);
+    }
+}
+if (!function_exists('plisio_invoice_btncolor_payload')) {
+    function plisio_invoice_btncolor_payload($lang, $textbotlang)
+    {
+        $styleEmoji = ['' => '⚪', 'primary' => '🔵', 'success' => '🟢', 'danger' => '🔴'];
+        $rows = [];
+        foreach (plisio_invoice_btnstyle_items($textbotlang) as $which => $defaultLabel) {
+            $style = plisio_invoice_btnstyle_for($lang, $which);
+            $btn = topup_styled_button($defaultLabel, $style, "plisiobtncolpick:{$lang}:{$which}");
+            $color = (string) ($style['color'] ?? '');
+            $btn['text'] .= ' ' . ($styleEmoji[$color] ?? '⚪');
+            $rows[] = [$btn];
+        }
+        $rows[] = [['text' => $textbotlang['Admin']['GatewayLang']['backBtn'], 'callback_data' => "plisiobtn:{$lang}"]];
+        return json_encode(['inline_keyboard' => $rows]);
+    }
+}
+if (!function_exists('plisio_invoice_btnrename_payload')) {
+    function plisio_invoice_btnrename_payload($lang, $textbotlang)
+    {
+        $rows = [];
+        foreach (plisio_invoice_btnstyle_items($textbotlang) as $which => $defaultLabel) {
+            $style = plisio_invoice_btnstyle_for($lang, $which);
+            $btn = topup_styled_button($defaultLabel, $style, "plisiobtnrenpick:{$lang}:{$which}");
+            if (trim((string) ($style['label'] ?? '')) !== '') {
+                $btn['text'] .= ' ✏️';
+            }
+            $rows[] = [$btn];
+        }
+        $rows[] = [['text' => $textbotlang['Admin']['BtnStyle']['resetRenameBtn'], 'callback_data' => "plisiobtnrenreset:{$lang}"]];
+        $rows[] = [['text' => $textbotlang['Admin']['GatewayLang']['backBtn'], 'callback_data' => "plisiobtn:{$lang}"]];
         return json_encode(['inline_keyboard' => $rows]);
     }
 }
@@ -1827,6 +1983,49 @@ if (!function_exists('help_layout_back_label')) {
         return $textbotlang['Admin']['LangScope']['backToHubBtn'];
     }
 }
+if (!function_exists('shop_feature_status_payload')) {
+    function shop_feature_status_payload($textbotlang)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $marzbanstatusextra = select("shopSetting", "*", "Namevalue", "statusextra", "select")['value'];
+        $marzbandirectpay = select("shopSetting", "*", "Namevalue", "statusdirectpabuy", "select")['value'];
+        $statustimeextra = select("shopSetting", "*", "Namevalue", "statustimeextra", "select")['value'];
+        $statusdisorder = select("shopSetting", "*", "Namevalue", "statusdisorder", "select")['value'];
+        $statuschangeservice = select("shopSetting", "*", "Namevalue", "statuschangeservice", "select")['value'];
+        $statusshowprice = select("shopSetting", "*", "Namevalue", "statusshowprice", "select")['value'];
+        $statusshowconfig = select("shopSetting", "*", "Namevalue", "configshow", "select")['value'];
+        $statusremoveserveice = select("shopSetting", "*", "Namevalue", "backserviecstatus", "select")['value'];
+        $btn = function ($isOn, $label, $cb) {
+            return [
+                'text' => ($isOn ? '✅ ' : '❌ ') . $label,
+                'callback_data' => $cb,
+                'style' => $isOn ? 'success' : 'danger',
+            ];
+        };
+        $rows = [];
+        $rows[] = [$btn($marzbanstatusextra == 'onextra', $textbotlang['Admin']['Status']['statusVolumeExtra'], "editshops-extravolunme-$marzbanstatusextra")];
+        $rows[] = [$btn($marzbandirectpay == 'ondirectbuy', $textbotlang['Admin']['Status']['paydirect'], "editshops-paydirect-$marzbandirectpay")];
+        $rows[] = [$btn($statustimeextra == 'ontimeextraa', $textbotlang['Admin']['Status']['statusTimeExtra'], "editshops-statustimeextra-$statustimeextra")];
+        $rows[] = [$btn($statusdisorder == 'ondisorder', $textbotlang['keyboard']['sendDisruptionReport'], "editshops-disorderss-$statusdisorder")];
+        $rows[] = [$btn($setting['statuscategorygenral'] == 'oncategorys', $textbotlang['keyboard']['categoryBug'], "editshops-categroygenral-" . $setting['statuscategorygenral'])];
+        $rows[] = [$btn($setting['statuscategory'] == 'oncategory', $textbotlang['Admin']['Status']['statusCategoryTime'], "editshops-categorytime-{$setting['statuscategory']}")];
+        $rows[] = [$btn($statuschangeservice == 'onstatus', $textbotlang['keyboard']['deactivateAccountStatus'], "editshops-changgestatus-" . $statuschangeservice)];
+        $rows[] = [$btn($statusshowprice == 'onshowprice', $textbotlang['keyboard']['showProductPrice'], "editshops-showprice-" . $statusshowprice)];
+        $rows[] = [$btn($statusshowconfig == 'onconfig', $textbotlang['keyboard']['getConfigBtn'], "editshops-showconfig-" . $statusshowconfig)];
+        $rows[] = [$btn($statusremoveserveice == 'on', $textbotlang['keyboard']['refundBtn'], "editshops-removeservicebackbtn-" . $statusremoveserveice)];
+        return json_encode(['inline_keyboard' => $rows]);
+    }
+}
+if (!function_exists('displayhub_payload')) {
+    function displayhub_payload($textbotlang)
+    {
+        return json_encode(['inline_keyboard' => [
+            [['text' => $textbotlang['Admin']['LangScope']['hubBtn'], 'callback_data' => 'displayhub_open:langscope']],
+            [['text' => $textbotlang['Admin']['BtnStyle']['hubBtn'], 'callback_data' => 'displayhub_open:btnstyle']],
+            [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'displayhub_close', 'style' => 'danger']],
+        ]]);
+    }
+}
 if (!function_exists('btnstyle_hub_payload')) {
     // top screen of "🎨 شخصی‌سازی نمایش دکمه‌ها": language tabs + the three
     // commerce kinds this tool covers (panels/products/categories)
@@ -1843,8 +2042,8 @@ if (!function_exists('btnstyle_hub_payload')) {
         $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['panelsBtn'], 'callback_data' => "btnstyle_kindhub:panel:{$lang}"]];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['productsBtn'], 'callback_data' => "btnstyle_kindhub:product:{$lang}"]];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['categoriesBtn'], 'callback_data' => "btnstyle_kindhub:category:{$lang}"]];
-        $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['gatewaysBtn'], 'callback_data' => "btnstyle_kindhub:gateway:{$lang}"]];
-        $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'btnstyle_close']];
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['backToHubBtn'], 'callback_data' => 'displayhub_back']];
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'btnstyle_close', 'style' => 'danger']];
         return json_encode($kb);
     }
 }
@@ -1858,7 +2057,7 @@ if (!function_exists('btnstyle_kindhub_payload')) {
         $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['colorBtn'], 'callback_data' => "help_col:{$kind}:{$lang}"]];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['emojiBtn'], 'callback_data' => "help_emo:{$kind}:{$lang}"]];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['BtnStyle']['renameBtn'], 'callback_data' => "help_ren:{$kind}:{$lang}"]];
-        $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['backToHubBtn'], 'callback_data' => "btnstyle_lang:{$lang}"]];
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['backToHubBtn'], 'callback_data' => $kind === 'gateway' ? "topuplang:{$lang}" : "btnstyle_lang:{$lang}"]];
         return json_encode($kb);
     }
 }
@@ -2194,6 +2393,63 @@ if ($text == "🔘 تنظیمات دکمه‌ها" && $adminrulecheck['rule'] ==
     return;
 }
 
+//----------------[  config column-order manager (lives inside the 🔑 تنظیم اکانت تست
+//                   bottext item only - was briefly also in the 🔘 hub, moved per request) ]----------------
+if (preg_match('/^btact\|cfgcol\|([a-z]{2})\|(.+)$/', $datain, $btm) && $adminrulecheck['rule'] == "administrator") {
+    list($cc_info, $cc_kb) = config_col_order_payload($textbotlang, $btm[1], $btm[2]);
+    Editmessagetext($from_id, $message_id, $cc_info, $cc_kb, 'HTML');
+    return;
+}if (preg_match('/^cfgcolel-([0123])-([a-z]{2})$/', $datain, $cc_m) && $adminrulecheck['rule'] == "administrator") {
+    list($cc_info, $cc_kb) = configdisplay_element_payload($cc_m[2], (int) $cc_m[1], $textbotlang);
+    Editmessagetext($from_id, $message_id, $cc_info, $cc_kb, 'HTML');
+    return;
+}
+if (preg_match('/^cfgcoltext-([0123])-([a-z]{2})$/', $datain, $cc_m) && $adminrulecheck['rule'] == "administrator") {
+    savedata("clear", "bt_msgid", $message_id);
+    step("cfgcoltxt-{$cc_m[2]}-{$cc_m[1]}", $from_id);
+    $cc_cancel_kb = json_encode(['inline_keyboard' => [
+        [['text' => '❌ انصراف', 'callback_data' => "cfgcolel-{$cc_m[1]}-{$cc_m[2]}"]],
+    ]]);
+    Editmessagetext($from_id, $message_id, "✏️ متن جدید رو بفرست ✍️", $cc_cancel_kb, 'HTML');
+    return;
+}
+if (preg_match('/^cfgcolelstyle-([0123])-(primary|success|danger)-([a-z]{2})$/', $datain, $cc_m) && $adminrulecheck['rule'] == "administrator") {
+    configdisplay_element_set_style($cc_m[3], (int) $cc_m[1], $cc_m[2]);
+    list($cc_info, $cc_kb) = configdisplay_element_payload($cc_m[3], (int) $cc_m[1], $textbotlang);
+    Editmessagetext($from_id, $message_id, $cc_info, $cc_kb, 'HTML');
+    return;
+}
+if (preg_match('/^cfgcolelrst-([0123])-([a-z]{2})$/', $datain, $cc_m) && $adminrulecheck['rule'] == "administrator") {
+    configdisplay_element_reset($cc_m[2], (int) $cc_m[1]);
+    list($cc_info, $cc_kb) = configdisplay_element_payload($cc_m[2], (int) $cc_m[1], $textbotlang);
+    Editmessagetext($from_id, $message_id, "🔁 این المان به پیش‌فرض برگشت.\n\n" . $cc_info, $cc_kb, 'HTML');
+    return;
+}
+if (preg_match('/^cfgcoldemo-([a-z]{2})$/', $datain, $cc_m) && $adminrulecheck['rule'] == "administrator") {
+    telegram('answerCallbackQuery', [
+        'callback_query_id' => $callback_query_id,
+        'text' => '🔘 این یه دکمه‌ی نمایشیه، فقط برای اینه که ببینی رنگ پیش‌فرض (سفید) چه شکلیه - کارکردی نداره.',
+        'show_alert' => true,
+        'cache_time' => 1,
+    ]);
+    return;
+}
+if (preg_match('/^btprevdemo-([a-z]{2})$/', $datain, $bt_pd_m) && $adminrulecheck['rule'] == "administrator") {
+    telegram('answerCallbackQuery', [
+        'callback_query_id' => $callback_query_id,
+        'text' => '👁 این دکمه‌ها فقط برای پیش‌نمایش هستن و کارکرد واقعی ندارن.',
+        'show_alert' => true,
+        'cache_time' => 1,
+    ]);
+    return;
+}
+if (preg_match('/^cfgcolbt-(getfirst|namefirst)-([a-z]{2})$/', $datain, $cc_m) && $adminrulecheck['rule'] == "administrator") {
+    $cc_value = ($cc_m[1] === 'namefirst') ? 'name_first' : 'config_first';
+    update("setting", "configColOrder", $cc_value, null, null);
+    list($cc_info, $cc_kb) = config_col_order_payload($textbotlang, $cc_m[2], 'users.usertest.selectUsernamePrompt');
+    Editmessagetext($from_id, $message_id, $cc_info, $cc_kb, 'HTML');
+    return;
+}
 //----------------[  button color manager handlers  ]----------------
 if ($text == "🎨 رنگ‌بندی دکمه‌ها" && $adminrulecheck['rule'] == "administrator") {
     sendmessage($from_id, "🎨 <b>بخش رنگ‌بندی دکمه‌های منوی اصلی</b>\n\nنوع کیبورد رو انتخاب کن 👇", $keyboard_colormanage, 'HTML');
@@ -2424,6 +2680,9 @@ if (preg_match('/^setsticker-(\d+)-(\d+)$/', $user['step'], $es_match) && $datai
             $es_msg = "✅ استیکر حذف شد.";
         } elseif ($es_fileid !== '') {
             $es_layout['keyboard'][$es_r][$es_c]['sticker'] = $es_fileid;
+            if (($es_layout['keyboard'][$es_r][$es_c]['text'] ?? '') === 'text_usertest') {
+                unset($es_layout['text_stickers']['users.usertest.selectUsernamePrompt']);
+            }
             update("setting", "keyboardmain", json_encode($es_layout));
             $es_msg = "✅ استیکر ذخیره شد! حالا کاربر که این دکمه رو بزنه، اول این استیکر براش ارسال می‌شه ✨";
         } else {
@@ -2650,30 +2909,92 @@ if ($datain == "renamereset" && $adminrulecheck['rule'] == "administrator") {
 if (preg_match('/^btact\|text\|([a-z]{2})\|(.+)$/', $datain, $btm) && $adminrulecheck['rule'] == "administrator") {
     savedata("clear", "bt_lang", $btm[1]);
     savedata("save", "bt_key", $btm[2]);
+    savedata("save", "bt_msgid", $message_id);
     step("get_new_text", $from_id);
     $bt_kb = json_encode(['inline_keyboard' => [
         [['text' => '🗑 ریست به پیش‌فرض', 'callback_data' => "btact|rsttext|{$btm[1]}|{$btm[2]}"]],
         [['text' => '❌ انصراف', 'callback_data' => "btact|cancel|{$btm[1]}|{$btm[2]}"]],
     ]]);
-    sendmessage($from_id, "✏️ متن جدید رو بفرست ✍️\n\n🗑 برای برگشت به متن پیش‌فرض، دکمه ریست رو بزن", $bt_kb, 'HTML');
+    $bt_prompt = "✏️ متن جدید رو بفرست ✍️\n\n🗑 برای برگشت به متن پیش‌فرض، دکمه ریست رو بزن";
+    $bt_prompt .= "\n\n📌 راهنمای فرمت\u{200C}بندی\n";
+    $bt_prompt .= "به\u{200C}جای X متن دلخواه خودتان را بگذارید:\n\n";
+    $bt_prompt .= "🔹 استایل متن\n";
+    $bt_prompt .= "• پررنگ: <code>&lt;b&gt;X&lt;/b&gt;</code>\n";
+    $bt_prompt .= "• کج: <code>&lt;i&gt;X&lt;/i&gt;</code>\n";
+    $bt_prompt .= "• زیرخط\u{200C}دار: <code>&lt;u&gt;X&lt;/u&gt;</code>\n";
+    $bt_prompt .= "• خط\u{200C}خورده: <code>&lt;s&gt;X&lt;/s&gt;</code>\n";
+    $bt_prompt .= "🔹 بلوک\u{200C}های خاص\n";
+    $bt_prompt .= "• مونو: <code>&lt;code&gt;X&lt;/code&gt;</code>\n";
+    $bt_prompt .= "• قابل\u{200C}کپی: <code>&lt;pre&gt;X&lt;/pre&gt;</code>\n";
+    $bt_prompt .= "• نقل\u{200C}قول: <code>&lt;blockquote&gt;X&lt;/blockquote&gt;</code>\n";
+    $bt_prompt .= "🔹 لینک\n";
+    $bt_prompt .= "• لینک: <code>&lt;a href=\"آدرس\"&gt;X&lt;/a&gt;</code>";
+    $bt_prompt .= "\n\n🔹 ایموجی پریمیوم\n";
+    $bt_prompt .= "• به خاطر محدودیت تلگرام، ایموجی پریمیوم رو فقط ابتدای متن (سمت راست برای فارسی) بفرست";
+    if (in_array($btm[2], ['users.text_start', 'textbot.testExpired', 'textbot.preInvoice'], true)) {
+        $bt_prompt .= "\n\n🔹 اطلاعات کاربر\n";
+        $bt_prompt .= "• نام کاربری تلگرام: <code>{tg_username}</code>\n";
+        $bt_prompt .= "• آیدی عددی: <code>{userid}</code>";
+    }
+    $bt_serviceGuides = [
+        'textbot.preInvoice' => "• نام سرویس یا پلن: <code>{name_product}</code>\n"
+            . "• نام کاربری سرویس: <code>{username}</code>\n"
+            . "• مدت زمان: <code>{Service_time}</code>\n"
+            . "• قیمت: <code>{price}</code>\n"
+            . "• حجم: <code>{Volume}</code>\n"
+            . "• یادداشت محصول: <code>{note}</code>\n"
+            . "• موجودی کیف پول کاربر: <code>{userBalance}</code>",
+        'textbot.afterPay' => "• نام کاربری سرویس: <code>{username}</code>\n"
+            . "• نام سرویس: <code>{name_service}</code>\n"
+            . "• نام پنل: <code>{location}</code>\n"
+            . "• مدت زمان: <code>{day}</code>\n"
+            . "• حجم: <code>{volume}</code>\n"
+            . "• کد کانفیگ آماده: <code>{config}</code>\n"
+            . "• متن کامل کانفیگ: <code>{links}</code>\n"
+            . "• لینک ساده کانفیگ: <code>{links2}</code>\n"
+            . "• آدرس اشتراک (بعضی انواع پنل): <code>{password}</code>",
+        'textbot.afterText' => "• نام کاربری سرویس: <code>{username}</code>\n"
+            . "• نام سرویس: <code>{name_service}</code>\n"
+            . "• نام پنل: <code>{location}</code>\n"
+            . "• مدت زمان: <code>{day}</code>\n"
+            . "• حجم: <code>{volume}</code>\n"
+            . "• کد کانفیگ آماده: <code>{config}</code>\n"
+            . "• متن کامل کانفیگ: <code>{links}</code>\n"
+            . "• لینک ساده کانفیگ: <code>{links2}</code>\n"
+            . "• آدرس اشتراک (بعضی انواع پنل): <code>{password}</code>",
+        'textbot.testExpired' => "• نام کاربری سرویس: <code>{username}</code>",
+        'users.usertest.selectUsernamePrompt' => "• مدت زمان اکانت تست: <code>{testtime}</code>\n"
+            . "• حجم اکانت تست: <code>{testvolume}</code>",
+        'users.status.getConfigHint' => "• مدت زمان این سرویس: <code>{testtime}</code>\n"
+            . "• حجم این سرویس: <code>{testvolume}</code>",
+    ];
+    if (isset($bt_serviceGuides[$btm[2]])) {
+        $bt_prompt .= "\n\n🔹 اطلاعات سرویس\n" . $bt_serviceGuides[$btm[2]];
+    }
+    Editmessagetext($from_id, $message_id, $bt_prompt, $bt_kb, 'HTML');
     return;
 }
 if (preg_match('/^btact\|sticker\|([a-z]{2})\|(.+)$/', $datain, $btm) && $adminrulecheck['rule'] == "administrator") {
+    savedata("clear", "bt_msgid", $message_id);
     step("btsticker-{$btm[1]}-{$btm[2]}", $from_id);
     $bt_kb = json_encode(['inline_keyboard' => [
         [['text' => '🗑 حذف استیکر', 'callback_data' => "btact|delst|{$btm[1]}|{$btm[2]}"]],
         [['text' => '❌ انصراف', 'callback_data' => "btact|cancel|{$btm[1]}|{$btm[2]}"]],
     ]]);
-    sendmessage($from_id, "🖼 استیکر پریمیوم برای این پیام رو بفرست 🎁\n\nهر وقت ربات این پیام رو بفرسته، اول این استیکر ارسال می‌شه", $bt_kb, 'HTML');
+    $bt_stickerPrompt = "🖼 یه استیکر بفرست (هر نوع استیکری، معمولی یا پریمیوم) 🎁\n\n";
+    $bt_stickerPrompt .= "از این به بعد، هر وقت ربات این پیام رو بفرسته، اول همین استیکر ارسال می" . "\u{200C}" . "شه.\n\n";
+    $bt_stickerPrompt .= "برای حذف یا انصراف، از دکمه" . "\u{200C}" . "های پایین استفاده کن 👇";
+    Editmessagetext($from_id, $message_id, $bt_stickerPrompt, $bt_kb, 'HTML');
     return;
 }
 if (preg_match('/^btact\|react\|([a-z]{2})\|(.+)$/', $datain, $btm) && $adminrulecheck['rule'] == "administrator") {
+    savedata("clear", "bt_msgid", $message_id);
     step("btreaction-{$btm[1]}-{$btm[2]}", $from_id);
     $bt_kb = json_encode(['inline_keyboard' => [
         [['text' => '🗑 حذف ری‌اکشن', 'callback_data' => "btact|delre|{$btm[1]}|{$btm[2]}"]],
         [['text' => '❌ انصراف', 'callback_data' => "btact|cancel|{$btm[1]}|{$btm[2]}"]],
     ]]);
-    sendmessage($from_id, "❤️ ایموجی ری‌اکشن رو بفرست ✍️ (مثل ❤️ 🔥 👍)\n\nوقتی کاربر این پیام رو فعال کنه، ربات روی پیام کاربر این ری‌اکشن رو می‌ذاره", $bt_kb, 'HTML');
+    Editmessagetext($from_id, $message_id, "❤️ ایموجی ری‌اکشن رو بفرست ✍️ (مثل ❤️ 🔥 👍)\n\nوقتی کاربر این پیام رو فعال کنه، ربات روی پیام کاربر این ری‌اکشن رو می‌ذاره", $bt_kb, 'HTML');
     return;
 }
 if (preg_match('/^btact\|prev\|([a-z]{2})\|(.+)$/', $datain, $btm) && $adminrulecheck['rule'] == "administrator") {
@@ -2681,7 +3002,25 @@ if (preg_match('/^btact\|prev\|([a-z]{2})\|(.+)$/', $datain, $btm) && $adminrule
     if ($bt_val === '') {
         $bt_val = '⚠️ متن پیدا نشد.';
     }
-    sendmessage($from_id, "👁 <b>پیش‌نمایش:</b>\n\n" . $bt_val, null, 'HTML');
+    $bt_prev_text = "👁 <b>پیش‌نمایش:</b>\n\n" . $bt_val;
+    $bt_prev_rows = [];
+    if ($btm[2] === 'users.usertest.selectUsernamePrompt') {
+        $bt_prev_text .= "\n\n➖➖➖➖➖➖➖➖➖➖\n👁 <b>پیش‌نمایش مرحله‌ی بعد (دریافت کانفیگ):</b>\n\n" . $textbotlang['users']['status']['getConfigHint'];
+        $bt_cfg_sample = json_decode(keyboard_config(['vless://uuid@host:443?security=none#' . rawurlencode('🇩🇪 Germany #1')], 0, false), true);
+        foreach ($bt_cfg_sample['inline_keyboard'] as $bt_cfg_row) {
+            foreach ($bt_cfg_row as &$bt_cfg_btn) {
+                // this is a sample render with a fake id_invoice - real callback_data
+                // here would hit the live getconfig handler and fail with "service not
+                // found"; route every button to the demo alert instead
+                $bt_cfg_btn['callback_data'] = "btprevdemo-{$btm[1]}";
+            }
+            unset($bt_cfg_btn);
+            $bt_prev_rows[] = $bt_cfg_row;
+        }
+    }
+    $bt_prev_rows[] = [['text' => '🔙 برگشت', 'callback_data' => "bt_edit|{$btm[1]}|{$btm[2]}"]];
+    $bt_prev_kb = json_encode(['inline_keyboard' => $bt_prev_rows]);
+    Editmessagetext($from_id, $message_id, $bt_prev_text, $bt_prev_kb, 'HTML');
     return;
 }
 if (preg_match('/^btact\|back\|([a-z]{2})$/', $datain, $btm) && $adminrulecheck['rule'] == "administrator") {
@@ -2696,13 +3035,11 @@ if (preg_match('/^btact\|rsttext\|([a-z]{2})\|(.+)$/', $datain, $btm) && $adminr
     if (!is_array($bt_map)) {
         $bt_map = [];
     }
-    $bt_p = explode('.', $btm[2]);
-    unset($bt_map[$btm[1]][$bt_p[0]][$bt_p[1]]);
-    if (empty($bt_map[$btm[1]][$bt_p[0]])) {
-        unset($bt_map[$btm[1]][$bt_p[0]]);
-    }
-    if (empty($bt_map[$btm[1]])) {
-        unset($bt_map[$btm[1]]);
+    if (isset($bt_map[$btm[1]]) && is_array($bt_map[$btm[1]])) {
+        bottext_dotted_unset($bt_map[$btm[1]], $btm[2]);
+        if (empty($bt_map[$btm[1]])) {
+            unset($bt_map[$btm[1]]);
+        }
     }
     update("setting", "text_edit", empty($bt_map) ? null : json_encode($bt_map, JSON_UNESCAPED_UNICODE), null, null);
     step('home', $from_id);
@@ -2717,13 +3054,11 @@ if (preg_match('/^btact\|rstall\|([a-z]{2})\|(.+)$/', $datain, $btm) && $adminru
     if (!is_array($bt_map)) {
         $bt_map = [];
     }
-    $bt_p = explode('.', $btm[2]);
-    unset($bt_map[$btm[1]][$bt_p[0]][$bt_p[1]]);
-    if (empty($bt_map[$btm[1]][$bt_p[0]])) {
-        unset($bt_map[$btm[1]][$bt_p[0]]);
-    }
-    if (empty($bt_map[$btm[1]])) {
-        unset($bt_map[$btm[1]]);
+    if (isset($bt_map[$btm[1]]) && is_array($bt_map[$btm[1]])) {
+        bottext_dotted_unset($bt_map[$btm[1]], $btm[2]);
+        if (empty($bt_map[$btm[1]])) {
+            unset($bt_map[$btm[1]]);
+        }
     }
     update("setting", "text_edit", empty($bt_map) ? null : json_encode($bt_map, JSON_UNESCAPED_UNICODE), null, null);
     $bt_layout = json_decode((string) ($bt_setting['keyboardmain'] ?? ''), true);
@@ -2773,12 +3108,80 @@ if (preg_match('/^btact\|cancel\|([a-z]{2})\|(.+)$/', $datain, $btm) && $adminru
     Editmessagetext($from_id, $message_id, $btm_text, $btm_kb, 'HTML');
     return;
 }
+if (preg_match('/^btact\|btns\|([a-z]{2})$/', $datain, $btm) && $adminrulecheck['rule'] == "administrator") {
+    list($ub_text, $ub_kb) = usertest_prompt_buttons_payload($btm[1], $textbotlang);
+    Editmessagetext($from_id, $message_id, $ub_text, $ub_kb, 'HTML');
+    return;
+}
+if (preg_match('/^btact\|btn\|([a-z]{2})\|([01])$/', $datain, $btm) && $adminrulecheck['rule'] == "administrator") {
+    list($ub_text, $ub_kb) = usertest_prompt_button_detail_payload($btm[1], (int) $btm[2], $textbotlang);
+    Editmessagetext($from_id, $message_id, $ub_text, $ub_kb, 'HTML');
+    return;
+}
+if (preg_match('/^btact\|btntext\|([a-z]{2})\|([01])$/', $datain, $btm) && $adminrulecheck['rule'] == "administrator") {
+    savedata("clear", "bt_msgid", $message_id);
+    step("btbtntext-{$btm[1]}-{$btm[2]}", $from_id);
+    $ub_cancel_kb = json_encode(['inline_keyboard' => [
+        [['text' => '❌ انصراف', 'callback_data' => "btact|btn|{$btm[1]}|{$btm[2]}"]],
+    ]]);
+    Editmessagetext($from_id, $message_id, "✏️ متن جدید دکمه رو بفرست ✍️", $ub_cancel_kb, 'HTML');
+    return;
+}
+if (preg_match('/^btact\|btnstyle\|([a-z]{2})\|([01])\|(primary|success|danger)$/', $datain, $btm) && $adminrulecheck['rule'] == "administrator") {
+    $ub_lang = $btm[1];
+    $ub_idx = (int) $btm[2];
+    $ub_style = $btm[3];
+    $ub_setting = select("setting", "*", null, null, "select");
+    $ub_be = json_decode((string) ($ub_setting['button_edit'] ?? ''), true);
+    if (!is_array($ub_be)) {
+        $ub_be = [];
+    }
+    $ub_be[$ub_lang]['users.usertest.selectUsernamePrompt'][$ub_idx]['style'] = $ub_style;
+    update("setting", "button_edit", json_encode($ub_be, JSON_UNESCAPED_UNICODE), null, null);
+    list($ub_text, $ub_kb) = usertest_prompt_button_detail_payload($ub_lang, $ub_idx, $textbotlang);
+    Editmessagetext($from_id, $message_id, $ub_text, $ub_kb, 'HTML');
+    return;
+}
+if (preg_match('/^btact\|btnrst\|([a-z]{2})\|([01])$/', $datain, $btm) && $adminrulecheck['rule'] == "administrator") {
+    $ub_lang = $btm[1];
+    $ub_idx = (int) $btm[2];
+    $ub_setting = select("setting", "*", null, null, "select");
+    $ub_be = json_decode((string) ($ub_setting['button_edit'] ?? ''), true);
+    if (is_array($ub_be) && isset($ub_be[$ub_lang]['users.usertest.selectUsernamePrompt'][$ub_idx])) {
+        unset($ub_be[$ub_lang]['users.usertest.selectUsernamePrompt'][$ub_idx]);
+        if (empty($ub_be[$ub_lang]['users.usertest.selectUsernamePrompt'])) {
+            unset($ub_be[$ub_lang]['users.usertest.selectUsernamePrompt']);
+        }
+        if (empty($ub_be[$ub_lang])) {
+            unset($ub_be[$ub_lang]);
+        }
+        update("setting", "button_edit", empty($ub_be) ? null : json_encode($ub_be, JSON_UNESCAPED_UNICODE), null, null);
+    }
+    list($ub_text, $ub_kb) = usertest_prompt_button_detail_payload($ub_lang, $ub_idx, $textbotlang);
+    Editmessagetext($from_id, $message_id, "🔁 این دکمه به پیش‌فرض برگشت.\n\n" . $ub_text, $ub_kb, 'HTML');
+    return;
+}
+if (preg_match('/^btact\|btnsrstall\|([a-z]{2})$/', $datain, $btm) && $adminrulecheck['rule'] == "administrator") {
+    $ub_lang = $btm[1];
+    $ub_setting = select("setting", "*", null, null, "select");
+    $ub_be = json_decode((string) ($ub_setting['button_edit'] ?? ''), true);
+    if (is_array($ub_be) && isset($ub_be[$ub_lang])) {
+        unset($ub_be[$ub_lang]['users.usertest.selectUsernamePrompt']);
+        if (empty($ub_be[$ub_lang])) {
+            unset($ub_be[$ub_lang]);
+        }
+        update("setting", "button_edit", empty($ub_be) ? null : json_encode($ub_be, JSON_UNESCAPED_UNICODE), null, null);
+    }
+    list($ub_text, $ub_kb) = usertest_prompt_buttons_payload($ub_lang, $textbotlang);
+    Editmessagetext($from_id, $message_id, "🔁 همه دکمه‌ها به پیش‌فرض برگشتن.\n\n" . $ub_text, $ub_kb, 'HTML');
+    return;
+}
 if (preg_match('/^btsticker-([a-z]{2})-(.+)$/', (string) $user['step'], $btm) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
     $bt_lang = $btm[1];
     $bt_key = $btm[2];
     $bt_fileid = $update['message']['sticker']['file_id'] ?? '';
     if ($bt_fileid === '') {
-        sendmessage($from_id, "⚠️ لطفاً یه استیکر بفرست (ترجیحاً استیکر پریمیوم) 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ لطفاً یه استیکر بفرست (هر نوع استیکری قابل قبوله) 😅", $backadmin, 'HTML');
         return;
     }
     $bt_setting = select("setting", "*", null, null, "select");
@@ -2788,12 +3191,30 @@ if (preg_match('/^btsticker-([a-z]{2})-(.+)$/', (string) $user['step'], $btm) &&
             $bt_layout['text_stickers'] = [];
         }
         bt_media_set($bt_layout['text_stickers'], $bt_key, $bt_lang, $bt_fileid);
+        if ($bt_key === 'users.usertest.selectUsernamePrompt' && isset($bt_layout['keyboard']) && is_array($bt_layout['keyboard'])) {
+            foreach ($bt_layout['keyboard'] as $bt_kr => $bt_krow) {
+                if (!is_array($bt_krow)) {
+                    continue;
+                }
+                foreach ($bt_krow as $bt_kc => $bt_kbtn) {
+                    if (is_array($bt_kbtn) && ($bt_kbtn['text'] ?? '') === 'text_usertest') {
+                        unset($bt_layout['keyboard'][$bt_kr][$bt_kc]['sticker']);
+                    }
+                }
+            }
+        }
         update("setting", "keyboardmain", json_encode($bt_layout, JSON_UNESCAPED_UNICODE), null, null);
     }
     step('home', $from_id);
     list($btm_text, $btm_kb) = bottext_item_menu_payload($bt_key, $bt_lang, $textbotlang);
-    sendmessage($from_id, "✅ استیکر ذخیره شد! حالا هر وقت ربات این پیام رو بفرسته، اول این استیکر ارسال می‌شه ✨", null, 'HTML');
-    sendmessage($from_id, $btm_text, $btm_kb, 'HTML');
+    $bt_stmsgid = intval(json_decode((string) ($user['Processing_value'] ?? ''), true)['bt_msgid'] ?? 0);
+    $bt_done_msg = "✅ استیکر ذخیره شد! حالا هر وقت ربات این پیام رو بفرسته، اول این استیکر ارسال می‌شه ✨" . "\n\n" . $btm_text;
+    deletemessage($from_id, $message_id);
+    if ($bt_stmsgid > 0) {
+        Editmessagetext($from_id, $bt_stmsgid, $bt_done_msg, $btm_kb, 'HTML');
+    } else {
+        sendmessage($from_id, $bt_done_msg, $btm_kb, 'HTML');
+    }
     return;
 }
 if (preg_match('/^btreaction-([a-z]{2})-(.+)$/', (string) $user['step'], $btm) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
@@ -2815,14 +3236,69 @@ if (preg_match('/^btreaction-([a-z]{2})-(.+)$/', (string) $user['step'], $btm) &
         update("setting", "keyboardmain", json_encode($bt_layout, JSON_UNESCAPED_UNICODE), null, null);
     }
     step('home', $from_id);
+    $bt_remsgid = intval(json_decode((string) ($user['Processing_value'] ?? ''), true)['bt_msgid'] ?? 0);
     list($btm_text, $btm_kb) = bottext_item_menu_payload($bt_key, $bt_lang, $textbotlang);
-    sendmessage($from_id, "✅ ری‌اکشن {$bt_emoji} ذخیره شد! وقتی کاربر این پیام رو فعال کنه، ربات روی پیامش این ری‌اکشن رو می‌ذاره", null, 'HTML');
-    sendmessage($from_id, $btm_text, $btm_kb, 'HTML');
+    $bt_done_msg = "✅ ری‌اکشن {$bt_emoji} ذخیره شد! وقتی کاربر این پیام رو فعال کنه، ربات روی پیامش این ری‌اکشن رو می‌ذاره" . "\n\n" . $btm_text;
+    deletemessage($from_id, $message_id);
+    if ($bt_remsgid > 0) {
+        Editmessagetext($from_id, $bt_remsgid, $bt_done_msg, $btm_kb, 'HTML');
+    } else {
+        sendmessage($from_id, $bt_done_msg, $btm_kb, 'HTML');
+    }
     return;
 }
 
-if (in_array($text, $textadmin) || $datain == "admin") {
-    if ($datain == "admin")
+if (preg_match('/^btbtntext-([a-z]{2})-([01])$/', (string) $user['step'], $btm) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+    $ub_lang = $btm[1];
+    $ub_idx = (int) $btm[2];
+    $ub_newtext = trim((string) $text);
+    if ($ub_newtext === '') {
+        sendmessage($from_id, "⚠️ لطفاً یه متن بفرست 😅", $backadmin, 'HTML');
+        return;
+    }
+    $ub_setting = select("setting", "*", null, null, "select");
+    $ub_be = json_decode((string) ($ub_setting['button_edit'] ?? ''), true);
+    if (!is_array($ub_be)) {
+        $ub_be = [];
+    }
+    $ub_be[$ub_lang]['users.usertest.selectUsernamePrompt'][$ub_idx]['text'] = $ub_newtext;
+    update("setting", "button_edit", json_encode($ub_be, JSON_UNESCAPED_UNICODE), null, null);
+    step('home', $from_id);
+    list($ub_text, $ub_kb) = usertest_prompt_button_detail_payload($ub_lang, $ub_idx, $textbotlang);
+    $ub_msgid = intval(json_decode((string) ($user['Processing_value'] ?? ''), true)['bt_msgid'] ?? 0);
+    $ub_done_msg = "✅ متن دکمه ذخیره شد!\n\n" . $ub_text;
+    deletemessage($from_id, $message_id);
+    if ($ub_msgid > 0) {
+        Editmessagetext($from_id, $ub_msgid, $ub_done_msg, $ub_kb, 'HTML');
+    } else {
+        sendmessage($from_id, $ub_done_msg, $ub_kb, 'HTML');
+    }
+    return;
+}
+
+if (preg_match('/^cfgcoltxt-([a-z]{2})-([0123])$/', (string) $user['step'], $cc_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+    $cc_lang = $cc_m[1];
+    $cc_idx = (int) $cc_m[2];
+    $cc_newtext = trim((string) $text);
+    if ($cc_newtext === '') {
+        sendmessage($from_id, "⚠️ لطفاً یه متن بفرست 😅", $backadmin, 'HTML');
+        return;
+    }
+    configdisplay_element_set_text($cc_lang, $cc_idx, $cc_newtext);
+    step('home', $from_id);
+    list($cc_info, $cc_kb) = configdisplay_element_payload($cc_lang, $cc_idx, $textbotlang);
+    $cc_msgid = intval(json_decode((string) ($user['Processing_value'] ?? ''), true)['bt_msgid'] ?? 0);
+    $cc_done_msg = "✅ متن ذخیره شد!\n\n" . $cc_info;
+    deletemessage($from_id, $message_id);
+    if ($cc_msgid > 0) {
+        Editmessagetext($from_id, $cc_msgid, $cc_done_msg, $cc_kb, 'HTML');
+    } else {
+        sendmessage($from_id, $cc_done_msg, $cc_kb, 'HTML');
+    }
+    return;
+}
+
+if (in_array($text, $textadmin) || $datain == "admin") {    if ($datain == "admin")
         deletemessage($from_id, $message_id);
     if ($buyreport == "0" || $otherservice == "0" || $otherreport == "0" || $paymentreports == "0" || $reporttest == "0" || $errorreport == "0") {
         sendmessage($from_id, $textbotlang['Admin']['activeBotText'], $active_panell, 'HTML');
@@ -2870,7 +3346,7 @@ if (in_array($text, $textadmin) || $datain == "admin") {
         return;
     }
     step('home', $from_id);
-    if (in_array($user['step'], ["updatetime", "val_usertest", "getlimitnew", "GetusernameNew", "GeturlNew", "protocolset", "updatemethodusername", "GetNameNew", "getprotocol", "getprotocolremove", "GetpaawordNew", "updateextendmethod", "setpricechangelocation"])) {
+    if (in_array($user['step'], ["updatetime", "val_usertest", "del_usertest", "getlimitnew", "GetusernameNew", "GeturlNew", "protocolset", "updatemethodusername", "GetNameNew", "getprotocol", "getprotocolremove", "GetpaawordNew", "updateextendmethod", "setpricechangelocation"])) {
         $typepanel = select("marzban_panel", "*", "name_panel", $user['Processing_value'], "select");
         outtypepanel($typepanel['type'], $textbotlang['Admin']['backMenu']);
     } elseif (in_array($user['step'], ["selectloc", "get_limit", "selectlocedite", "GetPriceExtra", "GetPriceexstratime", "GetPricecustomtime", "GetPricecustomvolume", "get_code", "get_codesell", "minbalancebulk", "bulkadd_lang", "bulkadd_lines", "bulkadd_agent", "bulkadd_location", "bulkadd_category", "bulkadd_reset", "bulkadd_note", "addprod_lang", "addprod_changecur"])) {
@@ -2997,14 +3473,112 @@ if (in_array($text, $textadmin) || $datain == "admin") {
     $id_user_set = $text;
     step('home', $from_id);
     update("user", "limit_usertest", $text, "id", $user['Processing_value']);
-} elseif ($text == $textbotlang['Admin']['getlimitusertest']['setLimitBtn'] && $adminrulecheck['rule'] == "administrator") {
+} elseif ($text == $textbotlang['keyboard']['setTestAccountLimitAll'] && $adminrulecheck['rule'] == "administrator") {
+    list($ur_caption, $ur_kb) = usertest_reset_hub_payload($textbotlang);
+    sendmessage($from_id, $ur_caption, $ur_kb, 'HTML');
+} elseif ($datain == "usertestrst_close" && $adminrulecheck['rule'] == "administrator") {
+    deletemessage($from_id, $message_id);
+    sendmessage($from_id, $textbotlang['users']['selectoption'], $setting_panel, 'HTML');
+} elseif ($datain == "usertestrst_back" && $adminrulecheck['rule'] == "administrator") {
+    list($ur_caption, $ur_kb) = usertest_reset_hub_payload($textbotlang);
+    Editmessagetext($from_id, $message_id, $ur_caption, $ur_kb, 'HTML');
+} elseif ($datain == "usertestrst_set" && $adminrulecheck['rule'] == "administrator") {
+    deletemessage($from_id, $message_id);
     sendmessage($from_id, $textbotlang['Admin']['getlimitusertest']['limitAll'], $backadmin, 'HTML');
     step('limit_usertest_allusers', $from_id);
 } elseif ($user['step'] == "limit_usertest_allusers") {
-    sendmessage($from_id, $textbotlang['Admin']['getlimitusertest']['setLimitAll'], $keyboardadmin, 'HTML');
+    if (!ctype_digit((string) $text) || (int) $text <= 0) {
+        sendmessage($from_id, $textbotlang['common']['invalidTime'], $backadmin, 'HTML');
+        return;
+    }
+    usertest_reset_now((int) $text);
     step('home', $from_id);
-    update("user", "limit_usertest", $text);
-    update("setting", "limit_usertest_all", $text);
+    list($ur_caption, $ur_kb) = usertest_reset_hub_payload($textbotlang);
+    sendmessage($from_id, $textbotlang['Admin']['getlimitusertest']['setLimitAll'], $keyboardadmin, 'HTML');
+    sendmessage($from_id, $ur_caption, $ur_kb, 'HTML');
+} elseif ($datain == "usertestrst_now" && $adminrulecheck['rule'] == "administrator") {
+    $ur_current = select("setting", "limit_usertest_all", null, null, "select")['limit_usertest_all'] ?? '';
+    if ($ur_current === null || $ur_current === '') {
+        $ur_current = 1;
+    }
+    usertest_reset_now($ur_current);
+    list($ur_caption, $ur_kb) = usertest_reset_hub_payload($textbotlang);
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['usertestReset']['resetNowDone'] . "\n\n" . $ur_caption, $ur_kb, 'HTML');
+} elseif ($datain == "usertestrst_auto" && $adminrulecheck['rule'] == "administrator") {
+    $ur_cfg = usertest_auto_reset_config();
+    if ($ur_cfg['enabled'] && $ur_cfg['unit'] !== null) {
+        $ur_kb = json_encode(['inline_keyboard' => [
+            [['text' => $textbotlang['Admin']['usertestReset']['changeIntervalBtn'], 'callback_data' => 'usertestrst_autopick']],
+            [['text' => $textbotlang['Admin']['usertestReset']['turnOffBtn'], 'callback_data' => 'usertestrst_autooff']],
+            [['text' => $textbotlang['Admin']['usertestReset']['backBtn'], 'callback_data' => 'usertestrst_back']],
+        ]]);
+        Editmessagetext($from_id, $message_id, $textbotlang['Admin']['usertestReset']['autoManageCaption'], $ur_kb, 'HTML');
+    } else {
+        $ur_kb = usertest_auto_unit_picker_payload($textbotlang);
+        Editmessagetext($from_id, $message_id, $textbotlang['Admin']['usertestReset']['pickUnitCaption'], $ur_kb, 'HTML');
+    }
+} elseif ($datain == "usertestrst_autopick" && $adminrulecheck['rule'] == "administrator") {
+    $ur_kb = usertest_auto_unit_picker_payload($textbotlang);
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['usertestReset']['pickUnitCaption'], $ur_kb, 'HTML');
+} elseif (preg_match('/^usertestrst_autounit_(minute|hour|week|month|year)$/', $datain, $ur_m) && $adminrulecheck['rule'] == "administrator") {
+    update("user", "Processing_value", $ur_m[1], "id", $from_id);
+    deletemessage($from_id, $message_id);
+    sendmessage($from_id, strtr($textbotlang['Admin']['usertestReset']['askAmount'], ['{unit}' => usertest_auto_reset_unit_label($ur_m[1], $textbotlang)]), $backadmin, 'HTML');
+    step('usertest_auto_amount', $from_id);
+} elseif ($user['step'] == "usertest_auto_amount") {
+    if (!ctype_digit((string) $text) || (int) $text <= 0) {
+        sendmessage($from_id, $textbotlang['common']['invalidTime'], $backadmin, 'HTML');
+        return;
+    }
+    usertest_auto_reset_set($user['Processing_value'], (int) $text);
+    step('home', $from_id);
+    list($ur_caption, $ur_kb) = usertest_reset_hub_payload($textbotlang);
+    sendmessage($from_id, $textbotlang['Admin']['usertestReset']['autoSetDone'], $keyboardadmin, 'HTML');
+    sendmessage($from_id, $ur_caption, $ur_kb, 'HTML');
+} elseif ($datain == "usertestrst_autooff" && $adminrulecheck['rule'] == "administrator") {
+    usertest_auto_reset_disable();
+    list($ur_caption, $ur_kb) = usertest_reset_hub_payload($textbotlang);
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['usertestReset']['autoOffDone'] . "\n\n" . $ur_caption, $ur_kb, 'HTML');
+} elseif ($text == $textbotlang['keyboard']['backupSettingsBtn'] && $adminrulecheck['rule'] == "administrator") {
+    list($bk_caption, $bk_kb) = backup_settings_hub_payload($textbotlang);
+    sendmessage($from_id, $bk_caption, $bk_kb, 'HTML');
+} elseif ($datain == "backupset_close" && $adminrulecheck['rule'] == "administrator") {
+    deletemessage($from_id, $message_id);
+    sendmessage($from_id, $textbotlang['users']['selectoption'], $setting_panel, 'HTML');
+} elseif ($datain == "backupset_db" && $adminrulecheck['rule'] == "administrator") {
+    deletemessage($from_id, $message_id);
+    sendmessage($from_id, $textbotlang['Admin']['BackupSettings']['askDbPasswordPrompt'], $backadmin, 'HTML');
+    step('backup_set_db_password', $from_id);
+} elseif ($user['step'] == "backup_set_db_password") {
+    $bk_val = trim((string) $text);
+    if ($bk_val === '0') {
+        update("setting", "backup_db_password", null, null, null);
+        $bk_msg = $textbotlang['Admin']['BackupSettings']['dbPasswordClearedDone'];
+    } else {
+        update("setting", "backup_db_password", $bk_val, null, null);
+        $bk_msg = $textbotlang['Admin']['BackupSettings']['dbPasswordSetDone'];
+    }
+    step('home', $from_id);
+    list($bk_caption, $bk_kb) = backup_settings_hub_payload($textbotlang);
+    sendmessage($from_id, $bk_msg, $keyboardadmin, 'HTML');
+    sendmessage($from_id, $bk_caption, $bk_kb, 'HTML');
+} elseif ($datain == "backupset_bot" && $adminrulecheck['rule'] == "administrator") {
+    deletemessage($from_id, $message_id);
+    sendmessage($from_id, $textbotlang['Admin']['BackupSettings']['askBotPasswordPrompt'], $backadmin, 'HTML');
+    step('backup_set_bot_password', $from_id);
+} elseif ($user['step'] == "backup_set_bot_password") {
+    $bk_val = trim((string) $text);
+    if ($bk_val === '0') {
+        update("setting", "backup_bot_password", null, null, null);
+        $bk_msg = $textbotlang['Admin']['BackupSettings']['botPasswordClearedDone'];
+    } else {
+        update("setting", "backup_bot_password", $bk_val, null, null);
+        $bk_msg = $textbotlang['Admin']['BackupSettings']['botPasswordSetDone'];
+    }
+    step('home', $from_id);
+    list($bk_caption, $bk_kb) = backup_settings_hub_payload($textbotlang);
+    sendmessage($from_id, $bk_msg, $keyboardadmin, 'HTML');
+    sendmessage($from_id, $bk_caption, $bk_kb, 'HTML');
 } elseif ($text == $textbotlang['keyboard']['channelSettings'] && $adminrulecheck['rule'] == "administrator") {
     sendmessage($from_id, $textbotlang['Admin']['channel']['description'], $channelkeyboard, 'HTML');
 } elseif ($text == $textbotlang['Admin']['Status']['btn'] || $datain == "stat_all_bot") {
@@ -5496,10 +6070,10 @@ elseif ($datain == "systemsms") {
     }
 } elseif (preg_match('/^cardcapdefault:([a-z]{2})$/', $datain, $cc_m) && $adminrulecheck['rule'] == "administrator") {
     card_invoice_caption_set($cc_m[1], '');
-    Editmessagetext($from_id, $message_id, topup_packages_caption($cc_m[1], 'card', $textbotlang), topup_packages_payload($cc_m[1], 'card', $textbotlang), 'HTML');
+    Editmessagetext($from_id, $message_id, topup_packages_caption_with_preview($cc_m[1], 'card', $textbotlang), topup_packages_payload($cc_m[1], 'card', $textbotlang), 'HTML');
 } elseif (preg_match('/^cardcap:([a-z]{2})$/', $datain, $cc_m) && $adminrulecheck['rule'] == "administrator") {
     $cc_cancelKb = json_encode(['inline_keyboard' => [
-        [['text' => $textbotlang['Admin']['TopupPkg']['closeCaptionPromptBtn'], 'callback_data' => "cardcapcancel:{$cc_m[1]}:{$message_id}"]],
+        [['text' => $textbotlang['Admin']['TopupPkg']['closeCaptionPromptBtn'], 'callback_data' => "cardcapcancel:{$cc_m[1]}:{$message_id}", 'style' => 'danger']],
     ]]);
     $cc_prompt = sendmessage($from_id, $textbotlang['Admin']['GatewayLang']['cardCapAsk'], $cc_cancelKb, 'HTML');
     $cc_promptId = (int) ($cc_prompt['result']['message_id'] ?? 0);
@@ -5507,7 +6081,7 @@ elseif ($datain == "systemsms") {
 } elseif (preg_match('/^cardcapcancel:([a-z]{2}):([0-9]+)$/', $datain, $cc_m) && $adminrulecheck['rule'] == "administrator") {
     step('home', $from_id);
     deletemessage($from_id, $message_id);
-    Editmessagetext($from_id, (int) $cc_m[2], topup_packages_caption($cc_m[1], 'card', $textbotlang), topup_packages_payload($cc_m[1], 'card', $textbotlang), 'HTML');
+    Editmessagetext($from_id, (int) $cc_m[2], topup_packages_caption_with_preview($cc_m[1], 'card', $textbotlang), topup_packages_payload($cc_m[1], 'card', $textbotlang), 'HTML');
 } elseif (preg_match('/^cardcapedit:([a-z]{2}):([0-9]+):([0-9]+)$/', (string) $user['step'], $cc_m) && $datain == '') {
     deletemessage($from_id, $message_id);
     $cc_text = trim((string) $text);
@@ -5523,13 +6097,13 @@ elseif ($datain == "systemsms") {
     card_invoice_caption_set($cc_m[1], $cc_text);
     step('home', $from_id);
     deletemessage($from_id, (int) $cc_m[3]);
-    Editmessagetext($from_id, (int) $cc_m[2], topup_packages_caption($cc_m[1], 'card', $textbotlang), topup_packages_payload($cc_m[1], 'card', $textbotlang), 'HTML');
+    Editmessagetext($from_id, (int) $cc_m[2], topup_packages_caption_with_preview($cc_m[1], 'card', $textbotlang), topup_packages_payload($cc_m[1], 'card', $textbotlang), 'HTML');
 } elseif (preg_match('/^cardexpcapdefault:([a-z]{2})$/', $datain, $ce_m) && $adminrulecheck['rule'] == "administrator") {
     card_invoice_expired_caption_set($ce_m[1], '');
-    Editmessagetext($from_id, $message_id, topup_packages_caption($ce_m[1], 'card', $textbotlang), topup_packages_payload($ce_m[1], 'card', $textbotlang), 'HTML');
+    Editmessagetext($from_id, $message_id, topup_packages_caption_with_preview($ce_m[1], 'card', $textbotlang), topup_packages_payload($ce_m[1], 'card', $textbotlang), 'HTML');
 } elseif (preg_match('/^cardexpcap:([a-z]{2})$/', $datain, $ce_m) && $adminrulecheck['rule'] == "administrator") {
     $ce_cancelKb = json_encode(['inline_keyboard' => [
-        [['text' => $textbotlang['Admin']['TopupPkg']['closeCaptionPromptBtn'], 'callback_data' => "cardexpcapcancel:{$ce_m[1]}:{$message_id}"]],
+        [['text' => $textbotlang['Admin']['TopupPkg']['closeCaptionPromptBtn'], 'callback_data' => "cardexpcapcancel:{$ce_m[1]}:{$message_id}", 'style' => 'danger']],
     ]]);
     $ce_prompt = sendmessage($from_id, $textbotlang['Admin']['GatewayLang']['askExpCaption'], $ce_cancelKb, 'HTML');
     $ce_promptId = (int) ($ce_prompt['result']['message_id'] ?? 0);
@@ -5537,7 +6111,7 @@ elseif ($datain == "systemsms") {
 } elseif (preg_match('/^cardexpcapcancel:([a-z]{2}):([0-9]+)$/', $datain, $ce_m) && $adminrulecheck['rule'] == "administrator") {
     step('home', $from_id);
     deletemessage($from_id, $message_id);
-    Editmessagetext($from_id, (int) $ce_m[2], topup_packages_caption($ce_m[1], 'card', $textbotlang), topup_packages_payload($ce_m[1], 'card', $textbotlang), 'HTML');
+    Editmessagetext($from_id, (int) $ce_m[2], topup_packages_caption_with_preview($ce_m[1], 'card', $textbotlang), topup_packages_payload($ce_m[1], 'card', $textbotlang), 'HTML');
 } elseif (preg_match('/^cardexpcapedit:([a-z]{2}):([0-9]+):([0-9]+)$/', (string) $user['step'], $ce_m) && $datain == '') {
     deletemessage($from_id, $message_id);
     $ce_text = trim((string) $text);
@@ -5553,7 +6127,7 @@ elseif ($datain == "systemsms") {
     card_invoice_expired_caption_set($ce_m[1], $ce_text);
     step('home', $from_id);
     deletemessage($from_id, (int) $ce_m[3]);
-    Editmessagetext($from_id, (int) $ce_m[2], topup_packages_caption($ce_m[1], 'card', $textbotlang), topup_packages_payload($ce_m[1], 'card', $textbotlang), 'HTML');
+    Editmessagetext($from_id, (int) $ce_m[2], topup_packages_caption_with_preview($ce_m[1], 'card', $textbotlang), topup_packages_payload($ce_m[1], 'card', $textbotlang), 'HTML');
 } elseif (preg_match('/^cardbtn:([a-z]{2})$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['GatewayLang']['cardBtnStyleCaption'], card_invoice_btnstyle_hub_payload($cb_m[1], $textbotlang), 'HTML');
 } elseif (preg_match('/^cardbtncol:([a-z]{2})$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
@@ -5577,7 +6151,7 @@ elseif ($datain == "systemsms") {
     $cb_items = card_invoice_btnstyle_items($textbotlang);
     $cb_label = topup_styled_button($cb_items[$cb_m[2]], $cb_style, '')['text'];
     $cb_cancelKb = json_encode(['inline_keyboard' => [
-        [['text' => $textbotlang['Admin']['TopupPkg']['closePromptBtn'], 'callback_data' => "cardbtnrencancel:{$cb_m[1]}:{$cb_m[2]}:{$message_id}"]],
+        [['text' => $textbotlang['Admin']['TopupPkg']['closePromptBtn'], 'callback_data' => "cardbtnrencancel:{$cb_m[1]}:{$cb_m[2]}:{$message_id}", 'style' => 'danger']],
     ]]);
     $cb_prompt = sendmessage($from_id, sprintf($textbotlang['Admin']['BtnStyle']['askRenameForItem'], $cb_label), $cb_cancelKb, 'HTML');
     $cb_promptId = (int) ($cb_prompt['result']['message_id'] ?? 0);
@@ -5602,6 +6176,114 @@ elseif ($datain == "systemsms") {
         card_invoice_btnstyle_set($cb_m[1], $cb_which, $cb_style);
     }
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['BtnStyle']['renameCaption'], card_invoice_btnrename_payload($cb_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^plisiocapdefault:([a-z]{2})$/', $datain, $pc_m) && $adminrulecheck['rule'] == "administrator") {
+    plisio_invoice_caption_set($pc_m[1], '');
+    Editmessagetext($from_id, $message_id, topup_packages_caption_with_preview($pc_m[1], 'plisio', $textbotlang), topup_packages_payload($pc_m[1], 'plisio', $textbotlang), 'HTML');
+} elseif (preg_match('/^plisiocap:([a-z]{2})$/', $datain, $pc_m) && $adminrulecheck['rule'] == "administrator") {
+    $pc_cancelKb = json_encode(['inline_keyboard' => [
+        [['text' => $textbotlang['Admin']['TopupPkg']['closeCaptionPromptBtn'], 'callback_data' => "plisiocapcancel:{$pc_m[1]}:{$message_id}", 'style' => 'danger']],
+    ]]);
+    $pc_prompt = sendmessage($from_id, $textbotlang['Admin']['GatewayLang']['plisioCapAsk'], $pc_cancelKb, 'HTML');
+    $pc_promptId = (int) ($pc_prompt['result']['message_id'] ?? 0);
+    step("plisiocapedit:{$pc_m[1]}:{$message_id}:{$pc_promptId}", $from_id);
+} elseif (preg_match('/^plisiocapcancel:([a-z]{2}):([0-9]+)$/', $datain, $pc_m) && $adminrulecheck['rule'] == "administrator") {
+    step('home', $from_id);
+    deletemessage($from_id, $message_id);
+    Editmessagetext($from_id, (int) $pc_m[2], topup_packages_caption_with_preview($pc_m[1], 'plisio', $textbotlang), topup_packages_payload($pc_m[1], 'plisio', $textbotlang), 'HTML');
+} elseif (preg_match('/^plisiocapedit:([a-z]{2}):([0-9]+):([0-9]+)$/', (string) $user['step'], $pc_m) && $datain == '') {
+    deletemessage($from_id, $message_id);
+    $pc_text = trim((string) $text);
+    // same premium-emoji-leading-entity handling as cardcapedit: - one
+    // entity, right at offset 0, never elsewhere in the text
+    $pc_ents = $update['message']['entities'] ?? [];
+    if (!empty($pc_ents[0]) && ($pc_ents[0]['type'] ?? '') === 'custom_emoji' && ($pc_ents[0]['offset'] ?? -1) === 0 && !empty($pc_ents[0]['custom_emoji_id'])) {
+        preg_match('/^\X/u', $pc_text, $pc_lead);
+        $pc_leadChar = $pc_lead[0] ?? '';
+        $pc_rest = mb_substr($pc_text, mb_strlen($pc_leadChar, 'UTF-8'), null, 'UTF-8');
+        $pc_text = '<tg-emoji emoji-id="' . htmlspecialchars((string) $pc_ents[0]['custom_emoji_id'], ENT_QUOTES) . '">' . $pc_leadChar . '</tg-emoji>' . $pc_rest;
+    }
+    plisio_invoice_caption_set($pc_m[1], $pc_text);
+    step('home', $from_id);
+    deletemessage($from_id, (int) $pc_m[3]);
+    Editmessagetext($from_id, (int) $pc_m[2], topup_packages_caption_with_preview($pc_m[1], 'plisio', $textbotlang), topup_packages_payload($pc_m[1], 'plisio', $textbotlang), 'HTML');
+} elseif (preg_match('/^plisioexpcapdefault:([a-z]{2})$/', $datain, $pe_m) && $adminrulecheck['rule'] == "administrator") {
+    plisio_invoice_expired_caption_set($pe_m[1], '');
+    Editmessagetext($from_id, $message_id, topup_packages_caption_with_preview($pe_m[1], 'plisio', $textbotlang), topup_packages_payload($pe_m[1], 'plisio', $textbotlang), 'HTML');
+} elseif (preg_match('/^plisioexpcap:([a-z]{2})$/', $datain, $pe_m) && $adminrulecheck['rule'] == "administrator") {
+    $pe_cancelKb = json_encode(['inline_keyboard' => [
+        [['text' => $textbotlang['Admin']['TopupPkg']['closeCaptionPromptBtn'], 'callback_data' => "plisioexpcapcancel:{$pe_m[1]}:{$message_id}", 'style' => 'danger']],
+    ]]);
+    $pe_prompt = sendmessage($from_id, $textbotlang['Admin']['GatewayLang']['askPlisioExpCaption'], $pe_cancelKb, 'HTML');
+    $pe_promptId = (int) ($pe_prompt['result']['message_id'] ?? 0);
+    step("plisioexpcapedit:{$pe_m[1]}:{$message_id}:{$pe_promptId}", $from_id);
+} elseif (preg_match('/^plisioexpcapcancel:([a-z]{2}):([0-9]+)$/', $datain, $pe_m) && $adminrulecheck['rule'] == "administrator") {
+    step('home', $from_id);
+    deletemessage($from_id, $message_id);
+    Editmessagetext($from_id, (int) $pe_m[2], topup_packages_caption_with_preview($pe_m[1], 'plisio', $textbotlang), topup_packages_payload($pe_m[1], 'plisio', $textbotlang), 'HTML');
+} elseif (preg_match('/^plisioexpcapedit:([a-z]{2}):([0-9]+):([0-9]+)$/', (string) $user['step'], $pe_m) && $datain == '') {
+    deletemessage($from_id, $message_id);
+    $pe_text = trim((string) $text);
+    // same premium-emoji-leading-entity handling as cardcapedit: - one
+    // entity, right at offset 0, never elsewhere in the text
+    $pe_ents = $update['message']['entities'] ?? [];
+    if (!empty($pe_ents[0]) && ($pe_ents[0]['type'] ?? '') === 'custom_emoji' && ($pe_ents[0]['offset'] ?? -1) === 0 && !empty($pe_ents[0]['custom_emoji_id'])) {
+        preg_match('/^\X/u', $pe_text, $pe_lead);
+        $pe_leadChar = $pe_lead[0] ?? '';
+        $pe_rest = mb_substr($pe_text, mb_strlen($pe_leadChar, 'UTF-8'), null, 'UTF-8');
+        $pe_text = '<tg-emoji emoji-id="' . htmlspecialchars((string) $pe_ents[0]['custom_emoji_id'], ENT_QUOTES) . '">' . $pe_leadChar . '</tg-emoji>' . $pe_rest;
+    }
+    plisio_invoice_expired_caption_set($pe_m[1], $pe_text);
+    step('home', $from_id);
+    deletemessage($from_id, (int) $pe_m[3]);
+    Editmessagetext($from_id, (int) $pe_m[2], topup_packages_caption_with_preview($pe_m[1], 'plisio', $textbotlang), topup_packages_payload($pe_m[1], 'plisio', $textbotlang), 'HTML');
+} elseif (preg_match('/^plisiobtn:([a-z]{2})$/', $datain, $pb_m) && $adminrulecheck['rule'] == "administrator") {
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['GatewayLang']['plisioBtnStyleCaption'], plisio_invoice_btnstyle_hub_payload($pb_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^plisiobtncol:([a-z]{2})$/', $datain, $pb_m) && $adminrulecheck['rule'] == "administrator") {
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['colorCaption'], plisio_invoice_btncolor_payload($pb_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^plisiobtncolpick:([a-z]{2}):(pay|reissue)$/', $datain, $pb_m) && $adminrulecheck['rule'] == "administrator") {
+    $pb_colorOrder = ['', 'primary', 'success', 'danger'];
+    $pb_style = plisio_invoice_btnstyle_for($pb_m[1], $pb_m[2]);
+    $pb_curPos = array_search((string) ($pb_style['color'] ?? ''), $pb_colorOrder, true);
+    $pb_nextColor = $pb_colorOrder[(($pb_curPos === false ? 0 : $pb_curPos) + 1) % count($pb_colorOrder)];
+    if ($pb_nextColor === '') {
+        unset($pb_style['color']);
+    } else {
+        $pb_style['color'] = $pb_nextColor;
+    }
+    plisio_invoice_btnstyle_set($pb_m[1], $pb_m[2], $pb_style);
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['colorCaption'], plisio_invoice_btncolor_payload($pb_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^plisiobtnren:([a-z]{2})$/', $datain, $pb_m) && $adminrulecheck['rule'] == "administrator") {
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['BtnStyle']['renameCaption'], plisio_invoice_btnrename_payload($pb_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^plisiobtnrenpick:([a-z]{2}):(pay|reissue)$/', $datain, $pb_m) && $adminrulecheck['rule'] == "administrator") {
+    $pb_style = plisio_invoice_btnstyle_for($pb_m[1], $pb_m[2]);
+    $pb_items = plisio_invoice_btnstyle_items($textbotlang);
+    $pb_label = topup_styled_button($pb_items[$pb_m[2]], $pb_style, '')['text'];
+    $pb_cancelKb = json_encode(['inline_keyboard' => [
+        [['text' => $textbotlang['Admin']['TopupPkg']['closePromptBtn'], 'callback_data' => "plisiobtnrencancel:{$pb_m[1]}:{$pb_m[2]}:{$message_id}", 'style' => 'danger']],
+    ]]);
+    $pb_prompt = sendmessage($from_id, sprintf($textbotlang['Admin']['BtnStyle']['askRenameForItem'], $pb_label), $pb_cancelKb, 'HTML');
+    $pb_promptId = (int) ($pb_prompt['result']['message_id'] ?? 0);
+    step("plisiobtnreni:{$pb_m[1]}:{$pb_m[2]}:{$message_id}:{$pb_promptId}", $from_id);
+} elseif (preg_match('/^plisiobtnrencancel:([a-z]{2}):(pay|reissue):([0-9]+)$/', $datain, $pb_m) && $adminrulecheck['rule'] == "administrator") {
+    step('home', $from_id);
+    deletemessage($from_id, $message_id);
+    Editmessagetext($from_id, (int) $pb_m[3], $textbotlang['Admin']['BtnStyle']['renameCaption'], plisio_invoice_btnrename_payload($pb_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^plisiobtnreni:([a-z]{2}):(pay|reissue):([0-9]+):([0-9]+)$/', (string) $user['step'], $pb_m) && $datain == '') {
+    deletemessage($from_id, $message_id);
+    $pb_newName = trim((string) $text) === '0' ? '' : trim((string) $text);
+    $pb_style = plisio_invoice_btnstyle_for($pb_m[1], $pb_m[2]);
+    $pb_style['label'] = $pb_newName;
+    plisio_invoice_btnstyle_set($pb_m[1], $pb_m[2], $pb_style);
+    step('home', $from_id);
+    deletemessage($from_id, (int) $pb_m[4]);
+    Editmessagetext($from_id, (int) $pb_m[3], $textbotlang['Admin']['BtnStyle']['renameCaption'], plisio_invoice_btnrename_payload($pb_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^plisiobtnrenreset:([a-z]{2})$/', $datain, $pb_m) && $adminrulecheck['rule'] == "administrator") {
+    foreach (['pay', 'reissue'] as $pb_which) {
+        $pb_style = plisio_invoice_btnstyle_for($pb_m[1], $pb_which);
+        $pb_style['label'] = '';
+        plisio_invoice_btnstyle_set($pb_m[1], $pb_which, $pb_style);
+    }
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['BtnStyle']['renameCaption'], plisio_invoice_btnrename_payload($pb_m[1], $textbotlang), 'HTML');
 } elseif (preg_match('/^gwcards:([a-z]{2})$/', $datain, $gw_m) && $adminrulecheck['rule'] == "administrator") {
     // also the cancel target for delete/edit mode - always drop back to a
     // clean step so a stale selection can never leak into later taps
@@ -5730,10 +6412,10 @@ elseif ($datain == "systemsms") {
         return;
     }
     deletemessage($from_id, $message_id);
-    sendmessage($from_id, topup_packages_caption($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
+    sendmessage($from_id, topup_packages_caption_with_preview($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
 } elseif (preg_match('/^topupdel:([a-z]{2}):([a-z0-9]+):([0-9]{1,3})$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     topup_packages_remove($tp_m[1], $tp_m[2], (int) $tp_m[3]);
-    Editmessagetext($from_id, $message_id, topup_packages_caption($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
+    Editmessagetext($from_id, $message_id, topup_packages_caption_with_preview($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
 } elseif (preg_match('/^topuppick:([a-z]{2}):([a-z0-9]+):([0-9]{1,2})$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     $tp_t = $textbotlang['Admin']['TopupPkg'];
     $tp_pkgs = topup_packages_for($tp_m[1], $tp_m[2]);
@@ -5751,7 +6433,7 @@ elseif ($datain == "systemsms") {
         return;
     }
     $tp_amtCancelKb = json_encode(['inline_keyboard' => [
-        [['text' => $textbotlang['Admin']['TopupPkg']['closeAmountPromptBtn'], 'callback_data' => "topupamtcancel:{$tp_m[1]}:{$tp_m[2]}:{$message_id}"]],
+        [['text' => $textbotlang['Admin']['TopupPkg']['closeAmountPromptBtn'], 'callback_data' => "topupamtcancel:{$tp_m[1]}:{$tp_m[2]}:{$message_id}", 'style' => 'danger']],
     ]]);
     $tp_prompt = sendmessage($from_id, strtr($textbotlang['Admin']['TopupPkg']['askAmount'], ['{currency}' => currency_get(currency_for_lang($tp_m[1]))['title'] ?? currency_for_lang($tp_m[1])]), $tp_amtCancelKb, 'HTML');
     $tp_promptId = (int) ($tp_prompt['result']['message_id'] ?? 0);
@@ -5759,7 +6441,7 @@ elseif ($datain == "systemsms") {
 } elseif (preg_match('/^topupamtcancel:([a-z]{2}):([a-z0-9]+):([0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     step('home', $from_id);
     deletemessage($from_id, $message_id);
-    Editmessagetext($from_id, (int) $tp_m[3], topup_packages_caption($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
+    Editmessagetext($from_id, (int) $tp_m[3], topup_packages_caption_with_preview($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
 } elseif (preg_match('/^topupamt:([a-z]{2}):([a-z0-9]+):([0-9]+):([0-9]+)$/', (string) $user['step'], $tp_m) && $datain == '') {
     $tp_t = $textbotlang['Admin']['TopupPkg'];
     deletemessage($from_id, $message_id);
@@ -5768,7 +6450,7 @@ elseif ($datain == "systemsms") {
     $tp_lbl = trim($tp_parts[1] ?? '');
     if ($tp_amtRaw === '' || !money_valid($tp_amtRaw, currency_for_lang($tp_m[1]))) {
         $tp_amtCancelKb = json_encode(['inline_keyboard' => [
-            [['text' => $textbotlang['Admin']['TopupPkg']['closeAmountPromptBtn'], 'callback_data' => "topupamtcancel:{$tp_m[1]}:{$tp_m[2]}:{$tp_m[3]}"]],
+            [['text' => $textbotlang['Admin']['TopupPkg']['closeAmountPromptBtn'], 'callback_data' => "topupamtcancel:{$tp_m[1]}:{$tp_m[2]}:{$tp_m[3]}", 'style' => 'danger']],
         ]]);
         Editmessagetext($from_id, (int) $tp_m[4], $tp_t['invalidAmount'] . "\n\n" . strtr($tp_t['askAmount'], ['{currency}' => currency_get(currency_for_lang($tp_m[1]))['title'] ?? currency_for_lang($tp_m[1])]), $tp_amtCancelKb, 'HTML');
         return;
@@ -5776,7 +6458,7 @@ elseif ($datain == "systemsms") {
     topup_packages_add($tp_m[1], $tp_m[2], money_normalize($tp_amtRaw), $tp_lbl);
     step("home", $from_id);
     deletemessage($from_id, (int) $tp_m[4]);
-    Editmessagetext($from_id, (int) $tp_m[3], topup_packages_caption($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
+    Editmessagetext($from_id, (int) $tp_m[3], topup_packages_caption_with_preview($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
 } elseif (preg_match('/^topupedit:([a-z]{2}):([a-z0-9]+):([0-9]{1,2})$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     $tp_t = $textbotlang['Admin']['TopupPkg'];
     $tp_pkgs = topup_packages_for($tp_m[1], $tp_m[2]);
@@ -5785,7 +6467,7 @@ elseif ($datain == "systemsms") {
     }
     $tp_cur = $tp_pkgs[(int) $tp_m[3]];
     $tp_amtedCancelKb = json_encode(['inline_keyboard' => [
-        [['text' => $tp_t['closePromptBtn'], 'callback_data' => "topupamtedcancel:{$tp_m[1]}:{$tp_m[2]}:{$tp_m[3]}:{$message_id}"]],
+        [['text' => $tp_t['closePromptBtn'], 'callback_data' => "topupamtedcancel:{$tp_m[1]}:{$tp_m[2]}:{$tp_m[3]}:{$message_id}", 'style' => 'danger']],
     ]]);
     $tp_prompt = sendmessage($from_id, strtr($tp_t['askAmountEdit'], [
         '{currency}' => currency_get(currency_for_lang($tp_m[1]))['title'] ?? currency_for_lang($tp_m[1]),
@@ -5797,7 +6479,7 @@ elseif ($datain == "systemsms") {
 } elseif (preg_match('/^topupamtedcancel:([a-z]{2}):([a-z0-9]+):([0-9]{1,2}):([0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     step('home', $from_id);
     deletemessage($from_id, $message_id);
-    Editmessagetext($from_id, (int) $tp_m[4], topup_packages_caption($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
+    Editmessagetext($from_id, (int) $tp_m[4], topup_packages_caption_with_preview($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
 } elseif (preg_match('/^topupamted:([a-z]{2}):([a-z0-9]+):([0-9]{1,2}):([0-9]+):([0-9]+)$/', (string) $user['step'], $tp_m) && $datain == '') {
     $tp_t = $textbotlang['Admin']['TopupPkg'];
     deletemessage($from_id, $message_id);
@@ -5808,7 +6490,7 @@ elseif ($datain == "systemsms") {
         $tp_pkgs = topup_packages_for($tp_m[1], $tp_m[2]);
         $tp_cur = $tp_pkgs[(int) $tp_m[3]] ?? ['amount' => '0', 'label' => ''];
         $tp_amtedCancelKb = json_encode(['inline_keyboard' => [
-            [['text' => $tp_t['closePromptBtn'], 'callback_data' => "topupamtedcancel:{$tp_m[1]}:{$tp_m[2]}:{$tp_m[3]}:{$tp_m[4]}"]],
+            [['text' => $tp_t['closePromptBtn'], 'callback_data' => "topupamtedcancel:{$tp_m[1]}:{$tp_m[2]}:{$tp_m[3]}:{$tp_m[4]}", 'style' => 'danger']],
         ]]);
         Editmessagetext($from_id, (int) $tp_m[5], $tp_t['invalidAmount'] . "\n\n" . strtr($tp_t['askAmountEdit'], [
             '{currency}' => currency_get(currency_for_lang($tp_m[1]))['title'] ?? currency_for_lang($tp_m[1]),
@@ -5820,13 +6502,13 @@ elseif ($datain == "systemsms") {
     topup_packages_update($tp_m[1], $tp_m[2], (int) $tp_m[3], money_normalize($tp_amtRaw), $tp_lbl);
     step("home", $from_id);
     deletemessage($from_id, (int) $tp_m[5]);
-    Editmessagetext($from_id, (int) $tp_m[4], topup_packages_caption($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
+    Editmessagetext($from_id, (int) $tp_m[4], topup_packages_caption_with_preview($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
 } elseif (preg_match('/^topupcapdefault:([a-z]{2}):([a-z0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     topup_caption_set($tp_m[1], $tp_m[2], '');
-    Editmessagetext($from_id, $message_id, topup_packages_caption($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
+    Editmessagetext($from_id, $message_id, topup_packages_caption_with_preview($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
 } elseif (preg_match('/^topupcap:([a-z]{2}):([a-z0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     $tp_cancelKb = json_encode(['inline_keyboard' => [
-        [['text' => $textbotlang['Admin']['TopupPkg']['closeCaptionPromptBtn'], 'callback_data' => "topupcapcancel:{$tp_m[1]}:{$tp_m[2]}:{$message_id}"]],
+        [['text' => $textbotlang['Admin']['TopupPkg']['closeCaptionPromptBtn'], 'callback_data' => "topupcapcancel:{$tp_m[1]}:{$tp_m[2]}:{$message_id}", 'style' => 'danger']],
     ]]);
     $tp_prompt = sendmessage($from_id, $textbotlang['Admin']['TopupPkg']['askCaption'], $tp_cancelKb, 'HTML');
     $tp_promptId = (int) ($tp_prompt['result']['message_id'] ?? 0);
@@ -5834,7 +6516,7 @@ elseif ($datain == "systemsms") {
 } elseif (preg_match('/^topupcapcancel:([a-z]{2}):([a-z0-9]+):([0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     step('home', $from_id);
     deletemessage($from_id, $message_id);
-    Editmessagetext($from_id, (int) $tp_m[3], topup_packages_caption($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
+    Editmessagetext($from_id, (int) $tp_m[3], topup_packages_caption_with_preview($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
 } elseif (preg_match('/^topupcapedit:([a-z]{2}):([a-z0-9]+):([0-9]+):([0-9]+)$/', (string) $user['step'], $tp_m) && $datain == '') {
     $tp_text = trim((string) $text);
     // a premium emoji is only recognised as a caption-leading prefix - one
@@ -5851,13 +6533,13 @@ elseif ($datain == "systemsms") {
     step("home", $from_id);
     deletemessage($from_id, $message_id);
     deletemessage($from_id, (int) $tp_m[4]);
-    Editmessagetext($from_id, (int) $tp_m[3], topup_packages_caption($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
+    Editmessagetext($from_id, (int) $tp_m[3], topup_packages_caption_with_preview($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
 } elseif (preg_match('/^topupcustomcapdefault:([a-z]{2}):([a-z0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     topup_custom_caption_set($tp_m[1], $tp_m[2], '');
-    Editmessagetext($from_id, $message_id, topup_packages_caption($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
+    Editmessagetext($from_id, $message_id, topup_packages_caption_with_preview($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
 } elseif (preg_match('/^topupcustomcap:([a-z]{2}):([a-z0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     $tp_cancelKb = json_encode(['inline_keyboard' => [
-        [['text' => $textbotlang['Admin']['TopupPkg']['closeCaptionPromptBtn'], 'callback_data' => "topupcustomcapcancel:{$tp_m[1]}:{$tp_m[2]}:{$message_id}"]],
+        [['text' => $textbotlang['Admin']['TopupPkg']['closeCaptionPromptBtn'], 'callback_data' => "topupcustomcapcancel:{$tp_m[1]}:{$tp_m[2]}:{$message_id}", 'style' => 'danger']],
     ]]);
     $tp_prompt = sendmessage($from_id, $textbotlang['Admin']['TopupPkg']['askCustomCaption'], $tp_cancelKb, 'HTML');
     $tp_promptId = (int) ($tp_prompt['result']['message_id'] ?? 0);
@@ -5865,7 +6547,7 @@ elseif ($datain == "systemsms") {
 } elseif (preg_match('/^topupcustomcapcancel:([a-z]{2}):([a-z0-9]+):([0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     step('home', $from_id);
     deletemessage($from_id, $message_id);
-    Editmessagetext($from_id, (int) $tp_m[3], topup_packages_caption($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
+    Editmessagetext($from_id, (int) $tp_m[3], topup_packages_caption_with_preview($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
 } elseif (preg_match('/^topupcustomcapedit:([a-z]{2}):([a-z0-9]+):([0-9]+):([0-9]+)$/', (string) $user['step'], $tp_m) && $datain == '') {
     $tp_text = trim((string) $text);
     // same premium-emoji-leading-entity handling as topupcapedit: - one
@@ -5881,22 +6563,29 @@ elseif ($datain == "systemsms") {
     step("home", $from_id);
     deletemessage($from_id, $message_id);
     deletemessage($from_id, (int) $tp_m[4]);
-    Editmessagetext($from_id, (int) $tp_m[3], topup_packages_caption($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
+    Editmessagetext($from_id, (int) $tp_m[3], topup_packages_caption_with_preview($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
 } elseif (preg_match('/^topupdisp:([a-z]{2}):([a-z0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['TopupPkg']['displayPickCaption'], topup_help_hub_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
 } elseif (preg_match('/^topuphelphub:([a-z]{2}):([a-z0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['TopupPkg']['displayPickCaption'], topup_help_hub_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
-} elseif ($datain === "topuphelplaynoop" || preg_match('/^topuphelplaynoop:/', $datain)) {
+} elseif ($datain === "topuphelplaynoop" || preg_match('/^topuphelpfullwidth:([a-z]{2}):([a-z0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
+    topup_columns_toggle_full($tp_m[1], $tp_m[2]);
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['layoutCaption'], topup_help_layout_payload($tp_m[1], $tp_m[2], $textbotlang, null), 'HTML');
+} elseif (preg_match('/^topuphelplaynoop:/', $datain)) {
     // custom/back are shown for context on the چیدمان screen but are not a
     // reorderable target (see topup_help_layout_payload) - intentionally inert
 } elseif (preg_match('/^topuphelplay:([a-z]{2}):([a-z0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['layoutCaption'], topup_help_layout_payload($tp_m[1], $tp_m[2], $textbotlang, null), 'HTML');
-} elseif (preg_match('/^topuphelplaypick:([a-z]{2}):([a-z0-9]+):([0-9]{1,2})$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
-    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['layoutCaption'], topup_help_layout_payload($tp_m[1], $tp_m[2], $textbotlang, (int) $tp_m[3]), 'HTML');
+} elseif (preg_match('/^topuphelplaypick:([a-z]{2}):([a-z0-9]+):([0-9]{1,2}|custom|back)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['layoutCaption'], topup_help_layout_payload($tp_m[1], $tp_m[2], $textbotlang, ctype_digit($tp_m[3]) ? (int) $tp_m[3] : $tp_m[3]), 'HTML');
 } elseif (preg_match('/^topuphelplaycancel:([a-z]{2}):([a-z0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['layoutCaption'], topup_help_layout_payload($tp_m[1], $tp_m[2], $textbotlang, null), 'HTML');
-} elseif (preg_match('/^topuphelplayswap:([a-z]{2}):([a-z0-9]+):([0-9]{1,2}):([0-9]{1,2})$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
-    topup_packages_swap($tp_m[1], $tp_m[2], (int) $tp_m[3], (int) $tp_m[4]);
+} elseif (preg_match('/^topuphelplayswap:([a-z]{2}):([a-z0-9]+):([0-9]{1,2}|custom|back):([0-9]{1,2}|custom|back)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
+    if (in_array($tp_m[3], ['custom', 'back'], true) && in_array($tp_m[4], ['custom', 'back'], true)) {
+        topup_custom_back_toggle($tp_m[1], $tp_m[2]);
+    } elseif (ctype_digit($tp_m[3]) && ctype_digit($tp_m[4])) {
+        topup_packages_swap($tp_m[1], $tp_m[2], (int) $tp_m[3], (int) $tp_m[4]);
+    }
     telegram('answerCallbackQuery', [
         'callback_query_id' => $callback_query_id,
         'text' => $textbotlang['Admin']['Help']['layoutSwapDone'],
@@ -5933,12 +6622,12 @@ elseif ($datain == "systemsms") {
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['emojiCaption'], topup_help_emoji_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
 } elseif (preg_match('/^topuphelpemopick:([a-z]{2}):([a-z0-9]+):([0-9]{1,2}|back|custom)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     $tp_helpCancelKb = json_encode(['inline_keyboard' => [
-        [['text' => $textbotlang['Admin']['TopupPkg']['closePromptBtn'], 'callback_data' => "topuphelpemocancel:{$tp_m[1]}:{$tp_m[2]}:{$tp_m[3]}:{$message_id}"]],
+        [['text' => $textbotlang['Admin']['TopupPkg']['closePromptBtn'], 'callback_data' => "topuphelpemocancel:{$tp_m[1]}:{$tp_m[2]}:{$tp_m[3]}:{$message_id}", 'style' => 'danger']],
     ]]);
     $tp_pkgLabel = ctype_digit($tp_m[3])
         ? topup_package_label(topup_packages_for($tp_m[1], $tp_m[2])[(int) $tp_m[3]] ?? ['amount' => '0'], $tp_m[1])
         : topup_styled_button($tp_m[3] === 'custom' ? $textbotlang['users']['Balance']['customAmountBtn'] : $textbotlang['users']['Balance']['backToMethodBtn'], topup_btnstyle_for($tp_m[1], $tp_m[2], $tp_m[3]), '')['text'];
-    $tp_prompt = sendmessage($from_id, sprintf($textbotlang['Admin']['Help']['askEmojiForItem'], $tp_pkgLabel), $tp_helpCancelKb, 'HTML');
+    $tp_prompt = sendmessage($from_id, sprintf($textbotlang['Admin']['TopupPkg']['askEmojiForItemTopup'], $tp_pkgLabel), $tp_helpCancelKb, 'HTML');
     $tp_promptId = (int) ($tp_prompt['result']['message_id'] ?? 0);
     step("topuphelpemoi:{$tp_m[1]}:{$tp_m[2]}:{$tp_m[3]}:{$message_id}:{$tp_promptId}", $from_id);
 } elseif (preg_match('/^topuphelpemocancel:([a-z]{2}):([a-z0-9]+):([0-9]{1,2}|back|custom):([0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
@@ -5954,6 +6643,7 @@ elseif ($datain == "systemsms") {
         } else {
             $tp_style = topup_btnstyle_for($tp_m[1], $tp_m[2], $tp_tok);
             unset($tp_style['emoji'], $tp_style['emojiIcon']);
+            $tp_style['noEmoji'] = true;
             topup_btnstyle_set($tp_m[1], $tp_m[2], $tp_tok, $tp_style);
         }
     } else {
@@ -5972,7 +6662,7 @@ elseif ($datain == "systemsms") {
             } else {
                 $tp_style = topup_btnstyle_for($tp_m[1], $tp_m[2], $tp_tok);
                 $tp_style['emojiIcon'] = $tp_emojiIcon;
-                unset($tp_style['emoji']);
+                unset($tp_style['emoji'], $tp_style['noEmoji']);
                 topup_btnstyle_set($tp_m[1], $tp_m[2], $tp_tok, $tp_style);
             }
         } else {
@@ -5980,7 +6670,7 @@ elseif ($datain == "systemsms") {
             $tp_emoji = $tp_emMatch[0] ?? '';
             if ($tp_emoji === '' || preg_match('/^[0-9a-zA-Z]$/', $tp_emoji)) {
                 $tp_helpCancelKb = json_encode(['inline_keyboard' => [
-                    [['text' => $textbotlang['Admin']['TopupPkg']['closePromptBtn'], 'callback_data' => "topuphelpemocancel:{$tp_m[1]}:{$tp_m[2]}:{$tp_m[3]}:{$tp_m[4]}"]],
+                    [['text' => $textbotlang['Admin']['TopupPkg']['closePromptBtn'], 'callback_data' => "topuphelpemocancel:{$tp_m[1]}:{$tp_m[2]}:{$tp_m[3]}:{$tp_m[4]}", 'style' => 'danger']],
                 ]]);
                 Editmessagetext($from_id, (int) $tp_m[5], $textbotlang['Admin']['TopupPkg']['invalidEmoji'], $tp_helpCancelKb, 'HTML');
                 return;
@@ -5990,7 +6680,7 @@ elseif ($datain == "systemsms") {
             } else {
                 $tp_style = topup_btnstyle_for($tp_m[1], $tp_m[2], $tp_tok);
                 $tp_style['emoji'] = $tp_emoji;
-                unset($tp_style['emojiIcon']);
+                unset($tp_style['emojiIcon'], $tp_style['noEmoji']);
                 topup_btnstyle_set($tp_m[1], $tp_m[2], $tp_tok, $tp_style);
             }
         }
@@ -6004,15 +6694,21 @@ elseif ($datain == "systemsms") {
     }
     foreach (['custom', 'back'] as $tp_which) {
         $tp_style = topup_btnstyle_for($tp_m[1], $tp_m[2], $tp_which);
-        unset($tp_style['emoji'], $tp_style['emojiIcon']);
+        unset($tp_style['emoji'], $tp_style['emojiIcon'], $tp_style['noEmoji']);
         topup_btnstyle_set($tp_m[1], $tp_m[2], $tp_which, $tp_style);
     }
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['emojiCaption'], topup_help_emoji_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
+} elseif (preg_match('/^topuphelpemosimple:([a-z]{2}):([a-z0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
+    topup_emoji_simple_toggle($tp_m[1], $tp_m[2]);
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['emojiCaption'], topup_help_emoji_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
+} elseif (preg_match('/^topuphelpemopos:([a-z]{2}):([a-z0-9]+):(left|right)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
+    topup_emoji_pos_bulk_set($tp_m[1], $tp_m[2], $tp_m[3]);
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['emojiCaption'], topup_help_emoji_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
 } elseif (preg_match('/^topuphelpren:([a-z]{2}):([a-z0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['BtnStyle']['renameCaption'], topup_help_rename_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
 } elseif (preg_match('/^topuphelprenpick:([a-z]{2}):([a-z0-9]+):([0-9]{1,2}|back|custom)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     $tp_helpCancelKb = json_encode(['inline_keyboard' => [
-        [['text' => $textbotlang['Admin']['TopupPkg']['closePromptBtn'], 'callback_data' => "topuphelprencancel:{$tp_m[1]}:{$tp_m[2]}:{$tp_m[3]}:{$message_id}"]],
+        [['text' => $textbotlang['Admin']['TopupPkg']['closePromptBtn'], 'callback_data' => "topuphelprencancel:{$tp_m[1]}:{$tp_m[2]}:{$tp_m[3]}:{$message_id}", 'style' => 'danger']],
     ]]);
     $tp_pkgLabel = ctype_digit($tp_m[3])
         ? topup_package_label(topup_packages_for($tp_m[1], $tp_m[2])[(int) $tp_m[3]] ?? ['amount' => '0'], $tp_m[1])
@@ -6057,7 +6753,7 @@ elseif ($datain == "systemsms") {
     Editmessagetext($from_id, $message_id, $tp_cap, $tp_kbJson, 'HTML');
 } elseif (preg_match('/^topupminset:([a-z]{2}):([a-z0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     $tp_minmaxCancelKb = json_encode(['inline_keyboard' => [
-        [['text' => $textbotlang['Admin']['TopupPkg']['closePromptBtn'], 'callback_data' => "topupminmaxcancel:{$tp_m[1]}:{$tp_m[2]}:{$message_id}"]],
+        [['text' => $textbotlang['Admin']['TopupPkg']['closePromptBtn'], 'callback_data' => "topupminmaxcancel:{$tp_m[1]}:{$tp_m[2]}:{$message_id}", 'style' => 'danger']],
     ]]);
     $tp_prompt = sendmessage($from_id, strtr($textbotlang['Admin']['TopupPkg']['askMin'], ['{currency}' => currency_get(currency_for_lang($tp_m[1]))['title'] ?? currency_for_lang($tp_m[1])]), $tp_minmaxCancelKb, 'HTML');
     $tp_promptId = (int) ($tp_prompt['result']['message_id'] ?? 0);
@@ -6073,7 +6769,7 @@ elseif ($datain == "systemsms") {
     $tp_txt = trim((string) $text);
     if ($tp_txt !== '0' && !money_valid($tp_txt, currency_for_lang($tp_m[1]))) {
         $tp_minmaxCancelKb = json_encode(['inline_keyboard' => [
-            [['text' => $tp_t['closePromptBtn'], 'callback_data' => "topupminmaxcancel:{$tp_m[1]}:{$tp_m[2]}:{$tp_m[3]}"]],
+            [['text' => $tp_t['closePromptBtn'], 'callback_data' => "topupminmaxcancel:{$tp_m[1]}:{$tp_m[2]}:{$tp_m[3]}", 'style' => 'danger']],
         ]]);
         Editmessagetext($from_id, (int) $tp_m[4], $tp_t['invalidAmount'] . "\n\n" . strtr($tp_t['askMin'], ['{currency}' => currency_get(currency_for_lang($tp_m[1]))['title'] ?? currency_for_lang($tp_m[1])]), $tp_minmaxCancelKb, 'HTML');
         return;
@@ -6086,7 +6782,7 @@ elseif ($datain == "systemsms") {
     Editmessagetext($from_id, (int) $tp_m[3], $tp_cap, $tp_kbJson, 'HTML');
 } elseif (preg_match('/^topupmaxset:([a-z]{2}):([a-z0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     $tp_minmaxCancelKb = json_encode(['inline_keyboard' => [
-        [['text' => $textbotlang['Admin']['TopupPkg']['closePromptBtn'], 'callback_data' => "topupminmaxcancel:{$tp_m[1]}:{$tp_m[2]}:{$message_id}"]],
+        [['text' => $textbotlang['Admin']['TopupPkg']['closePromptBtn'], 'callback_data' => "topupminmaxcancel:{$tp_m[1]}:{$tp_m[2]}:{$message_id}", 'style' => 'danger']],
     ]]);
     $tp_prompt = sendmessage($from_id, strtr($textbotlang['Admin']['TopupPkg']['askMax'], ['{currency}' => currency_get(currency_for_lang($tp_m[1]))['title'] ?? currency_for_lang($tp_m[1])]), $tp_minmaxCancelKb, 'HTML');
     $tp_promptId = (int) ($tp_prompt['result']['message_id'] ?? 0);
@@ -6097,7 +6793,7 @@ elseif ($datain == "systemsms") {
     $tp_txt = trim((string) $text);
     if ($tp_txt !== '0' && !money_valid($tp_txt, currency_for_lang($tp_m[1]))) {
         $tp_minmaxCancelKb = json_encode(['inline_keyboard' => [
-            [['text' => $tp_t['closePromptBtn'], 'callback_data' => "topupminmaxcancel:{$tp_m[1]}:{$tp_m[2]}:{$tp_m[3]}"]],
+            [['text' => $tp_t['closePromptBtn'], 'callback_data' => "topupminmaxcancel:{$tp_m[1]}:{$tp_m[2]}:{$tp_m[3]}", 'style' => 'danger']],
         ]]);
         Editmessagetext($from_id, (int) $tp_m[4], $tp_t['invalidAmount'] . "\n\n" . strtr($tp_t['askMax'], ['{currency}' => currency_get(currency_for_lang($tp_m[1]))['title'] ?? currency_for_lang($tp_m[1])]), $tp_minmaxCancelKb, 'HTML');
         return;
@@ -7765,6 +8461,36 @@ elseif ($datain == "systemsms") {
     outtypepanel($typepanel['type'], $textbotlang['Admin']['managepanel']['savedData']);
     update("marzban_panel", "val_usertest", $text, "name_panel", $user['Processing_value']);
     step('home', $from_id);
+} elseif ($text == $textbotlang['keyboard']['testDeleteTime'] && $adminrulecheck['rule'] == "administrator") {
+    sendmessage($from_id, $textbotlang['Admin']['getlimitusertest']['askDeleteTime'], $backadmin, 'HTML');
+    step('del_usertest', $from_id);
+} elseif ($user['step'] == "del_usertest") {
+    if (!ctype_digit($text)) {
+        sendmessage($from_id, $textbotlang['Admin']['getlimitusertest']['invalidDeleteTime'], $backadmin, 'HTML');
+        return;
+    }
+    $typepanel = select("marzban_panel", "*", "name_panel", $user['Processing_value'], "select");
+    outtypepanel($typepanel['type'], $textbotlang['Admin']['managepanel']['savedData']);
+    update("marzban_panel", "del_usertest", $text, "name_panel", $user['Processing_value']);
+    // the cron applies this threshold retroactively, so already-issued tests older
+    // than it disappear on the next tick (~2 min). Tell the admin exactly how many
+    // that is right now, instead of letting it happen silently.
+    $dt_hours = intval($text);
+    if ($dt_hours > 0) {
+        $dt_cutoff = time() - ($dt_hours * 3600);
+        $dt_stmt = $pdo->prepare("SELECT COUNT(*) AS c FROM invoice WHERE status != 'disabled' AND name_product = :np AND Service_location = :loc AND time_sell REGEXP '^[0-9]+$' AND CAST(time_sell AS UNSIGNED) > 0 AND CAST(time_sell AS UNSIGNED) <= :cutoff");
+        $dt_stmt->execute([
+            ':np' => $textbotlang['Admin']['adminphp']['db_test_service_name'],
+            ':loc' => $user['Processing_value'],
+            ':cutoff' => $dt_cutoff,
+        ]);
+        $dt_count = intval($dt_stmt->fetch(PDO::FETCH_ASSOC)['c']);
+        $dt_key = $dt_count > 0 ? 'deleteTimeSetWarn' : 'deleteTimeSetNone';
+        sendmessage($from_id, strtr($textbotlang['Admin']['getlimitusertest'][$dt_key], ['{count}' => $dt_count, '{hours}' => $dt_hours]), null, 'HTML');
+    } else {
+        sendmessage($from_id, $textbotlang['Admin']['getlimitusertest']['deleteTimeDisabled'], null, 'HTML');
+    }
+    step('home', $from_id);
 } elseif ($text == $textbotlang['keyboard']['setInboundId'] && $adminrulecheck['rule'] == "administrator") {
     sendmessage($from_id, $textbotlang['Admin']['managepanel']['askInboundId'], $backadmin, 'HTML');
     step('getinboundiid', $from_id);
@@ -7810,6 +8536,35 @@ elseif ($datain == "systemsms") {
         $stmt->bindParam(':name_panel', $user['Processing_value'], PDO::PARAM_STR);
         $stmt->execute();
     }
+    step('home', $from_id);
+} elseif ($text == $textbotlang['keyboard']['duplicatePanel'] && $adminrulecheck['rule'] == "administrator") {
+    sendmessage($from_id, $textbotlang['Admin']['managepanel']['getNameDuplicate'], $backadmin, 'HTML');
+    step('GetNameDuplicate', $from_id);
+} elseif ($user['step'] == "GetNameDuplicate") {
+    if (in_array($text, $marzban_list)) {
+        sendmessage($from_id, $textbotlang['Admin']['managepanel']['repeatPanel'], $backadmin, 'HTML');
+        return;
+    }
+    // copy every column of the source panel except its auto-increment id;
+    // code_panel gets a fresh random code the same way a newly added panel
+    // does, name_panel becomes whatever the admin just typed. Products and
+    // categories are never touched - they live in their own tables and
+    // reference a panel by name_panel, so a new panel row starts with none.
+    $dupCols = select("marzban_panel", "*", "name_panel", $user['Processing_value'], "select");
+    unset($dupCols['id']);
+    $dupCols['code_panel'] = bin2hex(random_bytes(2));
+    $dupCols['name_panel'] = $text;
+    $dupFields = array_keys($dupCols);
+    $dupPlaceholders = implode(',', array_map(function ($f) {
+        return ":$f";
+    }, $dupFields));
+    $dupStmt = $pdo->prepare("INSERT INTO marzban_panel (" . implode(',', $dupFields) . ") VALUES ($dupPlaceholders)");
+    foreach ($dupCols as $dupField => $dupValue) {
+        $dupStmt->bindValue(":$dupField", $dupValue, $dupValue === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+    }
+    $dupStmt->execute();
+    outtypepanel($dupCols['type'], $textbotlang['Admin']['managepanel']['duplicatedPanel']);
+    update("user", "Processing_value", $text, "id", $from_id);
     step('home', $from_id);
 } elseif ($text == $textbotlang['Admin']['btnKeyboard']['manageUser'] || $datain == "backlistuser") {
     $keyboardtypelistuser = json_encode([
@@ -9408,102 +10163,7 @@ elseif ($datain == "systemsms") {
     }
     step('home', $from_id);
 } elseif ($text == $textbotlang['keyboard']['shopFeatureStatus'] && $adminrulecheck['rule'] == "administrator") {
-    $marzbanstatusextra = select("shopSetting", "*", "Namevalue", "statusextra", "select")['value'];
-    $marzbandirectpay = select("shopSetting", "*", "Namevalue", "statusdirectpabuy", "select")['value'];
-    $statustimeextra = select("shopSetting", "*", "Namevalue", "statustimeextra", "select")['value'];
-    $statusdisorder = select("shopSetting", "*", "Namevalue", "statusdisorder", "select")['value'];
-    $statuschangeservice = select("shopSetting", "*", "Namevalue", "statuschangeservice", "select")['value'];
-    $statusshowprice = select("shopSetting", "*", "Namevalue", "statusshowprice", "select")['value'];
-    $statusshowconfig = select("shopSetting", "*", "Namevalue", "configshow", "select")['value'];
-    $statusremoveserveice = select("shopSetting", "*", "Namevalue", "backserviecstatus", "select")['value'];
-    $name_status_extra_Vloume = [
-        'onextra' => $textbotlang['Admin']['Status']['statuson'],
-        'offextra' => $textbotlang['Admin']['Status']['statusoff']
-    ][$marzbanstatusextra];
-    $name_status_paydirect = [
-        'ondirectbuy' => $textbotlang['Admin']['Status']['statuson'],
-        'offdirectbuy' => $textbotlang['Admin']['Status']['statusoff']
-    ][$marzbandirectpay];
-    $name_status_timeextra = [
-        'ontimeextraa' => $textbotlang['Admin']['Status']['statuson'],
-        'offtimeextraa' => $textbotlang['Admin']['Status']['statusoff']
-    ][$statustimeextra];
-    $name_status_disorder = [
-        'ondisorder' => $textbotlang['Admin']['Status']['statuson'],
-        'offdisorder' => $textbotlang['Admin']['Status']['statusoff']
-    ][$statusdisorder];
-    $categorygenral = [
-        'oncategorys' => $textbotlang['Admin']['Status']['statuson'],
-        'offcategorys' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['statuscategorygenral']];
-    $statustextchange = [
-        'onstatus' => $textbotlang['Admin']['Status']['statuson'],
-        'offstatus' => $textbotlang['Admin']['Status']['statusoff']
-    ][$statuschangeservice];
-    $statusshowpricestext = [
-        'onshowprice' => $textbotlang['Admin']['Status']['statuson'],
-        'offshowprice' => $textbotlang['Admin']['Status']['statusoff']
-    ][$statusshowprice];
-    $statusshowconfigtext = [
-        'onconfig' => $textbotlang['Admin']['Status']['statuson'],
-        'offconfig' => $textbotlang['Admin']['Status']['statusoff']
-    ][$statusshowconfig];
-    $statusbackremovetext = [
-        'on' => $textbotlang['Admin']['Status']['statuson'],
-        'off' => $textbotlang['Admin']['Status']['statusoff']
-    ][$statusremoveserveice];
-    $name_status_categorytime = [
-        'oncategory' => $textbotlang['Admin']['Status']['statuson'],
-        'offcategory' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['statuscategory']];
-    $Bot_Status = json_encode([
-        'inline_keyboard' => [
-            [
-                ['text' => $textbotlang['Admin']['Status']['statusSubject'], 'callback_data' => "subjectde"],
-                ['text' => $textbotlang['Admin']['Status']['subject'], 'callback_data' => "subject"],
-            ],
-            [
-                ['text' => $name_status_extra_Vloume, 'callback_data' => "editshops-extravolunme-$marzbanstatusextra"],
-                ['text' => $textbotlang['Admin']['Status']['statusVolumeExtra'], 'callback_data' => "extravolunme"],
-            ],
-            [
-                ['text' => $name_status_paydirect, 'callback_data' => "editshops-paydirect-$marzbandirectpay"],
-                ['text' => $textbotlang['Admin']['Status']['paydirect'], 'callback_data' => "paydirect"],
-            ],
-            [
-                ['text' => $name_status_timeextra, 'callback_data' => "editshops-statustimeextra-$statustimeextra"],
-                ['text' => $textbotlang['Admin']['Status']['statusTimeExtra'], 'callback_data' => "statustimeextra"],
-            ],
-            [
-                ['text' => $name_status_disorder, 'callback_data' => "editshops-disorderss-$statusdisorder"],
-                ['text' => $textbotlang['keyboard']['sendDisruptionReport'], 'callback_data' => "disorderss"],
-            ],
-            [
-                ['text' => $categorygenral, 'callback_data' => "editshops-categroygenral-" . $setting['statuscategorygenral']],
-                ['text' => $textbotlang['keyboard']['categoryBug'], 'callback_data' => "categroygenral"],
-            ],
-            [
-                ['text' => $name_status_categorytime, 'callback_data' => "editshops-categorytime-{$setting['statuscategory']}"],
-                ['text' => $textbotlang['Admin']['Status']['statusCategoryTime'], 'callback_data' => "statuscategorytime"],
-            ],
-            [
-                ['text' => $statustextchange, 'callback_data' => "editshops-changgestatus-" . $statuschangeservice],
-                ['text' => $textbotlang['keyboard']['deactivateAccountStatus'], 'callback_data' => "changgestatus"],
-            ],
-            [
-                ['text' => $statusshowpricestext, 'callback_data' => "editshops-showprice-" . $statusshowprice],
-                ['text' => $textbotlang['keyboard']['showProductPrice'], 'callback_data' => "showprice"],
-            ],
-            [
-                ['text' => $statusshowconfigtext, 'callback_data' => "editshops-showconfig-" . $statusshowconfig],
-                ['text' => $textbotlang['keyboard']['getConfigBtn'], 'callback_data' => "config"],
-            ],
-            [
-                ['text' => $statusbackremovetext, 'callback_data' => "editshops-removeservicebackbtn-" . $statusremoveserveice],
-                ['text' => $textbotlang['keyboard']['refundBtn'], 'callback_data' => "removeservicebackbtn"],
-            ],
-        ]
-    ]);
+    $Bot_Status = shop_feature_status_payload($textbotlang);
     sendmessage($from_id, $textbotlang['Admin']['Status']['botTitle'], $Bot_Status, 'HTML');
 } elseif (preg_match('/^editshops-(.*)-(.*)/', $datain, $dataget)) {
     $type = $dataget[1];
@@ -9579,103 +10239,7 @@ elseif ($datain == "systemsms") {
         }
         update("setting", "statuscategory", $valuenew);
     }
-    $setting = select("setting", "*", null, null, "select");
-    $marzbanstatusextra = select("shopSetting", "*", "Namevalue", "statusextra", "select")['value'];
-    $marzbandirectpay = select("shopSetting", "*", "Namevalue", "statusdirectpabuy", "select")['value'];
-    $statustimeextra = select("shopSetting", "*", "Namevalue", "statustimeextra", "select")['value'];
-    $statusdisorder = select("shopSetting", "*", "Namevalue", "statusdisorder", "select")['value'];
-    $statuschangeservice = select("shopSetting", "*", "Namevalue", "statuschangeservice", "select")['value'];
-    $statusshowprice = select("shopSetting", "*", "Namevalue", "statusshowprice", "select")['value'];
-    $statusshowconfig = select("shopSetting", "*", "Namevalue", "configshow", "select")['value'];
-    $statusremoveserveice = select("shopSetting", "*", "Namevalue", "backserviecstatus", "select")['value'];
-    $name_status_extra_Vloume = [
-        'onextra' => $textbotlang['Admin']['Status']['statuson'],
-        'offextra' => $textbotlang['Admin']['Status']['statusoff']
-    ][$marzbanstatusextra];
-    $name_status_paydirect = [
-        'ondirectbuy' => $textbotlang['Admin']['Status']['statuson'],
-        'offdirectbuy' => $textbotlang['Admin']['Status']['statusoff']
-    ][$marzbandirectpay];
-    $name_status_timeextra = [
-        'ontimeextraa' => $textbotlang['Admin']['Status']['statuson'],
-        'offtimeextraa' => $textbotlang['Admin']['Status']['statusoff']
-    ][$statustimeextra];
-    $name_status_disorder = [
-        'ondisorder' => $textbotlang['Admin']['Status']['statuson'],
-        'offdisorder' => $textbotlang['Admin']['Status']['statusoff']
-    ][$statusdisorder];
-    $categorygenral = [
-        'oncategorys' => $textbotlang['Admin']['Status']['statuson'],
-        'offcategorys' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['statuscategorygenral']];
-    $statustextchange = [
-        'onstatus' => $textbotlang['Admin']['Status']['statuson'],
-        'offstatus' => $textbotlang['Admin']['Status']['statusoff']
-    ][$statuschangeservice];
-    $statusshowpricestext = [
-        'onshowprice' => $textbotlang['Admin']['Status']['statuson'],
-        'offshowprice' => $textbotlang['Admin']['Status']['statusoff']
-    ][$statusshowprice];
-    $statusshowconfigtext = [
-        'onconfig' => $textbotlang['Admin']['Status']['statuson'],
-        'offconfig' => $textbotlang['Admin']['Status']['statusoff']
-    ][$statusshowconfig];
-    $statusbackremovetext = [
-        'on' => $textbotlang['Admin']['Status']['statuson'],
-        'off' => $textbotlang['Admin']['Status']['statusoff']
-    ][$statusremoveserveice];
-    $name_status_categorytime = [
-        'oncategory' => $textbotlang['Admin']['Status']['statuson'],
-        'offcategory' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['statuscategory']];
-    $Bot_Status = json_encode([
-        'inline_keyboard' => [
-            [
-                ['text' => $textbotlang['Admin']['Status']['statusSubject'], 'callback_data' => "subjectde"],
-                ['text' => $textbotlang['Admin']['Status']['subject'], 'callback_data' => "subject"],
-            ],
-            [
-                ['text' => $name_status_extra_Vloume, 'callback_data' => "editshops-extravolunme-$marzbanstatusextra"],
-                ['text' => $textbotlang['Admin']['Status']['statusVolumeExtra'], 'callback_data' => "extravolunme"],
-            ],
-            [
-                ['text' => $name_status_paydirect, 'callback_data' => "editshops-paydirect-$marzbandirectpay"],
-                ['text' => $textbotlang['Admin']['Status']['paydirect'], 'callback_data' => "paydirect"],
-            ],
-            [
-                ['text' => $name_status_timeextra, 'callback_data' => "editshops-statustimeextra-$statustimeextra"],
-                ['text' => $textbotlang['Admin']['Status']['statusTimeExtra'], 'callback_data' => "statustimeextra"],
-            ],
-            [
-                ['text' => $name_status_disorder, 'callback_data' => "editshops-disorderss-$statusdisorder"],
-                ['text' => $textbotlang['keyboard']['sendDisruptionReport'], 'callback_data' => "disorderss"],
-            ],
-            [
-                ['text' => $categorygenral, 'callback_data' => "editshops-categroygenral-" . $setting['statuscategorygenral']],
-                ['text' => $textbotlang['keyboard']['categoryBug'], 'callback_data' => "categroygenral"],
-            ],
-            [
-                ['text' => $name_status_categorytime, 'callback_data' => "editshops-categorytime-{$setting['statuscategory']}"],
-                ['text' => $textbotlang['Admin']['Status']['statusCategoryTime'], 'callback_data' => "statuscategorytime"],
-            ],
-            [
-                ['text' => $statustextchange, 'callback_data' => "editshops-changgestatus-" . $statuschangeservice],
-                ['text' => $textbotlang['keyboard']['deactivateAccountStatus'], 'callback_data' => "changgestatus"],
-            ],
-            [
-                ['text' => $statusshowpricestext, 'callback_data' => "editshops-showprice-" . $statusshowprice],
-                ['text' => $textbotlang['keyboard']['showProductPrice'], 'callback_data' => "showprice"],
-            ],
-            [
-                ['text' => $statusshowconfigtext, 'callback_data' => "editshops-showconfig-" . $statusshowconfig],
-                ['text' => $textbotlang['keyboard']['getConfigBtn'], 'callback_data' => "config"],
-            ],
-            [
-                ['text' => $statusbackremovetext, 'callback_data' => "editshops-removeservicebackbtn-" . $statusremoveserveice],
-                ['text' => $textbotlang['keyboard']['refundBtn'], 'callback_data' => "removeservicebackbtn"],
-            ],
-        ]
-    ]);
+    $Bot_Status = shop_feature_status_payload($textbotlang);
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Status']['botTitle'], $Bot_Status);
 } elseif ($text == $textbotlang['Admin']['report']['btnExport'] && $adminrulecheck['rule'] == "administrator") {
     sendmessage($from_id, $textbotlang['users']['selectoption'], $keyboardexportdata, 'HTML');
@@ -13404,14 +13968,13 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     $Bot_Status = json_encode(['inline_keyboard' => panel_feature_keyboard($panel, $textbotlang)]);
     sendmessage($from_id, panel_feature_caption($panel, $textbotlang), $Bot_Status, 'HTML');
 } elseif ($text == $textbotlang['Admin']['DisplayHub']['hubBtn'] && $adminrulecheck['rule'] == "administrator") {
-    $dh_kb = json_encode(['inline_keyboard' => [
-        [['text' => $textbotlang['Admin']['LangScope']['hubBtn'], 'callback_data' => 'displayhub_open:langscope']],
-        [['text' => $textbotlang['Admin']['BtnStyle']['hubBtn'], 'callback_data' => 'displayhub_open:btnstyle']],
-        [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'displayhub_close']],
-    ]]);
+    $dh_kb = displayhub_payload($textbotlang);
     sendmessage($from_id, $textbotlang['Admin']['DisplayHub']['hubCaption'], $dh_kb, 'HTML');
 } elseif ($datain == "displayhub_close" && $adminrulecheck['rule'] == "administrator") {
     deletemessage($from_id, $message_id);
+} elseif ($datain == "displayhub_back" && $adminrulecheck['rule'] == "administrator") {
+    $dh_kb = displayhub_payload($textbotlang);
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['DisplayHub']['hubCaption'], $dh_kb, 'HTML');
 } elseif ($datain == "displayhub_open:langscope" && $adminrulecheck['rule'] == "administrator") {
     $dh_kb = langscope_hub_payload($textbotlang);
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['LangScope']['hubCaption'], $dh_kb, 'HTML');
@@ -15125,6 +15688,47 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     }
     list($bt_home, $bt_kb) = keyboard_list_text($bt_lang);
     Editmessagetext($from_id, $message_id, $textbotlang['bottext']['resetAllDone'] . "\n\n" . $bt_home, $bt_kb, 'HTML');
+} elseif (preg_match('/^bt_group_resetall\|([^|]+)\|(.+)$/', $datain, $dataget) && $adminrulecheck['rule'] == "administrator") {
+    $bt_lang = $dataget[1];
+    $bt_group = $dataget[2];
+    if (!in_array($bt_lang, ['fa', 'en', 'ru', 'zh', 'tk'], true)) {
+        $bt_lang = 'fa';
+    }
+    $bt_group_keys = array_column(array_filter($textbotlang['bottext']['items'], function ($it) use ($bt_group) {
+        return ($it['group'] ?? '') === $bt_group;
+    }), 'key');
+    $bt_setting = select("setting", "*", null, null, "select");
+    $bt_map = json_decode((string) ($bt_setting['text_edit'] ?? ''), true);
+    if (!is_array($bt_map)) {
+        $bt_map = [];
+    }
+    if (isset($bt_map[$bt_lang]) && is_array($bt_map[$bt_lang])) {
+        foreach ($bt_group_keys as $bt_gk) {
+            bottext_dotted_unset($bt_map[$bt_lang], $bt_gk);
+        }
+        if (empty($bt_map[$bt_lang])) {
+            unset($bt_map[$bt_lang]);
+        }
+    }
+    update("setting", "text_edit", empty($bt_map) ? null : json_encode($bt_map, JSON_UNESCAPED_UNICODE), null, null);
+    $bt_layout = json_decode((string) ($bt_setting['keyboardmain'] ?? ''), true);
+    if (is_array($bt_layout)) {
+        foreach ($bt_group_keys as $bt_gk) {
+            unset($bt_layout['text_stickers'][$bt_gk], $bt_layout['text_reactions'][$bt_gk]);
+        }
+        update("setting", "keyboardmain", json_encode($bt_layout, JSON_UNESCAPED_UNICODE), null, null);
+    }
+    $textbotlang = languagechange();
+    list($bt_group_text, $bt_group_kb) = keyboard_list_text($bt_lang, $bt_group);
+    Editmessagetext($from_id, $message_id, $textbotlang['bottext']['resetAllDone'] . "\n\n" . $bt_group_text, $bt_group_kb, 'HTML');
+} elseif (preg_match('/^bt_group\|([^|]+)\|(.+)$/', $datain, $dataget) && $adminrulecheck['rule'] == "administrator") {
+    $bt_lang = $dataget[1];
+    $bt_group = $dataget[2];
+    if (!in_array($bt_lang, ['fa', 'en', 'ru', 'zh', 'tk'], true)) {
+        $bt_lang = 'fa';
+    }
+    list($bt_group_text, $bt_group_kb) = keyboard_list_text($bt_lang, $bt_group);
+    Editmessagetext($from_id, $message_id, $bt_group_text, $bt_group_kb, 'HTML');
 } elseif (preg_match('/^bt_edit\|([^|]+)\|(.+)$/', $datain, $dataget)) {
     $bt_lang = $dataget[1];
     $bt_key = $dataget[2];
@@ -15140,6 +15744,7 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     }
     $bt_lang = $userdata['bt_lang'] ?? 'fa';
     $bt_key = $userdata['bt_key'] ?? '';
+    $bt_msgid = intval($userdata['bt_msgid'] ?? 0);
     if (!in_array($bt_lang, ['fa', 'en', 'ru', 'zh', 'tk'], true)) {
         $bt_lang = 'fa';
     }
@@ -15194,25 +15799,31 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     if (!is_array($bt_map)) {
         $bt_map = [];
     }
-    $bt_parts = explode('.', $bt_key);
-    $bt_p0 = $bt_parts[0] ?? '';
-    $bt_p1 = $bt_parts[1] ?? '';
     $bt_reset = $bt_new === '0';
     if ($bt_reset) {
-        unset($bt_map[$bt_lang][$bt_p0][$bt_p1]);
-        if (empty($bt_map[$bt_lang][$bt_p0])) {
-            unset($bt_map[$bt_lang][$bt_p0]);
-        }
-        if (empty($bt_map[$bt_lang])) {
-            unset($bt_map[$bt_lang]);
+        if (isset($bt_map[$bt_lang]) && is_array($bt_map[$bt_lang])) {
+            bottext_dotted_unset($bt_map[$bt_lang], $bt_key);
+            if (empty($bt_map[$bt_lang])) {
+                unset($bt_map[$bt_lang]);
+            }
         }
     } else {
-        $bt_map[$bt_lang][$bt_p0][$bt_p1] = $bt_new;
+        if (!isset($bt_map[$bt_lang]) || !is_array($bt_map[$bt_lang])) {
+            $bt_map[$bt_lang] = [];
+        }
+        bottext_dotted_set($bt_map[$bt_lang], $bt_key, $bt_new);
     }
     update("setting", "text_edit", empty($bt_map) ? null : json_encode($bt_map, JSON_UNESCAPED_UNICODE), null, null);
     step('home', $from_id);
     $textbotlang = languagechange();
     list($bt_home, $bt_kb) = keyboard_list_text($bt_lang);
-    sendmessage($from_id, $bt_reset ? $textbotlang['bottext']['msg_reset_done'] : $textbotlang['bottext']['msg_saved'], $keyboardadmin, 'HTML');
-    sendmessage($from_id, $bt_home, $bt_kb, 'HTML');
+    $bt_done_msg = ($bt_reset ? $textbotlang['bottext']['msg_reset_done'] : $textbotlang['bottext']['msg_saved']) . "\n\n" . $bt_home;
+    if ($message_id) {
+        deletemessage($from_id, $message_id);
+    }
+    if ($bt_msgid > 0) {
+        Editmessagetext($from_id, $bt_msgid, $bt_done_msg, $bt_kb, 'HTML');
+    } else {
+        sendmessage($from_id, $bt_done_msg, $bt_kb, 'HTML');
+    }
 }
