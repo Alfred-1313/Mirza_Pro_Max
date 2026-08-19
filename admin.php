@@ -346,7 +346,7 @@ if (!function_exists('bottext_item_menu_payload')) {
         $bt_react = bt_media_lookup($bt_re, $bt_key, $bt_lang);
         // reaction needs a triggering user message — only these keys have one
         $bt_can_react = in_array($bt_key, ['users.text_start', 'textbot.faqDesc', 'textbot.tariffListDesc', 'textbot.rules', 'users.unknownMsg'], true);
-        $bt_has_buttons = ($bt_key === 'users.usertest.selectUsernamePrompt');
+        $bt_has_buttons = in_array($bt_key, ['users.usertest.selectUsernamePrompt', 'users.Balance.insufficientBalanceSimple'], true);
         $info = "📝 <b>{$bt_label}</b>\n➖➖➖➖➖➖➖➖➖➖\n";
         $info .= "✏️ متن: " . ($bt_custom ? "سفارشی ✅" : "پیش‌فرض") . "\n";
         $info .= "🖼 استیکر: " . ($bt_sticker !== '' ? "ست شده ✅" : "ندارد ❌") . "\n";
@@ -355,8 +355,9 @@ if (!function_exists('bottext_item_menu_payload')) {
         }
         if ($bt_has_buttons) {
             $bt_be = json_decode((string) ($bt_setting['button_edit'] ?? ''), true);
-            $bt_btn_custom = is_array($bt_be) && !empty($bt_be[$bt_lang]['users.usertest.selectUsernamePrompt']);
-            $info .= "🔘 دکمه‌های انصراف/پیش‌فرض: " . ($bt_btn_custom ? "سفارشی ✅" : "پیش‌فرض") . "\n";
+            $bt_btn_custom = is_array($bt_be) && !empty($bt_be[$bt_lang][$bt_key]);
+            $bt_btn_label = ($bt_key === 'users.Balance.insufficientBalanceSimple') ? '🔘 دکمه افزایش موجودی' : '🔘 دکمه‌های انصراف/پیش‌فرض';
+            $info .= "{$bt_btn_label}: " . ($bt_btn_custom ? "سفارشی ✅" : "پیش‌فرض") . "\n";
         }
         $info .= "➖➖➖➖➖➖➖➖➖➖\n👇 بخشی که می‌خوای تنظیم کنی رو انتخاب کن:";
         $kb = ['inline_keyboard' => []];
@@ -366,9 +367,11 @@ if (!function_exists('bottext_item_menu_payload')) {
             $bt_row[] = ['text' => '❤️ ری‌اکشن', 'callback_data' => "btact|react|{$bt_lang}|{$bt_key}"];
         }
         $kb['inline_keyboard'][] = $bt_row;
-        if ($bt_has_buttons) {
+        if ($bt_key === 'users.usertest.selectUsernamePrompt') {
             $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های انصراف/پیش‌فرض', 'callback_data' => "btact|btns|{$bt_lang}"]];
             $kb['inline_keyboard'][] = [['text' => '🗂 تنظیم نمایش و کپشن کانفیگ', 'callback_data' => "btact|cfgcol|{$bt_lang}|{$bt_key}"]];
+        } elseif ($bt_key === 'users.Balance.insufficientBalanceSimple') {
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه افزایش موجودی', 'callback_data' => "btact|bbtn|{$bt_lang}"]];
         }
         $kb['inline_keyboard'][] = [['text' => '👁 پیش‌نمایش', 'callback_data' => "btact|prev|{$bt_lang}|{$bt_key}"]];
         $kb['inline_keyboard'][] = [['text' => '🔁 ریست به پیش‌فرض', 'callback_data' => "btact|rstall|{$bt_lang}|{$bt_key}"]];
@@ -3108,6 +3111,337 @@ if (preg_match('/^btact\|cancel\|([a-z]{2})\|(.+)$/', $datain, $btm) && $adminru
     Editmessagetext($from_id, $message_id, $btm_text, $btm_kb, 'HTML');
     return;
 }
+if (preg_match('/^btact\|bbtn\|([a-z]{2})$/', $datain, $btm) && $adminrulecheck['rule'] == "administrator") {
+    list($bb_text, $bb_kb) = balancebtn_payload($btm[1], $textbotlang);
+    Editmessagetext($from_id, $message_id, $bb_text, $bb_kb, 'HTML');
+    return;
+}
+if (preg_match('/^btact\|bbtntext\|([a-z]{2})$/', $datain, $btm) && $adminrulecheck['rule'] == "administrator") {
+    savedata("clear", "bt_msgid", $message_id);
+    step("btbbtntext-{$btm[1]}", $from_id);
+    $bb_cancel_kb = json_encode(['inline_keyboard' => [
+        [['text' => '❌ انصراف', 'callback_data' => "btact|bbtn|{$btm[1]}"]],
+    ]]);
+    $bb_prompt = "✏️ متن جدید رو بفرست ✍️\n\n🗑 برای برگشت به متن پیش‌فرض، دکمه ریست رو بزن";
+    $bb_prompt .= "\n\n📌 راهنمای فرمت\u{200C}بندی\n";
+    $bb_prompt .= "به\u{200C}جای X متن دلخواه خودتان را بگذارید:\n\n";
+    $bb_prompt .= "🔹 استایل متن\n";
+    $bb_prompt .= "• پررنگ: <code>&lt;b&gt;X&lt;/b&gt;</code>\n";
+    $bb_prompt .= "• کج: <code>&lt;i&gt;X&lt;/i&gt;</code>\n";
+    $bb_prompt .= "• زیرخط\u{200C}دار: <code>&lt;u&gt;X&lt;/u&gt;</code>\n";
+    $bb_prompt .= "• خط\u{200C}خورده: <code>&lt;s&gt;X&lt;/s&gt;</code>\n";
+    $bb_prompt .= "🔹 بلوک\u{200C}های خاص\n";
+    $bb_prompt .= "• مونو: <code>&lt;code&gt;X&lt;/code&gt;</code>\n";
+    $bb_prompt .= "• قابل\u{200C}کپی: <code>&lt;pre&gt;X&lt;/pre&gt;</code>\n";
+    $bb_prompt .= "• نقل\u{200C}قول: <code>&lt;blockquote&gt;X&lt;/blockquote&gt;</code>\n";
+    $bb_prompt .= "🔹 لینک\n";
+    $bb_prompt .= "• لینک: <code>&lt;a href=\"آدرس\"&gt;X&lt;/a&gt;</code>";
+    $bb_prompt .= "\n\n🔹 ایموجی پریمیوم\n";
+    $bb_prompt .= "• به خاطر محدودیت تلگرام، ایموجی پریمیوم رو فقط ابتدای متن (سمت راست برای فارسی) بفرست";
+    Editmessagetext($from_id, $message_id, $bb_prompt, $bb_cancel_kb, 'HTML');
+    return;
+}
+
+if (preg_match('/^btact\|bbtnstyle\|([a-z]{2})\|(primary|success|danger)$/', $datain, $btm) && $adminrulecheck['rule'] == "administrator") {
+    $bb_lang = $btm[1];
+    $bb_style = $btm[2];
+    $bb_setting = select("setting", "*", null, null, "select");
+    $bb_be = json_decode((string) ($bb_setting['button_edit'] ?? ''), true);
+    if (!is_array($bb_be)) {
+        $bb_be = [];
+    }
+    $bb_be[$bb_lang]['users.Balance.insufficientBalanceSimple'][0]['style'] = $bb_style;
+    update("setting", "button_edit", json_encode($bb_be, JSON_UNESCAPED_UNICODE), null, null);
+    list($bb_text, $bb_kb) = balancebtn_payload($bb_lang, $textbotlang);
+    Editmessagetext($from_id, $message_id, $bb_text, $bb_kb, 'HTML');
+    return;
+}
+if (preg_match('/^btact\|bbtnemoji\|([a-z]{2})$/', $datain, $btm) && $adminrulecheck['rule'] == "administrator") {
+    step("setbbtnemoji-{$btm[1]}", $from_id);
+    $bb_cancel_kb = json_encode(['inline_keyboard' => [
+        [['text' => '❌ انصراف', 'callback_data' => "btact|bbtn|{$btm[1]}"]],
+    ]]);
+    $bb_emoji_prompt = "💎 یه ایموجی (ساده یا پریمیوم) بفرست، کنار متن دکمه نشون داده می‌شه 👇\n\n";
+    $bb_emoji_prompt .= "📌 ایموجی پریمیوم به‌خاطر محدودیت تلگرام همیشه سمت راست (ابتدای متن) قرار می‌گیره.\n";
+    $bb_emoji_prompt .= "برای ایموجی ساده، جای قرارگیریش (چپ/راست) از دکمه‌های صفحه‌ی قبل قابل تغییره.";
+    Editmessagetext($from_id, $message_id, $bb_emoji_prompt, $bb_cancel_kb, 'HTML');
+    return;
+}
+if (preg_match('/^btact\|bbtnemojiclear\|([a-z]{2})$/', $datain, $btm) && $adminrulecheck['rule'] == "administrator") {
+    $bb_lang = $btm[1];
+    $bb_setting = select("setting", "*", null, null, "select");
+    $bb_be = json_decode((string) ($bb_setting['button_edit'] ?? ''), true);
+    if (is_array($bb_be) && isset($bb_be[$bb_lang]['users.Balance.insufficientBalanceSimple'][0])) {
+        unset($bb_be[$bb_lang]['users.Balance.insufficientBalanceSimple'][0]['emoji'], $bb_be[$bb_lang]['users.Balance.insufficientBalanceSimple'][0]['icon_emoji']);
+        update("setting", "button_edit", json_encode($bb_be, JSON_UNESCAPED_UNICODE), null, null);
+    }
+    list($bb_text, $bb_kb) = balancebtn_payload($bb_lang, $textbotlang);
+    Editmessagetext($from_id, $message_id, "✅ ایموجی حذف شد.\n\n" . $bb_text, $bb_kb, 'HTML');
+    return;
+}
+if (preg_match('/^btact\|bbtnsimple\|([a-z]{2})$/', $datain, $btm) && $adminrulecheck['rule'] == "administrator") {
+    $bb_lang = $btm[1];
+    $bb_setting = select("setting", "*", null, null, "select");
+    $bb_be = json_decode((string) ($bb_setting['button_edit'] ?? ''), true);
+    if (!is_array($bb_be)) {
+        $bb_be = [];
+    }
+    $bb_cur = !empty($bb_be[$bb_lang]['users.Balance.insufficientBalanceSimple'][0]['simple']);
+    $bb_be[$bb_lang]['users.Balance.insufficientBalanceSimple'][0]['simple'] = !$bb_cur;
+    update("setting", "button_edit", json_encode($bb_be, JSON_UNESCAPED_UNICODE), null, null);
+    list($bb_text, $bb_kb) = balancebtn_payload($bb_lang, $textbotlang);
+    Editmessagetext($from_id, $message_id, $bb_text, $bb_kb, 'HTML');
+    return;
+}
+if (preg_match('/^btact\|bbtnpos\|([a-z]{2})\|(left|right)$/', $datain, $btm) && $adminrulecheck['rule'] == "administrator") {
+    $bb_lang = $btm[1];
+    $bb_pos = $btm[2];
+    $bb_setting = select("setting", "*", null, null, "select");
+    $bb_be = json_decode((string) ($bb_setting['button_edit'] ?? ''), true);
+    if (!is_array($bb_be)) {
+        $bb_be = [];
+    }
+    $bb_be[$bb_lang]['users.Balance.insufficientBalanceSimple'][0]['pos'] = $bb_pos;
+    update("setting", "button_edit", json_encode($bb_be, JSON_UNESCAPED_UNICODE), null, null);
+    list($bb_text, $bb_kb) = balancebtn_payload($bb_lang, $textbotlang);
+    Editmessagetext($from_id, $message_id, $bb_text, $bb_kb, 'HTML');
+    return;
+}
+if (preg_match('/^btact\|bbtnrst\|([a-z]{2})$/', $datain, $btm) && $adminrulecheck['rule'] == "administrator") {
+    $bb_lang = $btm[1];
+    $bb_setting = select("setting", "*", null, null, "select");
+    $bb_be = json_decode((string) ($bb_setting['button_edit'] ?? ''), true);
+    if (is_array($bb_be) && isset($bb_be[$bb_lang]['users.Balance.insufficientBalanceSimple'])) {
+        unset($bb_be[$bb_lang]['users.Balance.insufficientBalanceSimple']);
+        if (empty($bb_be[$bb_lang])) {
+            unset($bb_be[$bb_lang]);
+        }
+        update("setting", "button_edit", empty($bb_be) ? null : json_encode($bb_be, JSON_UNESCAPED_UNICODE), null, null);
+    }
+    list($bb_text, $bb_kb) = balancebtn_payload($bb_lang, $textbotlang);
+    Editmessagetext($from_id, $message_id, "🔁 این دکمه به پیش‌فرض برگشت.\n\n" . $bb_text, $bb_kb, 'HTML');
+    return;
+}
+if (preg_match('/^btbbtntext-([a-z]{2})$/', (string) $user['step'], $btm) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+    $bb_lang = $btm[1];
+    $bb_newtext = trim((string) $text);
+    if ($bb_newtext === '') {
+        sendmessage($from_id, "⚠️ لطفاً یه متن بفرست 😅", $backadmin, 'HTML');
+        return;
+    }
+    $bb_setting = select("setting", "*", null, null, "select");
+    $bb_be = json_decode((string) ($bb_setting['button_edit'] ?? ''), true);
+    if (!is_array($bb_be)) {
+        $bb_be = [];
+    }
+    $bb_be[$bb_lang]['users.Balance.insufficientBalanceSimple'][0]['text'] = $bb_newtext;
+    update("setting", "button_edit", json_encode($bb_be, JSON_UNESCAPED_UNICODE), null, null);
+    step('home', $from_id);
+    list($bb_text, $bb_kb) = balancebtn_payload($bb_lang, $textbotlang);
+    $bb_msgid = intval(json_decode((string) ($user['Processing_value'] ?? ''), true)['bt_msgid'] ?? 0);
+    $bb_done_msg = "✅ متن دکمه ذخیره شد!\n\n" . $bb_text;
+    deletemessage($from_id, $message_id);
+    if ($bb_msgid > 0) {
+        Editmessagetext($from_id, $bb_msgid, $bb_done_msg, $bb_kb, 'HTML');
+    } else {
+        sendmessage($from_id, $bb_done_msg, $bb_kb, 'HTML');
+    }
+    return;
+}
+if (preg_match('/^setbbtnemoji-([a-z]{2})$/', (string) $user['step'], $btm) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+    $bb_lang = $btm[1];
+    $bb_icon_id = '';
+    if (!empty($update['message']['entities']) && is_array($update['message']['entities'])) {
+        foreach ($update['message']['entities'] as $bb_ent) {
+            if (($bb_ent['type'] ?? '') === 'custom_emoji' && !empty($bb_ent['custom_emoji_id'])) {
+                $bb_icon_id = $bb_ent['custom_emoji_id'];
+                break;
+            }
+        }
+    }
+    $bb_setting = select("setting", "*", null, null, "select");
+    $bb_be = json_decode((string) ($bb_setting['button_edit'] ?? ''), true);
+    if (!is_array($bb_be)) {
+        $bb_be = [];
+    }
+    if ($bb_icon_id !== '') {
+        $bb_be[$bb_lang]['users.Balance.insufficientBalanceSimple'][0]['icon_emoji'] = $bb_icon_id;
+        unset($bb_be[$bb_lang]['users.Balance.insufficientBalanceSimple'][0]['emoji']);
+        update("setting", "button_edit", json_encode($bb_be, JSON_UNESCAPED_UNICODE), null, null);
+        $bb_msg = "✅ ایموجی پریمیوم ذخیره شد! 💎";
+    } else {
+        preg_match('/^\X/u', trim((string) $text), $bb_em);
+        $bb_emoji = $bb_em[0] ?? '';
+        if ($bb_emoji === '' || preg_match('/^[0-9a-zA-Z]$/', $bb_emoji)) {
+            sendmessage($from_id, "⚠️ لطفاً فقط یه ایموجی بفرست 😅", $backadmin, 'HTML');
+            return;
+        }
+        $bb_be[$bb_lang]['users.Balance.insufficientBalanceSimple'][0]['emoji'] = $bb_emoji;
+        unset($bb_be[$bb_lang]['users.Balance.insufficientBalanceSimple'][0]['icon_emoji']);
+        update("setting", "button_edit", json_encode($bb_be, JSON_UNESCAPED_UNICODE), null, null);
+        $bb_msg = "✅ ایموجی {$bb_emoji} ذخیره شد!";
+    }
+    step('home', $from_id);
+    list($bb_text, $bb_kb) = balancebtn_payload($bb_lang, $textbotlang);
+    deletemessage($from_id, $message_id);
+    sendmessage($from_id, $bb_msg . "\n\n" . $bb_text, $bb_kb, 'HTML');
+    return;
+}
+if (preg_match('/^volpct\|hub\|([a-z]{2})$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
+    list($vp_text, $vp_kb) = volumepct_hub_payload($vp_m[1], $textbotlang);
+    Editmessagetext($from_id, $message_id, $vp_text, $vp_kb, 'HTML');
+    return;
+}
+if (preg_match('/^volpct\|sec\|([a-z]{2})\|(vol|time|timeend|volend)$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
+    $vp_lang = $vp_m[1];
+    $vp_kind = $vp_m[2];
+    $vp_meta = volumepct_kind_meta($vp_kind);
+    if ($vp_meta['single']) {
+        // one-off notices have no list of their own - open (creating on first
+        // access) the single entry directly
+        $vp_idx = volumepct_singleton_index($vp_kind);
+        list($vp_text, $vp_kb) = volumepct_tier_detail_payload($vp_idx, $vp_lang, $textbotlang);
+    } else {
+        list($vp_text, $vp_kb) = volumepct_section_payload($vp_kind, $vp_lang, $textbotlang);
+    }
+    Editmessagetext($from_id, $message_id, $vp_text, $vp_kb, 'HTML');
+    return;
+}
+if (preg_match('/^volpct\|add\|([a-z]{2})\|(vol|time)$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
+    $vp_meta = volumepct_kind_meta($vp_m[2]);
+    savedata("clear", "bt_msgid", $message_id);
+    step("volpctnew-{$vp_m[1]}-{$vp_m[2]}", $from_id);
+    $vp_kb = json_encode(['inline_keyboard' => [
+        [['text' => '❌ انصراف', 'callback_data' => "volpct|sec|{$vp_m[1]}|{$vp_m[2]}"]],
+    ]]);
+    Editmessagetext($from_id, $message_id, $vp_meta['thresholdPrompt'], $vp_kb, 'HTML');
+    return;
+}
+if (preg_match('/^volpct\|open\|([a-z]{2})\|(\d+)$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
+    list($vp_text, $vp_kb) = volumepct_tier_detail_payload((int) $vp_m[2], $vp_m[1], $textbotlang);
+    Editmessagetext($from_id, $message_id, $vp_text, $vp_kb, 'HTML');
+    return;
+}
+if (preg_match('/^volpct\|pct\|([a-z]{2})\|(\d+)$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
+    savedata("clear", "bt_msgid", $message_id);
+    step("volpcttxt-pct-{$vp_m[1]}-{$vp_m[2]}", $from_id);
+    $vp_kb = json_encode(['inline_keyboard' => [
+        [['text' => '❌ انصراف', 'callback_data' => "volpct|open|{$vp_m[1]}|{$vp_m[2]}"]],
+    ]]);
+    $vp_meta = volumepct_kind_meta(volumepct_tier_kind(volumepct_tier_get((int) $vp_m[2])));
+    Editmessagetext($from_id, $message_id, $vp_meta['thresholdPrompt'], $vp_kb, 'HTML');
+    return;
+}
+if (preg_match('/^volpct\|text\|([a-z]{2})\|(\d+)$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
+    savedata("clear", "bt_msgid", $message_id);
+    step("volpcttxt-cap-{$vp_m[1]}-{$vp_m[2]}", $from_id);
+    $vp_kb = json_encode(['inline_keyboard' => [
+        [['text' => '❌ انصراف', 'callback_data' => "volpct|open|{$vp_m[1]}|{$vp_m[2]}"]],
+    ]]);
+    $vp_prompt = "✏️ متن جدید کپشن رو بفرست ✍️\n\n🗑 برای برگشت به متن پیش‌فرض، دکمه ریست رو بزن";
+    $vp_prompt .= "\n\n📌 راهنمای فرمت\u{200C}بندی\n";
+    $vp_prompt .= "به\u{200C}جای X متن دلخواه خودتان را بگذارید:\n\n";
+    $vp_prompt .= "🔹 استایل متن\n";
+    $vp_prompt .= "• پررنگ: <code>&lt;b&gt;X&lt;/b&gt;</code>\n";
+    $vp_prompt .= "• کج: <code>&lt;i&gt;X&lt;/i&gt;</code>\n";
+    $vp_prompt .= "• زیرخط\u{200C}دار: <code>&lt;u&gt;X&lt;/u&gt;</code>\n";
+    $vp_prompt .= "• خط\u{200C}خورده: <code>&lt;s&gt;X&lt;/s&gt;</code>\n";
+    $vp_prompt .= "🔹 بلوک\u{200C}های خاص\n";
+    $vp_prompt .= "• مونو: <code>&lt;code&gt;X&lt;/code&gt;</code>\n";
+    $vp_prompt .= "• قابل\u{200C}کپی: <code>&lt;pre&gt;X&lt;/pre&gt;</code>\n";
+    $vp_prompt .= "• نقل\u{200C}قول: <code>&lt;blockquote&gt;X&lt;/blockquote&gt;</code>\n";
+    $vp_prompt .= "🔹 لینک\n";
+    $vp_prompt .= "• لینک: <code>&lt;a href=\"آدرس\"&gt;X&lt;/a&gt;</code>";
+    $vp_prompt .= "\n\n🔹 ایموجی پریمیوم\n";
+    $vp_prompt .= "• به خاطر محدودیت تلگرام، ایموجی پریمیوم رو فقط ابتدای متن (سمت راست برای فارسی) بفرست";
+    $vp_prompt .= "\n\n🔹 اطلاعات کاربر و بسته\n";
+    $vp_prompt .= "• نام اکانت (یوزرنیم سرویس): <code>{username}</code>\n";
+    $vp_prompt .= "• درصد مصرف شده: <code>{usedpercent}</code>\n";
+    $vp_prompt .= "• حجم باقی\u{200C}مانده: <code>{remainingvolume}</code>\n";
+    $vp_prompt .= "• مدت زمان بسته (روز): <code>{packagedays}</code>\n";
+    $vp_prompt .= "• حجم کل بسته (گیگابایت): <code>{packagevolume}</code>\n";
+    $vp_prompt .= "• زمان باقی\u{200C}مانده (روز): <code>{remainingtime}</code>\n";
+    $vp_prompt .= "• ساعت باقی\u{200C}مانده (بعد از روزها): <code>{remaininghours}</code>\n";
+    $vp_prompt .= "• تاریخ خرید بسته (شمسی): <code>{purchasedate}</code>\n";
+    $vp_prompt .= "• تاریخ اتمام اشتراک (شمسی): <code>{expiredate}</code>\n";
+    $vp_prompt .= "• ساعت اتمام اشتراک: <code>{expiretime}</code>\n";
+    $vp_prompt .= "🔹 هویت تلگرام\n";
+    $vp_prompt .= "• نام کاربری تلگرام: <code>{tg_username}</code>\n";
+    $vp_prompt .= "• آیدی عددی تلگرام: <code>{userid}</code>";
+    Editmessagetext($from_id, $message_id, $vp_prompt, $vp_kb, 'HTML');
+    return;
+}
+if (preg_match('/^volpct\|btntext\|([a-z]{2})\|(\d+)$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
+    savedata("clear", "bt_msgid", $message_id);
+    step("volpcttxt-btn-{$vp_m[1]}-{$vp_m[2]}", $from_id);
+    $vp_kb = json_encode(['inline_keyboard' => [
+        [['text' => '❌ انصراف', 'callback_data' => "volpct|open|{$vp_m[1]}|{$vp_m[2]}"]],
+    ]]);
+    Editmessagetext($from_id, $message_id, "✏️ متن جدید دکمه رو بفرست ✍️", $vp_kb, 'HTML');
+    return;
+}
+if (preg_match('/^volpct\|sticker\|([a-z]{2})\|(\d+)$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
+    savedata("clear", "bt_msgid", $message_id);
+    step("volpctstk-{$vp_m[1]}-{$vp_m[2]}", $from_id);
+    $vp_kb = json_encode(['inline_keyboard' => [
+        [['text' => '❌ انصراف', 'callback_data' => "volpct|open|{$vp_m[1]}|{$vp_m[2]}"]],
+    ]]);
+    Editmessagetext($from_id, $message_id, "🖼 یه استیکر بفرست (هر نوع استیکری قابل قبوله) 😅", $vp_kb, 'HTML');
+    return;
+}
+if (preg_match('/^volpct\|style\|([a-z]{2})\|(\d+)\|(primary|success|danger)$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
+    volumepct_tier_set_style((int) $vp_m[2], $vp_m[3]);
+    list($vp_text, $vp_kb) = volumepct_tier_detail_payload((int) $vp_m[2], $vp_m[1], $textbotlang);
+    Editmessagetext($from_id, $message_id, $vp_text, $vp_kb, 'HTML');
+    return;
+}
+if (preg_match('/^volpct\|emoji\|([a-z]{2})\|(\d+)$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
+    step("volpctemo-{$vp_m[1]}-{$vp_m[2]}", $from_id);
+    $vp_kb = json_encode(['inline_keyboard' => [
+        [['text' => '❌ انصراف', 'callback_data' => "volpct|open|{$vp_m[1]}|{$vp_m[2]}"]],
+    ]]);
+    $vp_emoji_prompt = "💎 یه ایموجی (ساده یا پریمیوم) بفرست، کنار متن دکمه نشون داده می‌شه 👇\n\n";
+    $vp_emoji_prompt .= "📌 ایموجی پریمیوم به‌خاطر محدودیت تلگرام همیشه سمت راست (ابتدای متن) قرار می‌گیره.\n";
+    $vp_emoji_prompt .= "برای ایموجی ساده، جای قرارگیریش (چپ/راست) از دکمه‌های صفحه‌ی قبل قابل تغییره.";
+    Editmessagetext($from_id, $message_id, $vp_emoji_prompt, $vp_kb, 'HTML');
+    return;
+}
+if (preg_match('/^volpct\|simple\|([a-z]{2})\|(\d+)$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
+    $vp_cur = !empty(volumepct_tier_get((int) $vp_m[2])['simple']);
+    volumepct_tier_set_style((int) $vp_m[2], null, null, null, null, !$vp_cur);
+    list($vp_text, $vp_kb) = volumepct_tier_detail_payload((int) $vp_m[2], $vp_m[1], $textbotlang);
+    Editmessagetext($from_id, $message_id, $vp_text, $vp_kb, 'HTML');
+    return;
+}
+if (preg_match('/^volpct\|pos\|([a-z]{2})\|(\d+)\|(left|right)$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
+    volumepct_tier_set_style((int) $vp_m[2], null, null, null, $vp_m[3], null);
+    list($vp_text, $vp_kb) = volumepct_tier_detail_payload((int) $vp_m[2], $vp_m[1], $textbotlang);
+    Editmessagetext($from_id, $message_id, $vp_text, $vp_kb, 'HTML');
+    return;
+}
+if (preg_match('/^volpct\|del\|([a-z]{2})\|(\d+)$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
+    $vp_kind = volumepct_tier_kind(volumepct_tier_get((int) $vp_m[2]));
+    volumepct_tier_remove((int) $vp_m[2]);
+    if (in_array($vp_kind, ['vol', 'time'], true)) {
+        list($vp_text, $vp_kb) = volumepct_section_payload($vp_kind, $vp_m[1], $textbotlang);
+    } else {
+        list($vp_text, $vp_kb) = volumepct_hub_payload($vp_m[1], $textbotlang);
+    }
+    Editmessagetext($from_id, $message_id, "🗑 آستانه حذف شد.\n\n" . $vp_text, $vp_kb, 'HTML');
+    return;
+}
+if (preg_match('/^volpct\|rst\|([a-z]{2})\|(\d+)$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
+    volumepct_tier_reset_style((int) $vp_m[2], $vp_m[1]);
+    list($vp_text, $vp_kb) = volumepct_tier_detail_payload((int) $vp_m[2], $vp_m[1], $textbotlang);
+    Editmessagetext($from_id, $message_id, "🔁 کپشن و دکمه این آستانه به پیش‌فرض برگشتن.\n\n" . $vp_text, $vp_kb, 'HTML');
+    return;
+}
+if (preg_match('/^volpct\|rstall\|([a-z]{2})\|(vol|time)$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
+    volumepct_tiers_reset_all_style($vp_m[1], $vp_m[2]);
+    list($vp_text, $vp_kb) = volumepct_section_payload($vp_m[2], $vp_m[1], $textbotlang);
+    Editmessagetext($from_id, $message_id, "🔁 کپشن و دکمه‌ی همه‌ی آستانه‌های این بخش به پیش‌فرض برگشتن.\n\n" . $vp_text, $vp_kb, 'HTML');
+    return;
+}
 if (preg_match('/^btact\|btns\|([a-z]{2})$/', $datain, $btm) && $adminrulecheck['rule'] == "administrator") {
     list($ub_text, $ub_kb) = usertest_prompt_buttons_payload($btm[1], $textbotlang);
     Editmessagetext($from_id, $message_id, $ub_text, $ub_kb, 'HTML');
@@ -3276,6 +3610,138 @@ if (preg_match('/^btbtntext-([a-z]{2})-([01])$/', (string) $user['step'], $btm) 
     return;
 }
 
+if (preg_match('/^volpctnew-([a-z]{2})-(vol|time)$/', (string) $user['step'], $vp_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+    $vp_lang = $vp_m[1];
+    $vp_kind = $vp_m[2];
+    $vp_meta = volumepct_kind_meta($vp_kind);
+    $vp_raw = trim((string) $text);
+    if (!ctype_digit($vp_raw) || intval($vp_raw) < 0 || intval($vp_raw) > $vp_meta['max']) {
+        sendmessage($from_id, "⚠️ لطفاً یه عدد بین ۰ تا {$vp_meta['max']} بفرست 😅", $backadmin, 'HTML');
+        return;
+    }
+    $vp_index = volumepct_tier_add(intval($vp_raw), $vp_kind);
+    step('home', $from_id);
+    list($vp_text, $vp_kb) = volumepct_tier_detail_payload($vp_index, $vp_lang, $textbotlang);
+    deletemessage($from_id, $message_id);
+    sendmessage($from_id, "✅ آستانه جدید ساخته شد!\n\n" . $vp_text, $vp_kb, 'HTML');
+    return;
+}
+if (preg_match('/^volpcttxt-pct-([a-z]{2})-(\d+)$/', (string) $user['step'], $vp_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+    $vp_lang = $vp_m[1];
+    $vp_index = (int) $vp_m[2];
+    $vp_meta = volumepct_kind_meta(volumepct_tier_kind(volumepct_tier_get($vp_index)));
+    $vp_raw = trim((string) $text);
+    if (!ctype_digit($vp_raw) || intval($vp_raw) < 0 || intval($vp_raw) > $vp_meta['max']) {
+        sendmessage($from_id, "⚠️ لطفاً یه عدد بین ۰ تا {$vp_meta['max']} بفرست 😅", $backadmin, 'HTML');
+        return;
+    }
+    volumepct_tier_set_pct($vp_index, intval($vp_raw));
+    step('home', $from_id);
+    list($vp_text, $vp_kb) = volumepct_tier_detail_payload($vp_index, $vp_lang, $textbotlang);
+    $vp_msgid = intval(json_decode((string) ($user['Processing_value'] ?? ''), true)['bt_msgid'] ?? 0);
+    $vp_done = "✅ درصد ذخیره شد!\n\n" . $vp_text;
+    deletemessage($from_id, $message_id);
+    if ($vp_msgid > 0) {
+        Editmessagetext($from_id, $vp_msgid, $vp_done, $vp_kb, 'HTML');
+    } else {
+        sendmessage($from_id, $vp_done, $vp_kb, 'HTML');
+    }
+    return;
+}
+if (preg_match('/^volpcttxt-cap-([a-z]{2})-(\d+)$/', (string) $user['step'], $vp_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+    $vp_lang = $vp_m[1];
+    $vp_index = (int) $vp_m[2];
+    $vp_newtext = trim((string) $text);
+    if ($vp_newtext === '') {
+        sendmessage($from_id, "⚠️ لطفاً یه متن بفرست 😅", $backadmin, 'HTML');
+        return;
+    }
+    volumepct_tier_set_text($vp_index, $vp_lang, $vp_newtext);
+    step('home', $from_id);
+    list($vp_text, $vp_kb) = volumepct_tier_detail_payload($vp_index, $vp_lang, $textbotlang);
+    $vp_msgid = intval(json_decode((string) ($user['Processing_value'] ?? ''), true)['bt_msgid'] ?? 0);
+    $vp_done = "✅ کپشن ذخیره شد!\n\n" . $vp_text;
+    deletemessage($from_id, $message_id);
+    if ($vp_msgid > 0) {
+        Editmessagetext($from_id, $vp_msgid, $vp_done, $vp_kb, 'HTML');
+    } else {
+        sendmessage($from_id, $vp_done, $vp_kb, 'HTML');
+    }
+    return;
+}
+if (preg_match('/^volpcttxt-btn-([a-z]{2})-(\d+)$/', (string) $user['step'], $vp_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+    $vp_lang = $vp_m[1];
+    $vp_index = (int) $vp_m[2];
+    $vp_newtext = trim((string) $text);
+    if ($vp_newtext === '') {
+        sendmessage($from_id, "⚠️ لطفاً یه متن بفرست 😅", $backadmin, 'HTML');
+        return;
+    }
+    volumepct_tier_set_btnlabel($vp_index, $vp_lang, $vp_newtext);
+    step('home', $from_id);
+    list($vp_text, $vp_kb) = volumepct_tier_detail_payload($vp_index, $vp_lang, $textbotlang);
+    $vp_msgid = intval(json_decode((string) ($user['Processing_value'] ?? ''), true)['bt_msgid'] ?? 0);
+    $vp_done = "✅ متن دکمه ذخیره شد!\n\n" . $vp_text;
+    deletemessage($from_id, $message_id);
+    if ($vp_msgid > 0) {
+        Editmessagetext($from_id, $vp_msgid, $vp_done, $vp_kb, 'HTML');
+    } else {
+        sendmessage($from_id, $vp_done, $vp_kb, 'HTML');
+    }
+    return;
+}
+if (preg_match('/^volpctstk-([a-z]{2})-(\d+)$/', (string) $user['step'], $vp_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+    $vp_lang = $vp_m[1];
+    $vp_index = (int) $vp_m[2];
+    $vp_fileid = $update['message']['sticker']['file_id'] ?? '';
+    if ($vp_fileid === '') {
+        sendmessage($from_id, "⚠️ لطفاً یه استیکر بفرست (هر نوع استیکری قابل قبوله) 😅", $backadmin, 'HTML');
+        return;
+    }
+    volumepct_tier_set_sticker($vp_index, $vp_lang, $vp_fileid);
+    step('home', $from_id);
+    list($vp_text, $vp_kb) = volumepct_tier_detail_payload($vp_index, $vp_lang, $textbotlang);
+    $vp_msgid = intval(json_decode((string) ($user['Processing_value'] ?? ''), true)['bt_msgid'] ?? 0);
+    $vp_done = "✅ استیکر ذخیره شد!\n\n" . $vp_text;
+    deletemessage($from_id, $message_id);
+    if ($vp_msgid > 0) {
+        Editmessagetext($from_id, $vp_msgid, $vp_done, $vp_kb, 'HTML');
+    } else {
+        sendmessage($from_id, $vp_done, $vp_kb, 'HTML');
+    }
+    return;
+}
+if (preg_match('/^volpctemo-([a-z]{2})-(\d+)$/', (string) $user['step'], $vp_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+    $vp_lang = $vp_m[1];
+    $vp_index = (int) $vp_m[2];
+    $vp_icon_id = '';
+    if (!empty($update['message']['entities']) && is_array($update['message']['entities'])) {
+        foreach ($update['message']['entities'] as $vp_ent) {
+            if (($vp_ent['type'] ?? '') === 'custom_emoji' && !empty($vp_ent['custom_emoji_id'])) {
+                $vp_icon_id = $vp_ent['custom_emoji_id'];
+                break;
+            }
+        }
+    }
+    if ($vp_icon_id !== '') {
+        volumepct_tier_set_style($vp_index, null, null, $vp_icon_id, null, null);
+        $vp_msg = "✅ ایموجی پریمیوم ذخیره شد! 💎";
+    } else {
+        preg_match('/^\X/u', trim((string) $text), $vp_em);
+        $vp_emoji = $vp_em[0] ?? '';
+        if ($vp_emoji === '' || preg_match('/^[0-9a-zA-Z]$/', $vp_emoji)) {
+            sendmessage($from_id, "⚠️ لطفاً فقط یه ایموجی بفرست 😅", $backadmin, 'HTML');
+            return;
+        }
+        volumepct_tier_set_style($vp_index, null, $vp_emoji, null, null, null);
+        $vp_msg = "✅ ایموجی {$vp_emoji} ذخیره شد!";
+    }
+    step('home', $from_id);
+    list($vp_text, $vp_kb) = volumepct_tier_detail_payload($vp_index, $vp_lang, $textbotlang);
+    deletemessage($from_id, $message_id);
+    sendmessage($from_id, $vp_msg . "\n\n" . $vp_text, $vp_kb, 'HTML');
+    return;
+}
 if (preg_match('/^cfgcoltxt-([a-z]{2})-([0123])$/', (string) $user['step'], $cc_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
     $cc_lang = $cc_m[1];
     $cc_idx = (int) $cc_m[2];

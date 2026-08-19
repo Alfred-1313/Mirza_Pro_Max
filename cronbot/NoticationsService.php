@@ -56,6 +56,7 @@ class ServiceMonitor
                 if ($this->status_cron['day'])
                     $this->checkTimeExpiration($data['invoice'], $data['user'], $data['userData'], $invoice['username']);
             }
+            $this->checkCustomNotices($data['invoice'], $data['user'], $data['userData'], $invoice['username']);
             if ($this->status_cron['remove'])
                 $this->shouldRemoveService($data['invoice'], $data['user'], $data['userData'], $invoice['username']);
             if ($this->status_cron['remove_volume'])
@@ -209,6 +210,168 @@ class ServiceMonitor
         );
         $this->Panel->Modifyuser($invoice['username'], $panel_info['code_panel'], $configs);
     }
+    // admin-defined "at X% used, send this custom message/sticker/button" tiers
+    // (see volumepct_tier_* in function.php) - fully independent of the fixed
+    // GB-based checkVolumeThreshold() above, on by default doing nothing when
+    // no tiers are configured. Tracks the highest tier already notified per
+    // invoice in notifctions.volumePctSent so re-crossing a lower tier (or the
+    // same one again) never re-sends; a usage jump that skips straight past
+    // several tiers between cron runs only sends the single highest one reached.
+    private function checkCustomNotices($invoice, $user, $userData, $username)
+    {
+        if (empty($user) || empty(volumepct_tiers_map())) {
+            return;
+        }
+        $notif = json_decode((string) $invoice['notifctions'], true);
+        if (!is_array($notif)) {
+            $notif = [];
+        }
+        $usedPercent = 0;
+        if (!empty($userData['data_limit']) && $userData['data_limit'] > 0) {
+            $usedPercent = min(100, max(0, ($userData['used_traffic'] / $userData['data_limit']) * 100));
+        }
+        // most-terminal first, and each returns after sending, so a single cron
+        // pass never fires more than one custom notice for the same invoice
+        if ($this->noticeVolumeEnded($invoice, $user, $userData, $notif, $usedPercent)) {
+            return;
+        }
+        if ($this->noticeTimeEnded($invoice, $user, $userData, $notif, $usedPercent)) {
+            return;
+        }
+        if ($this->noticeVolumeTier($invoice, $user, $userData, $notif, $usedPercent)) {
+            return;
+        }
+        $this->noticeTimeTier($invoice, $user, $userData, $notif, $usedPercent);
+    }
+
+    // shared delivery for all 4 notice kinds: optional sticker first, then the
+    // caption with that tier's own customized button, then persist the updated
+    // notifctions tracking blob
+    private function sendCustomNotice($tierIndex, $invoice, $user, $userData, array $notif, $usedPercent)
+    {
+        $lang = $user['lang'] ?? 'fa';
+        $caption = volumepct_tier_caption($tierIndex, $lang, $this->textBotLang, $invoice, $user, $userData, (string) round($usedPercent));
+        $keyboard = volumepct_tier_kb($tierIndex, $lang, $this->textBotLang, $invoice['id_invoice']);
+        $sticker = volumepct_tier_sticker($tierIndex, $lang);
+        if ($sticker !== '') {
+            telegram('sendSticker', ['chat_id' => $invoice['id_user'], 'sticker' => $sticker], $invoice['bottype']);
+        }
+        sendmessage($invoice['id_user'], $caption, $keyboard, 'HTML', $invoice['bottype']);
+        update("invoice", "notifctions", json_encode($notif), "id_invoice", $invoice['id_invoice']);
+    }
+
+    // volume fully consumed - fires once ever per invoice
+    private function noticeVolumeEnded($invoice, $user, $userData, $notif, $usedPercent)
+    {
+        if (!empty($notif['volEndSent'])) {
+            return false;
+        }
+        $exhausted = ($userData['status'] === 'limited')
+            || (!empty($userData['data_limit']) && $userData['data_limit'] > 0 && $userData['used_traffic'] >= $userData['data_limit']);
+        if (!$exhausted) {
+            return false;
+        }
+        $tiers = volumepct_tiers_for_kind('volend');
+        if (empty($tiers)) {
+            return false;
+        }
+        $notif['volEndSent'] = true;
+        $this->sendCustomNotice(array_key_first($tiers), $invoice, $user, $userData, $notif, $usedPercent);
+        return true;
+    }
+
+    // subscription time fully elapsed - fires once ever per invoice
+    private function noticeTimeEnded($invoice, $user, $userData, $notif, $usedPercent)
+    {
+        if (!empty($notif['timeEndSent'])) {
+            return false;
+        }
+        $ended = ($userData['status'] === 'expired')
+            || (!empty($userData['expire']) && $userData['expire'] > 0 && $userData['expire'] <= time());
+        if (!$ended) {
+            return false;
+        }
+        $tiers = volumepct_tiers_for_kind('timeend');
+        if (empty($tiers)) {
+            return false;
+        }
+        $notif['timeEndSent'] = true;
+        $this->sendCustomNotice(array_key_first($tiers), $invoice, $user, $userData, $notif, $usedPercent);
+        return true;
+    }
+
+    // "X% of your volume is used" tiers - picks the HIGHEST threshold crossed
+    // that is above whatever was last sent, so a usage jump between cron runs
+    // sends only the single most-relevant one, never a backlog
+    private function noticeVolumeTier($invoice, $user, $userData, $notif, $usedPercent)
+    {
+        if (!in_array($userData['status'], ['active', 'Unknown'], true)) {
+            return false;
+        }
+        if (empty($userData['data_limit']) || $userData['data_limit'] <= 0) {
+            return false;
+        }
+        $alreadySent = intval($notif['volumePctSent'] ?? 0);
+        $bestPct = null;
+        $bestIndex = null;
+        foreach (volumepct_tiers_for_kind('vol') as $i => $tier) {
+            $pct = intval($tier['pct'] ?? -1);
+            if ($pct < 0 || $pct > 100) {
+                continue;
+            }
+            if ($usedPercent >= $pct && $pct > $alreadySent) {
+                if ($bestPct === null || $pct > $bestPct) {
+                    $bestPct = $pct;
+                    $bestIndex = $i;
+                }
+            }
+        }
+        if ($bestIndex === null) {
+            return false;
+        }
+        $notif['volumePctSent'] = $bestPct;
+        $this->sendCustomNotice($bestIndex, $invoice, $user, $userData, $notif, $usedPercent);
+        return true;
+    }
+
+    // "X days left" tiers - mirror image of the volume logic: thresholds are
+    // crossed on the way DOWN, so it picks the LOWEST (most urgent) threshold
+    // crossed that is below whatever was last sent
+    private function noticeTimeTier($invoice, $user, $userData, $notif, $usedPercent)
+    {
+        if (!in_array($userData['status'], ['active', 'Unknown'], true)) {
+            return false;
+        }
+        if (empty($userData['expire']) || $userData['expire'] <= 0) {
+            return false;
+        }
+        $daysLeft = ($userData['expire'] - time()) / 86400;
+        if ($daysLeft < 0) {
+            return false;
+        }
+        $lastSent = isset($notif['timeTierSent']) ? intval($notif['timeTierSent']) : PHP_INT_MAX;
+        $bestDays = null;
+        $bestIndex = null;
+        foreach (volumepct_tiers_for_kind('time') as $i => $tier) {
+            $days = intval($tier['pct'] ?? -1);
+            if ($days < 0) {
+                continue;
+            }
+            if ($daysLeft <= $days && $days < $lastSent) {
+                if ($bestDays === null || $days < $bestDays) {
+                    $bestDays = $days;
+                    $bestIndex = $i;
+                }
+            }
+        }
+        if ($bestIndex === null) {
+            return false;
+        }
+        $notif['timeTierSent'] = $bestDays;
+        $this->sendCustomNotice($bestIndex, $invoice, $user, $userData, $notif, $usedPercent);
+        return true;
+    }
+
     private function checkTimeExpiration($invoice, $user, $userData, $username)
     {
         $validStatuses = ['expired', 'on_hold', 'limited'];

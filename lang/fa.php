@@ -174,6 +174,12 @@ return array (
         'label' => '🔑 تنظیم اکانت تست',
         'key' => 'users.usertest.selectUsernamePrompt',
       ),
+      26 => 
+      array (
+        'label' => '✏️ ویرایش پیام موجودی ناکافی',
+        'key' => 'users.Balance.insufficientBalanceSimple',
+        'group' => 'buyflow',
+      ),
     ),
   ),
   'language' => 
@@ -7930,6 +7936,17 @@ nowpayments.io
 ',
     'notifTimeRemaining' => '📌 از مهلت زمانی استفاده از سرویس %s فقط %s روز باقی مانده است. ',
     'notifVolumeActionHint' => 'لطفاً در صورت تمایل برای خرید حجم اضافه و یا تمدید سرویستون از طریق بخش «%s» اقدام بفرمایین',
+    'volumePctDefaultText' => 'مشتری گرامی {username}
+حجم بسته VPN شما {packagedays} روزه {packagevolume} گیگابایتی {usedpercent} درصد استفاده شده است .
+چنان چه تمایل به مصرف سرویس خود دارید از دکمه زیر استفاده کنید 🫶',
+    'volumeTimeDefaultText' => 'مشتری گرامی {username}
+شما تا ساعت {expiretime} تاریخ {expiredate} معادل {remainingtime} روز {remaininghours} ساعت میتوانید از بسته خود استفاده کنید
+چنان چه تمایل به مصرف سرویس خود دارید از دکمه زیر استفاده کنید 🫶',
+    'volumeTimeEndDefaultText' => 'مشتری گرامی {username}
+مدت زمان بسته شما که در تاریخ {purchasedate} خریداری کرده بودید به اتمام رسید ، چنان چه تمایل به مصرف سرویس خود دارید از دکمه زیر استفاده کنید 🫶',
+    'volumeEndDefaultText' => 'مشتری گرامی {username}
+حجم بسته VPN شما {packagedays} روزه {packagevolume} گیگابایتی شما به پایان رسید .
+این بسته فاقد تمدید خودکار میباشد برای تمدید و استفاده مجدد میتوانید بسته خود را با دکمه پایین تمدید کنید 🫶',
     'notifVolumeCronTitle' => '📌 اطلاعیه کرون حجم
 
 ',

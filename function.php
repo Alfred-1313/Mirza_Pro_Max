@@ -3830,6 +3830,607 @@ if (!function_exists('usertest_prompt_button_detail_payload')) {
         return [$info, json_encode($kb)];
     }
 }
+if (!function_exists('balancebtn_defs')) {
+    function balancebtn_defs($textbotlang)
+    {
+        return [
+            0 => ['name' => '💰 دکمه افزایش موجودی', 'text' => $textbotlang['textbot']['addBalance'], 'style' => 'success', 'callback_data' => 'Add_Balance'],
+        ];
+    }
+}
+if (!function_exists('balancebtn_override')) {
+    function balancebtn_override($lang)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
+        return (is_array($be) && isset($be[$lang]['users.Balance.insufficientBalanceSimple'][0]) && is_array($be[$lang]['users.Balance.insufficientBalanceSimple'][0]))
+            ? $be[$lang]['users.Balance.insufficientBalanceSimple'][0]
+            : [];
+    }
+}
+if (!function_exists('balancebtn_kb')) {
+    // renders the "insufficient balance" message's own top-up button, applying any
+    // per-language text/color/premium-emoji override - this is the keyboard actually
+    // sent to users at both purchase call sites in index.php
+    function balancebtn_kb($lang, $textbotlang)
+    {
+        $d = balancebtn_defs($textbotlang)[0];
+        $ov = balancebtn_override($lang);
+        $text = (isset($ov['text']) && $ov['text'] !== '') ? $ov['text'] : $d['text'];
+        $style = (isset($ov['style']) && in_array($ov['style'], ['primary', 'success', 'danger'], true)) ? $ov['style'] : $d['style'];
+        $pos = (isset($ov['pos']) && $ov['pos'] === 'left') ? 'left' : 'right';
+        $btn = ['text' => $text, 'callback_data' => $d['callback_data'], 'style' => $style];
+        if (!empty($ov['simple'])) {
+            $btn['text'] = strip_leading_emoji($text);
+        } elseif (!empty($ov['icon_emoji'])) {
+            $btn['text'] = strip_leading_emoji($text);
+            $btn['icon_custom_emoji_id'] = $ov['icon_emoji'];
+        } else {
+            // no custom emoji override set - pos should still be able to move
+            // whatever leading emoji the DEFAULT/current text already has
+            // baked in (e.g. the default "💰 افزایش موجودی"), not just a
+            // separately-configured one
+            if (!empty($ov['emoji'])) {
+                $emoji = $ov['emoji'];
+                $rest = strip_leading_emoji($text);
+            } else {
+                list($emoji, $rest) = split_leading_emoji($text);
+            }
+            if ($emoji !== '') {
+                $btn['text'] = ($pos === 'left') ? trim($rest . ' ' . $emoji) : trim($emoji . ' ' . $rest);
+            }
+        }
+        return json_encode(['inline_keyboard' => [[$btn]]]);
+    }
+}
+if (!function_exists('balancebtn_payload')) {
+    function balancebtn_payload($lang, $textbotlang)
+    {
+        $d = balancebtn_defs($textbotlang)[0];
+        $ov = balancebtn_override($lang);
+        $curText = (isset($ov['text']) && $ov['text'] !== '') ? $ov['text'] : $d['text'];
+        $curStyle = (isset($ov['style']) && in_array($ov['style'], ['primary', 'success', 'danger'], true)) ? $ov['style'] : $d['style'];
+        $curPos = (isset($ov['pos']) && $ov['pos'] === 'left') ? 'left' : 'right';
+        $curSimple = !empty($ov['simple']);
+        $previewBtn = ['text' => $curText, 'callback_data' => 'none', 'style' => $curStyle];
+        $hasEmoji = false;
+        if ($curSimple) {
+            $previewBtn['text'] = strip_leading_emoji($curText);
+        } elseif (!empty($ov['icon_emoji'])) {
+            $previewBtn['text'] = strip_leading_emoji($curText);
+            $previewBtn['icon_custom_emoji_id'] = $ov['icon_emoji'];
+            $hasEmoji = true;
+        } else {
+            if (!empty($ov['emoji'])) {
+                $pvEmoji = $ov['emoji'];
+                $pvRest = strip_leading_emoji($curText);
+                $hasEmoji = true;
+            } else {
+                list($pvEmoji, $pvRest) = split_leading_emoji($curText);
+            }
+            if ($pvEmoji !== '') {
+                $previewBtn['text'] = ($curPos === 'left') ? trim($pvRest . ' ' . $pvEmoji) : trim($pvEmoji . ' ' . $pvRest);
+            }
+        }
+        $info = "🔘 <b>دکمه افزایش موجودی</b>\n➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= "این دکمه، زیر پیام «موجودی ناکافی» به کاربر نشون داده می‌شه.\n";
+        $info .= "➖➖➖➖➖➖➖➖➖➖\n👁 پیش‌نمایش زنده 👇";
+        $kb = ['inline_keyboard' => []];
+        $kb['inline_keyboard'][] = [$previewBtn];
+        $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش متن', 'callback_data' => "btact|bbtntext|{$lang}"]];
+        $kb['inline_keyboard'][] = [
+            ['text' => ($curStyle === 'primary' ? '✅ ' : '') . '🔵 آبی', 'callback_data' => "btact|bbtnstyle|{$lang}|primary", 'style' => 'primary'],
+            ['text' => ($curStyle === 'success' ? '✅ ' : '') . '🟢 سبز', 'callback_data' => "btact|bbtnstyle|{$lang}|success", 'style' => 'success'],
+            ['text' => ($curStyle === 'danger' ? '✅ ' : '') . '🔴 قرمز', 'callback_data' => "btact|bbtnstyle|{$lang}|danger", 'style' => 'danger'],
+        ];
+        $kb['inline_keyboard'][] = [['text' => ($hasEmoji ? '✅ ' : '') . '💎 ایموجی دکمه', 'callback_data' => "btact|bbtnemoji|{$lang}"]];
+        $kb['inline_keyboard'][] = [['text' => ($curSimple ? '✅ ' : '') . '🎭 حالت ساده (بدون ایموجی)', 'callback_data' => "btact|bbtnsimple|{$lang}"]];
+        $kb['inline_keyboard'][] = [
+            ['text' => ($curPos === 'right' ? '✅ ' : '') . '➡️ راست', 'callback_data' => "btact|bbtnpos|{$lang}|right"],
+            ['text' => ($curPos === 'left' ? '✅ ' : '') . '⬅️ چپ', 'callback_data' => "btact|bbtnpos|{$lang}|left"],
+        ];
+        $kb['inline_keyboard'][] = [['text' => '🔁 ریست این دکمه', 'callback_data' => "btact|bbtnrst|{$lang}", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "bt_edit|{$lang}|users.Balance.insufficientBalanceSimple"]];
+        return [$info, json_encode($kb)];
+    }
+}
+if (!function_exists('volumepct_tiers_map')) {
+    // admin-managed list of "at X% used, send this custom message/sticker/button"
+    // thresholds for the volume-usage cron warning - same map/save/set-style
+    // shape as topup_packages_*, deliberately mirrored for consistency, but its
+    // own independent storage column since tiers aren't scoped to a gateway
+    function volumepct_tiers_map($fresh = false)
+    {
+        static $cache = null;
+        if ($cache !== null && !$fresh) {
+            return $cache;
+        }
+        $setting = select("setting", "*", null, null, "select");
+        $m = json_decode((string) ($setting['volumePctTiers'] ?? ''), true);
+        $cache = is_array($m) ? array_values($m) : [];
+        return $cache;
+    }
+}
+if (!function_exists('volumepct_tiers_save')) {
+    function volumepct_tiers_save(array $tiers)
+    {
+        $tiers = array_values($tiers);
+        $json = empty($tiers) ? '[]' : json_encode($tiers, JSON_UNESCAPED_UNICODE);
+        update("setting", "volumePctTiers", $json, null, null);
+        volumepct_tiers_map(true);
+    }
+}
+if (!function_exists('volumepct_tier_get')) {
+    function volumepct_tier_get($index)
+    {
+        $tiers = volumepct_tiers_map();
+        return $tiers[$index] ?? [];
+    }
+}
+if (!function_exists('volumepct_kind_meta')) {
+    // single source of truth for the 4 notice kinds, so no UI/cron code has to
+    // scatter its own per-kind conditionals. 'single' kinds are one-off notices
+    // (no threshold, exactly one instance, auto-created on first open) rather
+    // than admin-managed multi-tier lists.
+    function volumepct_kind_meta($kind = null)
+    {
+        $meta = [
+            'vol' => [
+                'label' => '📊 مصرف حجم (درصدی)',
+                'title' => 'آستانه %s٪ مصرف',
+                'rowLabel' => '🎯 %s٪ مصرف',
+                'thresholdBtn' => '🎯 تغییر درصد (%s٪)',
+                'thresholdPrompt' => '🎯 چند درصد مصرف؟ یه عدد بین ۰ تا ۱۰۰ بفرست (مثلاً 80)',
+                'icon' => '🎯',
+                'single' => false,
+                'max' => 100,
+            ],
+            'time' => [
+                'label' => '⏳ زمان باقی‌مانده',
+                'title' => 'آستانه %s روز مانده',
+                'rowLabel' => '⏳ %s روز مانده',
+                'thresholdBtn' => '⏳ تغییر روز (%s روز)',
+                'thresholdPrompt' => '⏳ چند روز مونده به اتمام اشتراک پیام بره؟ یه عدد بفرست (مثلاً 3)',
+                'icon' => '⏳',
+                'single' => false,
+                'max' => 3650,
+            ],
+            'timeend' => [
+                'label' => '⛔ پیام اتمام زمان',
+                'title' => 'پیام اتمام زمان اشتراک',
+                'rowLabel' => '⛔ پیام اتمام زمان',
+                'thresholdBtn' => '',
+                'thresholdPrompt' => '',
+                'icon' => '⛔',
+                'single' => true,
+                'max' => 0,
+            ],
+            'volend' => [
+                'label' => '🔚 پایان حجم',
+                'title' => 'پیام پایان حجم بسته',
+                'rowLabel' => '🔚 پیام پایان حجم',
+                'thresholdBtn' => '',
+                'thresholdPrompt' => '',
+                'icon' => '🔚',
+                'single' => true,
+                'max' => 0,
+            ],
+        ];
+        if ($kind === null) {
+            return $meta;
+        }
+        return $meta[$kind] ?? $meta['vol'];
+    }
+}
+if (!function_exists('volumepct_tier_kind')) {
+    // entries saved before the time/end kinds existed have no 'kind' key at all -
+    // they are all volume-percentage tiers, so that is the backward-compatible default
+    function volumepct_tier_kind($tier)
+    {
+        $k = is_array($tier) ? (string) ($tier['kind'] ?? 'vol') : 'vol';
+        return array_key_exists($k, volumepct_kind_meta()) ? $k : 'vol';
+    }
+}
+if (!function_exists('volumepct_tiers_for_kind')) {
+    // returns [realIndex => tier] preserving the true storage indices, so every
+    // callback_data built from these keys still addresses the right row
+    function volumepct_tiers_for_kind($kind)
+    {
+        $out = [];
+        foreach (volumepct_tiers_map() as $i => $tier) {
+            if (volumepct_tier_kind($tier) === $kind) {
+                $out[$i] = $tier;
+            }
+        }
+        return $out;
+    }
+}
+if (!function_exists('volumepct_singleton_index')) {
+    // find-or-create for the one-off kinds (timeend/volend) - the admin never
+    // "adds" these, they just exist the first time the section is opened
+    function volumepct_singleton_index($kind)
+    {
+        foreach (volumepct_tiers_map() as $i => $tier) {
+            if (volumepct_tier_kind($tier) === $kind) {
+                return $i;
+            }
+        }
+        return volumepct_tier_add(0, $kind);
+    }
+}
+if (!function_exists('volumepct_tier_add')) {
+    function volumepct_tier_add($pct, $kind = 'vol')
+    {
+        $meta = volumepct_kind_meta($kind);
+        $tiers = volumepct_tiers_map();
+        $entry = ['pct' => max(0, min($meta['max'], intval($pct)))];
+        if ($kind !== 'vol') {
+            $entry['kind'] = $kind;
+        }
+        $tiers[] = $entry;
+        volumepct_tiers_save($tiers);
+        return count($tiers) - 1;
+    }
+}
+if (!function_exists('volumepct_tier_remove')) {
+    function volumepct_tier_remove($index)
+    {
+        $tiers = volumepct_tiers_map();
+        unset($tiers[$index]);
+        volumepct_tiers_save(array_values($tiers));
+    }
+}
+if (!function_exists('volumepct_tier_set_pct')) {
+    function volumepct_tier_set_pct($index, $pct)
+    {
+        $tiers = volumepct_tiers_map();
+        if (!isset($tiers[$index])) {
+            return;
+        }
+        $meta = volumepct_kind_meta(volumepct_tier_kind($tiers[$index]));
+        $tiers[$index]['pct'] = max(0, min($meta['max'], intval($pct)));
+        volumepct_tiers_save($tiers);
+    }
+}
+if (!function_exists('volumepct_tier_set_style')) {
+    // null = leave that field untouched, matches topup_packages_set_style's
+    // established sentinel convention - pass '' explicitly to clear one
+    function volumepct_tier_set_style($index, $style = null, $emoji = null, $emojiIcon = null, $pos = null, $simple = null)
+    {
+        $tiers = volumepct_tiers_map();
+        if (!isset($tiers[$index])) {
+            return;
+        }
+        if ($style !== null && in_array($style, ['primary', 'success', 'danger'], true)) {
+            $tiers[$index]['style'] = $style;
+        }
+        if ($emoji !== null) {
+            if ($emoji === '') {
+                unset($tiers[$index]['emoji']);
+            } else {
+                $tiers[$index]['emoji'] = $emoji;
+            }
+            unset($tiers[$index]['emojiIcon']);
+        }
+        if ($emojiIcon !== null) {
+            if ($emojiIcon === '') {
+                unset($tiers[$index]['emojiIcon']);
+            } else {
+                $tiers[$index]['emojiIcon'] = $emojiIcon;
+                unset($tiers[$index]['emoji']);
+            }
+        }
+        if ($pos !== null && in_array($pos, ['left', 'right'], true)) {
+            $tiers[$index]['pos'] = $pos;
+        }
+        if ($simple !== null) {
+            $tiers[$index]['simple'] = (bool) $simple;
+        }
+        volumepct_tiers_save($tiers);
+    }
+}
+if (!function_exists('volumepct_tier_set_text')) {
+    function volumepct_tier_set_text($index, $lang, $text)
+    {
+        $tiers = volumepct_tiers_map();
+        if (!isset($tiers[$index])) {
+            return;
+        }
+        $tiers[$index]['text'][$lang] = $text;
+        volumepct_tiers_save($tiers);
+    }
+}
+if (!function_exists('volumepct_tier_set_btnlabel')) {
+    function volumepct_tier_set_btnlabel($index, $lang, $label)
+    {
+        $tiers = volumepct_tiers_map();
+        if (!isset($tiers[$index])) {
+            return;
+        }
+        $tiers[$index]['btnLabel'][$lang] = $label;
+        volumepct_tiers_save($tiers);
+    }
+}
+if (!function_exists('volumepct_tier_set_sticker')) {
+    function volumepct_tier_set_sticker($index, $lang, $fileId)
+    {
+        $tiers = volumepct_tiers_map();
+        if (!isset($tiers[$index])) {
+            return;
+        }
+        if ($fileId === '') {
+            unset($tiers[$index]['sticker'][$lang]);
+        } else {
+            $tiers[$index]['sticker'][$lang] = $fileId;
+        }
+        volumepct_tiers_save($tiers);
+    }
+}
+if (!function_exists('volumepct_tier_sticker')) {
+    function volumepct_tier_sticker($index, $lang)
+    {
+        $tier = volumepct_tier_get($index);
+        return (string) ($tier['sticker'][$lang] ?? '');
+    }
+}
+if (!function_exists('volumepct_tier_default_text')) {
+    function volumepct_tier_default_text($textbotlang, $kind = 'vol')
+    {
+        $map = [
+            'vol' => 'volumePctDefaultText',
+            'time' => 'volumeTimeDefaultText',
+            'timeend' => 'volumeTimeEndDefaultText',
+            'volend' => 'volumeEndDefaultText',
+        ];
+        $key = $map[$kind] ?? $map['vol'];
+        if (!empty($textbotlang['hardcoded'][$key])) {
+            return $textbotlang['hardcoded'][$key];
+        }
+        return "مشتری گرامی {username}\nحجم بسته VPN شما {packagedays} روزه {packagevolume} گیگابایتی {usedpercent} درصد استفاده شده است .\nچنان چه تمایل به مصرف سرویس خود دارید از دکمه زیر استفاده کنید 🫶";
+    }
+}
+if (!function_exists('volumepct_tier_caption')) {
+    // computes every placeholder from the real invoice/user/panel-data context -
+    // {username} stays the pre-established VPN-service-username meaning (see
+    // project_bottext_manager_guide), {tg_username}/{userid} reuse
+    // bottext_user_placeholders() verbatim (same Telegram-identity tokens used
+    // elsewhere), {expiredate}/{expiretime} use the same jdate() Jalali library
+    // already used throughout index.php for admin-facing timestamps
+    function volumepct_tier_caption($index, $lang, $textbotlang, $invoice, $user, $userData, $usedPercent)
+    {
+        require_once __DIR__ . '/jdf.php';
+        // formatBytes() reads its unit-suffix labels via `global $textbotlang`
+        // rather than a parameter - callers like the notification cron only ever
+        // populate $this->textBotLang (a class property), so that global is
+        // never actually set there and the unit suffix silently comes out empty.
+        // Force it here from the parameter we already have, so this feature's
+        // own {remainingvolume} always renders with a real unit regardless of
+        // caller context (pre-existing issue in checkVolumeThreshold()'s own
+        // formatBytes() call - out of scope here, left untouched, flagged separately).
+        $GLOBALS['textbotlang'] = $textbotlang;
+        $tier = volumepct_tier_get($index);
+        $tpl = $tier['text'][$lang] ?? volumepct_tier_default_text($textbotlang, volumepct_tier_kind($tier));
+        $remainingVolumeFormatted = formatBytes(max(0, ($userData['data_limit'] ?? 0) - ($userData['used_traffic'] ?? 0)));
+        $packageDays = (string) intval($invoice['Service_time'] ?? 0);
+        $packageVolume = !empty($userData['data_limit']) ? (string) round($userData['data_limit'] / (1024 ** 3)) : '0';
+        $secsLeft = !empty($userData['expire']) ? max(0, $userData['expire'] - time()) : 0;
+        $remainingDays = (string) intdiv($secsLeft, 86400);
+        // the leftover hours WITHIN the last partial day, not the total hours -
+        // the default caption reads "معادل X روز X ساعت", so these two are meant
+        // to be read together, not as two independent totals
+        $remainingHours = (string) intdiv($secsLeft % 86400, 3600);
+        $expireDate = !empty($userData['expire']) ? jdate('Y/m/d', $userData['expire']) : '';
+        $expireTime = !empty($userData['expire']) ? jdate('H:i', $userData['expire']) : '';
+        // invoice.time_sell is a unix timestamp written at purchase time
+        $purchaseDate = !empty($invoice['time_sell']) && ctype_digit((string) $invoice['time_sell'])
+            ? jdate('Y/m/d', (int) $invoice['time_sell'])
+            : '';
+        $userPlaceholders = function_exists('bottext_user_placeholders')
+            ? bottext_user_placeholders($user, $invoice['id_user'] ?? 0)
+            : ['{tg_username}' => '', '{userid}' => (string) ($invoice['id_user'] ?? '')];
+        return strtr($tpl, array_merge($userPlaceholders, [
+            '{username}' => $invoice['username'] ?? '',
+            '{usedpercent}' => (string) $usedPercent,
+            '{remainingvolume}' => $remainingVolumeFormatted,
+            '{packagedays}' => $packageDays,
+            '{packagevolume}' => $packageVolume,
+            '{remainingtime}' => $remainingDays,
+            '{remaininghours}' => $remainingHours,
+            '{expiredate}' => $expireDate,
+            '{expiretime}' => $expireTime,
+            '{purchasedate}' => $purchaseDate,
+        ]));
+    }
+}
+if (!function_exists('volumepct_tier_reset_style')) {
+    // resets ONE tier's caption/button customization back to default WITHOUT
+    // deleting the tier itself (its percentage survives) - text/btnLabel/sticker
+    // are language-scoped so only the given language is cleared;
+    // style/emoji/emojiIcon/pos/simple are shared across languages, cleared
+    // unconditionally
+    function volumepct_tier_reset_style($index, $lang)
+    {
+        $tiers = volumepct_tiers_map();
+        if (!isset($tiers[$index])) {
+            return;
+        }
+        unset($tiers[$index]['text'][$lang], $tiers[$index]['btnLabel'][$lang], $tiers[$index]['sticker'][$lang]);
+        unset($tiers[$index]['style'], $tiers[$index]['emoji'], $tiers[$index]['emojiIcon'], $tiers[$index]['pos'], $tiers[$index]['simple']);
+        volumepct_tiers_save($tiers);
+    }
+}
+if (!function_exists('volumepct_tiers_reset_all_style')) {
+    function volumepct_tiers_reset_all_style($lang, $kind = null)
+    {
+        $indices = ($kind === null)
+            ? array_keys(volumepct_tiers_map())
+            : array_keys(volumepct_tiers_for_kind($kind));
+        foreach ($indices as $i) {
+            volumepct_tier_reset_style($i, $lang);
+        }
+    }
+}
+if (!function_exists('volumepct_tier_kb')) {
+    // renders the tier's own renew/top-up button - reuses the exact
+    // 'extend_{invoiceId}' callback the pre-existing single-threshold notifier
+    // already relies on (createExtendServiceKeyboard() in
+    // NoticationsService.php), so tapping it still triggers the real extend flow
+    function volumepct_tier_kb($index, $lang, $textbotlang, $invoiceId)
+    {
+        $tier = volumepct_tier_get($index);
+        $text = $tier['btnLabel'][$lang] ?? ($textbotlang['keyboard']['renewService'] ?? 'تمدید سرویس');
+        $style = (isset($tier['style']) && in_array($tier['style'], ['primary', 'success', 'danger'], true)) ? $tier['style'] : 'primary';
+        $pos = (isset($tier['pos']) && $tier['pos'] === 'left') ? 'left' : 'right';
+        $btn = ['text' => $text, 'callback_data' => 'extend_' . $invoiceId, 'style' => $style];
+        if (!empty($tier['simple'])) {
+            $btn['text'] = strip_leading_emoji($text);
+        } elseif (!empty($tier['emojiIcon'])) {
+            $btn['text'] = strip_leading_emoji($text);
+            $btn['icon_custom_emoji_id'] = $tier['emojiIcon'];
+        } else {
+            // no custom emoji override set - pos should still be able to move
+            // whatever leading emoji the DEFAULT/current button label already
+            // has baked in (e.g. the default "💊 تمدید سرویس")
+            if (!empty($tier['emoji'])) {
+                $emoji = $tier['emoji'];
+                $rest = strip_leading_emoji($text);
+            } else {
+                list($emoji, $rest) = split_leading_emoji($text);
+            }
+            if ($emoji !== '') {
+                $btn['text'] = ($pos === 'left') ? trim($rest . ' ' . $emoji) : trim($emoji . ' ' . $rest);
+            }
+        }
+        return json_encode(['inline_keyboard' => [[$btn]]]);
+    }
+}
+if (!function_exists('volumepct_hub_payload')) {
+    function volumepct_hub_payload($lang, $textbotlang)
+    {
+        $volCount = count(volumepct_tiers_for_kind('vol'));
+        $timeCount = count(volumepct_tiers_for_kind('time'));
+        $info = "🔋 <b>هشدار مصرف بسته</b>\n➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= "سه نوع هشدار می‌تونی برای کاربرها تنظیم کنی؛ هر کدوم کپشن، استیکر و دکمه‌ی مستقل خودش رو داره:\n\n";
+        $info .= "📊 <b>مصرف حجم</b> - وقتی درصد مشخصی از حجم بسته مصرف شد\n";
+        $info .= "⏳ <b>زمان باقی‌مانده</b> - وقتی تعداد روز مشخصی تا اتمام اشتراک مونده (+ پیام اتمام زمان)\n";
+        $info .= "🔚 <b>پایان حجم</b> - وقتی حجم بسته کاملاً تموم شد\n";
+        $info .= "➖➖➖➖➖➖➖➖➖➖\n👇 بخشی که می‌خوای تنظیم کنی رو انتخاب کن:";
+        $kb = ['inline_keyboard' => []];
+        $kb['inline_keyboard'][] = [['text' => '📊 مصرف حجم (درصدی)' . ($volCount ? " • {$volCount} آستانه" : ''), 'callback_data' => "volpct|sec|{$lang}|vol"]];
+        $kb['inline_keyboard'][] = [['text' => '⏳ زمان باقی‌مانده' . ($timeCount ? " • {$timeCount} آستانه" : ''), 'callback_data' => "volpct|sec|{$lang}|time"]];
+        $kb['inline_keyboard'][] = [['text' => '🔚 پایان حجم', 'callback_data' => "volpct|sec|{$lang}|volend"]];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به لیست', 'callback_data' => "btact|back|{$lang}"]];
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'] ?? '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
+        return [$info, json_encode($kb)];
+    }
+}
+if (!function_exists('volumepct_section_payload')) {
+    // the tier list for one multi-tier kind ('vol' or 'time'). Singleton kinds
+    // never reach here - their callback resolves straight to a detail screen.
+    function volumepct_section_payload($kind, $lang, $textbotlang)
+    {
+        $meta = volumepct_kind_meta($kind);
+        $tiers = volumepct_tiers_for_kind($kind);
+        $order = array_keys($tiers);
+        // volume tiers read best highest-first (80 then 50); time tiers read
+        // best lowest-first (1 day then 3 then 7) - both are "closest to the
+        // limit first"
+        usort($order, function ($a, $b) use ($tiers, $kind) {
+            $av = intval($tiers[$a]['pct'] ?? 0);
+            $bv = intval($tiers[$b]['pct'] ?? 0);
+            return ($kind === 'time') ? ($av - $bv) : ($bv - $av);
+        });
+        $info = "{$meta['label']}\n➖➖➖➖➖➖➖➖➖➖\n";
+        if ($kind === 'time') {
+            $info .= "وقتی به تعداد روز تعیین‌شده تا اتمام اشتراک کاربر برسیم، پیام سفارشی همون آستانه براش ارسال می‌شه.\n";
+        } else {
+            $info .= "وقتی کاربر به هرکدوم از این آستانه‌های درصد مصرف برسه، پیام سفارشی همون آستانه براش ارسال می‌شه.\n";
+        }
+        $info .= "➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= empty($tiers) ? "فعلاً هیچ آستانه‌ای تعریف نشده." : "👇 روی هر آستانه بزن تا ویرایشش کنی:";
+        $kb = ['inline_keyboard' => []];
+        foreach ($order as $i) {
+            $tier = $tiers[$i];
+            $custom = !empty($tier['text'][$lang]);
+            $label = sprintf($meta['rowLabel'], intval($tier['pct'] ?? 0)) . ($custom ? ' ✏️' : '');
+            $style = (isset($tier['style']) && in_array($tier['style'], ['primary', 'success', 'danger'], true)) ? $tier['style'] : ($custom ? 'success' : 'primary');
+            $kb['inline_keyboard'][] = [['text' => $label, 'callback_data' => "volpct|open|{$lang}|{$i}", 'style' => $style]];
+        }
+        $kb['inline_keyboard'][] = [['text' => '➕ افزودن آستانه جدید', 'callback_data' => "volpct|add|{$lang}|{$kind}"]];
+        if ($kind === 'time') {
+            $kb['inline_keyboard'][] = [['text' => '⛔ پیام اتمام زمان اشتراک', 'callback_data' => "volpct|sec|{$lang}|timeend"]];
+        }
+        if (!empty($tiers)) {
+            $kb['inline_keyboard'][] = [['text' => '🔁 ریست کپشن و دکمه‌های این بخش', 'callback_data' => "volpct|rstall|{$lang}|{$kind}", 'style' => 'danger']];
+        }
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "volpct|hub|{$lang}"]];
+        return [$info, json_encode($kb)];
+    }
+}
+if (!function_exists('volumepct_tier_detail_payload')) {
+    function volumepct_tier_detail_payload($index, $lang, $textbotlang)
+    {
+        $tiers = volumepct_tiers_map();
+        if (!isset($tiers[$index])) {
+            return volumepct_hub_payload($lang, $textbotlang);
+        }
+        $tier = $tiers[$index];
+        $pct = intval($tier['pct'] ?? 0);
+        $hasCustomText = !empty($tier['text'][$lang]);
+        $curStyle = (isset($tier['style']) && in_array($tier['style'], ['primary', 'success', 'danger'], true)) ? $tier['style'] : 'primary';
+        $curPos = (isset($tier['pos']) && $tier['pos'] === 'left') ? 'left' : 'right';
+        $curSimple = !empty($tier['simple']);
+        $hasSticker = !empty($tier['sticker'][$lang]);
+        $hasEmoji = !empty($tier['emoji']) || !empty($tier['emojiIcon']);
+        $previewKb = json_decode(volumepct_tier_kb($index, $lang, $textbotlang, 0), true);
+        $previewBtn = $previewKb['inline_keyboard'][0][0];
+        $previewBtn['callback_data'] = 'none';
+
+        $kind = volumepct_tier_kind($tier);
+        $meta = volumepct_kind_meta($kind);
+        $currentCaptionRaw = $tier['text'][$lang] ?? volumepct_tier_default_text($textbotlang, $kind);
+        $title = $meta['single'] ? $meta['title'] : sprintf($meta['title'], $pct);
+        $info = "{$meta['icon']} <b>{$title}</b>\n➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= "✏️ کپشن: " . ($hasCustomText ? "سفارشی ✅" : "پیش‌فرض") . "\n";
+        $info .= "<blockquote>" . htmlspecialchars($currentCaptionRaw, ENT_QUOTES) . "</blockquote>\n";
+        $info .= "🖼 استیکر: " . ($hasSticker ? "ست شده ✅" : "ندارد ❌") . "\n";
+        $info .= "➖➖➖➖➖➖➖➖➖➖\n👁 پیش‌نمایش زنده دکمه 👇";
+
+        $kb = ['inline_keyboard' => []];
+        $kb['inline_keyboard'][] = [$previewBtn];
+        if (!$meta['single']) {
+            $kb['inline_keyboard'][] = [['text' => sprintf($meta['thresholdBtn'], $pct), 'callback_data' => "volpct|pct|{$lang}|{$index}"]];
+        }
+        $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش کپشن', 'callback_data' => "volpct|text|{$lang}|{$index}"]];
+        $kb['inline_keyboard'][] = [['text' => '🖼 استیکر', 'callback_data' => "volpct|sticker|{$lang}|{$index}"]];
+        $kb['inline_keyboard'][] = [['text' => '✏️ متن دکمه', 'callback_data' => "volpct|btntext|{$lang}|{$index}"]];
+        $kb['inline_keyboard'][] = [
+            ['text' => ($curStyle === 'primary' ? '✅ ' : '') . '🔵 آبی', 'callback_data' => "volpct|style|{$lang}|{$index}|primary", 'style' => 'primary'],
+            ['text' => ($curStyle === 'success' ? '✅ ' : '') . '🟢 سبز', 'callback_data' => "volpct|style|{$lang}|{$index}|success", 'style' => 'success'],
+            ['text' => ($curStyle === 'danger' ? '✅ ' : '') . '🔴 قرمز', 'callback_data' => "volpct|style|{$lang}|{$index}|danger", 'style' => 'danger'],
+        ];
+        $kb['inline_keyboard'][] = [['text' => ($hasEmoji ? '✅ ' : '') . '💎 ایموجی دکمه', 'callback_data' => "volpct|emoji|{$lang}|{$index}"]];
+        $kb['inline_keyboard'][] = [['text' => ($curSimple ? '✅ ' : '') . '🎭 حالت ساده (بدون ایموجی)', 'callback_data' => "volpct|simple|{$lang}|{$index}"]];
+        $kb['inline_keyboard'][] = [
+            ['text' => ($curPos === 'right' ? '✅ ' : '') . '➡️ راست', 'callback_data' => "volpct|pos|{$lang}|{$index}|right"],
+            ['text' => ($curPos === 'left' ? '✅ ' : '') . '⬅️ چپ', 'callback_data' => "volpct|pos|{$lang}|{$index}|left"],
+        ];
+        $kb['inline_keyboard'][] = [['text' => '🔁 ریست کپشن و دکمه', 'callback_data' => "volpct|rst|{$lang}|{$index}", 'style' => 'danger']];
+        if (!$meta['single']) {
+            $kb['inline_keyboard'][] = [['text' => '🗑 حذف این آستانه', 'callback_data' => "volpct|del|{$lang}|{$index}", 'style' => 'danger']];
+        }
+        // timeend lives inside the time section; volend is its own top-level section
+        if ($kind === 'timeend') {
+            $backCb = "volpct|sec|{$lang}|time";
+        } elseif ($kind === 'volend') {
+            $backCb = "volpct|hub|{$lang}";
+        } else {
+            $backCb = "volpct|sec|{$lang}|{$kind}";
+        }
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => $backCb]];
+        return [$info, json_encode($kb)];
+    }
+}
 if (!function_exists('config_col_order_payload')) {
     // controls which column comes first on the per-service config-list screen
     // (keyboard_config() in keyboard.php): the "دریافت کانفیگ" button, or the

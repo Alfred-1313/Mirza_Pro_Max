@@ -2274,6 +2274,7 @@ function keyboard_list_text($lang, $groupFilter = null)
     if (!empty($bt_grouped['buyflow'])) {
         $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['groupBuyflowLabel'], 'callback_data' => "bt_group|$lang|buyflow"]];
     }
+    $keyboard_text['inline_keyboard'][] = [['text' => '🔋 هشدار مصرف بسته', 'callback_data' => "volpct|hub|$lang"]];
     list($bt_um_label, $bt_um_style) = $bt_decorate('users.unknownMsg', $bt_unknown_label);
     $bt_um_btn = ['text' => $bt_um_label, 'callback_data' => "bt_edit|$lang|users.unknownMsg"];
     if ($bt_um_style !== '') {

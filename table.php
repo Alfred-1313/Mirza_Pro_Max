@@ -1316,6 +1316,7 @@ addFieldToTable("setting", "lang_currency", '{"fa":"IRT","en":"USD","ru":"RUB","
 addFieldToTable("setting", "lang_gateways", '{}', "TEXT");
 addFieldToTable("setting", "gw_auto_currency", 'off', "TEXT");
 addFieldToTable("setting", "topup_packages", '{}', "TEXT");
+addFieldToTable("setting", "volumePctTiers", '[]', "TEXT");
 addFieldToTable("setting", "topup_captions", '{}', "TEXT");
 addFieldToTable("setting", "topup_minmax", '{}', "TEXT");
 addFieldToTable("setting", "topup_btnstyle", '{}', "TEXT");

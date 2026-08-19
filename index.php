@@ -118,7 +118,14 @@ if ($user == false) {
 // while the user is genuinely mid-flow somewhere else, silently cancel that
 // flow first so the tapped button runs normally instead of being swallowed
 // by a stale step-gated branch further down this same dispatch chain
-if (is_main_menu_trigger($text, $datain, $textbotlang)) {
+// exception: a handful of admin steps explicitly ask the admin to type
+// free-form text for a button/caption label - those already have their own
+// inline "❌ انصراف" cancel button, so a typed reply that happens to match
+// an existing menu label's text (e.g. re-typing a button's current name)
+// must reach that step's own handler instead of being hijacked as navigation
+$mm_step = (string) ($user['step'] ?? '');
+$mm_exempt_step = ((string) $datain === '' && preg_match('/^(btbtntext|btbbtntext)-/', $mm_step) === 1);
+if (!$mm_exempt_step && is_main_menu_trigger($text, $datain, $textbotlang)) {
     preempt_active_session($user, $from_id);
 }
 $admin_ids = select("admin", "id_admin", null, null, "FETCH_COLUMN");
@@ -4005,13 +4012,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         $Balance_prim = $priceproduct - $user['Balance'];
         if ($Balance_prim <= 1)
             $Balance_prim = 0;
-        $bakinfos = json_encode([
-            'inline_keyboard' => [
-                [
-                    ['text' => $textbotlang['textbot']['addBalance'], 'callback_data' => "Add_Balance"],
-                ]
-            ]
-        ]);
+        $bakinfos = balancebtn_kb($user['lang'] ?? 'fa', $textbotlang);
         Editmessagetext($from_id, $message_id, $textbotlang['users']['Balance']['insufficientBalanceSimple'], $bakinfos, 'HTML');
         step('home', $from_id);
         return;
@@ -4573,13 +4574,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         sendmessage($from_id, sprintf($textbotlang['users']['Discount']['discountapplied'], $user['pricediscount']), null, 'HTML');
     }
     if ($priceproduct > $user['Balance'] && $user['agent'] != "n2") {
-        $bakinfos = json_encode([
-            'inline_keyboard' => [
-                [
-                    ['text' => $textbotlang['textbot']['addBalance'], 'callback_data' => "Add_Balance"],
-                ]
-            ]
-        ]);
+        $bakinfos = balancebtn_kb($user['lang'] ?? 'fa', $textbotlang);
         Editmessagetext($from_id, $message_id, $textbotlang['users']['Balance']['insufficientBalanceSimple'], $bakinfos, 'HTML');
         step('home', $from_id);
         return;
