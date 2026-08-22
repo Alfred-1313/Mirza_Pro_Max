@@ -487,36 +487,66 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         if ($datain == "backorder") {
             Editmessagetext($from_id, $message_id, $textbotlang['users']['sell']['service_not_available'], $noServiceKb);
         } else {
-            // remove the user's own button tap so the chat keeps only this answer
-            deletemessage($from_id, $message_id);
+            // the user's own tap is deliberately left in place - deleting it made
+            // the 🛍 سرویس های من message vanish from their chat history
             sendmessage($from_id, $textbotlang['users']['sell']['service_not_available'], $noServiceKb, 'html');
         }
         return;
     }
-    $pagination_buttons = [
-        [
-            'text' => $textbotlang['users']['page']['next'],
-            'callback_data' => 'next_page'
-        ],
-        ['text' => $textbotlang['users']['search']['title'], 'callback_data' => 'searchservice']
-    ];
-    $backuser = [
-        [
-            'text' => $textbotlang['keyboard']['backToMainMenu'],
-            'callback_data' => 'backuser'
-        ]
-    ];
+    // how many service rows this page actually produced - a full page means
+    // there may be more, anything less means this is the last one and a "next"
+    // button would just loop the user back to page 1
+    $ms_rowCount = count($keyboardlists['inline_keyboard']);
     if ($setting['NotUser'] == "onnotuser") {
         $keyboardlists['inline_keyboard'][] = [['text' => $textbotlang['users']['page']['notusernameme'], 'callback_data' => 'notusernameme']];
     }
-    $keyboardlists['inline_keyboard'][] = $pagination_buttons;
-    $keyboardlists['inline_keyboard'][] = $backuser;
+    if ($ms_rowCount >= $items_per_page) {
+        $keyboardlists['inline_keyboard'][] = [
+            ['text' => $textbotlang['users']['page']['nextPageBtn'], 'callback_data' => 'next_page'],
+        ];
+    }
+    $keyboardlists['inline_keyboard'][] = [
+        ['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'servclose', 'style' => 'danger'],
+    ];
     $keyboard_json = json_encode($keyboardlists);
     if ($datain == "backorder") {
         Editmessagetext($from_id, $message_id, $textbotlang['users']['sell']['service_sell'], $keyboard_json);
     } else {
         sendmessage($from_id, $textbotlang['users']['sell']['service_sell'], $keyboard_json, 'html');
     }
+} elseif ($datain == "mmclose") {
+    // shared ❌ بستن for the main-menu screens (اکانت تست / حساب کاربری /
+    // افزایش موجودی / آموزش): drop the screen, the sticker that came with
+    // it, and any half-finished step behind it
+    deletemessage($from_id, $message_id);
+    if (ctype_digit((string) ($user['menu_sticker_id'] ?? '')) && intval($user['menu_sticker_id']) > 0) {
+        deletemessage($from_id, intval($user['menu_sticker_id']));
+        update("user", "menu_sticker_id", "0", "id", $from_id);
+    }
+    menu_tap_cleanup($from_id, $user);
+    step('home', $from_id);
+} elseif ($datain == "sellclose") {
+    // closes the panel picker and removes the buy-button sticker that was
+    // sent with it. Processing_value_tow is the right field to read here:
+    // keyboard.php stashes the text_sell sticker id there on the tap that
+    // opened this screen, and 'sellclose' is not in the sticker map so
+    // nothing has overwritten it since.
+    deletemessage($from_id, $message_id);
+    if (ctype_digit((string) ($user['Processing_value_tow'] ?? '')) && intval($user['Processing_value_tow']) > 0) {
+        deletemessage($from_id, intval($user['Processing_value_tow']));
+        update("user", "Processing_value_tow", "", "id", $from_id);
+    }
+    menu_tap_cleanup($from_id, $user);
+    step('home', $from_id);
+} elseif ($datain == "servclose") {
+    // closes the list the same way every other ❌ بستن in the bot does, and
+    // takes the main-menu sticker that was sent alongside it with it
+    deletemessage($from_id, $message_id);
+    if (ctype_digit((string) ($user['menu_sticker_id'] ?? '')) && intval($user['menu_sticker_id']) > 0) {
+        deletemessage($from_id, intval($user['menu_sticker_id']));
+        update("user", "menu_sticker_id", "0", "id", $from_id);
+    }
+    menu_tap_cleanup($from_id, $user);
 } elseif ($datain == 'next_page') {
     $numpage = select("invoice", "id_user", "id_user", $from_id, "count");
     $page = $user['pagenumber'];
@@ -3449,6 +3479,11 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     if ($datain == "buyfresh") {
         // the no-service message is being replaced by a brand new screen, not edited
         deletemessage($from_id, $message_id);
+        // ...and so is the sticker that came with it
+        if (ctype_digit((string) ($user['menu_sticker_id'] ?? '')) && intval($user['menu_sticker_id']) > 0) {
+            deletemessage($from_id, intval($user['menu_sticker_id']));
+            update("user", "menu_sticker_id", "0", "id", $from_id);
+        }
     }
     $locationproduct = $pdo->prepare("SELECT * FROM marzban_panel  WHERE status = 'active' AND (agent = ? OR agent = 'all')");
     $locationproduct->bindValue(1, $user['agent'], PDO::PARAM_STR);
@@ -4712,11 +4747,82 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     step('topup_pick_method', $from_id);
     // only a callback gives us a bot-authored message to edit; the reply
     // button and /topup must send a fresh one (same shape as accountWallet)
+    $tp_methodKb = topup_disc_method_keyboard(topup_method_keyboard($step_payment), $from_id, $user['lang'] ?? 'fa');
     if ($datain == "Add_Balance") {
-        Editmessagetext($from_id, $message_id, $textbotlang['users']['Balance']['selectPaymentGrouped'], topup_method_keyboard($step_payment), 'HTML');
+        Editmessagetext($from_id, $message_id, topup_disc_method_caption($from_id, $user['lang'] ?? 'fa', $textbotlang), $tp_methodKb, 'HTML');
     } else {
-        sendmessage($from_id, $textbotlang['users']['Balance']['selectPaymentGrouped'], topup_method_keyboard($step_payment), 'HTML');
+        sendmessage($from_id, topup_disc_method_caption($from_id, $user['lang'] ?? 'fa', $textbotlang), $tp_methodKb, 'HTML');
     }
+    return;
+} elseif ($datain == "topup_disc_enter" && $user['step'] == "topup_pick_method") {
+    step('topup_disc_code', $from_id);
+    Editmessagetext($from_id, $message_id, "🎁 کد تخفیف رو همین‌جا بفرست:", json_encode([
+        'inline_keyboard' => [[['text' => '🔙 بازگشت', 'callback_data' => 'topup_disc_cancel', 'style' => 'danger']]],
+    ]), 'HTML');
+} elseif ($datain == "topup_disc_cancel" && $user['step'] == "topup_disc_code") {
+    step('topup_pick_method', $from_id);
+    Editmessagetext($from_id, $message_id, topup_disc_method_caption($from_id, $user['lang'] ?? 'fa', $textbotlang), topup_disc_method_keyboard(topup_method_keyboard($step_payment), $from_id, $user['lang'] ?? 'fa'), 'HTML');
+} elseif ($datain == "topup_disc_auto_info" && $user['step'] == "topup_pick_method") {
+    // the codeless discount has no code to show, so this is the only place a
+    // user can read its terms before choosing a gateway
+    telegram('answerCallbackQuery', [
+        'callback_query_id' => $callback_query_id,
+        'text' => topup_disc_auto_info_text($user['lang'] ?? 'fa', $textbotlang),
+        'show_alert' => true,
+        'cache_time' => 1,
+    ]);
+} elseif ($datain == "topup_disc_info" && $user['step'] == "topup_pick_method") {
+    // replaces the old remove-code button: an applied code can no longer be
+    // dropped from this screen, tapping it just explains its terms
+    $tp_act = topup_disc_user_active($from_id);
+    $tp_found = ($tp_act !== null) ? topup_disc_find_code($tp_act['code']) : null;
+    $tp_msg = ($tp_found === null)
+        ? 'این کد دیگه فعال نیست.'
+        : (topup_disc_caption_line($tp_found['code'], $textbotlang) . "\n\n" . topup_disc_terms_line($tp_found['code'], $from_id, $tp_found['gateway'], $textbotlang));
+    telegram('answerCallbackQuery', [
+        'callback_query_id' => $callback_query_id,
+        'text' => $tp_msg,
+        'show_alert' => true,
+        'cache_time' => 1,
+    ]);
+} elseif ($user['step'] == "topup_disc_code" && $datain == '' && trim((string) $text) !== '') {
+    // step-gated branches in index.php must ALSO validate the real input, never
+    // match on the step alone - see the 2026-08-08 swallowed-navigation bug
+    $tp_lang = $user['lang'] ?? 'fa';
+    $tp_typed = trim((string) $text);
+    $tp_found = topup_disc_find_code($tp_typed);
+    deletemessage($from_id, $message_id);
+    $tp_err = null;
+    if ($tp_found === null) {
+        $tp_err = "❌ این کد معتبر نیست.";
+    } elseif ((string) $tp_found['lang'] !== (string) $tp_lang) {
+        $tp_err = "❌ این کد برای زبان شما نیست.";
+    } else {
+        $tp_st = topup_disc_code_status($tp_found['code']);
+        if ($tp_st === 'expired') {
+            $tp_err = "❌ اعتبار این کد تموم شده.";
+        } elseif ($tp_st === 'exhausted') {
+            $tp_err = "❌ ظرفیت این کد پر شده.";
+        } elseif ($tp_st !== 'active') {
+            $tp_err = "❌ این کد در حال حاضر فعال نیست.";
+        } else {
+            $tp_per = intval($tp_found['code']['limitPerUser'] ?? 0);
+            if ($tp_per > 0 && topup_disc_code_user_count($tp_found['code']['code'], $from_id) >= $tp_per) {
+                $tp_err = "❌ شما قبلاً از این کد استفاده کردید.";
+            }
+        }
+    }
+    if ($tp_err !== null) {
+        sendmessage($from_id, $tp_err, json_encode([
+            'inline_keyboard' => [[['text' => '🔙 بازگشت', 'callback_data' => 'topup_disc_cancel', 'style' => 'danger']]],
+        ]), 'HTML');
+        return;
+    }
+    topup_disc_user_activate($from_id, $tp_found['code']['code'], $tp_found['lang'], $tp_found['gateway']);
+    step('topup_pick_method', $from_id);
+    $tp_okLine = topup_disc_caption_line($tp_found['code'], $textbotlang);
+    $tp_terms = topup_disc_terms_line($tp_found['code'], $from_id, $tp_found['gateway'], $textbotlang);
+    sendmessage($from_id, "✅ کد فعال شد!\n\n<blockquote><b>" . htmlspecialchars($tp_okLine, ENT_QUOTES) . "</b></blockquote>\n" . $tp_terms . "\n\nحالا روش پرداخت رو انتخاب کن 👇", topup_disc_method_keyboard(topup_method_keyboard($step_payment), $from_id, $tp_lang), 'HTML');
     return;
 } elseif ($user['step'] == "topup_pick_method" && gateway_button_key(['callback_data' => $datain], $textbotlang['textbot']['cartToCart'] ?? null) !== null) {
     $tp_lang = $user['lang'] ?? 'fa';
@@ -4728,7 +4834,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     foreach (array_chunk(topup_packages_for($tp_lang, $tp_key, true), topup_columns_for($tp_lang, $tp_key), true) as $tp_row) {
         $tp_kbRow = [];
         foreach ($tp_row as $tp_i => $tp_p) {
-            $tp_kbRow[] = topup_package_button($tp_p, $tp_lang, "toppick:{$tp_i}");
+            $tp_kbRow[] = topup_disc_decorate_button(topup_package_button($tp_p, $tp_lang, "toppick:{$tp_i}"), $from_id, $tp_lang, $tp_key, $tp_p['amount'] ?? 0);
         }
         $tp_kb['inline_keyboard'][] = $tp_kbRow;
     }
@@ -4743,7 +4849,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     }
     $tp_kb['inline_keyboard'][] = $tp_customBackRow;
     step("topup_pkg:{$tp_key}", $from_id);
-    Editmessagetext($from_id, $message_id, topup_caption_for($tp_lang, $tp_key, $textbotlang['users']['Balance']['pkgPromptTitle']), json_encode($tp_kb), 'HTML');
+    Editmessagetext($from_id, $message_id, topup_caption_for($tp_lang, $tp_key, $textbotlang['users']['Balance']['pkgPromptTitle']) . topup_disc_caption_block($from_id, $tp_lang, $tp_key, $textbotlang), json_encode($tp_kb), 'HTML');
 } elseif ($datain == "topup_back_methods" && (preg_match('/^topup_pkg:/', (string) $user['step']) || preg_match('/^topup_custom:/', (string) $user['step']))) {
     if ($step_payment_none) {
         step('home', $from_id);
@@ -4751,17 +4857,17 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         return;
     }
     step('topup_pick_method', $from_id);
-    Editmessagetext($from_id, $message_id, $textbotlang['users']['Balance']['selectPaymentGrouped'], topup_method_keyboard($step_payment), 'HTML');
+    Editmessagetext($from_id, $message_id, topup_disc_method_caption($from_id, $user['lang'] ?? 'fa', $textbotlang), topup_disc_method_keyboard(topup_method_keyboard($step_payment), $from_id, $user['lang'] ?? 'fa'), 'HTML');
 } elseif (preg_match('/^topup_pkg:([a-z0-9]+)$/', (string) $user['step'], $tp_m) && $datain == "topup_custom_start") {
     step("topup_custom:{$tp_m[1]}", $from_id);
     $tp_lang = $user['lang'] ?? 'fa';
     $tp_key = $tp_m[1];
     $tp_backStyle = topup_btnstyle_for($tp_lang, $tp_key, 'back', true);
     $tp_customCap = topup_custom_caption_for($tp_lang, $tp_key, $textbotlang['users']['Balance']['customAmountPromptTitle']);
-    Editmessagetext($from_id, $message_id, strtr($tp_customCap, ['{currency}' => currency_get(currency_for_lang($tp_lang))['title'] ?? currency_for_lang($tp_lang)]), json_encode([
+    Editmessagetext($from_id, $message_id, strtr($tp_customCap, ['{currency}' => currency_get(currency_for_lang($tp_lang))['title'] ?? currency_for_lang($tp_lang)]) . topup_disc_caption_block($from_id, $tp_lang, $tp_key, $textbotlang), json_encode([
         'inline_keyboard' => [[
             topup_styled_button($textbotlang['users']['Balance']['backToMethodBtn'], $tp_backStyle, 'topup_back_methods', 'danger'),
-            ['text' => $textbotlang['users']['status']['backinfo'], 'callback_data' => 'topup_back_pkg'],
+            topup_styled_button(topup_backpkg_label($tp_lang, $tp_key, $textbotlang), topup_btnstyle_for($tp_lang, $tp_key, 'backpkg', true), 'topup_back_pkg', ''),
         ]],
     ]), 'HTML');
 } elseif (preg_match('/^topup_custom:([a-z0-9]+)$/', (string) $user['step'], $tp_m) && $datain == "topup_back_pkg") {
@@ -4771,7 +4877,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     foreach (array_chunk(topup_packages_for($tp_lang, $tp_key, true), topup_columns_for($tp_lang, $tp_key), true) as $tp_row) {
         $tp_kbRow = [];
         foreach ($tp_row as $tp_i => $tp_p) {
-            $tp_kbRow[] = topup_package_button($tp_p, $tp_lang, "toppick:{$tp_i}");
+            $tp_kbRow[] = topup_disc_decorate_button(topup_package_button($tp_p, $tp_lang, "toppick:{$tp_i}"), $from_id, $tp_lang, $tp_key, $tp_p['amount'] ?? 0);
         }
         $tp_kb['inline_keyboard'][] = $tp_kbRow;
     }
@@ -4786,7 +4892,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     }
     $tp_kb['inline_keyboard'][] = $tp_customBackRow;
     step("topup_pkg:{$tp_key}", $from_id);
-    Editmessagetext($from_id, $message_id, topup_caption_for($tp_lang, $tp_key, $textbotlang['users']['Balance']['pkgPromptTitle']), json_encode($tp_kb), 'HTML');
+    Editmessagetext($from_id, $message_id, topup_caption_for($tp_lang, $tp_key, $textbotlang['users']['Balance']['pkgPromptTitle']) . topup_disc_caption_block($from_id, $tp_lang, $tp_key, $textbotlang), json_encode($tp_kb), 'HTML');
 } elseif (preg_match('/^topup_pkg:([a-z0-9]+)$/', (string) $user['step'], $tp_m) && preg_match('/^toppick:([0-9]{1,3})$/', (string) $datain, $tp_pick)) {
     $tp_key = $tp_m[1];
     $tp_lang = $user['lang'] ?? 'fa';

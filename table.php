@@ -675,6 +675,45 @@ try {
     file_put_contents('error_log', $e->getMessage());
 }
 //-----------------------------------------------------------------
+// top-up discount: which code a user currently has activated (one at a time -
+// activating another replaces it) and a log of every successful application
+try {
+    $result = $pdo->query("SHOW TABLES LIKE 'topup_discount_user'");
+    if ($result->rowCount() === 0) {
+        $result = $pdo->query("CREATE TABLE topup_discount_user (
+        id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        id_user varchar(200) NULL,
+        code varchar(200) NULL,
+        lang varchar(20) NULL,
+        gateway varchar(100) NULL,
+        activated_at varchar(50) NULL)");
+        if (!$result) {
+            echo "table topup_discount_user" . implode(' ', $pdo->errorInfo());
+        }
+    }
+} catch (Exception $e) {
+    file_put_contents('error_log', $e->getMessage());
+}
+try {
+    $result = $pdo->query("SHOW TABLES LIKE 'topup_discount_use'");
+    if ($result->rowCount() === 0) {
+        $result = $pdo->query("CREATE TABLE topup_discount_use (
+        id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        id_user varchar(200) NULL,
+        code varchar(200) NULL,
+        lang varchar(20) NULL,
+        gateway varchar(100) NULL,
+        paid varchar(100) NULL,
+        bonus varchar(100) NULL,
+        used_at varchar(50) NULL)");
+        if (!$result) {
+            echo "table topup_discount_use" . implode(' ', $pdo->errorInfo());
+        }
+    }
+} catch (Exception $e) {
+    file_put_contents('error_log', $e->getMessage());
+}
+//-----------------------------------------------------------------
 try {
 
     $result = $pdo->query("SHOW TABLES LIKE 'Giftcodeconsumed'");
@@ -1317,6 +1356,12 @@ addFieldToTable("setting", "lang_gateways", '{}', "TEXT");
 addFieldToTable("setting", "gw_auto_currency", 'off', "TEXT");
 addFieldToTable("setting", "topup_packages", '{}', "TEXT");
 addFieldToTable("setting", "volumePctTiers", '[]', "TEXT");
+addFieldToTable("setting", "topup_discounts", '{}', "TEXT");
+addFieldToTable("setting", "topup_disc_notify", '{}', "TEXT");
+addFieldToTable("user", "menu_sticker_id", "0", "VARCHAR(50)");
+addFieldToTable("user", "menu_tap_id", "0", "VARCHAR(50)");
+addFieldToTable("user", "bt_sticker_id", "0", "VARCHAR(50)");
+addFieldToTable("user", "bt_sticker_owner", "0", "VARCHAR(50)");
 addFieldToTable("setting", "topup_captions", '{}', "TEXT");
 addFieldToTable("setting", "topup_minmax", '{}', "TEXT");
 addFieldToTable("setting", "topup_btnstyle", '{}', "TEXT");

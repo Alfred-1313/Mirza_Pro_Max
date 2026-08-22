@@ -283,6 +283,7 @@ $keyboard = build_main_keyboard();
 $keyboardPanel = json_encode([
     'inline_keyboard' => [
         [['text' => $textbotlang['textbot']['addBalance'], 'callback_data' => "Add_Balance"]],
+        [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => "mmclose", 'style' => 'danger']],
     ],
     'resize_keyboard' => true
 ]);
@@ -534,7 +535,6 @@ $shopkeyboard = json_encode([
         [['text' => $textbotlang['keyboard']['manageProducts']], ['text' => $textbotlang['keyboard']['manageCategory']]],
         [['text' => $textbotlang['Admin']['DisplayHub']['hubBtn']], ['text' => $textbotlang['keyboard']['financial']]],
         [['text' => $textbotlang['keyboard']['topupPackages']]],
-        [['text' => $textbotlang['keyboard']['createDiscountCode']], ['text' => $textbotlang['keyboard']['deleteDiscountCode']]],
         [['text' => $textbotlang['keyboard']['createGiftCode']], ['text' => $textbotlang['keyboard']['deleteGiftCode']]],
         [['text' => $textbotlang['keyboard']['minBulkBalance']], ['text' => $textbotlang['keyboard']['renewalCashback']]],
         [['text' => $textbotlang['Admin']['backAdminBtn']], ['text' => $textbotlang['Admin']['backMenuBtn']]]
@@ -801,7 +801,7 @@ if ($setting['linkappstatus'] == "1") {
     ];
 }
 $helpcwtgory['inline_keyboard'][] = [
-    ['text' => $textbotlang['users']['backbtn'], 'callback_data' => "backuser"],
+    ['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => "mmclose", 'style' => 'danger'],
 ];
 $json_list_helpـcategory = json_encode($helpcwtgory);
 
@@ -877,15 +877,9 @@ if ($setting['statusnamecustom'] == 'onnamecustom')
     $statusnote = true;
 if ($setting['statusnoteforf'] == "0" && $users['agent'] == "f")
     $statusnote = false;
-if ($statusnote) {
-    $list_marzban_panel_users['inline_keyboard'][] = [
-        ['text' => $textbotlang['users']['backbtn'], 'callback_data' => "buyback"],
-    ];
-} else {
-    $list_marzban_panel_users['inline_keyboard'][] = [
-        ['text' => $textbotlang['users']['backbtn'], 'callback_data' => "backuser"],
-    ];
-}
+$list_marzban_panel_users['inline_keyboard'][] = [
+    ['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => "sellclose", 'style' => 'danger'],
+];
 $list_marzban_panel_user = json_encode($list_marzban_panel_users);
 
 
@@ -958,7 +952,7 @@ while ($result = $stmt->fetch(PDO::FETCH_ASSOC)) {
     ];
 }
 $list_marzban_panel_usertest['inline_keyboard'][] = [
-    ['text' => $textbotlang['users']['backbtn'], 'callback_data' => "backuser"],
+    ['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => "mmclose", 'style' => 'danger'],
 ];
 $list_marzban_usertest = json_encode($list_marzban_panel_usertest);
 
@@ -2220,11 +2214,31 @@ function keyboard_list_text($lang, $groupFilter = null)
     $bt_list_re = (is_array($bt_list_layout) && isset($bt_list_layout['text_reactions']) && is_array($bt_list_layout['text_reactions'])) ? $bt_list_layout['text_reactions'] : [];
     // returns [decorated label, telegram button "style" ('success' = real green
     // button, Bot API 9.4+; '' = no style key at all, Telegram's own default]
-    $bt_decorate = function ($key, $label) use ($lang, $bt_list_edit, $bt_list_st, $bt_list_re, $bt_can_react_keys) {
-        $parts = explode('.', $key);
-        $custom = is_array($bt_list_edit) && isset($bt_list_edit[$lang][$parts[0]][$parts[1]]);
+    $bt_list_be = json_decode((string) ($bt_list_setting['button_edit'] ?? ''), true);
+    // A few items were later given stores of their own beyond text/sticker/reaction.
+    // Per-button label and colour overrides live in setting.button_edit under the
+    // item's own dotted key, which the generic test below already covers; anything
+    // that does NOT follow that shape needs an entry here, or the item can be fully
+    // configured and still render as untouched - the exact complaint this fixes.
+    $bt_extra_stores = [
+        // 🔑 تنظیم اکانت تست also owns the config-column display settings
+        'users.usertest.selectUsernamePrompt' => function ($lang, $be, $setting) {
+            return !empty($be[$lang]['configDisplay'])
+                || (string) ($setting['configColOrder'] ?? '') !== '';
+        },
+    ];
+    $bt_decorate = function ($key, $label) use ($lang, $bt_list_edit, $bt_list_st, $bt_list_re, $bt_can_react_keys, $bt_list_be, $bt_list_setting, $bt_extra_stores) {
+        // a real dotted lookup, not [$parts[0]][$parts[1]]: three-part keys such as
+        // users.sell.serviceSelect and users.sell.selectCategory share their first
+        // two segments, so the old test turned every sibling green the moment one
+        // of them was edited - and missed nothing only because it over-matched
+        $custom = is_array($bt_list_edit) && bottext_dotted_isset($bt_list_edit[$lang] ?? null, $key);
         $sticker = bt_media_lookup($bt_list_st, $key, $lang);
         $react = in_array($key, $bt_can_react_keys, true) ? bt_media_lookup($bt_list_re, $key, $lang) : '';
+        $buttons = is_array($bt_list_be) && !empty($bt_list_be[$lang][$key]);
+        if (!$buttons && isset($bt_extra_stores[$key])) {
+            $buttons = (bool) $bt_extra_stores[$key]($lang, is_array($bt_list_be) ? $bt_list_be : [], $bt_list_setting);
+        }
         $suffix = '';
         if ($custom) {
             $suffix .= ' ✏️';
@@ -2235,7 +2249,10 @@ function keyboard_list_text($lang, $groupFilter = null)
         if ($sticker !== '') {
             $suffix .= ' 🖼';
         }
-        $style = ($custom || $sticker !== '' || $react !== '') ? 'success' : '';
+        if ($buttons) {
+            $suffix .= ' 🔘';
+        }
+        $style = ($custom || $buttons || $sticker !== '' || $react !== '') ? 'success' : '';
         return [$label . $suffix, $style];
     };
     // items tagged with a 'group' live in their own submenu instead of the
@@ -2272,9 +2289,32 @@ function keyboard_list_text($lang, $groupFilter = null)
         $keyboard_text['inline_keyboard'][] = [$bt_btn];
     }
     if (!empty($bt_grouped['buyflow'])) {
-        $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['groupBuyflowLabel'], 'callback_data' => "bt_group|$lang|buyflow"]];
+        // the group row has to answer for its children: an item customized inside
+        // the submenu otherwise leaves no trace at all on this screen
+        $bt_group_custom = false;
+        foreach ($bt_grouped['buyflow'] as $bt_g) {
+            list(, $bt_g_style) = $bt_decorate($bt_g['key'], $bt_g['label']);
+            if ($bt_g_style !== '') {
+                $bt_group_custom = true;
+                break;
+            }
+        }
+        $bt_grp_btn = ['text' => $textbotlang['bottext']['groupBuyflowLabel'], 'callback_data' => "bt_group|$lang|buyflow"];
+        if ($bt_group_custom) {
+            $bt_grp_btn['style'] = 'success';
+        }
+        $keyboard_text['inline_keyboard'][] = [$bt_grp_btn];
     }
-    $keyboard_text['inline_keyboard'][] = [['text' => '🔋 هشدار مصرف بسته', 'callback_data' => "volpct|hub|$lang"]];
+    // the warning tiers live in their own column and have no bottext key, so this
+    // row does its own check instead of going through $bt_decorate. It asks
+    // "is anything customized?", NOT "does a threshold exist?" - a bare threshold
+    // is structure, and its own reset button never removes one, so keying the
+    // green off the array being non-empty made the row impossible to clear.
+    $bt_volpct_btn = ['text' => '🔋 هشدار مصرف بسته', 'callback_data' => "volpct|hub|$lang"];
+    if (function_exists('volumepct_has_custom') && volumepct_has_custom($lang)) {
+        $bt_volpct_btn['style'] = 'success';
+    }
+    $keyboard_text['inline_keyboard'][] = [$bt_volpct_btn];
     list($bt_um_label, $bt_um_style) = $bt_decorate('users.unknownMsg', $bt_unknown_label);
     $bt_um_btn = ['text' => $bt_um_label, 'callback_data' => "bt_edit|$lang|users.unknownMsg"];
     if ($bt_um_style !== '') {
@@ -2366,12 +2406,12 @@ $sticker_callback_map = [
     'affiliatesbtn' => 'text_affiliates',
     'extendbtn' => 'text_extend',
     'supportbtns' => 'text_support',
-    'backorder' => 'text_Purchased_services',
     'helpbtns' => 'text_help',
     'usertestbtn' => 'text_usertest',
     'change_language' => 'text_change_language',
 ];
 $sticker_btn_key = null;
+$menu_tap_from_text = false;
 if (!empty($datain) && isset($sticker_callback_map[$datain])) {
     $sticker_btn_key = $sticker_callback_map[$datain];
 } elseif (!empty($text)) {
@@ -2379,9 +2419,29 @@ if (!empty($datain) && isset($sticker_callback_map[$datain])) {
     foreach ($replacements as $rep_key => $rep_val) {
         if ($text === $rep_val || $text_stripped === strip_leading_emoji($rep_val)) {
             $sticker_btn_key = $rep_key;
+            $menu_tap_from_text = true;
             break;
         }
     }
+}
+// Tapping a main-menu button on the reply keyboard posts the label itself as a
+// message FROM the user, which then sits in the chat forever. Remember its id so
+// the screen it opened can take it away from its own close button, together with
+// the caption and the sticker. Callback taps are deliberately excluded: there
+// $message_id is the bot's own glass main menu, which has to survive.
+if ($menu_tap_from_text) {
+    $mt_msId = (int) ($message_id ?? 0);
+    update("user", "menu_tap_id", $mt_msId > 0 ? (string) $mt_msId : "0", "id", $from_id);
+} elseif ($sticker_btn_key !== null) {
+    // a glass tap opens a screen the stashed message does not belong to - drop
+    // it rather than risk closing an unrelated message later
+    update("user", "menu_tap_id", "0", "id", $from_id);
+}
+if ($sticker_btn_key !== null) {
+    // only the sticker sent on THIS tap may be closed later: a button with no
+    // sticker of its own would otherwise inherit the previous one's id and its
+    // ❌ بستن would delete a sticker belonging to an older screen
+    update("user", "menu_sticker_id", "0", "id", $from_id);
 }
 if ($sticker_btn_key === 'text_sell') {
     // a fresh buy attempt starts clean - never let a leftover id from an
@@ -2408,6 +2468,12 @@ if ($sticker_btn_key !== null && !empty($keyboardRows) && function_exists('teleg
                         update("user", "Processing_value_tow", (string) $st_stickerId, "id", $from_id);
                     }
                 }
+                // every main-menu sticker is remembered here so whichever screen
+                // it accompanied can remove it from its own ❌ بستن button. Kept
+                // in a dedicated column rather than the heavily-overloaded
+                // Processing_value_tow, which other flows re-purpose mid-request.
+                $st_msId = (int) ($st_sent['result']['message_id'] ?? 0);
+                update("user", "menu_sticker_id", $st_msId > 0 ? (string) $st_msId : "0", "id", $from_id);
                 break 2;
             }
         }

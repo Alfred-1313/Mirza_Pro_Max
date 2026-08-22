@@ -4,8 +4,11 @@ config.php
 # third-party dependencies - regenerate with `composer install`
 /vendor/
 
-# our own pre-edit backup snapshots (hundreds of these accumulate over time)
-*.bak_*
+# our own pre-edit backup snapshots (hundreds of these accumulate over time).
+# The pattern is deliberately broad: snapshots get suffixed in all sorts of
+# ways (.bak_, .bak2_, .bakV_, .bakAA_ ...) and *.bak_* missed every one of
+# those variants, so they showed up as untracked files ready to be committed.
+*.bak*
 
 # runtime logs
 log.txt

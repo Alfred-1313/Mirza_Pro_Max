@@ -442,6 +442,17 @@ class ServiceMonitor
     }
 }
 
+// fires the "code finished" report for codes that simply ran out of time
+// without a final use to trigger it inline
+if (function_exists('topup_disc_sweep_expired')) {
+    topup_disc_sweep_expired();
+}
+// periodic discount usage summary - self-throttling, decides internally
+// whether enough time has passed since the previous one
+if (function_exists('topup_disc_periodic_report')) {
+    topup_disc_periodic_report();
+}
+
 // Execute the volume monitoring
 $volumeMonitor = new ServiceMonitor();
 $volumeMonitor->RunNotifactions();
