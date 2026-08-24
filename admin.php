@@ -9,6 +9,51 @@ $domainhostsEscaped = htmlspecialchars($domainhosts, ENT_QUOTES | ENT_SUBSTITUTE
 
 $miniAppInstructionText = sprintf($textbotlang['Admin']['webpanel']['miniAppHelp'], $domainhostsEscaped);
 
+//----------------[  main-menu button settings: glass hub screens  ]----------------
+// top hub + the color/emoji sub-hubs, converted from the old reply-keyboard
+// chain to inline so every screen in this tree carries its own back/close
+// row and "back" always lands on 🎨 شخصی‌سازی پیام‌های ربات, never
+// ⚙️ تنظیمات عمومی (the old destination, hardcoded from when this hub used
+// to live there)
+if (!function_exists('btnset_hub_payload')) {
+    function btnset_hub_payload($textbotlang)
+    {
+        $kb = ['inline_keyboard' => [
+            [['text' => '🎨 رنگ‌بندی دکمه‌ها', 'callback_data' => 'btnset_open:color', 'style' => 'primary']],
+            [['text' => '🎭 ایموجی و استیکر دکمه‌ها', 'callback_data' => 'btnset_open:emoji', 'style' => 'primary']],
+            [['text' => '📐 چیدمان دکمه‌ها', 'callback_data' => 'btnset_open:layout', 'style' => 'primary']],
+            [['text' => '✏️ نام و نمایش دکمه‌ها', 'callback_data' => 'btnset_open:rename', 'style' => 'primary']],
+            [['text' => $textbotlang['bottext']['backToListLabel'], 'callback_data' => 'btact|back|fa', 'style' => 'danger']],
+            [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']],
+        ]];
+        return json_encode($kb);
+    }
+}
+if (!function_exists('btnset_color_hub_payload')) {
+    function btnset_color_hub_payload($textbotlang)
+    {
+        $kb = ['inline_keyboard' => [
+            [['text' => '🎛 رنگ دکمه‌های شیشه‌ای', 'callback_data' => 'btnset_color:i', 'style' => 'primary']],
+            [['text' => '⌨️ رنگ دکمه‌های کیبوردی', 'callback_data' => 'btnset_color:r', 'style' => 'primary']],
+            [['text' => '🔙 بازگشت به منوی قبلی', 'callback_data' => 'bt_btnsettings', 'style' => 'danger']],
+            [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']],
+        ]];
+        return json_encode($kb);
+    }
+}
+if (!function_exists('btnset_emoji_hub_payload')) {
+    function btnset_emoji_hub_payload($textbotlang)
+    {
+        $kb = ['inline_keyboard' => [
+            [['text' => '😀 ایموجی دکمه‌ها', 'callback_data' => 'btnset_emoji:emoji', 'style' => 'primary']],
+            [['text' => '✨ استیکر پریمیوم دکمه‌ها', 'callback_data' => 'btnset_emoji:sticker', 'style' => 'primary']],
+            [['text' => '🔙 بازگشت به منوی قبلی', 'callback_data' => 'bt_btnsettings', 'style' => 'danger']],
+            [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']],
+        ]];
+        return json_encode($kb);
+    }
+}
+
 //----------------[  button color manager  ]----------------
 if (!function_exists('color_editor_payload')) {
     function color_editor_payload($mode, $textbotlang)
@@ -60,6 +105,8 @@ if (!function_exists('color_editor_payload')) {
                 $kb['inline_keyboard'][] = $kbRow;
             }
         }
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبلی', 'callback_data' => 'btnset_open:color', 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']];
         return json_encode($kb);
     }
 }
@@ -357,6 +404,16 @@ if (!function_exists('bottext_item_menu_payload')) {
         if ($bt_key === 'textbot.afterText') {
             $bt_label = '📦 پیام بعد از دریافت اکانت تست';
         }
+        $bt_extra_note = '';
+        if ($bt_key === 'textbot.afterText') {
+            $bt_extra_note = "\nℹ️ این همون پیامیه که درست بعد از ساخته‌شدن اکانت تست، همراه کانفیگ و QR برای کاربر فرستاده می‌شه.\n⚠️ متن پیش‌فرضش با «✅ سرویس با موفقیت ایجاد شد» شروع می‌شه و کلمه‌ی «تست» توش نیست - برای همین شبیه پیام خرید به نظر می‌رسه، ولی فقط تو مسیر اکانت تست فرستاده می‌شه.\n";
+        }
+        if ($bt_key === 'users.sell.service_not_available') {
+            $bt_extra_note = "\nℹ️ این پیام وقتی نشون داده می‌شه که کاربر داخل «🛍 سرویس‌های من» هیچ سرویس فعالی نداشته باشه.\n";
+        }
+        if ($bt_key === 'users.usertest.selectUsernamePrompt') {
+            $bt_extra_note = "\nℹ️ وضعیت بالا فقط مال همین پیامه (درخواست یوزرنیم اکانت تست). پیام‌های زیر خط سفید «سایر پیام‌های اکانت تست» هرکدوم پیام و وضعیت جدا خودشونو دارن.\n";
+        }
         foreach (($textbotlang['bottext']['items'] ?? []) as $bt_it) {
             if (($bt_it['key'] ?? '') === $bt_key) {
                 $bt_label = $bt_it['label'];
@@ -372,46 +429,101 @@ if (!function_exists('bottext_item_menu_payload')) {
         $bt_re = (is_array($bt_layout) && isset($bt_layout['text_reactions']) && is_array($bt_layout['text_reactions'])) ? $bt_layout['text_reactions'] : [];
         $bt_sticker = bt_media_lookup($bt_st, $bt_key, $bt_lang);
         $bt_react = bt_media_lookup($bt_re, $bt_key, $bt_lang);
+        $bt_be = json_decode((string) ($bt_setting['button_edit'] ?? ''), true);
+        // used by the "related item" rows (🗂/📦/⏰ etc.) to answer for a
+        // DIFFERENT key's own customization state, the same way the main
+        // bottext home list already does for its group-launcher rows
+        $bt_is_customized = function ($key) use ($bt_lang, $bt_te, $bt_st, $bt_re, $bt_be) {
+            $textCustom = is_array($bt_te) && isset($bt_te[$bt_lang]) && bottext_dotted_isset($bt_te[$bt_lang], $key);
+            $stickerCustom = bt_media_lookup($bt_st, $key, $bt_lang) !== '';
+            $reactCustom = bt_media_lookup($bt_re, $key, $bt_lang) !== '';
+            $btnCustom = is_array($bt_be) && !empty($bt_be[$bt_lang][$key]);
+            return $textCustom || $stickerCustom || $reactCustom || $btnCustom;
+        };
         // reaction needs a triggering user message — only these keys have one
         $bt_can_react = in_array($bt_key, ['users.text_start', 'textbot.faqDesc', 'textbot.tariffListDesc', 'textbot.rules', 'users.unknownMsg'], true);
-        $bt_has_buttons = in_array($bt_key, ['users.usertest.selectUsernamePrompt', 'users.Balance.insufficientBalanceSimple'], true);
-        $info = "📝 <b>{$bt_label}</b>\n➖➖➖➖➖➖➖➖➖➖\n";
+        $bt_has_buttons = in_array($bt_key, ['users.usertest.selectUsernamePrompt', 'users.Balance.insufficientBalanceSimple', 'users.sell.selectUsernamePrompt', 'users.sell.preInvoice', 'users.sell.preInvoice2', 'textbot.preInvoice', 'users.sell.service_not_available', 'textbot.testExpired'], true);
+        $info = "📝 <b>{$bt_label}</b>\n➖➖➖➖➖➖➖➖➖➖\n{$bt_extra_note}";
         $info .= "✏️ متن: " . ($bt_custom ? "سفارشی ✅" : "پیش‌فرض") . "\n";
         $info .= "🖼 استیکر: " . ($bt_sticker !== '' ? "ست شده ✅" : "ندارد ❌") . "\n";
         if ($bt_can_react) {
             $info .= "❤️ ری‌اکشن: " . ($bt_react !== '' ? $bt_react : "ندارد ❌") . "\n";
         }
+        $bt_btn_custom = false;
         if ($bt_has_buttons) {
-            $bt_be = json_decode((string) ($bt_setting['button_edit'] ?? ''), true);
-            $bt_btn_custom = is_array($bt_be) && !empty($bt_be[$bt_lang][$bt_key]);
-            $bt_btn_label = ($bt_key === 'users.Balance.insufficientBalanceSimple') ? '🔘 دکمه افزایش موجودی' : '🔘 دکمه‌های انصراف/پیش‌فرض';
+            $bt_btn_label = '🔘 دکمه‌های انصراف/پیش‌فرض';
+            if ($bt_key === 'users.Balance.insufficientBalanceSimple') {
+                $bt_btn_label = '🔘 دکمه افزایش موجودی';
+            } elseif (in_array($bt_key, ['users.sell.preInvoice', 'users.sell.preInvoice2', 'textbot.preInvoice'], true)) {
+                $bt_btn_label = '🔘 دکمه‌های تأیید خرید';
+            } elseif ($bt_key === 'users.sell.service_not_available') {
+                $bt_btn_label = '🔘 دکمه تهیه اشتراک';
+            } elseif ($bt_key === 'textbot.testExpired') {
+                $bt_btn_label = '🔘 دکمه خرید سرویس';
+            }
+            // 'cf' is shared across three caption screens - checked here so its
+            // own status line is accurate no matter which of the three is open
+            if (in_array($bt_key, ['users.sell.preInvoice', 'users.sell.preInvoice2', 'textbot.preInvoice'], true)) {
+                $bt_be_key = 'users.sell.confirmButtons';
+            } else {
+                $bt_be_key = $bt_key;
+            }
+            $bt_btn_custom = is_array($bt_be) && !empty($bt_be[$bt_lang][$bt_be_key]);
             $info .= "{$bt_btn_label}: " . ($bt_btn_custom ? "سفارشی ✅" : "پیش‌فرض") . "\n";
         }
         $info .= "➖➖➖➖➖➖➖➖➖➖\n👇 بخشی که می‌خوای تنظیم کنی رو انتخاب کن:";
         $kb = ['inline_keyboard' => []];
-        $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش متن', 'callback_data' => "btact|text|{$bt_lang}|{$bt_key}"]];
-        $bt_row = [['text' => '🖼 استیکر', 'callback_data' => "btact|sticker|{$bt_lang}|{$bt_key}"]];
+        $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش متن', 'callback_data' => "btact|text|{$bt_lang}|{$bt_key}", 'style' => $bt_custom ? 'success' : 'primary']];
+        $bt_row = [['text' => '🖼 استیکر', 'callback_data' => "btact|sticker|{$bt_lang}|{$bt_key}", 'style' => $bt_sticker !== '' ? 'success' : 'primary']];
         if ($bt_can_react) {
-            $bt_row[] = ['text' => '❤️ ری‌اکشن', 'callback_data' => "btact|react|{$bt_lang}|{$bt_key}"];
+            $bt_row[] = ['text' => '❤️ ری‌اکشن', 'callback_data' => "btact|react|{$bt_lang}|{$bt_key}", 'style' => $bt_react !== '' ? 'success' : 'primary'];
         }
         $kb['inline_keyboard'][] = $bt_row;
+        // usertest renders its own preview/reset rows early (right after its
+        // self-controls, like every other item) so the shared block at the
+        // bottom of this function is skipped for it - avoids needing a
+        // divider to explain why they'd otherwise reappear after the
+        // "other messages" section below
+        $bt_prev_inline = false;
         if ($bt_key === 'users.usertest.selectUsernamePrompt') {
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های انصراف/پیش‌فرض', 'callback_data' => "btact|btns|{$bt_lang}"]];
-            $kb['inline_keyboard'][] = [['text' => '🗂 تنظیم نمایش و کپشن کانفیگ', 'callback_data' => "btact|cfgcol|{$bt_lang}|{$bt_key}"]];
-            $kb['inline_keyboard'][] = [['text' => '📦 پیام بعد از دریافت اکانت تست', 'callback_data' => "bt_edit|{$bt_lang}|textbot.afterText"]];
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های انصراف/پیش‌فرض', 'callback_data' => "btact|btns|{$bt_lang}", 'style' => $bt_btn_custom ? 'success' : 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '👁 پیش‌نمایش', 'callback_data' => "btact|prev|{$bt_lang}|{$bt_key}", 'style' => 'primary']];
+            $bt_prev_inline = true;
+            // white, non-navigating divider (established session pattern) - makes
+            // clear the next rows are OTHER messages in the test-account flow,
+            // not more controls for the prompt this screen is already editing
+            $kb['inline_keyboard'][] = [['text' => bt_section_meta('usertest_related')['label'], 'callback_data' => 'bt_sep|usertest_related']];
+            $bt_cfgcol_custom = !empty($bt_be[$bt_lang]['configDisplay']) || (string) ($bt_setting['configColOrder'] ?? '') !== '';
+            $kb['inline_keyboard'][] = [['text' => '🗂 تنظیم نمایش و کپشن کانفیگ', 'callback_data' => "btact|cfgcol|{$bt_lang}|{$bt_key}", 'style' => $bt_cfgcol_custom ? 'success' : 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '📦 پیام بعد از دریافت اکانت تست', 'callback_data' => "bt_edit|{$bt_lang}|textbot.afterText", 'style' => $bt_is_customized('textbot.afterText') ? 'success' : 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '⏰ پیام اتمام اکانت تست', 'callback_data' => "bt_edit|{$bt_lang}|textbot.testExpired", 'style' => $bt_is_customized('textbot.testExpired') ? 'success' : 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌ی پیام اتمام اکانت تست', 'callback_data' => "gbtn|list|{$bt_lang}|te|u", 'style' => (!empty($bt_be[$bt_lang]['textbot.testExpired'])) ? 'success' : 'primary']];
         } elseif ($bt_key === 'users.Balance.insufficientBalanceSimple') {
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه افزایش موجودی', 'callback_data' => "btact|bbtn|{$bt_lang}"]];
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه افزایش موجودی', 'callback_data' => "btact|bbtn|{$bt_lang}", 'style' => $bt_btn_custom ? 'success' : 'primary']];
+        } elseif ($bt_key === 'users.sell.selectUsernamePrompt') {
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های انصراف/پیش‌فرض', 'callback_data' => "gbtn|list|{$bt_lang}|su", 'style' => $bt_btn_custom ? 'success' : 'primary']];
+        } elseif (in_array($bt_key, ['users.sell.preInvoice', 'users.sell.preInvoice2', 'textbot.preInvoice'], true)) {
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های تأیید خرید', 'callback_data' => "gbtn|list|{$bt_lang}|cf", 'style' => $bt_btn_custom ? 'success' : 'primary']];
+        } elseif ($bt_key === 'users.sell.service_not_available') {
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه تهیه اشتراک', 'callback_data' => "gbtn|list|{$bt_lang}|ns", 'style' => $bt_btn_custom ? 'success' : 'primary']];
+        } elseif ($bt_key === 'textbot.testExpired') {
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه خرید سرویس', 'callback_data' => "gbtn|list|{$bt_lang}|te", 'style' => $bt_btn_custom ? 'success' : 'primary']];
         }
-        $kb['inline_keyboard'][] = [['text' => '👁 پیش‌نمایش', 'callback_data' => "btact|prev|{$bt_lang}|{$bt_key}"]];
-        $kb['inline_keyboard'][] = [['text' => '🔁 ریست به پیش‌فرض', 'callback_data' => "btact|rstall|{$bt_lang}|{$bt_key}"]];
+        if (!$bt_prev_inline) {
+            $kb['inline_keyboard'][] = [['text' => '👁 پیش‌نمایش', 'callback_data' => "btact|prev|{$bt_lang}|{$bt_key}", 'style' => 'primary']];
+        }
+        $kb['inline_keyboard'][] = [['text' => '🔁 ریست به پیش‌فرض', 'callback_data' => "btact|rstall|{$bt_lang}|{$bt_key}", 'style' => 'danger']];
         if ($bt_item_group !== '') {
-            $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "bt_group|{$bt_lang}|{$bt_item_group}"]];
+            $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "bt_group|{$bt_lang}|{$bt_item_group}", 'style' => 'danger']];
         } elseif ($bt_key === 'users.status.getConfigHint') {
-            $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "btact|cfgcol|{$bt_lang}|users.usertest.selectUsernamePrompt"]];
+            $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "btact|cfgcol|{$bt_lang}|users.usertest.selectUsernamePrompt", 'style' => 'danger']];
         } elseif ($bt_key === 'textbot.afterText') {
-            $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "bt_edit|{$bt_lang}|users.usertest.selectUsernamePrompt"]];
+            $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "bt_edit|{$bt_lang}|users.usertest.selectUsernamePrompt", 'style' => 'danger']];
+        } elseif ($bt_key === 'textbot.testExpired') {
+            $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "bt_edit|{$bt_lang}|users.usertest.selectUsernamePrompt", 'style' => 'danger']];
         }
-        $kb['inline_keyboard'][] = [['text' => '🔙 برگشت به لیست', 'callback_data' => "btact|back|{$bt_lang}"]];
+        $kb['inline_keyboard'][] = [['text' => '🔙 برگشت به لیست', 'callback_data' => "btact|back|{$bt_lang}", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
         return [$info, json_encode($kb)];
     }
 }
@@ -498,8 +610,12 @@ if (!function_exists('emoji_sticker_editor_payload')) {
                 ['text' => '⬅️ چپ' . ($es_pos_global === 'left' ? ' ✅' : ''), 'callback_data' => 'emojiposall-left'],
                 ['text' => 'راست ➡️' . ($es_pos_global === 'right' ? ' ✅' : ''), 'callback_data' => 'emojiposall-right']
             ];
-            $kb['inline_keyboard'][] = [['text' => '🔄 ریست همه ایموجی‌های کاستوم', 'callback_data' => 'emojiresetall']];
+            $kb['inline_keyboard'][] = [['text' => '🔄 ریست همه ایموجی‌های کاستوم', 'callback_data' => 'emojiresetall', 'style' => 'danger']];
+        } else {
+            $kb['inline_keyboard'][] = [['text' => '🔄 ریست همه استیکرهای دکمه‌ها', 'callback_data' => 'stickerresetall', 'style' => 'danger']];
         }
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبلی', 'callback_data' => 'btnset_open:emoji', 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']];
         return json_encode($kb);
     }
 }
@@ -554,6 +670,8 @@ if (!function_exists('layout_editor_payload')) {
             ];
         }
         $kb['inline_keyboard'][] = [['text' => '🔄 ریست چیدمان به پیش‌فرض', 'callback_data' => "layoutreset"]];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبلی', 'callback_data' => 'bt_btnsettings', 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']];
         return json_encode($kb);
     }
 }
@@ -580,6 +698,8 @@ if (!function_exists('lang_switch_settings_payload')) {
             $lsw_on = in_array($lsw_code, $lsw_langs, true);
             $kb['inline_keyboard'][] = [['text' => ($lsw_on ? '✅ ' : '⬜ ') . $lsw_label, 'callback_data' => "lsw_lang-{$lsw_code}"]];
         }
+        $kb['inline_keyboard'][] = [['text' => '🔙 برگشت به لیست', 'callback_data' => 'btact|back|fa', 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
         return json_encode($kb);
     }
 }
@@ -637,6 +757,8 @@ if (!function_exists('rename_editor_payload')) {
             ];
         }
         $kb['inline_keyboard'][] = [['text' => '🔄 ریست به پیش‌فرض', 'callback_data' => "renamereset"]];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبلی', 'callback_data' => 'bt_btnsettings', 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']];
         return json_encode($kb);
     }
 }
@@ -2055,6 +2177,9 @@ if (!function_exists('shop_feature_status_payload')) {
         $rows[] = [$btn($marzbandirectpay == 'ondirectbuy', $textbotlang['Admin']['Status']['paydirect'], "editshops-paydirect-$marzbandirectpay")];
         $rows[] = [$btn($statustimeextra == 'ontimeextraa', $textbotlang['Admin']['Status']['statusTimeExtra'], "editshops-statustimeextra-$statustimeextra")];
         $rows[] = [$btn($statusdisorder == 'ondisorder', $textbotlang['keyboard']['sendDisruptionReport'], "editshops-disorderss-$statusdisorder")];
+        // placed right before the category row so the two read top-to-bottom in
+        // the same order the buy flow actually visits them: panel, then category
+        $rows[] = [$btn(($setting['statuspanelshow'] ?? 'onpanelshow') == 'onpanelshow', $textbotlang['Admin']['Status']['showPanelSelection'], "editshops-panelshow-" . ($setting['statuspanelshow'] ?? 'onpanelshow'))];
         $rows[] = [$btn($setting['statuscategorygenral'] == 'oncategorys', $textbotlang['keyboard']['categoryBug'], "editshops-categroygenral-" . $setting['statuscategorygenral'])];
         $rows[] = [$btn($setting['statuscategory'] == 'oncategory', $textbotlang['Admin']['Status']['statusCategoryTime'], "editshops-categorytime-{$setting['statuscategory']}")];
         $rows[] = [$btn($statuschangeservice == 'onstatus', $textbotlang['keyboard']['deactivateAccountStatus'], "editshops-changgestatus-" . $statuschangeservice)];
@@ -2067,9 +2192,19 @@ if (!function_exists('shop_feature_status_payload')) {
 if (!function_exists('displayhub_payload')) {
     function displayhub_payload($textbotlang)
     {
+        // LangScope moved out to its own شاپ reply-keyboard button (shop
+        // catalog visibility belongs with the rest of the shop settings, not
+        // here) - this handler and its callback (displayhub_open:langscope)
+        // are left in place, just unreachable from this screen now
         return json_encode(['inline_keyboard' => [
-            [['text' => $textbotlang['Admin']['LangScope']['hubBtn'], 'callback_data' => 'displayhub_open:langscope']],
             [['text' => $textbotlang['Admin']['BtnStyle']['hubBtn'], 'callback_data' => 'displayhub_open:btnstyle']],
+            // this hub is opened from the bottext message list now, so it needs
+            // its own way back there, on top of the plain-close row it already
+            // had. btnstyle_hub_payload() a few lines below already hardcodes
+            // 'fa' regardless of context, so returning to the 'fa' tab here
+            // matches an existing, accepted simplification rather than
+            // introducing a new one.
+            [['text' => $textbotlang['bottext']['backToListLabel'], 'callback_data' => 'btact|back|fa']],
             [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'displayhub_close', 'style' => 'danger']],
         ]]);
     }
@@ -2105,7 +2240,7 @@ if (!function_exists('btnstyle_kindhub_payload')) {
         $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['colorBtn'], 'callback_data' => "help_col:{$kind}:{$lang}"]];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['emojiBtn'], 'callback_data' => "help_emo:{$kind}:{$lang}"]];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['BtnStyle']['renameBtn'], 'callback_data' => "help_ren:{$kind}:{$lang}"]];
-        $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['backToHubBtn'], 'callback_data' => $kind === 'gateway' ? "topuplang:{$lang}" : "btnstyle_lang:{$lang}"]];
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['backToHubBtn'], 'callback_data' => $kind === 'gateway' ? "topuplang:{$lang}" : "bt_group|{$lang}|buyflow"]];
         return json_encode($kb);
     }
 }
@@ -2482,6 +2617,15 @@ if (preg_match('/^cfgcoldemo-([a-z]{2})$/', $datain, $cc_m) && $adminrulecheck['
     ]);
     return;
 }
+if (preg_match('/^bt_sep\|(\w+)$/', $datain, $bt_sep_m) && $adminrulecheck['rule'] == "administrator") {
+    telegram('answerCallbackQuery', [
+        'callback_query_id' => $callback_query_id,
+        'text' => bt_section_meta($bt_sep_m[1])['alert'],
+        'show_alert' => true,
+        'cache_time' => 1,
+    ]);
+    return;
+}
 if (preg_match('/^btprevdemo-([a-z]{2})$/', $datain, $bt_pd_m) && $adminrulecheck['rule'] == "administrator") {
     telegram('answerCallbackQuery', [
         'callback_query_id' => $callback_query_id,
@@ -2610,7 +2754,7 @@ if ($text == "😀 ایموجی دکمه‌ها" && $adminrulecheck['rule'] == "
 }
 if ($text == "✨ استیکر پریمیوم دکمه‌ها" && $adminrulecheck['rule'] == "administrator") {
     $es_kb = emoji_sticker_editor_payload('sticker', $textbotlang);
-    sendmessage($from_id, "✨ <b>استیکر پریمیوم دکمه‌ها</b>\n\nروی هر دکمه بزن و استیکرش رو بفرست 👇\nوقتی کاربر اون دکمه رو بزنه، اول این استیکر ارسال می‌شه\n✅ ست شده | ❌ ست نشده\n🚫 = دکمه پنهان شده", $es_kb, 'HTML');
+    sendmessage($from_id, "✨ <b>استیکر پریمیوم دکمه‌ها</b>\n\nروی هر دکمه بزن و استیکرش رو بفرست 👇\nوقتی کاربر اون دکمه رو بزنه، اول این استیکر ارسال می‌شه\n✅ ست شده | ❌ ست نشده\n🚫 = دکمه پنهان شده\n\n📌 این‌ها فقط برای لحظه‌ی لمس دکمه‌های منوی اصلی‌ان؛ برای استیکر پیام‌های داخل مراحل خرید/سرویس‌های من/اکانت تست، از 🎨 شخصی‌سازی پیام‌های ربات استفاده کن.", $es_kb, 'HTML');
     return;
 }
 if (preg_match('/^btnemoji-(\d+)-(\d+)$/', $datain, $es_match) && $adminrulecheck['rule'] == "administrator") {
@@ -2642,6 +2786,12 @@ if ($datain == "emojisimple" && $adminrulecheck['rule'] == "administrator") {
     $es_state = $es_now ? "✅ روشن شد — ایموجی‌های پیش‌فرض متن دکمه‌ها مخفی می‌شن" : "❌ خاموش شد — ایموجی‌های پیش‌فرض برگشتن";
     $es_kb = emoji_sticker_editor_payload('emoji', $textbotlang);
     Editmessagetext($from_id, $message_id, "🔲 <b>حالت ساده {$es_state}</b>\n\n😀 <b>ایموجی دکمه‌های منو</b>\nروی هر دکمه بزن و ایموجی جدیدش رو بفرست 👇\n\n👀 پیش‌نمایش زنده‌ی منوی کاربره — نتیجه رو همینجا و با /start توی منو ببین", $es_kb, 'HTML');
+    return;
+}
+if ($datain == "stickerresetall" && $adminrulecheck['rule'] == "administrator") {
+    mainmenu_sticker_reset_all();
+    $es_kb = emoji_sticker_editor_payload('sticker', $textbotlang);
+    Editmessagetext($from_id, $message_id, "🔄 <b>همه استیکرهای دکمه‌ها پاک شدن.</b>\n\n✨ <b>استیکر دکمه‌های منو</b>\nروی هر دکمه بزن و استیکری که موقع لمسش فرستاده می‌شه رو تعیین کن 👇\n👀 پیش‌نمایش زنده‌ی منوی کاربر", $es_kb, 'HTML');
     return;
 }
 if ($datain == "emojiresetall" && $adminrulecheck['rule'] == "administrator") {
@@ -2742,7 +2892,7 @@ if (preg_match('/^setsticker-(\d+)-(\d+)$/', $user['step'], $es_match) && $datai
     }
     step('emojisticker', $from_id);
     $es_kb = emoji_sticker_editor_payload('sticker', $textbotlang);
-    sendmessage($from_id, $es_msg . "\n\n✨ <b>استیکر پریمیوم دکمه‌ها</b>\nروی دکمه بعدی بزن یا برگرد 👇\n🚫 = دکمه پنهان شده", $es_kb, 'HTML');
+    sendmessage($from_id, $es_msg . "\n\n✨ <b>استیکر پریمیوم دکمه‌ها</b>\nروی دکمه بعدی بزن یا برگرد 👇\n🚫 = دکمه پنهان شده\n\n📌 این‌ها فقط برای لحظه‌ی لمس دکمه‌های منوی اصلی‌ان؛ برای استیکر پیام‌های داخل مراحل خرید/سرویس‌های من/اکانت تست، از 🎨 شخصی‌سازی پیام‌های ربات استفاده کن.", $es_kb, 'HTML');
     return;
 }
 
@@ -3237,6 +3387,127 @@ if (preg_match('/^btact\|bbtnpos\|([a-z]{2})\|(left|right)$/', $datain, $btm) &&
     update("setting", "button_edit", json_encode($bb_be, JSON_UNESCAPED_UNICODE), null, null);
     list($bb_text, $bb_kb) = balancebtn_payload($bb_lang, $textbotlang);
     Editmessagetext($from_id, $message_id, $bb_text, $bb_kb, 'HTML');
+    return;
+}
+if (preg_match('/^gbtn\|list\|([a-z]{2})\|(su|cf|ns|te)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+    list($gb_text, $gb_kb) = genbtn_list_payload($gb_m[2], $gb_m[1], $textbotlang, $gb_m[3] ?? '');
+    Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
+    return;
+}
+if (preg_match('/^gbtn\|open\|([a-z]{2})\|(su|cf|ns|te)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+    list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], (int) $gb_m[3], $textbotlang, $gb_m[4] ?? '');
+    Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
+    return;
+}
+if (preg_match('/^gbtn\|text\|([a-z]{2})\|(su|cf|ns|te)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+    savedata("clear", "bt_msgid", $message_id);
+    $gb_o = $gb_m[4] ?? '';
+    $gb_sfx = ($gb_o !== '') ? "|{$gb_o}" : '';
+    step("gbtntxt-{$gb_m[1]}-{$gb_m[2]}-{$gb_m[3]}" . (($gb_o !== '') ? "-{$gb_o}" : ''), $from_id);
+    $gb_cancel_kb = json_encode(['inline_keyboard' => [
+        [['text' => '❌ انصراف', 'callback_data' => "gbtn|open|{$gb_m[1]}|{$gb_m[2]}|{$gb_m[3]}{$gb_sfx}"]],
+    ]]);
+    Editmessagetext($from_id, $message_id, "✏️ متن جدید دکمه رو بفرست ✍️", $gb_cancel_kb, 'HTML');
+    return;
+}
+if (preg_match('/^gbtn\|style\|([a-z]{2})\|(su|cf|ns|te)\|([01])\|(primary|success|danger)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+    $gb_key = genbtn_alias_to_key($gb_m[2]);
+    genbtn_set_style($gb_m[1], $gb_key, (int) $gb_m[3], $gb_m[4]);
+    list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], (int) $gb_m[3], $textbotlang, $gb_m[5] ?? '');
+    Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
+    return;
+}
+if (preg_match('/^gbtn\|emoji\|([a-z]{2})\|(su|cf|ns|te)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+    $gb_o = $gb_m[4] ?? '';
+    $gb_sfx = ($gb_o !== '') ? "|{$gb_o}" : '';
+    step("gbtnemo-{$gb_m[1]}-{$gb_m[2]}-{$gb_m[3]}" . (($gb_o !== '') ? "-{$gb_o}" : ''), $from_id);
+    $gb_kb = json_encode(['inline_keyboard' => [
+        [['text' => '❌ انصراف', 'callback_data' => "gbtn|open|{$gb_m[1]}|{$gb_m[2]}|{$gb_m[3]}{$gb_sfx}"]],
+    ]]);
+    $gb_prompt = "💎 یه ایموجی (ساده یا پریمیوم) بفرست، کنار متن دکمه نشون داده می‌شه 👇\n\n";
+    $gb_prompt .= "📌 ایموجی پریمیوم به‌خاطر محدودیت تلگرام همیشه سمت راست (ابتدای متن) قرار می‌گیره.\n";
+    $gb_prompt .= "برای ایموجی ساده، جای قرارگیریش (چپ/راست) از دکمه‌های صفحه‌ی قبل قابل تغییره.";
+    Editmessagetext($from_id, $message_id, $gb_prompt, $gb_kb, 'HTML');
+    return;
+}
+if (preg_match('/^gbtn\|simple\|([a-z]{2})\|(su|cf|ns|te)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+    $gb_key = genbtn_alias_to_key($gb_m[2]);
+    $gb_ov = genbtn_override($gb_m[1], $gb_key, (int) $gb_m[3]);
+    genbtn_set_style($gb_m[1], $gb_key, (int) $gb_m[3], null, null, null, null, empty($gb_ov['simple']));
+    list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], (int) $gb_m[3], $textbotlang, $gb_m[4] ?? '');
+    Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
+    return;
+}
+if (preg_match('/^gbtn\|pos\|([a-z]{2})\|(su|cf|ns|te)\|([01])\|(left|right)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+    $gb_key = genbtn_alias_to_key($gb_m[2]);
+    genbtn_set_style($gb_m[1], $gb_key, (int) $gb_m[3], null, null, null, $gb_m[4], null);
+    list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], (int) $gb_m[3], $textbotlang, $gb_m[5] ?? '');
+    Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
+    return;
+}
+if (preg_match('/^gbtn\|rst\|([a-z]{2})\|(su|cf|ns|te)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+    $gb_key = genbtn_alias_to_key($gb_m[2]);
+    genbtn_reset($gb_m[1], $gb_key, (int) $gb_m[3]);
+    list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], (int) $gb_m[3], $textbotlang, $gb_m[4] ?? '');
+    Editmessagetext($from_id, $message_id, "🔁 این دکمه به پیش‌فرض برگشت.\n\n" . $gb_text, $gb_kb, 'HTML');
+    return;
+}
+if (preg_match('/^gbtn\|rstall\|([a-z]{2})\|(su|cf|ns|te)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+    $gb_key = genbtn_alias_to_key($gb_m[2]);
+    genbtn_reset_all($gb_m[1], $gb_key);
+    list($gb_text, $gb_kb) = genbtn_list_payload($gb_m[2], $gb_m[1], $textbotlang, $gb_m[3] ?? '');
+    Editmessagetext($from_id, $message_id, "🔁 همه دکمه‌ها به پیش‌فرض برگشتن.\n\n" . $gb_text, $gb_kb, 'HTML');
+    return;
+}
+if (preg_match('/^gbtntxt-([a-z]{2})-(su|cf|ns|te)-([01])(?:-(u))?$/', (string) $user['step'], $gb_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+    $gb_key = genbtn_alias_to_key($gb_m[2]);
+    $gb_newtext = trim((string) $text);
+    if ($gb_newtext === '' || mb_strlen($gb_newtext) > 64) {
+        sendmessage($from_id, "⚠️ متن باید بین ۱ تا ۶۴ حرف باشه 😅", $backadmin, 'HTML');
+        return;
+    }
+    genbtn_set_text($gb_m[1], $gb_key, (int) $gb_m[3], $gb_newtext);
+    step('home', $from_id);
+    list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], (int) $gb_m[3], $textbotlang, $gb_m[4] ?? '');
+    $gb_msgid = intval(json_decode((string) ($user['Processing_value'] ?? ''), true)['bt_msgid'] ?? 0);
+    $gb_done_msg = "✅ متن دکمه ذخیره شد!\n\n" . $gb_text;
+    deletemessage($from_id, $message_id);
+    if ($gb_msgid > 0) {
+        Editmessagetext($from_id, $gb_msgid, $gb_done_msg, $gb_kb, 'HTML');
+    } else {
+        sendmessage($from_id, $gb_done_msg, $gb_kb, 'HTML');
+    }
+    return;
+}
+if (preg_match('/^gbtnemo-([a-z]{2})-(su|cf|ns|te)-([01])(?:-(u))?$/', (string) $user['step'], $gb_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+    $gb_key = genbtn_alias_to_key($gb_m[2]);
+    $gb_idx = (int) $gb_m[3];
+    $gb_icon_id = '';
+    if (!empty($update['message']['entities']) && is_array($update['message']['entities'])) {
+        foreach ($update['message']['entities'] as $gb_ent) {
+            if (($gb_ent['type'] ?? '') === 'custom_emoji' && !empty($gb_ent['custom_emoji_id'])) {
+                $gb_icon_id = $gb_ent['custom_emoji_id'];
+                break;
+            }
+        }
+    }
+    if ($gb_icon_id !== '') {
+        genbtn_set_style($gb_m[1], $gb_key, $gb_idx, null, null, $gb_icon_id, null, null);
+        $gb_msg = "✅ ایموجی پریمیوم ذخیره شد! 💎";
+    } else {
+        preg_match('/^\X/u', trim((string) $text), $gb_em);
+        $gb_emoji = $gb_em[0] ?? '';
+        if ($gb_emoji === '' || preg_match('/^[0-9a-zA-Z]$/', $gb_emoji)) {
+            sendmessage($from_id, "⚠️ لطفاً فقط یه ایموجی بفرست 😅", $backadmin, 'HTML');
+            return;
+        }
+        genbtn_set_style($gb_m[1], $gb_key, $gb_idx, null, $gb_emoji, null, null, null);
+        $gb_msg = "✅ ایموجی {$gb_emoji} ذخیره شد!";
+    }
+    step('home', $from_id);
+    list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], $gb_idx, $textbotlang, $gb_m[4] ?? '');
+    deletemessage($from_id, $message_id);
+    sendmessage($from_id, $gb_msg . "\n\n" . $gb_text, $gb_kb, 'HTML');
     return;
 }
 if (preg_match('/^btact\|bbtnrst\|([a-z]{2})$/', $datain, $btm) && $adminrulecheck['rule'] == "administrator") {
@@ -3791,6 +4062,27 @@ if (preg_match('/^tpdautovalv-([a-z]{2})-([a-z0-9_]+)$/', (string) $user['step']
     }
     return;
 }
+if (preg_match('/^tpdautolimitv-([a-z]{2})-([a-z0-9_]+)$/', (string) $user['step'], $td_m) && $datain == '' && $adminrulecheck['rule'] == "administrator" && !topup_disc_is_nav_text($text, $textbotlang)) {
+    $td_raw = trim((string) $text);
+    if (!ctype_digit($td_raw)) {
+        sendmessage($from_id, "⚠️ لطفاً فقط یه عدد بفرست 😅", $backadmin, 'HTML');
+        return;
+    }
+    $td_a = topup_disc_auto_for($td_m[1], $td_m[2]);
+    $td_a['limitPerUser'] = intval($td_raw);
+    topup_disc_auto_set($td_m[1], $td_m[2], $td_a);
+    step('home', $from_id);
+    list($td_text, $td_kb) = topup_disc_auto_payload($td_m[1], $td_m[2], $textbotlang);
+    $td_mid = intval(json_decode((string) ($user['Processing_value'] ?? ''), true)['bt_msgid'] ?? 0);
+    deletemessage($from_id, $message_id);
+    $td_done = "✅ ذخیره شد!\n\n" . $td_text;
+    if ($td_mid > 0) {
+        Editmessagetext($from_id, $td_mid, $td_done, $td_kb, 'HTML');
+    } else {
+        sendmessage($from_id, $td_done, $td_kb, 'HTML');
+    }
+    return;
+}
 if (preg_match('/^tpdfld-(val|limit|user|exp)-([a-z]{2})-([a-z0-9_]+)-(\d+)$/', (string) $user['step'], $td_m) && $datain == '' && $adminrulecheck['rule'] == "administrator" && !topup_disc_is_nav_text($text, $textbotlang)) {
     $td_what = $td_m[1];
     $td_lang = $td_m[2];
@@ -4040,7 +4332,15 @@ if (in_array($text, $textadmin) || $datain == "admin") {    if ($datain == "admi
         sendmessage($from_id, $textbotlang['Admin']['backMenu'], $shopkeyboard, 'HTML');
     } elseif (in_array($user['step'], ["addchannel", "removechannel"])) {
         sendmessage($from_id, $textbotlang['Admin']['backMenu'], $channelkeyboard, 'HTML');
-    } elseif ($user['step'] == "colormanage" || $user['step'] == "emojisticker" || $user['step'] == "renamemanage" || $user['step'] == "btnsettings" || preg_match('/^set(emoji|sticker)-/', (string) $user['step']) || preg_match('/^renamebtn-/', (string) $user['step']) || preg_match('/^bt(sticker|reaction)-/', (string) $user['step'])) {
+    } elseif ($user['step'] == "colormanage" || $user['step'] == "emojisticker" || $user['step'] == "renamemanage" || $user['step'] == "btnsettings" || preg_match('/^set(emoji|sticker)-/', (string) $user['step']) || preg_match('/^renamebtn-/', (string) $user['step'])) {
+        // this whole branch belongs to the 🔘 تنظیمات دکمه‌های منوی اصلی tree,
+        // relocated under 🎨 شخصی‌سازی پیام‌های ربات - previously hardcoded to
+        // $setting_panel from when the hub still lived there
+        list($btnset_back_home, $btnset_back_kb) = keyboard_list_text('fa');
+        sendmessage($from_id, $btnset_back_home, $btnset_back_kb, 'HTML');
+    } elseif (preg_match('/^bt(sticker|reaction)-/', (string) $user['step'])) {
+        // unrelated sibling subsystem (bot text manager's sticker/reaction
+        // capture steps) - left targeting $setting_panel exactly as before
         sendmessage($from_id, $textbotlang['Admin']['backMenu'], $setting_panel, 'HTML');
     } else {
         sendmessage($from_id, $textbotlang['Admin']['backAdmin'], $keyboardadmin, 'HTML');
@@ -4232,6 +4532,36 @@ if (in_array($text, $textadmin) || $datain == "admin") {    if ($datain == "admi
 } elseif ($datain == "backupset_close" && $adminrulecheck['rule'] == "administrator") {
     deletemessage($from_id, $message_id);
     sendmessage($from_id, $textbotlang['users']['selectoption'], $setting_panel, 'HTML');
+} elseif ($datain == "backupset_toggle_db" && $adminrulecheck['rule'] == "administrator") {
+    $bk_setting = select("setting", "*", null, null, "select");
+    $bk_new = (($bk_setting['backup_db_enabled'] ?? '1') === '0') ? '1' : '0';
+    update("setting", "backup_db_enabled", $bk_new, null, null);
+    list($bk_caption, $bk_kb) = backup_settings_hub_payload($textbotlang);
+    Editmessagetext($from_id, $message_id, $bk_caption, $bk_kb, 'HTML');
+} elseif ($datain == "backupset_toggle_bot" && $adminrulecheck['rule'] == "administrator") {
+    $bk_setting = select("setting", "*", null, null, "select");
+    $bk_new = (($bk_setting['backup_bot_enabled'] ?? '1') === '0') ? '1' : '0';
+    update("setting", "backup_bot_enabled", $bk_new, null, null);
+    list($bk_caption, $bk_kb) = backup_settings_hub_payload($textbotlang);
+    Editmessagetext($from_id, $message_id, $bk_caption, $bk_kb, 'HTML');
+} elseif ($datain == "backupset_interval" && $adminrulecheck['rule'] == "administrator") {
+    deletemessage($from_id, $message_id);
+    sendmessage($from_id, $textbotlang['Admin']['BackupSettings']['askIntervalPrompt'], $backadmin, 'HTML');
+    step('backup_set_interval', $from_id);
+} elseif ($user['step'] == "backup_set_interval") {
+    $bk_val = trim((string) $text);
+    if (!ctype_digit($bk_val) || (int) $bk_val < 1 || (int) $bk_val > 24) {
+        sendmessage($from_id, $textbotlang['common']['invalidTime'], $backadmin, 'HTML');
+        return;
+    }
+    update("setting", "backup_interval_hours", $bk_val, null, null);
+    updateBackupCronSchedule($bk_val);
+    step('home', $from_id);
+    list($bk_caption, $bk_kb) = backup_settings_hub_payload($textbotlang);
+    sendmessage($from_id, strtr($textbotlang['Admin']['BackupSettings']['intervalSetDone'], ['{hours}' => $bk_val]), $keyboardadmin, 'HTML');
+    sendmessage($from_id, $bk_caption, $bk_kb, 'HTML');
+} elseif ($text == "/backup" && $adminrulecheck['rule'] == "administrator") {
+    backup_run_now($from_id, $textbotlang);
 } elseif ($datain == "backupset_db" && $adminrulecheck['rule'] == "administrator") {
     deletemessage($from_id, $message_id);
     sendmessage($from_id, $textbotlang['Admin']['BackupSettings']['askDbPasswordPrompt'], $backadmin, 'HTML');
@@ -10914,6 +11244,13 @@ elseif ($datain == "systemsms") {
             $valuenew = "oncategorys";
         }
         update("setting", "statuscategorygenral", $valuenew, null, null);
+    } elseif ($type == "panelshow") {
+        if ($value == "onpanelshow") {
+            $valuenew = "offpanelshow";
+        } else {
+            $valuenew = "onpanelshow";
+        }
+        update("setting", "statuspanelshow", $valuenew, null, null);
     } elseif ($type == "changgestatus") {
         if ($value == "onstatus") {
             $valuenew = "offstatus";
@@ -14681,6 +15018,43 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
 } elseif ($text == $textbotlang['Admin']['DisplayHub']['hubBtn'] && $adminrulecheck['rule'] == "administrator") {
     $dh_kb = displayhub_payload($textbotlang);
     sendmessage($from_id, $textbotlang['Admin']['DisplayHub']['hubCaption'], $dh_kb, 'HTML');
+} elseif ($datain == "bt_displayhub" && $adminrulecheck['rule'] == "administrator") {
+    $dh_kb = displayhub_payload($textbotlang);
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['DisplayHub']['hubCaption'], $dh_kb, 'HTML');
+} elseif ($datain == "bt_btnsettings" && $adminrulecheck['rule'] == "administrator") {
+    $btnset_kb = btnset_hub_payload($textbotlang);
+    Editmessagetext($from_id, $message_id, "🔘 <b>تنظیمات دکمه‌های منوی اصلی</b>\n\nاز اینجا ظاهر ۱۲ دکمه‌ی ثابت پایین صفحه‌ی کاربر (منوی اصلی) رو کامل شخصی‌سازی می‌کنی:\n\n🎨 <b>رنگ‌بندی</b> — رنگ هر دکمه، جدا برای حالت شیشه‌ای و کیبوردی\n🎭 <b>ایموجی و استیکر</b> — ایموجی کنار متن یا استیکری که موقع لمس دکمه ارسال می‌شه\n📐 <b>چیدمان</b> — ترتیب و عرض دکمه‌ها\n✏️ <b>نام و نمایش</b> — تغییر اسم دکمه یا مخفی کردنش\n\n👇 کدوم بخش رو می‌خوای؟", $btnset_kb, 'HTML');
+} elseif ($datain == "bt_langswitch" && $adminrulecheck['rule'] == "administrator") {
+    // promoted out of 🔘 تنظیمات دکمه‌های منوی اصلی into its own direct entry
+    // on the bottext home list - it controls the end-user language-picker
+    // menu, a different concern from main-menu button appearance
+    $lsw_kb = lang_switch_settings_payload();
+    Editmessagetext($from_id, $message_id, "🌐 <b>تنظیمات تغییر زبان کاربر</b>\n\n1️⃣ روشن/خاموش بودن نمایش خودکار منوی انتخاب زبان\n2️⃣ نمایش فقط بار اول یا هر بار که کاربر /start می‌زنه\n3️⃣ زبان‌هایی که توی منوی انتخاب نشون داده می‌شن (حداقل یکی باید روشن بمونه)\n\nروی هر مورد بزن تا تنظیمش کنی 👇", $lsw_kb, 'HTML');
+} elseif ($datain == "btnset_open:color" && $adminrulecheck['rule'] == "administrator") {
+    $btnset_kb = btnset_color_hub_payload($textbotlang);
+    Editmessagetext($from_id, $message_id, "🎨 <b>بخش رنگ‌بندی دکمه‌های منوی اصلی</b>\n\nنوع کیبورد رو انتخاب کن 👇", $btnset_kb, 'HTML');
+} elseif (preg_match('/^btnset_color:(i|r)$/', $datain, $btnset_m) && $adminrulecheck['rule'] == "administrator") {
+    $color_kb = color_editor_payload($btnset_m[1], $textbotlang);
+    $color_title = ($btnset_m[1] == 'r') ? "⌨️ <b>رنگ‌بندی دکمه‌های کیبوردی (معمولی)</b>" : "🎛 <b>رنگ‌بندی دکمه‌های شیشه‌ای (اینلاین)</b>";
+    Editmessagetext($from_id, $message_id, $color_title . "\n\nاین لیست، پیش‌نمایش زنده‌ی منوته 🎨\nروی هر دکمه بزن تا رنگش عوض بشه 👇\n⚪ پیش‌فرض ← 🔵 آبی ← 🟢 سبز ← 🔴 قرمز\n🚫 = دکمه پنهان شده", $color_kb, 'HTML');
+} elseif ($datain == "btnset_open:emoji" && $adminrulecheck['rule'] == "administrator") {
+    $btnset_kb = btnset_emoji_hub_payload($textbotlang);
+    Editmessagetext($from_id, $message_id, "🎭 <b>ایموجی و استیکر دکمه‌های منوی اصلی</b>\n\nکدوم بخش رو می‌خوای تنظیم کنی؟ 👇", $btnset_kb, 'HTML');
+} elseif ($datain == "btnset_emoji:emoji" && $adminrulecheck['rule'] == "administrator") {
+    $es_kb = emoji_sticker_editor_payload('emoji', $textbotlang);
+    Editmessagetext($from_id, $message_id, "😀 <b>ایموجی دکمه‌های منو</b>\n\n👀 این لیست دقیقاً همون چیزیه که کاربر توی منو می‌بینه (پیش‌نمایش زنده با همون رنگ و ایموجی‌ها)\nروی هر دکمه بزن و ایموجی جدیدش رو بفرست 👇\n📍 چپ/راست بودن ایموجی‌های معمولی رو با دکمه‌های ⬅️➡️ پایین لیست تعیین کن\n💎 ایموجی پریمیوم همیشه قبل از متن دکمه‌ست و جاش قابل تغییر نیست (این محدودیت خود تلگرامه، نه ربات)\n🚫 = دکمه پنهان شده", $es_kb, 'HTML');
+} elseif ($datain == "btnset_emoji:sticker" && $adminrulecheck['rule'] == "administrator") {
+    $es_kb = emoji_sticker_editor_payload('sticker', $textbotlang);
+    Editmessagetext($from_id, $message_id, "✨ <b>استیکر پریمیوم دکمه‌ها</b>\n\nروی هر دکمه بزن و استیکرش رو بفرست 👇\nوقتی کاربر اون دکمه رو بزنه، اول این استیکر ارسال می‌شه\n✅ ست شده | ❌ ست نشده\n🚫 = دکمه پنهان شده\n\n📌 این‌ها فقط برای لحظه‌ی لمس دکمه‌های منوی اصلی‌ان؛ برای استیکر پیام‌های داخل مراحل خرید/سرویس‌های من/اکانت تست، از 🎨 شخصی‌سازی پیام‌های ربات استفاده کن.", $es_kb, 'HTML');
+} elseif ($datain == "btnset_open:layout" && $adminrulecheck['rule'] == "administrator") {
+    $ly_kb = layout_editor_payload($textbotlang);
+    Editmessagetext($from_id, $message_id, "📐 <b>چیدمان دکمه‌های منو</b>\n\n🔹 <b>جابه‌جایی:</b> روی یه دکمه بزن تا انتخاب بشه، بعد روی دکمه‌ی مقصد بزن\n🔹 <b>تک/دوتایی:</b> دکمه رو انتخاب کن و «🔲 تمام‌عرض / کنار هم» رو بزن\n🔹 رنگ و ایموجی و استیکر دکمه‌ها همراهشون منتقل می‌شن\n🚫 = دکمه پنهان شده", $ly_kb, 'HTML');
+} elseif ($datain == "btnset_open:rename" && $adminrulecheck['rule'] == "administrator") {
+    $rn_kb = rename_editor_payload($textbotlang);
+    Editmessagetext($from_id, $message_id, "✏️ <b>نام و نمایش دکمه‌های منو</b>\n\n🔹 روی یه دکمه بزن تا انتخاب بشه 🔵\n🔹 بعد «✏️ تغییر نام» برای عوض کردن اسمش، یا «👁 پنهان / نمایش» برای مخفی/آشکار کردنش رو بزن\n🚫 = دکمه‌ی پنهان", $rn_kb, 'HTML');
+} elseif ($datain == "btnset_open:langswitch" && $adminrulecheck['rule'] == "administrator") {
+    $lsw_kb = lang_switch_settings_payload();
+    Editmessagetext($from_id, $message_id, "🌐 <b>تنظیمات تغییر زبان کاربر</b>\n\n1️⃣ روشن/خاموش بودن نمایش خودکار منوی انتخاب زبان\n2️⃣ نمایش فقط بار اول یا هر بار که کاربر /start می‌زنه\n3️⃣ زبان‌هایی که توی منوی انتخاب نشون داده می‌شن (حداقل یکی باید روشن بمونه)\n\nروی هر مورد بزن تا تنظیمش کنی 👇", $lsw_kb, 'HTML');
 } elseif ($datain == "displayhub_close" && $adminrulecheck['rule'] == "administrator") {
     deletemessage($from_id, $message_id);
 } elseif ($datain == "displayhub_back" && $adminrulecheck['rule'] == "administrator") {
@@ -14811,6 +15185,12 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
 } elseif (preg_match('/^topupdisc:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
     list($td_text, $td_kb) = topup_disc_hub_payload($td_m[1], $td_m[2], $textbotlang);
     Editmessagetext($from_id, $message_id, $td_text, $td_kb, 'HTML');
+} elseif (preg_match('/^tpdadmintest:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
+    $td_setting = select("setting", "*", null, null, "select");
+    $td_new = (($td_setting['topup_disc_admin_selftest'] ?? '0') === '1') ? '0' : '1';
+    update("setting", "topup_disc_admin_selftest", $td_new, null, null);
+    list($td_text, $td_kb) = topup_disc_hub_payload($td_m[1], $td_m[2], $textbotlang);
+    Editmessagetext($from_id, $message_id, $td_text, $td_kb, 'HTML');
 } elseif (preg_match('/^tpdauto:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
     list($td_text, $td_kb) = topup_disc_auto_payload($td_m[1], $td_m[2], $textbotlang);
     Editmessagetext($from_id, $message_id, $td_text, $td_kb, 'HTML');
@@ -14820,6 +15200,16 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     topup_disc_auto_set($td_m[1], $td_m[2], $td_a);
     list($td_text, $td_kb) = topup_disc_auto_payload($td_m[1], $td_m[2], $textbotlang);
     Editmessagetext($from_id, $message_id, $td_text, $td_kb, 'HTML');
+} elseif (preg_match('/^tpdautonewonly:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
+    $td_a = topup_disc_auto_for($td_m[1], $td_m[2]);
+    $td_a['newUserOnly'] = empty($td_a['newUserOnly']);
+    topup_disc_auto_set($td_m[1], $td_m[2], $td_a);
+    list($td_text, $td_kb) = topup_disc_auto_payload($td_m[1], $td_m[2], $textbotlang);
+    Editmessagetext($from_id, $message_id, $td_text, $td_kb, 'HTML');
+} elseif (preg_match('/^tpdautoreset:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
+    topup_disc_auto_set($td_m[1], $td_m[2], []);
+    list($td_text, $td_kb) = topup_disc_auto_payload($td_m[1], $td_m[2], $textbotlang);
+    Editmessagetext($from_id, $message_id, "🔁 تخفیف خودکار به پیش‌فرض برگشت.\n\n" . $td_text, $td_kb, 'HTML');
 } elseif (preg_match('/^tpdautomode:([a-z]{2}):([a-z0-9_]+):(percent|fixed)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
     $td_a = topup_disc_auto_for($td_m[1], $td_m[2]);
     $td_a['mode'] = $td_m[3];
@@ -14838,6 +15228,11 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     step("tpdautoexpv-{$td_m[1]}-{$td_m[2]}", $from_id);
     $td_kb = json_encode(['inline_keyboard' => [[['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "tpdauto:{$td_m[1]}:{$td_m[2]}"]], [['text' => '❌ بستن', 'callback_data' => "tpdclose", 'style' => 'danger']]]]);
     Editmessagetext($from_id, $message_id, "⏳ تخفیف خودکار تا چند روز دیگه فعال باشه؟ (۰ = بدون محدودیت زمانی)", $td_kb, 'HTML');
+} elseif (preg_match('/^tpdautolimit:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
+    savedata("clear", "bt_msgid", $message_id);
+    step("tpdautolimitv-{$td_m[1]}-{$td_m[2]}", $from_id);
+    $td_kb = json_encode(['inline_keyboard' => [[['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "tpdauto:{$td_m[1]}:{$td_m[2]}"]], [['text' => '❌ بستن', 'callback_data' => "tpdclose", 'style' => 'danger']]]]);
+    Editmessagetext($from_id, $message_id, "👤 هر کاربر چند بار بتونه از تخفیف خودکار این درگاه استفاده کنه؟ (۰ = نامحدود)", $td_kb, 'HTML');
 } elseif (preg_match('/^tpdadd:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
     savedata("clear", "bt_msgid", $message_id);
     step("tpdaddc-{$td_m[1]}-{$td_m[2]}", $from_id);
@@ -14849,6 +15244,11 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
 } elseif (preg_match('/^tpdtog:([a-z]{2}):([a-z0-9_]+):(\d+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
     $td_c = topup_disc_code_get($td_m[1], $td_m[2], (int) $td_m[3]);
     topup_disc_code_update($td_m[1], $td_m[2], (int) $td_m[3], ['enabled' => empty($td_c['enabled'])]);
+    list($td_text, $td_kb) = topup_disc_code_payload($td_m[1], $td_m[2], (int) $td_m[3], $textbotlang);
+    Editmessagetext($from_id, $message_id, $td_text, $td_kb, 'HTML');
+} elseif (preg_match('/^tpdnewonly:([a-z]{2}):([a-z0-9_]+):(\d+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
+    $td_c = topup_disc_code_get($td_m[1], $td_m[2], (int) $td_m[3]);
+    topup_disc_code_update($td_m[1], $td_m[2], (int) $td_m[3], ['newUserOnly' => empty($td_c['newUserOnly'])]);
     list($td_text, $td_kb) = topup_disc_code_payload($td_m[1], $td_m[2], (int) $td_m[3], $textbotlang);
     Editmessagetext($from_id, $message_id, $td_text, $td_kb, 'HTML');
 } elseif (preg_match('/^tpdmode:([a-z]{2}):([a-z0-9_]+):(\d+):(percent|fixed)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
@@ -16539,19 +16939,48 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     if (!in_array($bt_lang, ['fa', 'en', 'ru', 'zh', 'tk'], true)) {
         $bt_lang = 'fa';
     }
-    // this used to wipe setting.text_edit outright - every language at once -
-    // and to drop the sticker/reaction maps whole. Now it is scoped to the tab
-    // being viewed, and covers the button stores it never touched. The admin
-    // check matches every sibling reset handler; it was the only one without one
-    bottext_reset_keys(bottext_all_item_keys($textbotlang), $bt_lang);
-    // the 🔋 warning rows are on this screen too, so a whole-list reset has to
-    // include them. Captions/stickers/buttons only - the thresholds themselves
-    // are the admin's structural config and survive, exactly as they do when
-    // that section's own reset button is used
-    volumepct_tiers_reset_all_style($bt_lang, null);
+    // no longer wipes on the spot - opens the picker so the admin sees exactly
+    // what is about to go and can narrow it down. Everything starts selected,
+    // so the old "tap once, reset everything" path is still just two taps.
+    list($bt_rp_text, $bt_rp_kb) = bt_reset_picker_payload($bt_lang, 255, $textbotlang);
+    Editmessagetext($from_id, $message_id, $bt_rp_text, $bt_rp_kb, 'HTML');
+} elseif (preg_match('/^bt_rsttog\|([a-z]{2})\|(\d{1,3})\|(\d{1,3})$/', $datain, $dataget) && $adminrulecheck['rule'] == "administrator") {
+    $bt_lang = in_array($dataget[1], ['fa', 'en', 'ru', 'zh', 'tk'], true) ? $dataget[1] : 'fa';
+    $bt_mask = ((int) $dataget[2]) & 255;
+    $bt_bit = ((int) $dataget[3]) & 255;
+    $bt_mask = ($bt_mask & $bt_bit) ? ($bt_mask & ~$bt_bit) : ($bt_mask | $bt_bit);
+    list($bt_rp_text, $bt_rp_kb) = bt_reset_picker_payload($bt_lang, $bt_mask, $textbotlang);
+    Editmessagetext($from_id, $message_id, $bt_rp_text, $bt_rp_kb, 'HTML');
+} elseif (preg_match('/^bt_rstsel\|([a-z]{2})\|(all|none)$/', $datain, $dataget) && $adminrulecheck['rule'] == "administrator") {
+    $bt_lang = in_array($dataget[1], ['fa', 'en', 'ru', 'zh', 'tk'], true) ? $dataget[1] : 'fa';
+    $bt_mask = ($dataget[2] === 'all') ? 255 : 0;
+    list($bt_rp_text, $bt_rp_kb) = bt_reset_picker_payload($bt_lang, $bt_mask, $textbotlang);
+    Editmessagetext($from_id, $message_id, $bt_rp_text, $bt_rp_kb, 'HTML');
+} elseif ($datain == "bt_rstsep" && $adminrulecheck['rule'] == "administrator") {
+    telegram('answerCallbackQuery', [
+        'callback_query_id' => $callback_query_id,
+        'text' => 'این‌ها تنظیمات ظاهری دکمه‌های ثابت پایین صفحه‌ی کاربرن - نه متن پیام‌ها.',
+        'show_alert' => true,
+    ]);
+    return;
+} elseif (preg_match('/^bt_rstgo\|([a-z]{2})\|(\d{1,3})$/', $datain, $dataget) && $adminrulecheck['rule'] == "administrator") {
+    $bt_lang = in_array($dataget[1], ['fa', 'en', 'ru', 'zh', 'tk'], true) ? $dataget[1] : 'fa';
+    $bt_mask = ((int) $dataget[2]) & 255;
+    if ($bt_mask === 0) {
+        telegram('answerCallbackQuery', [
+            'callback_query_id' => $callback_query_id,
+            'text' => 'هیچ بخشی انتخاب نشده - اول تیک بخش‌هایی که می‌خوای ریست بشن رو بزن.',
+            'show_alert' => true,
+        ]);
+        return;
+    }
+    $bt_rp_done = bt_reset_apply_mask($bt_lang, $bt_mask, $textbotlang);
     $textbotlang = languagechange();
     list($bt_home, $bt_kb) = keyboard_list_text($bt_lang);
-    Editmessagetext($from_id, $message_id, $textbotlang['bottext']['resetAllDone'] . "\n\n" . $bt_home, $bt_kb, 'HTML');
+    $bt_rp_msg = empty($bt_rp_done)
+        ? "ℹ️ چیزی برای ریست نبود - بخش‌های انتخابی از قبل روی پیش‌فرض بودن."
+        : ("✅ <b>ریست شد:</b>\n" . implode("\n", $bt_rp_done));
+    Editmessagetext($from_id, $message_id, $bt_rp_msg . "\n\n" . $bt_home, $bt_kb, 'HTML');
 } elseif (preg_match('/^bt_group_resetall\|([^|]+)\|(.+)$/', $datain, $dataget) && $adminrulecheck['rule'] == "administrator") {
     $bt_lang = $dataget[1];
     $bt_group = $dataget[2];
@@ -16600,6 +17029,9 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
         }
     }
     if ($bt_key === 'users.unknownMsg') {
+        $bt_valid = true;
+    }
+    if (in_array($bt_key, ['textbot.afterText', 'users.status.getConfigHint'], true)) {
         $bt_valid = true;
     }
     if (!$bt_valid || $bt_key === '') {

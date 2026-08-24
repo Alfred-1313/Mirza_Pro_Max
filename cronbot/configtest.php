@@ -30,13 +30,7 @@ usertest_maybe_auto_reset();
             $ManagePanel->RemoveUser($result['Service_location'],$resultt);
         update("invoice","status","disabled","username",$resultt);
         if(intval($user['status_cron']) != 0){
-         $Response = json_encode([
-        'inline_keyboard' => [
-            [
-                ['text' => $textbotlang['keyboard']['buyService'], 'callback_data' => 'buy'],
-            ],
-        ]
-    ]);
+         $Response = test_expired_kb($user['lang'] ?? 'fa', $textbotlang);
         $textexpire = str_replace('{username}', $resultt, $textbotlang['textbot']['testExpired']);
         $textexpire = strtr($textexpire, bottext_user_placeholders($user, $result['id_user']));
         sendmessage($result['id_user'], $textexpire, $Response, 'HTML');

@@ -95,7 +95,7 @@ if (!function_exists('bottext_extras_for_text')) {
                     continue;
                 }
                 // match against the literal segments around sprintf placeholders
-                $bts_segs = preg_split('/%[-+0-9.]*[a-zA-Z]/', $bts_val);
+                $bts_segs = preg_split('/%[-+0-9.]*[a-zA-Z]|\{[a-zA-Z_]+\}/', $bts_val);
                 $bts_seg0 = trim($bts_segs[0] ?? '');
                 $bts_seg1 = trim($bts_segs[1] ?? '');
                 $bts_seg0 = mb_substr($bts_seg0, 0, 40);

@@ -228,6 +228,10 @@ timeauto_not_verify,status_keyboard_config,cron_status
         addFieldToTable("setting", "configColOrder", null, "VARCHAR(20)");
         addFieldToTable("setting", "backup_db_password", null, "VARCHAR(255)");
         addFieldToTable("setting", "backup_bot_password", null, "VARCHAR(255)");
+        addFieldToTable("setting", "backup_db_enabled", "1", "VARCHAR(1)");
+        addFieldToTable("setting", "backup_bot_enabled", "1", "VARCHAR(1)");
+        addFieldToTable("setting", "backup_interval_hours", "5", "VARCHAR(2)");
+        addFieldToTable("setting", "topup_disc_admin_selftest", "0", "VARCHAR(1)");
         addFieldToTable("setting", "configGetBtnStyle", null, "VARCHAR(20)");
         addFieldToTable("setting", "lang_switch", null, "TEXT");
         addFieldToTable("setting", "help_layout", null, "TEXT");
@@ -254,7 +258,10 @@ timeauto_not_verify,status_keyboard_config,cron_status
         addFieldToTable("setting", "verifybucodeuser", "offverify", "VARCHAR(100)");
         addFieldToTable("setting", "on_hold_day", "4", "VARCHAR(100)");
         addFieldToTable("setting", "bulkbuy", "onbulk", "VARCHAR(100)");
-        addFieldToTable("setting", "statuscategorygenral", "offcategorys", "VARCHAR(100)");
+        addFieldToTable("setting", "statuscategorygenral", "oncategorys", "VARCHAR(100)");
+    // default ON: keeps today's live behaviour (panel picker always shown,
+    // hardcoded via `false &&` in index.php) unchanged unless the admin flips it
+    addFieldToTable("setting", "statuspanelshow", "onpanelshow", "VARCHAR(20)");
         addFieldToTable("setting", "cronvolumere", "5", "VARCHAR(100)");
         addFieldToTable("setting", "agentreqprice", "0", "VARCHAR(100)");
         addFieldToTable("setting", "statusnamecustom", "offnamecustom", "VARCHAR(100)");
@@ -974,12 +981,12 @@ try {
         $pdo->query("INSERT INTO shopSetting (Namevalue,value) VALUES ('customtimepricen2','4000')");
         $pdo->query("INSERT INTO shopSetting (Namevalue,value) VALUES ('statusdirectpabuy','ondirectbuy')");
         $pdo->query("INSERT INTO shopSetting (Namevalue,value) VALUES ('minbalancebuybulk','0')");
-        $pdo->query("INSERT INTO shopSetting (Namevalue,value) VALUES ('statustimeextra','ontimeextraa')");
+        $pdo->query("INSERT INTO shopSetting (Namevalue,value) VALUES ('statustimeextra','offtimeextraa')");
         $pdo->query("INSERT INTO shopSetting (Namevalue,value) VALUES ('statusdisorder','offdisorder')");
-        $pdo->query("INSERT INTO shopSetting (Namevalue,value) VALUES ('statuschangeservice','onstatus')");
+        $pdo->query("INSERT INTO shopSetting (Namevalue,value) VALUES ('statuschangeservice','offstatus')");
         $pdo->query("INSERT INTO shopSetting (Namevalue,value) VALUES ('statusshowprice','offshowprice')");
         $pdo->query("INSERT INTO shopSetting (Namevalue,value) VALUES ('configshow','onconfig')");
-        $pdo->query("INSERT INTO shopSetting (Namevalue,value) VALUES ('backserviecstatus','on')");
+        $pdo->query("INSERT INTO shopSetting (Namevalue,value) VALUES ('backserviecstatus','off')");
         $pdo->query("INSERT INTO shopSetting (Namevalue,value) VALUES ('chashbackextend','0')");
         $__q4 = $pdo->prepare("INSERT INTO shopSetting (Namevalue,value) VALUES ('chashbackextend_agent',?)");
         $__q4->bindValue(1, $agent_cashback, PDO::PARAM_STR);
@@ -991,15 +998,15 @@ try {
         $pdo->query("INSERT IGNORE INTO shopSetting (Namevalue,value) VALUES ('statusextra','offextra')");
         $pdo->query("INSERT IGNORE INTO shopSetting (Namevalue,value) VALUES ('statusdirectpabuy','ondirectbuy')");
         $pdo->query("INSERT IGNORE INTO shopSetting (Namevalue,value) VALUES ('minbalancebuybulk','0')");
-        $pdo->query("INSERT IGNORE INTO shopSetting (Namevalue,value) VALUES ('statustimeextra','ontimeextraa')");
+        $pdo->query("INSERT IGNORE INTO shopSetting (Namevalue,value) VALUES ('statustimeextra','offtimeextraa')");
         $pdo->query("INSERT IGNORE INTO shopSetting (Namevalue,value) VALUES ('customtimepricef','4000')");
         $pdo->query("INSERT IGNORE INTO shopSetting (Namevalue,value) VALUES ('customtimepricen','4000')");
         $pdo->query("INSERT IGNORE INTO shopSetting (Namevalue,value) VALUES ('customtimepricen2','4000')");
         $pdo->query("INSERT IGNORE INTO shopSetting (Namevalue,value) VALUES ('statusdisorder','offdisorder')");
-        $pdo->query("INSERT IGNORE INTO shopSetting (Namevalue,value) VALUES ('statuschangeservice','onstatus')");
+        $pdo->query("INSERT IGNORE INTO shopSetting (Namevalue,value) VALUES ('statuschangeservice','offstatus')");
         $pdo->query("INSERT IGNORE INTO shopSetting (Namevalue,value) VALUES ('statusshowprice','offshowprice')");
         $pdo->query("INSERT IGNORE INTO shopSetting (Namevalue,value) VALUES ('configshow','onconfig')");
-        $pdo->query("INSERT IGNORE INTO shopSetting (Namevalue,value) VALUES ('backserviecstatus','on')");
+        $pdo->query("INSERT IGNORE INTO shopSetting (Namevalue,value) VALUES ('backserviecstatus','off')");
         $pdo->query("INSERT IGNORE INTO shopSetting (Namevalue,value) VALUES ('chashbackextend','0')");
         $__q5 = $pdo->prepare("INSERT IGNORE INTO shopSetting (Namevalue,value) VALUES ('chashbackextend_agent',?)");
         $__q5->bindValue(1, $agent_cashback, PDO::PARAM_STR);

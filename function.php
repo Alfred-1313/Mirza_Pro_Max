@@ -3256,7 +3256,6 @@ function activecron()
         "*/1 * * * * curl https://$domainhosts/cronbot/activeconfig.php",
         "*/1 * * * * curl https://$domainhosts/cronbot/disableconfig.php",
         "*/1 * * * * curl https://$domainhosts/cronbot/iranpay1.php",
-        "0 */5 * * * curl https://$domainhosts/cronbot/backupbot.php",
         "*/2 * * * * curl https://$domainhosts/cronbot/gift.php",
         "*/30 * * * * curl https://$domainhosts/cronbot/expireagent.php",
         "*/15 * * * * curl https://$domainhosts/cronbot/on_hold.php",
@@ -3266,6 +3265,64 @@ function activecron()
     ];
 
     addCronIfNotExists($cronCommands);
+
+    // backupbot.php's schedule is admin-configurable (🗄 تنظیمات بکاپ), so it's
+    // managed separately from the fixed list above - addCronIfNotExists() can
+    // only ever add a missing line, never replace a stale one, which would
+    // otherwise leave two competing schedules active side by side after the
+    // admin changes it
+    $setting = select("setting", "*", null, null, "select");
+    updateBackupCronSchedule($setting['backup_interval_hours'] ?? '5');
+}
+if (!function_exists('updateBackupCronSchedule')) {
+    function updateBackupCronSchedule($intervalHours)
+    {
+        global $domainhosts;
+        $intervalHours = (int) $intervalHours;
+        if ($intervalHours < 1 || $intervalHours > 24) {
+            $intervalHours = 5;
+        }
+        if (!isShellExecAvailable()) {
+            return false;
+        }
+        $crontabBinary = getCrontabBinary();
+        if ($crontabBinary === null) {
+            return false;
+        }
+        $existingCronJobs = runShellCommand(sprintf('%s -l 2>/dev/null', escapeshellarg($crontabBinary)));
+        $existingCronJobs = trim((string) $existingCronJobs);
+        $cronLines = $existingCronJobs === '' ? [] : preg_split('/\r?\n/', $existingCronJobs);
+        $cronLines = array_values(array_filter(array_map('trim', $cronLines), static function ($line) {
+            return $line !== '' && strpos($line, '#') !== 0;
+        }));
+
+        $targetLine = "0 */$intervalHours * * * curl https://$domainhosts/cronbot/backupbot.php";
+        $backupLines = array_values(array_filter($cronLines, static function ($line) {
+            return strpos($line, 'cronbot/backupbot.php') !== false;
+        }));
+        if ($backupLines === [$targetLine]) {
+            return true;
+        }
+
+        $cronLines = array_values(array_filter($cronLines, static function ($line) {
+            return strpos($line, 'cronbot/backupbot.php') === false;
+        }));
+        $cronLines[] = $targetLine;
+        $cronLines = array_values(array_unique($cronLines));
+        $cronContent = implode(PHP_EOL, $cronLines) . PHP_EOL;
+
+        $temporaryFile = tempnam(sys_get_temp_dir(), 'cron');
+        if ($temporaryFile === false) {
+            return false;
+        }
+        if (file_put_contents($temporaryFile, $cronContent) === false) {
+            unlink($temporaryFile);
+            return false;
+        }
+        runShellCommand(sprintf('%s %s', escapeshellarg($crontabBinary), escapeshellarg($temporaryFile)));
+        unlink($temporaryFile);
+        return true;
+    }
 }
 function createInvoice($amount)
 {
@@ -3709,7 +3766,7 @@ if (!function_exists('bottext_all_item_keys')) {
                 $keys[] = $it['key'];
             }
         }
-        foreach (['users.unknownMsg', 'textbot.afterText', 'users.status.getConfigHint'] as $extra) {
+        foreach (['users.unknownMsg', 'textbot.afterText', 'users.status.getConfigHint', 'users.sell.confirmButtons'] as $extra) {
             $keys[] = $extra;
         }
         return array_values(array_unique($keys));
@@ -3728,8 +3785,18 @@ if (!function_exists('bottext_reset_keys')) {
     //
     // Everything here is scoped to $lang. configColOrder is the one genuinely
     // global setting, so it is cleared only when its owning item is reset.
-    function bottext_reset_keys(array $keys, $lang)
+    // $parts limits WHICH stores get cleared: 'text' = the message text,
+    // 'media' = its sticker/reaction, 'buttons' = its custom buttons (and the
+    // config-column settings the usertest item owns). Defaults to all three,
+    // so the per-item and per-group resets that call this are unchanged.
+    function bottext_reset_keys(array $keys, $lang, array $parts = ['text', 'media', 'buttons'])
     {
+        $doText = in_array('text', $parts, true);
+        $doMedia = in_array('media', $parts, true);
+        $doButtons = in_array('buttons', $parts, true);
+        if (!$doText && !$doMedia && !$doButtons) {
+            return;
+        }
         $setting = select("setting", "*", null, null, "select");
         $map = json_decode((string) ($setting['text_edit'] ?? ''), true);
         if (!is_array($map)) {
@@ -3745,20 +3812,22 @@ if (!function_exists('bottext_reset_keys')) {
         }
         $clearColOrder = false;
         foreach ($keys as $key) {
-            if (isset($map[$lang]) && is_array($map[$lang])) {
+            if ($doText && isset($map[$lang]) && is_array($map[$lang])) {
                 bottext_dotted_unset($map[$lang], $key);
             }
-            if (isset($layout['text_stickers']) && is_array($layout['text_stickers'])) {
+            if ($doMedia && isset($layout['text_stickers']) && is_array($layout['text_stickers'])) {
                 bt_media_unset($layout['text_stickers'], $key, $lang);
             }
-            if (isset($layout['text_reactions']) && is_array($layout['text_reactions'])) {
+            if ($doMedia && isset($layout['text_reactions']) && is_array($layout['text_reactions'])) {
                 bt_media_unset($layout['text_reactions'], $key, $lang);
             }
-            unset($be[$lang][$key]);
-            if ($key === 'users.usertest.selectUsernamePrompt') {
-                // this item also owns the config-column display settings
-                unset($be[$lang]['configDisplay']);
-                $clearColOrder = true;
+            if ($doButtons) {
+                unset($be[$lang][$key]);
+                if ($key === 'users.usertest.selectUsernamePrompt') {
+                    // this item also owns the config-column display settings
+                    unset($be[$lang]['configDisplay']);
+                    $clearColOrder = true;
+                }
             }
         }
         if (isset($map[$lang]) && empty($map[$lang])) {
@@ -3767,16 +3836,298 @@ if (!function_exists('bottext_reset_keys')) {
         if (isset($be[$lang]) && empty($be[$lang])) {
             unset($be[$lang]);
         }
-        update("setting", "text_edit", empty($map) ? null : json_encode($map, JSON_UNESCAPED_UNICODE), null, null);
-        update("setting", "button_edit", empty($be) ? null : json_encode($be, JSON_UNESCAPED_UNICODE), null, null);
+        if ($doText) {
+            update("setting", "text_edit", empty($map) ? null : json_encode($map, JSON_UNESCAPED_UNICODE), null, null);
+        }
+        if ($doButtons) {
+            update("setting", "button_edit", empty($be) ? null : json_encode($be, JSON_UNESCAPED_UNICODE), null, null);
+        }
         // keyboardmain carries the whole main menu - only ever write it back if
         // it still looks like a real layout, never a decode failure
-        if (!empty($layout) && isset($layout['keyboard'])) {
+        if ($doMedia && !empty($layout) && isset($layout['keyboard'])) {
             update("setting", "keyboardmain", json_encode($layout, JSON_UNESCAPED_UNICODE), null, null);
         }
         if ($clearColOrder) {
             update("setting", "configColOrder", null, null, null);
         }
+    }
+}
+if (!function_exists('mainmenu_appearance_reset')) {
+    // Clears every per-button appearance override the main-menu button screens
+    // can set (colour for both keyboard modes, tap sticker, hidden flag,
+    // renamed label, emoji in all three of its forms), plus the two global
+    // emoji switches.
+    //
+    // Deliberately preserved: the row/column STRUCTURE of $layout['keyboard']
+    // and each button's 'text' key. Those are the menu's identity, not
+    // customizations - dropping them would leave the bot with no main menu at
+    // all. Also preserved: text_stickers / text_reactions, which live in the
+    // same blob but belong to the message manager and are reset separately by
+    // bottext_reset_keys().
+    // $parts: any of 'sticker', 'color', 'emoji', 'visibility'. Defaults to all
+    // four, so callers that want a full wipe need not spell it out.
+    function mainmenu_appearance_reset(array $parts = ['sticker', 'color', 'emoji', 'visibility'])
+    {
+        $mmFields = [];
+        if (in_array('sticker', $parts, true)) {
+            $mmFields[] = 'sticker';
+        }
+        if (in_array('color', $parts, true)) {
+            $mmFields[] = 'style';
+            $mmFields[] = 'style_reply';
+        }
+        if (in_array('emoji', $parts, true)) {
+            $mmFields[] = 'emoji';
+            $mmFields[] = 'emoji_pos';
+            $mmFields[] = 'icon_emoji';
+        }
+        if (in_array('visibility', $parts, true)) {
+            $mmFields[] = 'hidden';
+            $mmFields[] = 'custom_text';
+        }
+        if (empty($mmFields)) {
+            return false;
+        }
+        $setting = select("setting", "*", null, null, "select");
+        $layout = json_decode((string) ($setting['keyboardmain'] ?? ''), true);
+        // never write back a decode failure - that would wipe the whole menu
+        if (!is_array($layout) || !isset($layout['keyboard']) || !is_array($layout['keyboard'])) {
+            return false;
+        }
+        foreach ($layout['keyboard'] as $mm_r => $mm_row) {
+            if (!is_array($mm_row)) {
+                continue;
+            }
+            foreach ($mm_row as $mm_c => $mm_btn) {
+                if (!is_array($mm_btn)) {
+                    continue;
+                }
+                foreach ($mmFields as $mm_f) {
+                    unset($layout['keyboard'][$mm_r][$mm_c][$mm_f]);
+                }
+            }
+        }
+        if (in_array('emoji', $parts, true)) {
+            unset($layout['simple_emoji'], $layout['emoji_pos_global']);
+        }
+        update("setting", "keyboardmain", json_encode($layout, JSON_UNESCAPED_UNICODE), null, null);
+        return true;
+    }
+}
+if (!function_exists('bt_reset_sections')) {
+    // The 🔁 reset picker's catalogue. Each entry is one selectable category:
+    //   bit    - its slot in the stateless mask carried in callback_data
+    //   label  - the row text
+    //   sep    - a white divider label rendered ABOVE this row, or ''
+    // Order here is the order shown on screen.
+    function bt_reset_sections()
+    {
+        return [
+            'msg_text' => ['bit' => 1, 'label' => '📝 متن پیام‌ها', 'sep' => ''],
+            'msg_media' => ['bit' => 2, 'label' => '🖼 استیکر و ری‌اکشن پیام‌ها', 'sep' => ''],
+            'msg_buttons' => ['bit' => 4, 'label' => '🔘 دکمه‌های داخل پیام‌ها', 'sep' => ''],
+            'warnings' => ['bit' => 8, 'label' => '🔋 هشدارهای مصرف بسته', 'sep' => ''],
+            'mm_sticker' => ['bit' => 16, 'label' => '✨ استیکر دکمه‌های منو', 'sep' => '⬇️ دکمه‌های منوی اصلی (پایین صفحه‌ی کاربر)'],
+            'mm_color' => ['bit' => 32, 'label' => '🎨 رنگ دکمه‌های منو', 'sep' => ''],
+            'mm_emoji' => ['bit' => 64, 'label' => '😀 ایموجی دکمه‌های منو', 'sep' => ''],
+            'mm_visibility' => ['bit' => 128, 'label' => '👁 نام و مخفی‌بودن دکمه‌ها', 'sep' => ''],
+        ];
+    }
+}
+if (!function_exists('bt_reset_counts')) {
+    // How many things are ACTUALLY customized right now in each category, so
+    // the picker can tell the admin exactly what a reset would destroy instead
+    // of making them guess.
+    function bt_reset_counts($lang, $textbotlang)
+    {
+        $c = ['msg_text' => 0, 'msg_media' => 0, 'msg_buttons' => 0, 'warnings' => 0,
+              'mm_sticker' => 0, 'mm_color' => 0, 'mm_emoji' => 0, 'mm_visibility' => 0];
+        $setting = select("setting", "*", null, null, "select");
+        $te = json_decode((string) ($setting['text_edit'] ?? ''), true);
+        $layout = json_decode((string) ($setting['keyboardmain'] ?? ''), true);
+        $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
+        $st = (is_array($layout) && isset($layout['text_stickers']) && is_array($layout['text_stickers'])) ? $layout['text_stickers'] : [];
+        $re = (is_array($layout) && isset($layout['text_reactions']) && is_array($layout['text_reactions'])) ? $layout['text_reactions'] : [];
+        foreach (bottext_all_item_keys($textbotlang) as $k) {
+            if (is_array($te) && isset($te[$lang]) && bottext_dotted_isset($te[$lang], $k)) {
+                $c['msg_text']++;
+            }
+            if (bt_media_lookup($st, $k, $lang) !== '' || bt_media_lookup($re, $k, $lang) !== '') {
+                $c['msg_media']++;
+            }
+            if (is_array($be) && !empty($be[$lang][$k])) {
+                $c['msg_buttons']++;
+            }
+        }
+        if (is_array($be) && !empty($be[$lang]['configDisplay'])) {
+            $c['msg_buttons']++;
+        }
+        if ((string) ($setting['configColOrder'] ?? '') !== '') {
+            $c['msg_buttons']++;
+        }
+        foreach (volumepct_tiers_map() as $tier) {
+            if (!is_array($tier)) {
+                continue;
+            }
+            $touched = isset($tier['text'][$lang]) || isset($tier['btnLabel'][$lang]) || isset($tier['sticker'][$lang])
+                || isset($tier['style']) || isset($tier['emoji']) || isset($tier['emojiIcon'])
+                || isset($tier['pos']) || isset($tier['simple']);
+            if ($touched) {
+                $c['warnings']++;
+            }
+        }
+        if (is_array($layout) && isset($layout['keyboard']) && is_array($layout['keyboard'])) {
+            foreach ($layout['keyboard'] as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                foreach ($row as $btn) {
+                    if (!is_array($btn)) {
+                        continue;
+                    }
+                    if (isset($btn['sticker'])) {
+                        $c['mm_sticker']++;
+                    }
+                    if (isset($btn['style']) || isset($btn['style_reply'])) {
+                        $c['mm_color']++;
+                    }
+                    if (isset($btn['emoji']) || isset($btn['emoji_pos']) || isset($btn['icon_emoji'])) {
+                        $c['mm_emoji']++;
+                    }
+                    if (isset($btn['hidden']) || isset($btn['custom_text'])) {
+                        $c['mm_visibility']++;
+                    }
+                }
+            }
+            if (isset($layout['simple_emoji']) || isset($layout['emoji_pos_global'])) {
+                $c['mm_emoji']++;
+            }
+        }
+        return $c;
+    }
+}
+if (!function_exists('bt_reset_picker_payload')) {
+    // The confirmation screen for 🔁 ریست همه به پیش‌فرض. The selection lives
+    // entirely in the callback_data as a bitmask - no step, no DB state, so it
+    // cannot go stale or leak between admins.
+    function bt_reset_picker_payload($lang, $mask, $textbotlang)
+    {
+        $sections = bt_reset_sections();
+        $counts = bt_reset_counts($lang, $textbotlang);
+        $total = 0;
+        $selectedCount = 0;
+        foreach ($sections as $name => $s) {
+            $total += $counts[$name];
+            if ($mask & $s['bit']) {
+                $selectedCount += $counts[$name];
+            }
+        }
+        $info = "🔁 <b>ریست به پیش‌فرض</b>\n➖➖➖➖➖➖➖➖➖➖\n";
+        if ($total === 0) {
+            $info .= "✨ هیچ تنظیم سفارشی‌ای پیدا نشد - همه‌چیز همین الان روی حالت پیش‌فرضه.\n";
+        } else {
+            $info .= "انتخاب کن کدوم بخش‌ها به حالت پیش‌فرض برگردن.\n";
+            $info .= "فقط ردیف‌هایی که ✅ دارن پاک می‌شن.\n\n";
+            $info .= "عدد جلوی هر ردیف = تعداد موردی که همین الان سفارشی شده.\n";
+            $info .= "⚠️ این کار برگشت‌ناپذیره.\n";
+        }
+        $info .= "➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= "📊 مجموع سفارشی‌شده: <b>{$total}</b> مورد\n";
+        $info .= "🗑 با انتخاب فعلی پاک می‌شه: <b>{$selectedCount}</b> مورد";
+        $kb = ['inline_keyboard' => []];
+        foreach ($sections as $name => $s) {
+            if ($s['sep'] !== '') {
+                $kb['inline_keyboard'][] = [['text' => $s['sep'], 'callback_data' => 'bt_rstsep']];
+            }
+            $on = ($mask & $s['bit']) ? true : false;
+            $n = $counts[$name];
+            $kb['inline_keyboard'][] = [[
+                'text' => ($on ? '✅ ' : '❌ ') . $s['label'] . ' (' . $n . ')',
+                'callback_data' => "bt_rsttog|{$lang}|{$mask}|{$s['bit']}",
+                // green = this category actually HAS customizations to lose
+                'style' => $n > 0 ? 'success' : 'primary',
+            ]];
+        }
+        $kb['inline_keyboard'][] = [
+            ['text' => '✅ انتخاب همه', 'callback_data' => "bt_rstsel|{$lang}|all", 'style' => 'primary'],
+            ['text' => '❌ هیچ‌کدام', 'callback_data' => "bt_rstsel|{$lang}|none", 'style' => 'primary'],
+        ];
+        $kb['inline_keyboard'][] = [['text' => "🗑 ریست موارد انتخاب‌شده ({$selectedCount})", 'callback_data' => "bt_rstgo|{$lang}|{$mask}", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '🔙 انصراف و بازگشت', 'callback_data' => "btact|back|{$lang}", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
+        return [$info, json_encode($kb)];
+    }
+}
+if (!function_exists('bt_reset_apply_mask')) {
+    // Runs exactly the categories the mask selects and returns a human summary
+    // of what was cleared, so the admin sees the result instead of a bare "done".
+    function bt_reset_apply_mask($lang, $mask, $textbotlang)
+    {
+        $sections = bt_reset_sections();
+        $before = bt_reset_counts($lang, $textbotlang);
+        $done = [];
+        $parts = [];
+        if ($mask & $sections['msg_text']['bit']) {
+            $parts[] = 'text';
+        }
+        if ($mask & $sections['msg_media']['bit']) {
+            $parts[] = 'media';
+        }
+        if ($mask & $sections['msg_buttons']['bit']) {
+            $parts[] = 'buttons';
+        }
+        if (!empty($parts)) {
+            bottext_reset_keys(bottext_all_item_keys($textbotlang), $lang, $parts);
+        }
+        if ($mask & $sections['warnings']['bit']) {
+            volumepct_tiers_reset_all_style($lang, null);
+        }
+        $mmParts = [];
+        if ($mask & $sections['mm_sticker']['bit']) {
+            $mmParts[] = 'sticker';
+        }
+        if ($mask & $sections['mm_color']['bit']) {
+            $mmParts[] = 'color';
+        }
+        if ($mask & $sections['mm_emoji']['bit']) {
+            $mmParts[] = 'emoji';
+        }
+        if ($mask & $sections['mm_visibility']['bit']) {
+            $mmParts[] = 'visibility';
+        }
+        if (!empty($mmParts)) {
+            mainmenu_appearance_reset($mmParts);
+        }
+        foreach ($sections as $name => $s) {
+            if (($mask & $s['bit']) && $before[$name] > 0) {
+                $done[] = "• {$s['label']} ({$before[$name]} مورد)";
+            }
+        }
+        return $done;
+    }
+}
+if (!function_exists('mainmenu_sticker_reset_all')) {
+    // the ✨ استیکر پریمیوم دکمه‌ها screen's own reset - stickers only, so it
+    // stays scoped exactly like the emoji screen's existing reset button
+    function mainmenu_sticker_reset_all()
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $layout = json_decode((string) ($setting['keyboardmain'] ?? ''), true);
+        if (!is_array($layout) || !isset($layout['keyboard']) || !is_array($layout['keyboard'])) {
+            return false;
+        }
+        foreach ($layout['keyboard'] as $mm_r => $mm_row) {
+            if (!is_array($mm_row)) {
+                continue;
+            }
+            foreach ($mm_row as $mm_c => $mm_btn) {
+                if (is_array($mm_btn)) {
+                    unset($layout['keyboard'][$mm_r][$mm_c]['sticker']);
+                }
+            }
+        }
+        update("setting", "keyboardmain", json_encode($layout, JSON_UNESCAPED_UNICODE), null, null);
+        return true;
     }
 }
 if (!function_exists('bottext_merge_overrides')) {
@@ -3861,6 +4212,383 @@ if (!function_exists('bottext_dotted_unset')) {
         $arr = bottext_dotted_unset_walk($arr, explode('.', $key));
     }
 }
+if (!function_exists('bt_section_meta')) {
+    // white, non-navigating divider rows inside a bottext group list. Tapping
+    // one answers the callback with an alert (no message edit) explaining what
+    // the items below it are for - Telegram inline keyboards have no real
+    // section-header concept, this is the standard workaround.
+    function bt_section_meta($section = null)
+    {
+        $meta = [
+            'panel' => [
+                'label' => '🛍 مراحل انتخاب خرید',
+                'alert' => 'این بخش کپشن‌ها و دکمه‌های مراحل انتخاب پنل، دسته‌بندی و محصول رو مدیریت می‌کنه.',
+            ],
+            'balance' => [
+                'label' => '👤 نام سرویس و موجودی',
+                'alert' => 'این بخش پیام‌های نام‌گذاری سرویس و موجودی ناکافی رو مدیریت می‌کنه.',
+            ],
+            'confirm' => [
+                'label' => '🧾 تأیید خرید',
+                'alert' => 'این بخش کپشن‌های صفحه‌ی تأیید نهایی خرید رو مدیریت می‌کنه.',
+            ],
+            'btnstyle' => [
+                'label' => '🎨 ظاهر دکمه‌های انتخاب',
+                'alert' => 'این بخش رنگ، ترتیب، عرض و ایموجی دکمه‌های پنل، دسته‌بندی و محصول رو مدیریت می‌کنه - نه متن پیام‌ها رو.',
+            ],
+            'usertest_related' => [
+                'label' => '📦 سایر پیام‌های اکانت تست',
+                'alert' => 'این دکمه‌ها تو رو به پیام‌های دیگه‌ای می‌برن که تو مسیر اکانت تست فرستاده می‌شن - نه همین پیامی که الان داری تنظیمش می‌کنی.',
+            ],
+            'usertest_current' => [
+                'label' => '⬆️ دکمه‌های بالا برای پیام‌های دیگه بود',
+                'alert' => 'از اینجا به بعد دوباره برگشتیم به تنظیمات همین پیام (درخواست نام کاربری اکانت تست).',
+            ],
+            'processing' => [
+                'label' => '⏳ پیام‌های در حال پردازش',
+                'alert' => 'این بخش پیام‌های موقتی‌ای رو مدیریت می‌کنه که وقتی کاربر منتظره نشون داده می‌شن (در حال ساخت لینک پرداخت، در حال ساخت سرویس).',
+            ],
+            'preinvoice_afterpay' => [
+                'label' => '🧾 پیش‌فاکتور و پیام بعد از خرید',
+                'alert' => 'این بخش کپشن پیش‌فاکتور و پیامی که درست بعد از تکمیل‌شدن خرید (همراه کانفیگ) برای کاربر فرستاده می‌شه رو مدیریت می‌کنه.',
+            ],
+            'cfgcol_actions' => [
+                'label' => '⚙️ تنظیم ترتیب ستون‌ها',
+                'alert' => 'با دکمه‌های پایین مشخص کن اول دکمه‌ی «دریافت کانفیگ» نشون داده بشه یا اول نام کانفیگ - دکمه‌های بالاتر (پیش‌نمایش) خودشون قابل لمس‌ان و به صفحه‌ی ویرایش همون آیتم می‌رن.',
+            ],
+            'home_general' => [
+                'label' => '💬 پیام‌های عمومی ربات',
+                'alert' => 'این بخش پیام‌های مستقل ربات (خوش‌آمدگویی، سؤالات متداول، تعرفه‌ها، قوانین) رو مدیریت می‌کنه - مربوط به هیچ مرحله‌ی خاصی نیستن.',
+            ],
+            'home_purchase' => [
+                'label' => '🛍 پیام‌ها و بخش‌های خرید',
+                'alert' => 'این بخش پیام‌های مرتبط با خرید و دو زیرمنوی کامل «مراحل خرید» و «سرویس‌های من» رو مدیریت می‌کنه.',
+            ],
+            'home_usertest' => [
+                'label' => '🔑 اکانت تست',
+                'alert' => 'این بخش پیام‌های مسیر اکانت تست (تنظیم یوزرنیم و پیام پایان اعتبار) رو مدیریت می‌کنه.',
+            ],
+            'home_tools' => [
+                'label' => '⚙️ ابزارها و تنظیمات جانبی',
+                'alert' => 'این بخش ابزارهای جانبی (ظاهر دکمه‌های منوی اصلی، تنظیمات تغییر زبان) رو مدیریت می‌کنه - نه متن پیام‌ها رو.',
+            ],
+        ];
+        if ($section === null) {
+            return $meta;
+        }
+        return $meta[$section] ?? ['label' => (string) $section, 'alert' => '📌 این یک برچسب بخشه.'];
+    }
+}
+if (!function_exists('genbtn_alias_map')) {
+    // Telegram's callback_data is capped at 64 bytes, and the full dotted item
+    // keys this system otherwise uses (e.g. "users.sell.selectUsernamePrompt")
+    // eat most of that budget on their own - short aliases keep every gbtn|
+    // callback comfortably under the limit. 'cf' is the confirm/cancel row
+    // shared by all three "تأیید خرید" screens (normal, discounted, custom-
+    // volume) - they render byte-identical buttons in the live code today, so
+    // one shared override avoids three copies of the same edit.
+    function genbtn_alias_map()
+    {
+        return [
+            'su' => 'users.sell.selectUsernamePrompt',
+            'cf' => 'users.sell.confirmButtons',
+            // unlike 'cf', this key is not shared - it is the SAME key as the
+            // caption item itself, so resetting/green-state checking the
+            // caption already covers its one button for free
+            'ns' => 'users.sell.service_not_available',
+            'te' => 'textbot.testExpired',
+        ];
+    }
+}
+if (!function_exists('genbtn_alias_to_key')) {
+    function genbtn_alias_to_key($alias)
+    {
+        $m = genbtn_alias_map();
+        return $m[$alias] ?? null;
+    }
+}
+if (!function_exists('genbtn_defs')) {
+    // idx => ['name' => admin-facing label, 'text' => default button text,
+    // 'style' => default colour, 'callback_data' => the REAL action for this
+    // button - only meaningful for 'su', whose action never varies by screen;
+    // 'cf' varies per call site, so its live callback_data is supplied by the
+    // caller of genbtn_render() instead, and 'none' here is only for previews]
+    function genbtn_defs($alias, $textbotlang)
+    {
+        if ($alias === 'su') {
+            return [
+                0 => ['name' => '🔴 دکمه انصراف', 'text' => $textbotlang['keyboard']['cancelUsernameBtn'], 'style' => 'danger', 'callback_data' => 'ucancel'],
+                1 => ['name' => '🟢 دکمه استفاده از پیش‌فرض', 'text' => $textbotlang['keyboard']['useDefaultUsernameBtn'], 'style' => 'success', 'callback_data' => 'usedefaultname'],
+            ];
+        }
+        if ($alias === 'cf') {
+            return [
+                0 => ['name' => '🔴 دکمه انصراف', 'text' => $textbotlang['keyboard']['backToPlansBtn'], 'style' => 'danger', 'callback_data' => 'none'],
+                1 => ['name' => '🟢 دکمه تأیید و پرداخت', 'text' => $textbotlang['keyboard']['payAndGetService'], 'style' => 'success', 'callback_data' => 'none'],
+            ];
+        }
+        if ($alias === 'ns') {
+            return [
+                0 => ['name' => '🔵 دکمه تهیه اشتراک', 'text' => $textbotlang['users']['sell']['buySubscriptionBtn'], 'style' => 'primary', 'callback_data' => 'buyfresh'],
+            ];
+        }
+        if ($alias === 'te') {
+            return [
+                0 => ['name' => '🔵 دکمه خرید سرویس', 'text' => $textbotlang['keyboard']['buyService'], 'style' => 'primary', 'callback_data' => 'buy'],
+            ];
+        }
+        return [];
+    }
+}
+if (!function_exists('genbtn_override')) {
+    function genbtn_override($lang, $key, $idx)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
+        return (is_array($be) && isset($be[$lang][$key][$idx]) && is_array($be[$lang][$key][$idx]))
+            ? $be[$lang][$key][$idx]
+            : [];
+    }
+}
+if (!function_exists('genbtn_set_text')) {
+    function genbtn_set_text($lang, $key, $idx, $text)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
+        if (!is_array($be)) {
+            $be = [];
+        }
+        $be[$lang][$key][$idx]['text'] = $text;
+        update("setting", "button_edit", json_encode($be, JSON_UNESCAPED_UNICODE), null, null);
+    }
+}
+if (!function_exists('genbtn_set_style')) {
+    // one combined setter, mirroring volumepct_tier_set_style()'s shape:
+    // pass null to leave a field untouched, '' to clear an emoji/icon field
+    function genbtn_set_style($lang, $key, $idx, $style = null, $emoji = null, $emojiIcon = null, $pos = null, $simple = null)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
+        if (!is_array($be)) {
+            $be = [];
+        }
+        if ($style !== null && in_array($style, ['primary', 'success', 'danger'], true)) {
+            $be[$lang][$key][$idx]['style'] = $style;
+        }
+        if ($emoji !== null) {
+            if ($emoji === '') {
+                unset($be[$lang][$key][$idx]['emoji']);
+            } else {
+                $be[$lang][$key][$idx]['emoji'] = $emoji;
+            }
+            unset($be[$lang][$key][$idx]['emojiIcon']);
+        }
+        if ($emojiIcon !== null) {
+            if ($emojiIcon === '') {
+                unset($be[$lang][$key][$idx]['emojiIcon']);
+            } else {
+                $be[$lang][$key][$idx]['emojiIcon'] = $emojiIcon;
+            }
+            unset($be[$lang][$key][$idx]['emoji']);
+        }
+        if ($pos !== null && in_array($pos, ['left', 'right'], true)) {
+            $be[$lang][$key][$idx]['pos'] = $pos;
+        }
+        if ($simple !== null) {
+            $be[$lang][$key][$idx]['simple'] = (bool) $simple;
+        }
+        if (empty($be[$lang][$key][$idx])) {
+            unset($be[$lang][$key][$idx]);
+        }
+        update("setting", "button_edit", empty($be) ? null : json_encode($be, JSON_UNESCAPED_UNICODE), null, null);
+    }
+}
+if (!function_exists('genbtn_reset')) {
+    function genbtn_reset($lang, $key, $idx)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
+        if (is_array($be) && isset($be[$lang][$key][$idx])) {
+            unset($be[$lang][$key][$idx]);
+            if (empty($be[$lang][$key])) {
+                unset($be[$lang][$key]);
+            }
+            if (empty($be[$lang])) {
+                unset($be[$lang]);
+            }
+            update("setting", "button_edit", empty($be) ? null : json_encode($be, JSON_UNESCAPED_UNICODE), null, null);
+        }
+    }
+}
+if (!function_exists('genbtn_reset_all')) {
+    function genbtn_reset_all($lang, $key)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
+        if (is_array($be) && isset($be[$lang][$key])) {
+            unset($be[$lang][$key]);
+            if (empty($be[$lang])) {
+                unset($be[$lang]);
+            }
+            update("setting", "button_edit", empty($be) ? null : json_encode($be, JSON_UNESCAPED_UNICODE), null, null);
+        }
+    }
+}
+if (!function_exists('genbtn_current')) {
+    // merged text/style only - what the admin's plain-text preview/list rows show
+    function genbtn_current(array $def, array $ov)
+    {
+        $text = (isset($ov['text']) && $ov['text'] !== '') ? $ov['text'] : $def['text'];
+        $style = (isset($ov['style']) && in_array($ov['style'], ['primary', 'success', 'danger'], true)) ? $ov['style'] : $def['style'];
+        return [$text, $style];
+    }
+}
+if (!function_exists('genbtn_render')) {
+    // the button as it is actually sent to a real user - same emoji-baking
+    // algorithm as volumepct_tier_kb(), generalized to any def/override pair
+    function genbtn_render(array $def, array $ov, $callback_data)
+    {
+        list($text, $style) = genbtn_current($def, $ov);
+        $pos = (isset($ov['pos']) && $ov['pos'] === 'left') ? 'left' : 'right';
+        $btn = ['text' => $text, 'callback_data' => $callback_data, 'style' => $style];
+        if (!empty($ov['simple'])) {
+            $btn['text'] = strip_leading_emoji($text);
+        } elseif (!empty($ov['emojiIcon'])) {
+            $btn['text'] = strip_leading_emoji($text);
+            $btn['icon_custom_emoji_id'] = $ov['emojiIcon'];
+        } else {
+            if (!empty($ov['emoji'])) {
+                $emoji = $ov['emoji'];
+                $rest = strip_leading_emoji($text);
+            } else {
+                list($emoji, $rest) = split_leading_emoji($text);
+            }
+            if ($emoji !== '') {
+                $btn['text'] = ($pos === 'left') ? trim($rest . ' ' . $emoji) : trim($emoji . ' ' . $rest);
+            }
+        }
+        return $btn;
+    }
+}
+if (!function_exists('sell_selectUsername_kb')) {
+    // renders the buy flow's OWN copy of the cancel/use-default keyboard - the
+    // usertest flow keeps using its separate usertest_selectUsername_kb(), so
+    // overrides on one never leak into the other
+    function sell_selectUsername_kb($lang, $textbotlang)
+    {
+        $defs = genbtn_defs('su', $textbotlang);
+        $buttons = [];
+        foreach ($defs as $idx => $d) {
+            $ov = genbtn_override($lang, 'users.sell.selectUsernamePrompt', $idx);
+            $buttons[] = genbtn_render($d, $ov, $d['callback_data']);
+        }
+        return json_encode(['inline_keyboard' => [$buttons]]);
+    }
+}
+if (!function_exists('sell_confirm_kb')) {
+    // the shared confirm/cancel row for every "تأیید خرید" screen - the only
+    // thing that differs per call site is which callback actually confirms
+    // the purchase, so that is the one thing the caller supplies
+    function sell_confirm_kb($lang, $textbotlang, $confirmCallback, $cancelCallback = 'backuser')
+    {
+        $defs = genbtn_defs('cf', $textbotlang);
+        $cbs = [0 => $cancelCallback, 1 => $confirmCallback];
+        $buttons = [];
+        foreach ($defs as $idx => $d) {
+            $ov = genbtn_override($lang, 'users.sell.confirmButtons', $idx);
+            $buttons[] = genbtn_render($d, $ov, $cbs[$idx]);
+        }
+        return json_encode(['inline_keyboard' => [$buttons]]);
+    }
+}
+if (!function_exists('sell_noservice_kb')) {
+    // the "🛍 سرویس‌های من" empty-state keyboard - a single button, still
+    // routed through the same generalized system for text/colour/emoji
+    function sell_noservice_kb($lang, $textbotlang)
+    {
+        $defs = genbtn_defs('ns', $textbotlang);
+        $ov = genbtn_override($lang, 'users.sell.service_not_available', 0);
+        return json_encode(['inline_keyboard' => [[genbtn_render($defs[0], $ov, $defs[0]['callback_data'])]]]);
+    }
+}
+if (!function_exists('test_expired_kb')) {
+    function test_expired_kb($lang, $textbotlang)
+    {
+        $defs = genbtn_defs('te', $textbotlang);
+        $ov = genbtn_override($lang, 'textbot.testExpired', 0);
+        return json_encode(['inline_keyboard' => [[genbtn_render($defs[0], $ov, $defs[0]['callback_data'])]]]);
+    }
+}
+if (!function_exists('genbtn_list_payload')) {
+    // $origin: '' = opened from the alias's own caption item (default), 'u' =
+    // opened from the 🔑 تنظیم اکانت تست screen. Only affects where 🔙 بازگشت
+    // goes; it is threaded through every sub-screen so an edit round-trip
+    // cannot lose it.
+    function genbtn_list_payload($alias, $lang, $textbotlang, $origin = '')
+    {
+        $key = genbtn_alias_to_key($alias);
+        $gb_sfx = ($origin === 'u') ? '|u' : '';
+        $defs = genbtn_defs($alias, $textbotlang);
+        $titles = ['su' => '🔘 دکمه‌های نام‌گذاری سرویس', 'cf' => '🔘 دکمه‌های تأیید خرید', 'ns' => '🔘 دکمه‌ی نداشتن سرویس فعال', 'te' => '🔘 دکمه‌ی پیام اتمام اکانت تست'];
+        $notes = [
+            'su' => 'این ۲ دکمه، زیر پیام انتخاب نام سرویس (مرحله‌ی خرید) به کاربر نشون داده می‌شن.',
+            'cf' => 'این ۲ دکمه، زیر صفحه‌ی تأیید نهایی خرید نشون داده می‌شن - هر سه حالت (عادی/تخفیف‌دار/حجم دلخواه) از این یکی استفاده می‌کنن، پس ویرایششون روی هر سه اثر می‌ذاره.',
+            'ns' => 'این ۱ دکمه، زیر پیامِ "سرویس فعالی ندارید" (وقتی 🛍 سرویس‌های من خالیه) به کاربر نشون داده می‌شه.',
+            'te' => 'این ۱ دکمه، زیر پیامِ «اکانت تست شما به پایان رسید» به کاربر نشون داده می‌شه (همون پیامی که کرون موقع تموم‌شدن اعتبار اکانت تست می‌فرسته).',
+        ];
+        $info = ($titles[$alias] ?? '🔘 دکمه‌ها') . "\n➖➖➖➖➖➖➖➖➖➖\n" . ($notes[$alias] ?? '') . "\n";
+        $info .= "➖➖➖➖➖➖➖➖➖➖\n👁 پیش‌نمایش زنده - روی هرکدوم بزن تا ویرایشش کنی 👇";
+        $kb = ['inline_keyboard' => []];
+        foreach ($defs as $idx => $d) {
+            $ov = genbtn_override($lang, $key, $idx);
+            list($curText, $curStyle) = genbtn_current($d, $ov);
+            $kb['inline_keyboard'][] = [['text' => $curText, 'callback_data' => "gbtn|open|{$lang}|{$alias}|{$idx}{$gb_sfx}", 'style' => $curStyle]];
+        }
+        $kb['inline_keyboard'][] = [['text' => '🔁 ریست همه به پیش‌فرض', 'callback_data' => "gbtn|rstall|{$lang}|{$alias}{$gb_sfx}", 'style' => 'danger']];
+        $backKeyMap = ['su' => 'users.sell.selectUsernamePrompt', 'cf' => 'users.sell.preInvoice', 'ns' => 'users.sell.service_not_available', 'te' => 'textbot.testExpired'];
+        $backKey = ($origin === 'u') ? 'users.usertest.selectUsernamePrompt' : ($backKeyMap[$alias] ?? 'users.sell.selectUsernamePrompt');
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "bt_edit|{$lang}|{$backKey}", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
+        return [$info, json_encode($kb)];
+    }
+}
+if (!function_exists('genbtn_detail_payload')) {
+    function genbtn_detail_payload($alias, $lang, $idx, $textbotlang, $origin = '')
+    {
+        $key = genbtn_alias_to_key($alias);
+        $gb_sfx = ($origin === 'u') ? '|u' : '';
+        $defs = genbtn_defs($alias, $textbotlang);
+        if (!isset($defs[$idx])) {
+            return genbtn_list_payload($alias, $lang, $textbotlang, $origin);
+        }
+        $d = $defs[$idx];
+        $ov = genbtn_override($lang, $key, $idx);
+        list($curText, $curStyle) = genbtn_current($d, $ov);
+        $curPos = (isset($ov['pos']) && $ov['pos'] === 'left') ? 'left' : 'right';
+        $curSimple = !empty($ov['simple']);
+        $hasEmoji = !empty($ov['emoji']) || !empty($ov['emojiIcon']);
+        $previewBtn = genbtn_render($d, $ov, 'none');
+        $info = "🔘 <b>ویرایش {$d['name']}</b>\n➖➖➖➖➖➖➖➖➖➖\n👁 پیش‌نمایش زنده 👇";
+        $kb = ['inline_keyboard' => []];
+        $kb['inline_keyboard'][] = [$previewBtn];
+        $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش متن', 'callback_data' => "gbtn|text|{$lang}|{$alias}|{$idx}{$gb_sfx}", 'style' => (isset($ov['text']) && $ov['text'] !== '') ? 'success' : 'primary']];
+        $kb['inline_keyboard'][] = [
+            ['text' => ($curStyle === 'primary' ? '✅ ' : '') . '🔵 آبی', 'callback_data' => "gbtn|style|{$lang}|{$alias}|{$idx}|primary{$gb_sfx}", 'style' => 'primary'],
+            ['text' => ($curStyle === 'success' ? '✅ ' : '') . '🟢 سبز', 'callback_data' => "gbtn|style|{$lang}|{$alias}|{$idx}|success{$gb_sfx}", 'style' => 'success'],
+            ['text' => ($curStyle === 'danger' ? '✅ ' : '') . '🔴 قرمز', 'callback_data' => "gbtn|style|{$lang}|{$alias}|{$idx}|danger{$gb_sfx}", 'style' => 'danger'],
+        ];
+        $kb['inline_keyboard'][] = [['text' => ($hasEmoji ? '✅ ' : '') . '💎 ایموجی دکمه', 'callback_data' => "gbtn|emoji|{$lang}|{$alias}|{$idx}{$gb_sfx}", 'style' => $hasEmoji ? 'success' : 'primary']];
+        $kb['inline_keyboard'][] = [['text' => ($curSimple ? '✅ ' : '') . '🎭 حالت ساده (بدون ایموجی)', 'callback_data' => "gbtn|simple|{$lang}|{$alias}|{$idx}{$gb_sfx}", 'style' => $curSimple ? 'success' : 'primary']];
+        $kb['inline_keyboard'][] = [
+            ['text' => ($curPos === 'right' ? '✅ ' : '') . '➡️ راست', 'callback_data' => "gbtn|pos|{$lang}|{$alias}|{$idx}|right{$gb_sfx}", 'style' => 'primary'],
+            ['text' => ($curPos === 'left' ? '✅ ' : '') . '⬅️ چپ', 'callback_data' => "gbtn|pos|{$lang}|{$alias}|{$idx}|left{$gb_sfx}", 'style' => 'primary'],
+        ];
+        $kb['inline_keyboard'][] = [['text' => '🔁 ریست این دکمه', 'callback_data' => "gbtn|rst|{$lang}|{$alias}|{$idx}{$gb_sfx}", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "gbtn|list|{$lang}|{$alias}{$gb_sfx}", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
+        return [$info, json_encode($kb)];
+    }
+}
 if (!function_exists('usertest_prompt_button_defs')) {
     // the 2 buttons on the usertest username-prompt screen (users.usertest.selectUsernamePrompt) -
     // hardcoded to this one item rather than a generic registry since it's the only item that
@@ -3915,7 +4643,8 @@ if (!function_exists('usertest_prompt_buttons_payload')) {
             $kb['inline_keyboard'][] = [['text' => $curText, 'callback_data' => "btact|btn|{$lang}|{$idx}", 'style' => $curStyle]];
         }
         $kb['inline_keyboard'][] = [['text' => '🔁 ریست همه به پیش‌فرض', 'callback_data' => "btact|btnsrstall|{$lang}", 'style' => 'danger']];
-        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "bt_edit|{$lang}|users.usertest.selectUsernamePrompt"]];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "bt_edit|{$lang}|users.usertest.selectUsernamePrompt", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
         return [$info, json_encode($kb)];
     }
 }
@@ -3931,14 +4660,15 @@ if (!function_exists('usertest_prompt_button_detail_payload')) {
         $info .= "👁 پیش‌نمایش زنده 👇";
         $kb = ['inline_keyboard' => []];
         $kb['inline_keyboard'][] = [['text' => $curText, 'callback_data' => 'none', 'style' => $curStyle]];
-        $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش متن', 'callback_data' => "btact|btntext|{$lang}|{$idx}"]];
+        $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش متن', 'callback_data' => "btact|btntext|{$lang}|{$idx}", 'style' => (isset($ov['text']) && $ov['text'] !== '') ? 'success' : 'primary']];
         $kb['inline_keyboard'][] = [
             ['text' => ($curStyle === 'primary' ? '✅ ' : '') . '🔵 آبی', 'callback_data' => "btact|btnstyle|{$lang}|{$idx}|primary", 'style' => 'primary'],
             ['text' => ($curStyle === 'success' ? '✅ ' : '') . '🟢 سبز', 'callback_data' => "btact|btnstyle|{$lang}|{$idx}|success", 'style' => 'success'],
             ['text' => ($curStyle === 'danger' ? '✅ ' : '') . '🔴 قرمز', 'callback_data' => "btact|btnstyle|{$lang}|{$idx}|danger", 'style' => 'danger'],
         ];
         $kb['inline_keyboard'][] = [['text' => '🔁 ریست این دکمه', 'callback_data' => "btact|btnrst|{$lang}|{$idx}", 'style' => 'danger']];
-        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "btact|btns|{$lang}"]];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "btact|btns|{$lang}", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
         return [$info, json_encode($kb)];
     }
 }
@@ -4303,6 +5033,56 @@ if (!function_exists('topup_disc_method_to_gateway')) {
             'Star Telegram' => 'startelegrams',
         ];
         return $map[(string) $method] ?? null;
+    }
+}
+if (!function_exists('topup_disc_admin_restrictions_bypassed')) {
+    // true when $userId is an admin AND the 🧪 اعمال محدودیت‌ها روی خودم
+    // toggle (topup_disc_hub_payload) is off (the default) - lets an admin
+    // preview any discount's real caption/behavior without their own
+    // (inevitably non-"new", already-used) account tripping the per-user
+    // or new-users-only checks. Flip the toggle on to test the fully
+    // enforced behavior exactly as a real user would experience it.
+    function topup_disc_admin_restrictions_bypassed($userId)
+    {
+        $admin_ids = select("admin", "id_admin", null, null, "FETCH_COLUMN");
+        if (!is_array($admin_ids) || !in_array((string) $userId, array_map('strval', $admin_ids), true)) {
+            return false;
+        }
+        $setting = select("setting", "*", null, null, "select");
+        return ($setting['topup_disc_admin_selftest'] ?? '0') !== '1';
+    }
+}
+if (!function_exists('topup_disc_user_has_any_paid_topup')) {
+    // true once this user has ANY previously-completed wallet top-up (any
+    // gateway) - backs the "فقط کاربران جدید" (new-users-only) restriction on
+    // both the auto discount and discount codes. Called from inside
+    // topup_disc_award(), itself called from DirectPayment() BEFORE the
+    // current row's own payment_Status flips to 'paid', so this naturally
+    // excludes the payment currently being credited.
+    function topup_disc_user_has_any_paid_topup($userId)
+    {
+        global $pdo;
+        $st = $pdo->prepare("SELECT Payment_Method FROM Payment_report WHERE id_user = ? AND payment_Status = 'paid'");
+        $st->execute([$userId]);
+        foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $method) {
+            if (topup_disc_method_to_gateway($method) !== null) {
+                return true;
+            }
+        }
+        return false;
+    }
+}
+if (!function_exists('topup_disc_auto_user_count')) {
+    // mirrors topup_disc_code_user_count() for the codeless auto discount -
+    // scoped to (lang, gateway) since a separate auto discount is configured
+    // per gateway/language, same scope $auto itself is fetched at. Auto-sourced
+    // topup_discount_use rows are logged with an empty code (see topup_disc_award).
+    function topup_disc_auto_user_count($userId, $lang, $gatewayKey)
+    {
+        global $pdo;
+        $st = $pdo->prepare("SELECT COUNT(*) FROM topup_discount_use WHERE id_user = :u AND (code = '' OR code IS NULL) AND lang = :l AND gateway = :g");
+        $st->execute([':u' => $userId, ':l' => $lang, ':g' => $gatewayKey]);
+        return intval($st->fetchColumn());
     }
 }
 if (!function_exists('topup_disc_award')) {
@@ -4911,12 +5691,14 @@ if (!function_exists('topup_disc_hub_payload')) {
         $auto = topup_disc_auto_for($lang, $key);
         $codes = topup_disc_codes_for($lang, $key);
         $autoOn = !empty($auto['enabled']) && floatval($auto['value'] ?? 0) > 0;
+        $adminSelfTest = (select("setting", "*", null, null, "select")['topup_disc_admin_selftest'] ?? '0') === '1';
 
         $info = "🎁 <b>تخفیف شارژ</b> — <code>{$key}</code>\n➖➖➖➖➖➖➖➖➖➖\n";
         $info .= "تخفیف روی شارژ کیف پول: کاربر همون مبلغ رو پرداخت می‌کنه، ولی بیشتر شارژ می‌شه.\n";
         $info .= "➖➖➖➖➖➖➖➖➖➖\n";
         $info .= "🎯 تخفیف خودکار (بدون کد): " . ($autoOn ? topup_disc_admin_value_label($auto) . ' ✅' : 'خاموش') . "\n";
         $info .= "🎟 کدهای تخفیف: " . count($codes) . "\n";
+        $info .= "🧪 محدودیت «هر کاربر»/«فقط کاربران جدید» روی خودِ ادمین‌ها: " . ($adminSelfTest ? 'فعاله (مثل یه کاربر واقعی)' : 'غیرفعاله (ادمین‌ها همیشه واجد شرایطن، برای دیدن راحت‌تر نتیجه)') . "\n";
         if (!$autoOn && floatval($auto['value'] ?? 0) > 0) {
             $info .= "\n⚠️ <b>تخفیف خودکار مقدار داره ولی خاموشه</b> — روشنش کن تا اعمال بشه.\n";
         }
@@ -4943,10 +5725,10 @@ if (!function_exists('topup_disc_hub_payload')) {
             $kb['inline_keyboard'][] = [[
                 'text' => $label,
                 'callback_data' => "tpdopen:{$lang}:{$key}:{$i}",
-                'style' => ($st === 'active') ? 'success' : 'danger',
+                'style' => ($st === 'active') ? 'success' : 'primary',
             ]];
         }
-        $kb['inline_keyboard'][] = [['text' => '➕ افزودن کد تخفیف', 'callback_data' => "tpdadd:{$lang}:{$key}"]];
+        $kb['inline_keyboard'][] = [['text' => '➕ افزودن کد تخفیف', 'callback_data' => "tpdadd:{$lang}:{$key}", 'style' => 'primary']];
         $tpd_ncfg = topup_disc_notify_get();
         $tpd_nOn = (!empty($tpd_ncfg['perUse']) || !empty($tpd_ncfg['periodic']));
         $kb['inline_keyboard'][] = [[
@@ -4954,7 +5736,12 @@ if (!function_exists('topup_disc_hub_payload')) {
             'callback_data' => "tpdnotif:{$lang}:{$key}",
             'style' => $tpd_nOn ? 'success' : 'primary',
         ]];
-        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "dslang:{$lang}"]];
+        $kb['inline_keyboard'][] = [[
+            'text' => ($adminSelfTest ? '✅ ' : '') . '🧪 اعمال محدودیت‌ها روی خودم (تست ادمین)',
+            'callback_data' => "tpdadmintest:{$lang}:{$key}",
+            'style' => $adminSelfTest ? 'success' : 'primary',
+        ]];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "dslang:{$lang}", 'style' => 'danger']];
         return [$info, json_encode($kb)];
     }
 }
@@ -4966,15 +5753,19 @@ if (!function_exists('topup_disc_auto_payload')) {
         $on = !empty($auto['enabled']);
         $mode = ($auto['mode'] ?? 'percent') === 'fixed' ? 'fixed' : 'percent';
         $val = floatval($auto['value'] ?? 0);
+        $perUser = intval($auto['limitPerUser'] ?? 1);
+        $newOnly = !empty($auto['newUserOnly']);
 
         $info = "🎯 <b>تخفیف خودکار</b> — <code>{$key}</code>\n➖➖➖➖➖➖➖➖➖➖\n";
-        $info .= "بدون نیاز به کد، برای همه‌ی کاربرهای این زبان و این درگاه، نامحدود.\n";
+        $info .= "بدون نیاز به کد، برای همه‌ی کاربرهای این زبان و این درگاه.\n";
         $info .= "➖➖➖➖➖➖➖➖➖➖\n";
         $info .= "وضعیت: " . ($on ? 'روشن ✅' : 'خاموش') . "\n";
         $info .= "نوع: " . ($mode === 'fixed' ? 'مبلغ ثابت' : 'درصدی') . "\n";
         $info .= "مقدار: " . topup_disc_admin_value_label($auto) . "\n";
         $autoExp = intval($auto['expiry'] ?? 0);
         $info .= "انقضا: " . ($autoExp > 0 ? jdate('Y/m/d - H:i', $autoExp) : 'ندارد') . "\n";
+        $info .= "هر کاربر: " . ($perUser > 0 ? "{$perUser} بار" : 'نامحدود') . " (پیش‌فرض: ۱ بار)\n";
+        $info .= "فقط کاربران جدید: " . ($newOnly ? 'بله' : 'خیر') . "\n";
         if ($autoExp > 0 && time() >= $autoExp) {
             $info .= "\n⚠️ <b>مدت این تخفیف تموم شده</b> — تا تاریخش رو تمدید نکنی اعمال نمی‌شه.\n";
         }
@@ -4990,15 +5781,18 @@ if (!function_exists('topup_disc_auto_payload')) {
         $kb['inline_keyboard'][] = [[
             'text' => $on ? '✅ روشن' : '❌ خاموش',
             'callback_data' => "tpdautotog:{$lang}:{$key}",
-            'style' => $on ? 'success' : 'danger',
+            'style' => $on ? 'success' : 'primary',
         ]];
         $kb['inline_keyboard'][] = [
-            ['text' => ($mode === 'percent' ? '✅ ' : '') . '٪ درصدی', 'callback_data' => "tpdautomode:{$lang}:{$key}:percent"],
-            ['text' => ($mode === 'fixed' ? '✅ ' : '') . '💵 مبلغ ثابت', 'callback_data' => "tpdautomode:{$lang}:{$key}:fixed"],
+            ['text' => ($mode === 'percent' ? '✅ ' : '') . '٪ درصدی', 'callback_data' => "tpdautomode:{$lang}:{$key}:percent", 'style' => 'primary'],
+            ['text' => ($mode === 'fixed' ? '✅ ' : '') . '💵 مبلغ ثابت', 'callback_data' => "tpdautomode:{$lang}:{$key}:fixed", 'style' => 'primary'],
         ];
-        $kb['inline_keyboard'][] = [['text' => '✏️ تغییر مقدار (' . topup_disc_admin_value_label($auto) . ')', 'callback_data' => "tpdautoval:{$lang}:{$key}"]];
-        $kb['inline_keyboard'][] = [['text' => '⏳ مدت اعتبار', 'callback_data' => "tpdautoexp:{$lang}:{$key}"]];
-        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "topupdisc:{$lang}:{$key}"]];
+        $kb['inline_keyboard'][] = [['text' => '✏️ تغییر مقدار (' . topup_disc_admin_value_label($auto) . ')', 'callback_data' => "tpdautoval:{$lang}:{$key}", 'style' => $val > 0 ? 'success' : 'primary']];
+        $kb['inline_keyboard'][] = [['text' => '⏳ مدت اعتبار', 'callback_data' => "tpdautoexp:{$lang}:{$key}", 'style' => $autoExp > 0 ? 'success' : 'primary']];
+        $kb['inline_keyboard'][] = [['text' => '👤 سهمیه هر کاربر' . ($perUser > 0 ? " ({$perUser} بار)" : ''), 'callback_data' => "tpdautolimit:{$lang}:{$key}", 'style' => $perUser > 0 ? 'success' : 'primary']];
+        $kb['inline_keyboard'][] = [['text' => ($newOnly ? '✅ ' : '') . '🆕 فقط کاربران جدید', 'callback_data' => "tpdautonewonly:{$lang}:{$key}", 'style' => $newOnly ? 'success' : 'primary']];
+        $kb['inline_keyboard'][] = [['text' => '🔄 ریست همه', 'callback_data' => "tpdautoreset:{$lang}:{$key}", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "topupdisc:{$lang}:{$key}", 'style' => 'danger']];
         return [$info, json_encode($kb)];
     }
 }
@@ -5014,8 +5808,9 @@ if (!function_exists('topup_disc_code_payload')) {
         $used = topup_disc_code_used_count($c['code']);
         $uniq = topup_disc_code_unique_users($c['code']);
         $lim = intval($c['limitTotal'] ?? 0);
-        $perUser = intval($c['limitPerUser'] ?? 0);
+        $perUser = intval($c['limitPerUser'] ?? 1);
         $exp = intval($c['expiry'] ?? 0);
+        $newOnly = !empty($c['newUserOnly']);
 
         $info = "🎟 <b>کد تخفیف</b>\n➖➖➖➖➖➖➖➖➖➖\n";
         $info .= "کد: <code>{$c['code']}</code>\n";
@@ -5023,8 +5818,9 @@ if (!function_exists('topup_disc_code_payload')) {
         $info .= "وضعیت: " . topup_disc_admin_status_label($st) . "\n";
         $info .= "نوع: " . ($mode === 'fixed' ? 'مبلغ ثابت' : 'درصدی') . " — " . topup_disc_admin_value_label($c) . "\n";
         $info .= "سهمیه کل: " . ($lim > 0 ? "{$used} از {$lim}" : "{$used} (نامحدود)") . "\n";
-        $info .= "هر کاربر: " . ($perUser > 0 ? "{$perUser} بار" : 'نامحدود') . "\n";
+        $info .= "هر کاربر: " . ($perUser > 0 ? "{$perUser} بار" : 'نامحدود') . " (پیش‌فرض: ۱ بار)\n";
         $info .= "انقضا: " . ($exp > 0 ? jdate('Y/m/d H:i', $exp) : 'ندارد') . "\n";
+        $info .= "فقط کاربران جدید: " . ($newOnly ? 'بله' : 'خیر') . "\n";
         $info .= "👥 استفاده‌کننده‌ها: {$uniq} نفر\n";
         if (floatval($c['value'] ?? 0) > 0) {
             $info .= "\n👁 چیزی که کاربر می‌بینه:\n<blockquote><b>"
@@ -5036,20 +5832,21 @@ if (!function_exists('topup_disc_code_payload')) {
         $kb['inline_keyboard'][] = [[
             'text' => $on ? '✅ فعال' : '❌ غیرفعال',
             'callback_data' => "tpdtog:{$lang}:{$key}:{$idx}",
-            'style' => $on ? 'success' : 'danger',
+            'style' => $on ? 'success' : 'primary',
         ]];
         $kb['inline_keyboard'][] = [
-            ['text' => ($mode === 'percent' ? '✅ ' : '') . '٪ درصدی', 'callback_data' => "tpdmode:{$lang}:{$key}:{$idx}:percent"],
-            ['text' => ($mode === 'fixed' ? '✅ ' : '') . '💵 مبلغ ثابت', 'callback_data' => "tpdmode:{$lang}:{$key}:{$idx}:fixed"],
+            ['text' => ($mode === 'percent' ? '✅ ' : '') . '٪ درصدی', 'callback_data' => "tpdmode:{$lang}:{$key}:{$idx}:percent", 'style' => 'primary'],
+            ['text' => ($mode === 'fixed' ? '✅ ' : '') . '💵 مبلغ ثابت', 'callback_data' => "tpdmode:{$lang}:{$key}:{$idx}:fixed", 'style' => 'primary'],
         ];
-        $kb['inline_keyboard'][] = [['text' => '✏️ مقدار (' . topup_disc_admin_value_label($c) . ')', 'callback_data' => "tpdval:{$lang}:{$key}:{$idx}"]];
+        $kb['inline_keyboard'][] = [['text' => '✏️ مقدار (' . topup_disc_admin_value_label($c) . ')', 'callback_data' => "tpdval:{$lang}:{$key}:{$idx}", 'style' => floatval($c['value'] ?? 0) > 0 ? 'success' : 'primary']];
         $kb['inline_keyboard'][] = [
-            ['text' => '🔢 سهمیه کل', 'callback_data' => "tpdlimit:{$lang}:{$key}:{$idx}"],
-            ['text' => '👤 سهمیه هر کاربر', 'callback_data' => "tpduser:{$lang}:{$key}:{$idx}"],
+            ['text' => '🔢 سهمیه کل', 'callback_data' => "tpdlimit:{$lang}:{$key}:{$idx}", 'style' => $lim > 0 ? 'success' : 'primary'],
+            ['text' => '👤 سهمیه هر کاربر', 'callback_data' => "tpduser:{$lang}:{$key}:{$idx}", 'style' => $perUser > 0 ? 'success' : 'primary'],
         ];
-        $kb['inline_keyboard'][] = [['text' => '⏳ مدت اعتبار', 'callback_data' => "tpdexp:{$lang}:{$key}:{$idx}"]];
+        $kb['inline_keyboard'][] = [['text' => '⏳ مدت اعتبار', 'callback_data' => "tpdexp:{$lang}:{$key}:{$idx}", 'style' => $exp > 0 ? 'success' : 'primary']];
+        $kb['inline_keyboard'][] = [['text' => ($newOnly ? '✅ ' : '') . '🆕 فقط کاربران جدید', 'callback_data' => "tpdnewonly:{$lang}:{$key}:{$idx}", 'style' => $newOnly ? 'success' : 'primary']];
         $kb['inline_keyboard'][] = [['text' => '🗑 حذف این کد', 'callback_data' => "tpddel:{$lang}:{$key}:{$idx}", 'style' => 'danger']];
-        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "topupdisc:{$lang}:{$key}"]];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "topupdisc:{$lang}:{$key}", 'style' => 'danger']];
         return [$info, json_encode($kb)];
     }
 }
@@ -5095,6 +5892,8 @@ if (!function_exists('topup_disc_auto_set')) {
         $clean['mode'] = (isset($auto['mode']) && $auto['mode'] === 'fixed') ? 'fixed' : 'percent';
         $clean['value'] = max(0, floatval($auto['value'] ?? 0));
         $clean['expiry'] = max(0, intval($auto['expiry'] ?? 0));
+        $clean['limitPerUser'] = max(0, intval($auto['limitPerUser'] ?? 1));
+        $clean['newUserOnly'] = !empty($auto['newUserOnly']);
         $m[$lang][$gatewayKey]['auto'] = $clean;
         topup_disc_save($m);
     }
@@ -5124,7 +5923,8 @@ if (!function_exists('topup_disc_codes_set')) {
                 'enabled' => !empty($c['enabled']),
                 'expiry' => max(0, intval($c['expiry'] ?? 0)),
                 'limitTotal' => max(0, intval($c['limitTotal'] ?? 0)),
-                'limitPerUser' => max(0, intval($c['limitPerUser'] ?? 0)),
+                'limitPerUser' => max(0, intval($c['limitPerUser'] ?? 1)),
+                'newUserOnly' => !empty($c['newUserOnly']),
                 'reported' => !empty($c['reported']),
             ];
         }
@@ -5143,7 +5943,7 @@ if (!function_exists('topup_disc_code_add')) {
     function topup_disc_code_add($lang, $gatewayKey, $code)
     {
         $codes = topup_disc_codes_for($lang, $gatewayKey);
-        $codes[] = ['code' => $code, 'mode' => 'percent', 'value' => 0, 'enabled' => true, 'expiry' => 0, 'limitTotal' => 0, 'limitPerUser' => 0];
+        $codes[] = ['code' => $code, 'mode' => 'percent', 'value' => 0, 'enabled' => true, 'expiry' => 0, 'limitTotal' => 0, 'limitPerUser' => 1];
         topup_disc_codes_set($lang, $gatewayKey, $codes);
         return count($codes) - 1;
     }
@@ -5315,21 +6115,29 @@ if (!function_exists('topup_disc_effective')) {
     function topup_disc_effective($userId, $lang, $gatewayKey, $amount)
     {
         $candidates = [];
+        $adminBypass = topup_disc_admin_restrictions_bypassed($userId);
         $auto = topup_disc_auto_for($lang, $gatewayKey);
         $autoLive = !empty($auto['enabled'])
             && (intval($auto['expiry'] ?? 0) === 0 || time() < intval($auto['expiry']));
         if ($autoLive) {
-            $b = topup_disc_bonus_of($auto, $amount);
-            if ($b > 0) {
-                $candidates[] = ['source' => 'auto', 'bonus' => $b, 'disc' => $auto, 'code' => ''];
+            $autoPerUser = intval($auto['limitPerUser'] ?? 1);
+            $autoOk = $adminBypass || (($autoPerUser === 0 || topup_disc_auto_user_count($userId, $lang, $gatewayKey) < $autoPerUser)
+                && (empty($auto['newUserOnly']) || !topup_disc_user_has_any_paid_topup($userId)));
+            if ($autoOk) {
+                $b = topup_disc_bonus_of($auto, $amount);
+                if ($b > 0) {
+                    $candidates[] = ['source' => 'auto', 'bonus' => $b, 'disc' => $auto, 'code' => ''];
+                }
             }
         }
         $active = topup_disc_user_active($userId);
         if ($active && (string) $active['gateway'] === (string) $gatewayKey && (string) $active['lang'] === (string) $lang) {
             $found = topup_disc_find_code($active['code']);
             if ($found !== null && topup_disc_code_status($found['code']) === 'active') {
-                $perUser = intval($found['code']['limitPerUser'] ?? 0);
-                if ($perUser === 0 || topup_disc_code_user_count($found['code']['code'], $userId) < $perUser) {
+                $perUser = intval($found['code']['limitPerUser'] ?? 1);
+                $codeOk = $adminBypass || (($perUser === 0 || topup_disc_code_user_count($found['code']['code'], $userId) < $perUser)
+                    && (empty($found['code']['newUserOnly']) || !topup_disc_user_has_any_paid_topup($userId)));
+                if ($codeOk) {
                     $b = topup_disc_bonus_of($found['code'], $amount);
                     if ($b > 0) {
                         $candidates[] = ['source' => 'code', 'bonus' => $b, 'disc' => $found['code'], 'code' => $found['code']['code']];
@@ -5928,7 +6736,7 @@ if (!function_exists('config_col_order_payload')) {
         $kb['inline_keyboard'][] = $nameFirst ? [$headerName, $headerConfig] : [$headerConfig, $headerName];
         $kb['inline_keyboard'][] = $nameFirst ? [$sampleName, $sampleGet] : [$sampleGet, $sampleName];
         $kb['inline_keyboard'][] = [$getAllBtn];
-        $kb['inline_keyboard'][] = [['text' => 'عملیات', 'callback_data' => "cfgcoldemo-{$lang}"]];
+        $kb['inline_keyboard'][] = [['text' => bt_section_meta('cfgcol_actions')['label'], 'callback_data' => 'bt_sep|cfgcol_actions']];
         $kb['inline_keyboard'][] = [[
             'text' => (!$nameFirst ? '✅ ' : '') . 'دکمه‌ی دریافت، بعد نام کانفیگ',
             'callback_data' => $cbConfigFirst,
@@ -5940,8 +6748,8 @@ if (!function_exists('config_col_order_payload')) {
             'style' => ($nameFirst ? 'success' : 'primary'),
         ]];
         if ($originLang !== null) {
-            $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش کپشن این بخش', 'callback_data' => "bt_edit|{$originLang}|users.status.getConfigHint"]];
-            $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "bt_edit|{$originLang}|{$originKey}"]];
+            $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش کپشن این بخش', 'callback_data' => "bt_edit|{$originLang}|users.status.getConfigHint", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "bt_edit|{$originLang}|{$originKey}", 'style' => 'danger']];
         }
         return [$info, json_encode($kb)];
     }
@@ -6052,16 +6860,123 @@ if (!function_exists('backup_settings_hub_payload')) {
         $setting = select("setting", "*", null, null, "select");
         $dbSet = !empty($setting['backup_db_password']);
         $botSet = !empty($setting['backup_bot_password']);
+        $dbOn = ($setting['backup_db_enabled'] ?? '1') !== '0';
+        $botOn = ($setting['backup_bot_enabled'] ?? '1') !== '0';
+        $backupInterval = $setting['backup_interval_hours'] ?? '5';
         $caption = strtr($t['hubCaption'], [
             '{dbStatus}' => $dbSet ? $t['setStatus'] : $t['notSetStatus'],
             '{botStatus}' => $botSet ? $t['setStatus'] : $t['notSetStatus'],
         ]);
         $kb = ['inline_keyboard' => [
+            [['text' => ($dbOn ? '✅ ' : '❌ ') . $t['dbEnabledBtn'], 'callback_data' => 'backupset_toggle_db', 'style' => ($dbOn ? 'success' : 'danger')]],
             [['text' => ($dbSet ? '🔐 ' : '🔓 ') . $t['dbPasswordBtn'], 'callback_data' => 'backupset_db', 'style' => ($dbSet ? 'success' : 'primary')]],
+            [['text' => ($botOn ? '✅ ' : '❌ ') . $t['botEnabledBtn'], 'callback_data' => 'backupset_toggle_bot', 'style' => ($botOn ? 'success' : 'danger')]],
             [['text' => ($botSet ? '🔐 ' : '🔓 ') . $t['botPasswordBtn'], 'callback_data' => 'backupset_bot', 'style' => ($botSet ? 'success' : 'primary')]],
+            [['text' => strtr($t['intervalBtn'], ['{hours}' => $backupInterval]), 'callback_data' => 'backupset_interval', 'style' => 'primary']],
             [['text' => $t['closeBtn'], 'callback_data' => 'backupset_close', 'style' => 'danger']],
         ]];
         return [$caption, json_encode($kb)];
+    }
+}
+if (!function_exists('backup_run_now')) {
+    // manual, on-demand counterpart to cronbot/backupbot.php - triggered by
+    // the /backup admin command. Respects each backup type's own on/off
+    // toggle and password *unless both toggles are off*, in which case it
+    // still sends both files (as an escape hatch so a manual backup is
+    // always obtainable), but forces them unencrypted since an admin who
+    // turned the feature off never set an intentional password expectation
+    // for this manual run.
+    function backup_run_now($fromAdminId, $textbotlang)
+    {
+        global $dbhost, $usernamedb, $passworddb, $dbname;
+        $setting = select("setting", "*", null, null, "select");
+        $reportbackup = select("topicid", "idreport", "report", "backupfile", "select")['idreport'];
+        $dbEnabled = ($setting['backup_db_enabled'] ?? '1') !== '0';
+        $botEnabled = ($setting['backup_bot_enabled'] ?? '1') !== '0';
+        $forceNoPassword = false;
+        if (!$dbEnabled && !$botEnabled) {
+            $dbEnabled = true;
+            $botEnabled = true;
+            $forceNoPassword = true;
+        }
+
+        $backupDir = __DIR__ . '/cronbot';
+        $sentAny = false;
+        $stamp = date("Y-m-d_His");
+
+        if ($dbEnabled) {
+            $backupFileName = $backupDir . '/backup_manual_' . $stamp . '.sql';
+            $zipFileName = $backupDir . '/backup_manual_' . $stamp . '.zip';
+            $dbhostForCommand = empty($dbhost) ? "localhost" : $dbhost;
+            $command = "mysqldump -h $dbhostForCommand -u $usernamedb -p'$passworddb' --no-tablespaces --ssl-mode=DISABLED $dbname > " . escapeshellarg($backupFileName);
+            $output = [];
+            $returnVar = 0;
+            exec($command, $output, $returnVar);
+            if ($returnVar !== 0) {
+                telegram('sendmessage', [
+                    'chat_id' => $setting['Channel_Report'],
+                    'message_thread_id' => $reportbackup,
+                    'text' => $textbotlang['keyboard']['backupError'],
+                ]);
+            } else {
+                $dbBackupPassword = $forceNoPassword ? '' : ($setting['backup_db_password'] ?? '');
+                if ($dbBackupPassword !== '') {
+                    shell_exec("zip -j -P " . escapeshellarg($dbBackupPassword) . " " . escapeshellarg($zipFileName) . " " . escapeshellarg($backupFileName));
+                } else {
+                    shell_exec("zip -j " . escapeshellarg($zipFileName) . " " . escapeshellarg($backupFileName));
+                }
+                $fileToSend = is_file($zipFileName) ? $zipFileName : $backupFileName;
+                telegram('sendDocument', [
+                    'chat_id' => $setting['Channel_Report'],
+                    'message_thread_id' => $reportbackup,
+                    'document' => new CURLFile($fileToSend),
+                    'caption' => $textbotlang['hardcoded']['backupDatabaseCaption'],
+                ]);
+                $sentAny = true;
+                if (is_file($zipFileName)) {
+                    unlink($zipFileName);
+                }
+                if (is_file($backupFileName)) {
+                    unlink($backupFileName);
+                }
+            }
+        }
+
+        if ($botEnabled) {
+            $botFolderZipName = $backupDir . '/botfolder_manual_' . $stamp . '.zip';
+            $botRootDir = __DIR__;
+            $botBackupPassword = $forceNoPassword ? '' : ($setting['backup_bot_password'] ?? '');
+            $zipExcludes = "-x '.git/*' -x '*.bak_*'";
+            if ($botBackupPassword !== '') {
+                $botZipCommand = "cd " . escapeshellarg($botRootDir) . " && zip -r -P " . escapeshellarg($botBackupPassword) . " " . escapeshellarg($botFolderZipName) . " . " . $zipExcludes;
+            } else {
+                $botZipCommand = "cd " . escapeshellarg($botRootDir) . " && zip -r " . escapeshellarg($botFolderZipName) . " . " . $zipExcludes;
+            }
+            shell_exec($botZipCommand);
+            if (is_file($botFolderZipName)) {
+                telegram('sendDocument', [
+                    'chat_id' => $setting['Channel_Report'],
+                    'message_thread_id' => $reportbackup,
+                    'document' => new CURLFile($botFolderZipName),
+                    'caption' => $textbotlang['hardcoded']['botFolderBackupCaption'],
+                ]);
+                $sentAny = true;
+                unlink($botFolderZipName);
+            } else {
+                telegram('sendmessage', [
+                    'chat_id' => $setting['Channel_Report'],
+                    'message_thread_id' => $reportbackup,
+                    'text' => $textbotlang['keyboard']['backupError'],
+                ]);
+            }
+        }
+
+        if ($sentAny) {
+            telegram('sendmessage', [
+                'chat_id' => $fromAdminId,
+                'text' => $textbotlang['Admin']['BackupSettings']['manualBackupDone'],
+            ]);
+        }
     }
 }
 if (!function_exists('help_resolve_lang')) {    // resolves a tutorial ("help" row) for a given viewer language: returns    // the translated name/description/media/media_type/entities if one was

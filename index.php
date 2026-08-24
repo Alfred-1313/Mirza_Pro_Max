@@ -124,7 +124,7 @@ if ($user == false) {
 // an existing menu label's text (e.g. re-typing a button's current name)
 // must reach that step's own handler instead of being hijacked as navigation
 $mm_step = (string) ($user['step'] ?? '');
-$mm_exempt_step = ((string) $datain === '' && preg_match('/^(btbtntext|btbbtntext)-/', $mm_step) === 1);
+$mm_exempt_step = ((string) $datain === '' && preg_match('/^(btbtntext|btbbtntext|gbtntxt|gbtnemo)-/', $mm_step) === 1);
 if (!$mm_exempt_step && is_main_menu_trigger($text, $datain, $textbotlang)) {
     preempt_active_session($user, $from_id);
 }
@@ -483,7 +483,16 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     // nothing survived the live panel check (or the user never had a service):
     // show the buy prompt instead of an empty list carrying only pagination
     if (count($keyboardlists['inline_keyboard']) === 0 && $setting['NotUser'] == "offnotuser") {
-        $noServiceKb = json_encode(['inline_keyboard' => [[['text' => $textbotlang['users']['sell']['buySubscriptionBtn'], 'callback_data' => 'buyfresh', 'style' => 'primary']]]]);
+        $noServiceKb = sell_noservice_kb($user['lang'] ?? 'fa', $textbotlang);
+        // the 🛍 سرویس‌های من tap already auto-fired ITS OWN sticker before this
+        // point - if there is a dedicated sticker for "no active service" it
+        // replaces that one (bottext_fire_extras() below retires-before-firing
+        // on its own); if there is NOT one configured, this line is what keeps
+        // the generic 🛍 sticker from showing through anyway, matching the
+        // requested default of "no sticker at all" for the empty state
+        if (function_exists('bottext_sticker_retire')) {
+            bottext_sticker_retire($from_id);
+        }
         if ($datain == "backorder") {
             Editmessagetext($from_id, $message_id, $textbotlang['users']['sell']['service_not_available'], $noServiceKb);
         } else {
@@ -509,6 +518,15 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         ['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'servclose', 'style' => 'danger'],
     ];
     $keyboard_json = json_encode($keyboardlists);
+    // 🛍 سرویس‌های من might have JUST fired its own sticker on this exact tap -
+    // if there is a dedicated sticker for "has an active service" it replaces
+    // that one (bottext_fire_extras() retires-before-firing on its own below);
+    // if there is NOT one configured, this is what stops the generic 🛍
+    // sticker from showing through anyway (default: no sticker), matching how
+    // the "no active service" screen already behaves
+    if (function_exists('bottext_sticker_retire')) {
+        bottext_sticker_retire($from_id);
+    }
     if ($datain == "backorder") {
         Editmessagetext($from_id, $message_id, $textbotlang['users']['sell']['service_sell'], $keyboard_json);
     } else {
@@ -622,6 +640,15 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $keyboardlists['inline_keyboard'][] = $backuser;
     $keyboard_json = json_encode($keyboardlists);
     update("user", "pagenumber", $next_page, "id", $from_id);
+    // 🛍 سرویس‌های من might have JUST fired its own sticker on this exact tap -
+    // if there is a dedicated sticker for "has an active service" it replaces
+    // that one (bottext_fire_extras() retires-before-firing on its own below);
+    // if there is NOT one configured, this is what stops the generic 🛍
+    // sticker from showing through anyway (default: no sticker), matching how
+    // the "no active service" screen already behaves
+    if (function_exists('bottext_sticker_retire')) {
+        bottext_sticker_retire($from_id);
+    }
     Editmessagetext($from_id, $message_id, $textbotlang['users']['sell']['service_sell'], $keyboard_json);
 } elseif ($datain == 'previous_page') {
     $numpage = select("invoice", "id_user", "id_user", $from_id, "count");
@@ -698,6 +725,15 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $keyboardlists['inline_keyboard'][] = $backuser;
     $keyboard_json = json_encode($keyboardlists);
     update("user", "pagenumber", $previous_page, "id", $from_id);
+    // 🛍 سرویس‌های من might have JUST fired its own sticker on this exact tap -
+    // if there is a dedicated sticker for "has an active service" it replaces
+    // that one (bottext_fire_extras() retires-before-firing on its own below);
+    // if there is NOT one configured, this is what stops the generic 🛍
+    // sticker from showing through anyway (default: no sticker), matching how
+    // the "no active service" screen already behaves
+    if (function_exists('bottext_sticker_retire')) {
+        bottext_sticker_retire($from_id);
+    }
     Editmessagetext($from_id, $message_id, $textbotlang['users']['sell']['service_sell'], $keyboard_json);
 } elseif ($datain == "notusernameme") {
     sendmessage($from_id, $textbotlang['users']['status']['sendUsername'], $backuser, 'html');
@@ -3499,10 +3535,14 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     if ($user['number'] == "none" && $setting['get_number'] == "onAuthenticationphone")
         return;
     #-----------------------#
-    // panel selection is now always shown to the user before category/products,
-    // even with a single active panel, instead of silently auto-picking it - falls
-    // through to the $list_marzban_panel_user block below, same as multi-panel
-    if (false && ($locationproduct)->rowCount() == 1) {
+    // 🖥 نمایش انتخاب پنل (setting.statuspanelshow, toggled in 🛒 وضعیت قابلیت‌های
+    // فروشگاه) mirrors the category toggle: ON (default, matches the behaviour
+    // this always had until now) always shows the panel picker below, even with
+    // one active panel. OFF restores the original auto-pick-when-there-is-only-
+    // one-panel shortcut. With 2+ panels this condition is false either way, so
+    // the picker always shows regardless of the toggle - there is no other way
+    // to ask which panel the user wants.
+    if ($setting['statuspanelshow'] != 'onpanelshow' && ($locationproduct)->rowCount() == 1) {
         $location = ($locationproduct)->fetch(PDO::FETCH_ASSOC)['name_panel'];
         $locationproduct = select("marzban_panel", "*", "name_panel", $location, "select");
         if ($locationproduct['hide_user'] != null) {
@@ -3576,10 +3616,15 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
                     $statuscustom = false;
                 }
                 $textproduct = $textbotlang['users']['sell']['serviceSelectFirst'];
-                if ($datain == "buy") {
-                    Editmessagetext($from_id, $message_id, $textproduct, KeyboardProduct($marzban_list_get['name_panel'], $query, $user['pricediscount'], $datakeyboard, $statuscustom));
+                if ($setting['statusnamecustom'] == 'onnamecustom') {
+                    $backuser = "buyback";
                 } else {
-                    sendmessage($from_id, $textproduct, KeyboardProduct($marzban_list_get['name_panel'], $query, $user['pricediscount'], $datakeyboard, $statuscustom), 'HTML');
+                    $backuser = "backuser";
+                }
+                if ($datain == "buy") {
+                    Editmessagetext($from_id, $message_id, $textproduct, KeyboardProduct($marzban_list_get['name_panel'], $query, $user['pricediscount'], $datakeyboard, $statuscustom, $backuser));
+                } else {
+                    sendmessage($from_id, $textproduct, KeyboardProduct($marzban_list_get['name_panel'], $query, $user['pricediscount'], $datakeyboard, $statuscustom, $backuser), 'HTML');
                 }
             }
         } else {
@@ -3725,7 +3770,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     } else {
         $statuscustom = false;
     }
-    sendmessage($from_id, $textbotlang['users']['sell']['serviceSelectFirst'], KeyboardProduct($marzban_list_get['name_panel'], $query, $user['pricediscount'], $datakeyboard, $statuscustom), 'HTML');
+    sendmessage($from_id, $textbotlang['users']['sell']['serviceSelectFirst'], KeyboardProduct($marzban_list_get['name_panel'], $query, $user['pricediscount'], $datakeyboard, $statuscustom, "location_{$marzban_list_get['code_panel']}"), 'HTML');
 } elseif (preg_match('/^productmonth_(\w+)/', $datain, $dataget)) {
     $monthenumber = $dataget[1];
     $userdate = json_decode($user['Processing_value'], true);
@@ -3756,7 +3801,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         } else {
             $statuscustom = false;
         }
-        Editmessagetext($from_id, $message_id, $textbotlang['users']['sell']['serviceSelectFirst'], KeyboardProduct($marzban_list_get['name_panel'], $query, $user['pricediscount'], $datakeyboard, $statuscustom));
+        Editmessagetext($from_id, $message_id, $textbotlang['users']['sell']['serviceSelectFirst'], KeyboardProduct($marzban_list_get['name_panel'], $query, $user['pricediscount'], $datakeyboard, $statuscustom, "location_{$marzban_list_get['code_panel']}"));
     }
 } elseif ($datain == "customsellvolume") {
     $userdate = json_decode($user['Processing_value'], true);
@@ -4348,14 +4393,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         $info_product['price_product'] = 0;
     $pi_cur = $info_product['currency'] ?? null;
     $textin = sprintf($textbotlang['users']['sell']['preInvoice'], $user['Processing_value_tow'], $info_product['name_product'], $info_product['Service_time'], money($info_productmain, $pi_cur), money($info_product['price_product'], $pi_cur), $info_product['Volume_constraint'], $user['Balance']);
-    $paymentDiscount = json_encode([
-        'inline_keyboard' => [
-            [
-                ['text' => $textbotlang['keyboard']['backToPlansBtn'], 'callback_data' => "backuser", 'style' => 'danger'],
-                ['text' => $textbotlang['keyboard']['payAndGetService'], 'callback_data' => "confirmandgetserviceDiscount", 'style' => 'success'],
-            ],
-        ]
-    ]);
+    $paymentDiscount = sell_confirm_kb($user['lang'] ?? 'fa', $textbotlang, "confirmandgetserviceDiscount");
     $parametrsendvalue = $text . "_" . $info_product['price_product'];
     update("user", "Processing_value_four", $parametrsendvalue, "id", $from_id);
     sendmessage($from_id, $textin, $paymentDiscount, 'HTML');
