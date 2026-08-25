@@ -242,8 +242,34 @@ return array (
       array (
         'label' => '🛍️ پیام بعد از خرید',
         'key' => 'textbot.afterPay',
+      ),
+      array (
+        'label' => '📌 کپشن صفحه‌ی کانفیگ (حالت ۲) — خرید',
+        'key' => 'textbot.getConfigHintBuy',
+      ),
+      array (
+        'label' => '📌 کپشن صفحه‌ی کانفیگ (حالت ۲) — اکانت تست',
+        'key' => 'textbot.getConfigHintTest',
+      ),
+      array (
+        'label' => '📊 پیام و دکمه‌های صفحه‌ی وضعیت سرویس',
+        'key' => 'users.status.infoFull',
+      ),
+      array (
+        'label' => '🚀 پیام «رسید پرداخت ارسال شد» (در انتظار تایید)',
+        'key' => 'users.Balance.sendReceipt',
         'group' => 'buyflow',
-        'section' => 'preinvoice_afterpay',
+        'section' => 'balance_topup',
+      ),
+      array (
+        'label' => '💲 پیام و دکمه‌ی تایید شارژ کیف پول',
+        'key' => 'users.Balance.chargeSuccess',
+        'group' => 'buyflow',
+        'section' => 'balance_topup',
+      ),
+      array (
+        'label' => '🎁 پیام تخفیف (وقتی تخفیف روی شارژ اعمال بشه)',
+        'key' => 'users.Balance.chargeSuccessDiscount',
       ),
     ),
   ),  'language' => 
@@ -393,6 +419,17 @@ return array (
       'selectPayment' => '💵 روش پرداخت خود را انتخاب نمایید',
       'sendReceipt' => '🚀 رسید پرداخت  شما ارسال شد پس از تایید توسط مدیریت مبلغ به کیف پول شما واریز خواهد شد',
       'sendReceiptAndConfig' => '🚀 رسید شما ارسال و پس از بررسی اطلاعات سرویس برای شما ارسال خواهد شد',
+      'chargeSuccess' => '✅ <b>شارژ کیف پول شما با موفقیت انجام شد</b>
+
+💰 مبلغ واریزی: {amount} تومان
+💳 موجودی فعلی شما: {balance} تومان
+
+با تشکر از پرداخت شما 🙏
+{discount_block}',
+      'chargeSuccessDiscount' => '🎁 تخفیف اعمال شد!
+{bonus} تومان اضافه به کیف پول شما واریز شد.
+
+💰 موجودی فعلی: {balance}',
       'sending' => 'پرداخت دریافت شده و درحال بررسی می باشد لطفا منتظر بمانید',
       'waiting' => 'در انتظار تایید پرداخت',
       'zarinpal' => '❌ خطا 
@@ -1359,22 +1396,22 @@ n2  = نماینده با قابلیت های بیشتر',
 📅 تاریخ اتمام :  %s (%s]
 
 %s',
-      'infoFull' => '📊وضعیت سرویس : %s
-👤 نام سرویس : <code>%s</code>
-%s
-%s
-🌍 موقعیت سرویس :%s
-🗂 نام محصول :%s
+      'infoFull' => '📊 وضعیت سرویس: {status}
+👤 نام سرویس: <code>{username}</code>
+{password_line}
+{note_line}
+🌍 موقعیت سرویس: {location}
+🗂 نام محصول: {product}
 
-🔋 ترافیک : %s
-📥 حجم مصرفی : %s
-💢 حجم باقی مانده : %s (%s%%]
+🔋 ترافیک: {traffic}
+📥 حجم مصرفی: {used}
+💢 حجم باقی‌مانده: {remaining} ({percent}%)
 
-📅 تاریخ اتمام : %s (%s]
+📅 تاریخ اتمام: {expiration} ({days})
 
-%s
+{connection_info}
 
-💡 برای قطع دسترسی دیگران کافیست روی گزینه "تغییر لینک" کلیک کنید.',
+💡 برای قطع دسترسی دیگران کافیست روی گزینه‌ی «تغییر لینک» کلیک کنید.',
       'summary' => '
   
  وضعیت سرویس : %s
@@ -5849,6 +5886,8 @@ nowpayments.io
     'accountWallet' => '👤 حساب کاربری',
     'addBalance' => '💰 افزایش موجودی',
     'affiliates' => '👥 زیر مجموعه گیری',
+    'getConfigHintBuy' => '📌 جهت دریافت کانفیگ روی دکمه دریافت کانفیگ کلیک کنید',
+    'getConfigHintTest' => '📌 جهت دریافت کانفیگ روی دکمه دریافت کانفیگ کلیک کنید',
     'afterPay' => '✅ سرویس با موفقیت ایجاد شد
 
 👤 نام کاربری سرویس : {username}

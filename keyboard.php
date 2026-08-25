@@ -2199,13 +2199,20 @@ function keyboard_list_text($lang, $groupFilter = null)
     }
     $keyboard_list_text = $bt_tab_texts['bottext']['items'] ?? $textbotlang['bottext']['items'];
     $bt_unknown_label = $bt_tab_texts['bottext']['unknownMsgLabel'] ?? '💬 پیام نام‌شناس';
-    $keyboard_text['inline_keyboard'][] = [
-        ['text' => ($lang == 'fa' ? "✅" : "") . $textbotlang['bottext']['langs']['fa'], 'callback_data' => "bt_lang:fa", 'style' => 'primary'],
-        ['text' => ($lang == 'en' ? "✅" : "") . $textbotlang['bottext']['langs']['en'], 'callback_data' => "bt_lang:en", 'style' => 'primary'],
-        ['text' => ($lang == 'ru' ? "✅" : "") . $textbotlang['bottext']['langs']['ru'], 'callback_data' => "bt_lang:ru", 'style' => 'primary'],
-        ['text' => ($lang == 'zh' ? "✅" : "") . $textbotlang['bottext']['langs']['zh'], 'callback_data' => "bt_lang:zh", 'style' => 'primary'],
-        ['text' => ($lang == 'tk' ? "✅" : "") . $textbotlang['bottext']['langs']['tk'], 'callback_data' => "bt_lang:tk", 'style' => 'primary'],
-    ];
+    // language is chosen exactly once, here on the flat home list - group
+    // screens no longer show this row at all, so there is nothing left to
+    // "re-select"; the row's own dispatcher (admin.php's bt_lang: handler)
+    // still accepts an optional :{group} suffix from round 27, kept as a
+    // harmless unused capability rather than reverted
+    if ($groupFilter === null) {
+        $keyboard_text['inline_keyboard'][] = [
+            ['text' => ($lang == 'fa' ? "✅" : "") . $textbotlang['bottext']['langs']['fa'], 'callback_data' => "bt_lang:fa", 'style' => 'primary'],
+            ['text' => ($lang == 'en' ? "✅" : "") . $textbotlang['bottext']['langs']['en'], 'callback_data' => "bt_lang:en", 'style' => 'primary'],
+            ['text' => ($lang == 'ru' ? "✅" : "") . $textbotlang['bottext']['langs']['ru'], 'callback_data' => "bt_lang:ru", 'style' => 'primary'],
+            ['text' => ($lang == 'zh' ? "✅" : "") . $textbotlang['bottext']['langs']['zh'], 'callback_data' => "bt_lang:zh", 'style' => 'primary'],
+            ['text' => ($lang == 'tk' ? "✅" : "") . $textbotlang['bottext']['langs']['tk'], 'callback_data' => "bt_lang:tk", 'style' => 'primary'],
+        ];
+    }
     // buttons are renamed via the ✏️ نام و نمایش دکمه‌ها manager — keep this section for messages only.
     // textbot.testExpired is also skipped here on purpose: it's only reachable
     // from inside 🔑 تنظیم اکانت تست (see $bt_home_sections below and
@@ -2213,7 +2220,7 @@ function keyboard_list_text($lang, $groupFilter = null)
     // home-list row, which gave it two different entry points and made its
     // "back" button ambiguous (it could only point to one of them). Now there
     // is exactly one way in, so "back" is always correct.
-    $bt_skip_keys = ['textbot.sell', 'textbot.purchasedServices', 'textbot.extend', 'textbot.userTest', 'textbot.accountWallet', 'textbot.addBalance', 'textbot.tariffList', 'textbot.support', 'textbot.help', 'textbot.affiliates', 'textbot.discount', 'textbot.wheelLuck', 'textbot.faq', 'textbot.testExpired', 'textbot.afterPay', 'textbot.preInvoice'];
+    $bt_skip_keys = ['textbot.sell', 'textbot.purchasedServices', 'textbot.extend', 'textbot.userTest', 'textbot.accountWallet', 'textbot.addBalance', 'textbot.tariffList', 'textbot.support', 'textbot.help', 'textbot.affiliates', 'textbot.discount', 'textbot.wheelLuck', 'textbot.faq', 'textbot.testExpired', 'textbot.afterPay', 'textbot.preInvoice', 'textbot.getConfigHintBuy', 'textbot.getConfigHintTest', 'users.status.infoFull', 'users.Balance.sendReceipt', 'users.Balance.chargeSuccess', 'users.Balance.chargeSuccessDiscount'];
     $bt_can_react_keys = ['users.text_start', 'textbot.faqDesc', 'textbot.tariffListDesc', 'textbot.rules', 'users.unknownMsg'];
     $bt_list_setting = select("setting", "*", null, null, "select");
     $bt_list_edit = json_decode((string) ($bt_list_setting['text_edit'] ?? ''), true);
@@ -2295,6 +2302,11 @@ function keyboard_list_text($lang, $groupFilter = null)
             // blue by default, green (from $bt_decorate) once something is customized
             $bt_btn = ['text' => $bt_label, 'callback_data' => "bt_edit|$lang|{$data['key']}", 'style' => ($bt_style !== '' ? $bt_style : 'primary')];
             $keyboard_text['inline_keyboard'][] = [$bt_btn];
+            if ($groupFilter === 'myservices' && $data['key'] === 'users.sell.service_sell') {
+                $keyboard_text['inline_keyboard'][] = [['text' => bt_section_meta('myservices_related')['label'], 'callback_data' => 'bt_sep|myservices_related']];
+                list($bt_sf_label, $bt_sf_style) = $bt_decorate('users.status.infoFull', '📊 پیام و دکمه‌های صفحه‌ی وضعیت سرویس');
+                $keyboard_text['inline_keyboard'][] = [['text' => $bt_sf_label, 'callback_data' => "bt_edit|$lang|users.status.infoFull", 'style' => ($bt_sf_style !== '' ? $bt_sf_style : 'primary')]];
+            }
             if ($groupFilter === 'buyflow' && $data['key'] === 'users.sell.serviceSelectFirst') {
                 // the 3 sub-screens BtnStyle's own hub offered are exposed
                 // directly here now, under their own white divider, instead of
@@ -2307,10 +2319,15 @@ function keyboard_list_text($lang, $groupFilter = null)
                 $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['productStyleBtn'], 'callback_data' => 'btnstyle_kindhub:product:fa', 'style' => 'primary']];
             }
         }
+        if ($groupFilter === 'buyflow') {
+            $keyboard_text['inline_keyboard'][] = [['text' => bt_section_meta('cfgdeliv_link')['label'], 'callback_data' => 'bt_sep|cfgdeliv_link']];
+            $keyboard_text['inline_keyboard'][] = [['text' => '📌 نحوه‌ی نمایش کانفیگ', 'callback_data' => "cfgdeliv|list|{$lang}|b", 'style' => config_delivery_touched('purchase') ? 'success' : 'primary']];
+        }
         $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['resetAllLabel'], 'callback_data' => "bt_group_resetall|$lang|$groupFilter", 'style' => 'danger']];
         $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['backToListLabel'], 'callback_data' => "btact|back|$lang", 'style' => 'danger']];
         $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']];
-        $bt_caption_tpl = $bt_tab_texts['bottext']['groupBuyflowCaption'] ?? $textbotlang['bottext']['groupBuyflowCaption'];
+        $bt_captionKey = ($groupFilter === 'myservices') ? 'groupServicesCaption' : 'groupBuyflowCaption';
+        $bt_caption_tpl = $bt_tab_texts['bottext'][$bt_captionKey] ?? $textbotlang['bottext'][$bt_captionKey];
         $bt_caption = strtr($bt_caption_tpl, ['{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang]);
         return [$bt_caption, json_encode($keyboard_text)];
     }

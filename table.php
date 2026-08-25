@@ -236,6 +236,7 @@ timeauto_not_verify,status_keyboard_config,cron_status
         addFieldToTable("setting", "lang_switch", null, "TEXT");
         addFieldToTable("setting", "help_layout", null, "TEXT");
         addFieldToTable("setting", "status_keyboard_config", "1", "varchar(20)");
+        addFieldToTable("setting", "configDeliveryMode", null, "TEXT");
         addFieldToTable("setting", "statusnoteforf", "1", "varchar(20)");
         addFieldToTable("setting", "timeauto_not_verify", "4", "varchar(20)");
         addFieldToTable("setting", "statuscopycart", "0", "varchar(20)");
@@ -624,6 +625,7 @@ try {
     } else {
         ensureTableUtf8mb4('Payment_report');
         addFieldToTable("Payment_report", "message_id", null, "INT");
+        addFieldToTable("Payment_report", "receipt_msg_id", null, "INT");
         $Check_filde = $pdo->query("SHOW COLUMNS FROM Payment_report LIKE 'Payment_Method'");
         if (($Check_filde)->rowCount() != 1) {
             $pdo->query("ALTER TABLE Payment_report ADD Payment_Method VARCHAR(200)");

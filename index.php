@@ -514,9 +514,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             ['text' => $textbotlang['users']['page']['nextPageBtn'], 'callback_data' => 'next_page'],
         ];
     }
-    $keyboardlists['inline_keyboard'][] = [
-        ['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'servclose', 'style' => 'danger'],
-    ];
+    $keyboardlists['inline_keyboard'][] = [myservices_close_btn($user['lang'] ?? 'fa', $textbotlang)];
     $keyboard_json = json_encode($keyboardlists);
     // 🛍 سرویس‌های من might have JUST fired its own sticker on this exact tap -
     // if there is a dedicated sticker for "has an active service" it replaces
@@ -1214,10 +1212,20 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             unset($keyboarddate['Extra_time']);
         if ($marzbanstatusextra == "offextra")
             unset($keyboarddate['Extra_volume']);
+        $sb_lang = $user['lang'] ?? 'fa';
+        $sb_ordered_kd = [];
+        foreach (statusbtn_ordered_keys($sb_lang, $textbotlang) as $sb_ok) {
+            if (isset($keyboarddate[$sb_ok]) && !statusbtn_is_hidden($sb_lang, $sb_ok)) {
+                $sb_ordered_kd[$sb_ok] = $keyboarddate[$sb_ok];
+            }
+        }
+        $keyboarddate = $sb_ordered_kd;
         $tempArray = [];
         $keyboardsetting = ['inline_keyboard' => []];
-        foreach ($keyboarddate as $keyboardtext) {
-            $tempArray[] = ['text' => $keyboardtext['text'], 'callback_data' => $keyboardtext['callback_data'] . $username];
+        foreach ($keyboarddate as $sb_key => $keyboardtext) {
+            $sb_btn = statusbtn_render($sb_lang, $sb_key, $textbotlang, $keyboardtext['text']);
+            $sb_btn['callback_data'] = $keyboardtext['callback_data'] . $username;
+            $tempArray[] = $sb_btn;
             if (count($tempArray) == 2 or $keyboardtext['text'] == $textbotlang['users']['status']['btnRefresh']) {
                 $keyboardsetting['inline_keyboard'][] = $tempArray;
                 $tempArray = [];
@@ -1235,7 +1243,21 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         } else {
             $textconnect = strtr($textbotlang['users']['status']['lastOnline'], ['{lastonline}' => $lastonline]);
         }
-        $textinfo = sprintf($textbotlang['users']['status']['infoFull'], $status_var, $DataUserOut['username'], $userpassword, $nameconfig, $nameloc['Service_location'], $nameloc['name_product'], $LastTraffic, $usedTrafficGb, $RemainingVolume, $Percent, $expirationDate, $day, $textconnect);
+        $textinfo = strtr(bottext_resolve_key('users.status.infoFull'), [
+            '{status}' => $status_var,
+            '{username}' => $DataUserOut['username'],
+            '{password_line}' => $userpassword,
+            '{note_line}' => $nameconfig,
+            '{location}' => $nameloc['Service_location'],
+            '{product}' => $nameloc['name_product'],
+            '{traffic}' => $LastTraffic,
+            '{used}' => $usedTrafficGb,
+            '{remaining}' => $RemainingVolume,
+            '{percent}' => $Percent,
+            '{expiration}' => $expirationDate,
+            '{days}' => $day,
+            '{connection_info}' => $textconnect,
+        ]);
     }
     if ($user['step'] == "getuseragnetservice") {
         sendmessage($from_id, $textinfo, $keyboardsetting, 'html');
@@ -3193,8 +3215,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         $textcreatuser = str_replace('{password}', $dataoutput['subscription_url'], $textcreatuser);
         update("invoice", "user_info", $dataoutput['subscription_url'], "id_invoice", $randomString);
     }
-    sendMessageService($marzban_list_get, $dataoutput['configs'], $output_config_link, $dataoutput['username'], $usertestinfo, $textcreatuser, $randomString);
-    sendmessage($from_id, $textbotlang['users']['selectoption'], $keyboard, 'HTML');
+    sendMessageService($marzban_list_get, $dataoutput['configs'], $output_config_link, $dataoutput['username'], $usertestinfo, $textcreatuser, $randomString, kind: 'usertest');
     step('home', $from_id);
     if ($marzban_list_get['MethodUsername'] == $textbotlang['keyboard']['customTextSequential'] || $marzban_list_get['MethodUsername'] == $textbotlang['keyboard']['usernameSequential'] || $marzban_list_get['MethodUsername'] == $textbotlang['keyboard']['numericIdSequential'] || $marzban_list_get['MethodUsername'] == $textbotlang['keyboard']['agentCustomTextSequential']) {
         $value = intval($user['number_username']) + 1;
@@ -4197,7 +4218,6 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         update("invoice", "user_info", $dataoutput['subscription_url'], "id_invoice", $randomString);
     }
     sendMessageService($marzban_list_get, $dataoutput['configs'], $output_config_link, $dataoutput['username'], $Shoppinginfo, $textcreatuser, $randomString);
-    sendmessage($from_id, $textbotlang['users']['selectoption'], $keyboard, 'HTML');
     if (intval($priceproduct) != 0) {
         $Balance_prim = $user['Balance'] - $priceproduct;
         update("user", "Balance", $Balance_prim, "id", $from_id);
@@ -4746,7 +4766,6 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         $textcreatuser = str_replace('{links2}', "{$output_config_link}", $textcreatuser);
         sendMessageService($marzban_list_get, $dataoutput['configs'], $output_config_link, $dataoutput['username'], $Shoppinginfo, $textcreatuser, $randomString);
     }
-    sendmessage($from_id, $textbotlang['users']['selectoption'], $keyboard, 'HTML');
     $user_Balance = select("user", "*", "id", $from_id, "select");
     $Balance_prim = $user_Balance['Balance'] - $priceproduct;
     update("user", "Balance", $Balance_prim, "id", $from_id);
@@ -5846,7 +5865,8 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     if ($user['Processing_value_tow'] == "getconfigafterpay") {
         sendmessage($from_id, $textbotlang['users']['Balance']['sendReceiptAndConfig'], $keyboard, 'HTML');
     } else {
-        sendmessage($from_id, $textbotlang['users']['Balance']['sendReceipt'], $keyboard, 'HTML');
+        $rcpt_sent = sendmessage($from_id, $textbotlang['users']['Balance']['sendReceipt'], $keyboard, 'HTML');
+        update("Payment_report", "receipt_msg_id", intval($rcpt_sent['result']['message_id'] ?? 0), "id_order", $PaymentReport['id_order']);
     }
     update("Payment_report", "payment_Status", "waiting", "id_order", $PaymentReport['id_order']);
     update("Payment_report", "dec_not_confirmed", "$text $caption", "id_order", $PaymentReport['id_order']);
@@ -5957,7 +5977,8 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     } else {
 
         $textsendrasid = sprintf($textbotlang['Admin']['reportgroup']['newPaymentBalance2'], $first_name, $from_id, $from_id, $format_balance, $PaymentReport['id_order'], $username, $format_price_cart);
-        sendmessage($from_id, $textbotlang['users']['Balance']['sendReceipt'], $keyboard, 'HTML');
+        $rcpt_sent = sendmessage($from_id, $textbotlang['users']['Balance']['sendReceipt'], $keyboard, 'HTML');
+        update("Payment_report", "receipt_msg_id", intval($rcpt_sent['result']['message_id'] ?? 0), "id_order", $PaymentReport['id_order']);
     }
     foreach ($admin_ids as $id_admin) {
         $adminrulecheck = select("admin", "*", "id_admin", $id_admin, "select");

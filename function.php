@@ -1257,6 +1257,13 @@ function DirectPayment($order_id, $image = 'images.jpg')
             ]);
         }
     } else {
+        // the "🚀 receipt submitted, pending review" message has done its job
+        // once we get here - clean it up. A flow that never sent/tracked one
+        // (receipt_msg_id stays 0) is simply a no-op, not an error.
+        $rcptMsgId = intval($Payment_report['receipt_msg_id'] ?? 0);
+        if ($rcptMsgId > 0) {
+            deletemessage($Payment_report['id_user'], $rcptMsgId);
+        }
         // top-up discount: the user paid the full amount through the gateway,
         // the bonus is added on top here - the one shared place every gateway's
         // wallet credit passes through, so no gateway integration changes.
@@ -1264,16 +1271,36 @@ function DirectPayment($order_id, $image = 'images.jpg')
         $Balance_confrim = intval($Balance_id['Balance']) + intval($Payment_report['price']) + $topup_bonus;
         update("user", "Balance", $Balance_confrim, "id", $Payment_report['id_user']);
         update("Payment_report", "payment_Status", "paid", "id_order", $Payment_report['id_order']);
-        if ($topup_bonus > 0) {
-            sendmessage($Payment_report['id_user'], "🎁 <b>تخفیف اعمال شد!</b>\n\n" . money($topup_bonus) . " اضافه به کیف پول شما واریز شد.", null, 'HTML');
-        }
         $Payment_report['price'] = number_format($Payment_report['price'], 0);
         $format_price_cart = $Payment_report['price'];
         if ($Payment_report['Payment_Method'] == "cart to cart" or $Payment_report['Payment_Method'] == "arze digital offline") {
             $textconfrom = sprintf($textbotlang['hardcoded']['newPaymentBalanceChargeFn'], $Balance_id['id'], $Payment_report['id_order'], $Balance_id['username'], $format_price_cart, $Balance_id['Balance'], $Payment_report['dec_not_confirmed']);
             Editmessagetext($from_id, $message_id, $textconfrom, $Confirm_pay);
         }
-        sendmessage($Payment_report['id_user'], sprintf($textbotlang['hardcoded']['balanceChargedThanks'], $Payment_report['price'], $Payment_report['id_order']), null, 'HTML');
+        // the old "🎁 تخفیف اعمال شد!" message and the "💲 کاربر گرامی..."
+        // thank-you message used to be two separate sendmessage() calls -
+        // merged into one: the discount portion (when there is one) becomes a
+        // customizable <blockquote> appended to the customizable base caption,
+        // showing the user's up-to-date balance; a customizable تهیه اشتراک
+        // button (genbtn alias 'bc') always rides along underneath.
+        $bc_discountBlock = '';
+        if ($topup_bonus > 0) {
+            $bc_discountText = strtr(bottext_resolve_key('users.Balance.chargeSuccessDiscount'), [
+                '{bonus}' => money($topup_bonus),
+                '{balance}' => money($Balance_confrim),
+            ]);
+            $bc_discountBlock = "\n<blockquote>" . $bc_discountText . '</blockquote>';
+        }
+        $bc_caption = strtr(bottext_resolve_key('users.Balance.chargeSuccess'), [
+            '{amount}' => $Payment_report['price'],
+            '{balance}' => money($Balance_confrim),
+            '{discount_block}' => $bc_discountBlock,
+        ]);
+        $bc_lang = (is_array($Balance_id) && !empty($Balance_id['lang'])) ? $Balance_id['lang'] : 'fa';
+        $bc_defs = genbtn_defs('bc', $textbotlang);
+        $bc_ov = genbtn_override($bc_lang, 'users.Balance.chargeSuccess', 0);
+        $bc_kb = json_encode(['inline_keyboard' => [[genbtn_render($bc_defs[0], $bc_ov, $bc_defs[0]['callback_data'])]]]);
+        sendmessage($Payment_report['id_user'], $bc_caption, $bc_kb, 'HTML');
     }
 }
 function plisio($order_id, $price, $from_id)
@@ -3772,7 +3799,589 @@ if (!function_exists('bottext_all_item_keys')) {
         return array_values(array_unique($keys));
     }
 }
-if (!function_exists('bottext_reset_keys')) {
+if (!function_exists('statusbtn_defs')) {
+    // the "وضعیت سرویس" detail screen's 13 possible buttons, keyed by the
+    // exact same string keys index.php's own $keyboarddate array already
+    // uses - this is deliberate: it means the ~20 unset($keyboarddate[...])
+    // conditions that decide WHICH of these actually show for a given
+    // panel/settings combo never need to know this system exists at all.
+    // 'changestatus' is special: its real default text toggles between
+    // "روشن کردن"/"خاموش کردن" depending on the service's live state - the
+    // 'text' here is just a representative label for this admin UI's own
+    // preview; the real render call always passes the live value in as a
+    // fallback (see statusbtn_render()'s $fallbackText param).
+    function statusbtn_defs($textbotlang)
+    {
+        return [
+            'updateinfo' => ['name' => '♻️ بروزرسانی اطلاعات', 'text' => $textbotlang['keyboard']['refreshInfo'], 'style' => 'primary'],
+            'linksub' => ['name' => '🔗 لینک اشتراک', 'text' => $textbotlang['users']['status']['linksub'], 'style' => 'primary'],
+            'config' => ['name' => '🔰 دریافت کانفیگ', 'text' => $textbotlang['users']['status']['config'], 'style' => 'primary'],
+            'extend' => ['name' => '💊 تمدید سرویس', 'text' => $textbotlang['users']['extend']['title'], 'style' => 'success'],
+            'changelink' => ['name' => '⚙️ تغییر لینک', 'text' => $textbotlang['users']['changeLink']['btnTitle'], 'style' => 'primary'],
+            'removeservice' => ['name' => '❌ بازگشت وجه', 'text' => $textbotlang['users']['status']['removeservice'], 'style' => 'danger'],
+            'changenameconfig' => ['name' => '📝 تغییر یادداشت', 'text' => $textbotlang['users']['status']['btnEditNote'], 'style' => 'primary'],
+            'Extra_volume' => ['name' => '➕ خرید حجم اضافه', 'text' => $textbotlang['users']['extraVolume']['sellextra'], 'style' => 'success'],
+            'Extra_time' => ['name' => '⏳ خرید زمان اضافه', 'text' => $textbotlang['users']['extraTime']['title'], 'style' => 'success'],
+            'changestatus' => ['name' => '💡 روشن/خاموش کردن اکانت', 'text' => $textbotlang['users']['status']['btnTurnOn'], 'style' => 'primary'],
+            'transfor' => ['name' => '🚚 انتقال سرویس', 'text' => $textbotlang['users']['transfer']['title'], 'style' => 'primary'],
+            'change-location' => ['name' => '🌐 تغییر لوکیشن', 'text' => $textbotlang['users']['changeLocation']['title'], 'style' => 'primary'],
+            'ekhtelal' => ['name' => '⚠️ ارسال گزارش اختلال', 'text' => $textbotlang['keyboard']['sendDisruptionReport'], 'style' => 'danger'],
+        ];
+    }
+}
+if (!function_exists('statusbtn_override')) {
+    function statusbtn_override($lang, $key)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
+        return (is_array($be) && isset($be[$lang]['users.status.infoFull'][$key]) && is_array($be[$lang]['users.status.infoFull'][$key]))
+            ? $be[$lang]['users.status.infoFull'][$key]
+            : [];
+    }
+}
+if (!function_exists('statusbtn_current')) {
+    function statusbtn_current($lang, $key, $textbotlang)
+    {
+        $defs = statusbtn_defs($textbotlang);
+        $d = $defs[$key] ?? ['name' => $key, 'text' => $key, 'style' => 'primary'];
+        $ov = statusbtn_override($lang, $key);
+        $text = (isset($ov['text']) && $ov['text'] !== '') ? $ov['text'] : $d['text'];
+        $style = (isset($ov['style']) && in_array($ov['style'], ['primary', 'success', 'danger'], true)) ? $ov['style'] : $d['style'];
+        return ['text' => $text, 'style' => $style, 'name' => $d['name']];
+    }
+}
+if (!function_exists('statusbtn_render')) {
+    // $fallbackText: the caller's own live-computed default (only actually
+    // differs from statusbtn_defs() for 'changestatus', whose real default
+    // depends on the service's current on/off state) - an explicit text
+    // override still wins over it either way
+    function statusbtn_render($lang, $key, $textbotlang, $fallbackText = null)
+    {
+        $defs = statusbtn_defs($textbotlang);
+        $d = $defs[$key] ?? ['name' => $key, 'text' => $fallbackText ?? $key, 'style' => 'primary'];
+        if ($fallbackText !== null) {
+            $d['text'] = $fallbackText;
+        }
+        $ov = statusbtn_override($lang, $key);
+        $text = (isset($ov['text']) && $ov['text'] !== '') ? $ov['text'] : $d['text'];
+        $style = (isset($ov['style']) && in_array($ov['style'], ['primary', 'success', 'danger'], true)) ? $ov['style'] : $d['style'];
+        $pos = (isset($ov['pos']) && $ov['pos'] === 'left') ? 'left' : 'right';
+        $btn = ['text' => $text, 'style' => $style];
+        if (!empty($ov['simple'])) {
+            $btn['text'] = strip_leading_emoji($text);
+        } elseif (!empty($ov['emojiIcon'])) {
+            $btn['text'] = strip_leading_emoji($text);
+            $btn['icon_custom_emoji_id'] = $ov['emojiIcon'];
+        } else {
+            if (!empty($ov['emoji'])) {
+                $emoji = $ov['emoji'];
+                $rest = strip_leading_emoji($text);
+            } else {
+                list($emoji, $rest) = split_leading_emoji($text);
+            }
+            if ($emoji !== '') {
+                $btn['text'] = ($pos === 'left') ? trim($rest . ' ' . $emoji) : trim($emoji . ' ' . $rest);
+            }
+        }
+        return $btn;
+    }
+}
+if (!function_exists('statusbtn_set_field')) {
+    function statusbtn_set_field($lang, $key, $field, $value)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
+        if (!is_array($be)) {
+            $be = [];
+        }
+        $be[$lang]['users.status.infoFull'][$key][$field] = $value;
+        if ($field === 'emoji') {
+            unset($be[$lang]['users.status.infoFull'][$key]['emojiIcon']);
+        } elseif ($field === 'emojiIcon') {
+            unset($be[$lang]['users.status.infoFull'][$key]['emoji']);
+        }
+        update("setting", "button_edit", json_encode($be, JSON_UNESCAPED_UNICODE), null, null);
+    }
+}
+if (!function_exists('statusbtn_reset')) {
+    function statusbtn_reset($lang, $key)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
+        if (is_array($be) && isset($be[$lang]['users.status.infoFull'][$key])) {
+            unset($be[$lang]['users.status.infoFull'][$key]);
+            if (empty($be[$lang]['users.status.infoFull'])) {
+                unset($be[$lang]['users.status.infoFull']);
+            }
+            if (empty($be[$lang])) {
+                unset($be[$lang]);
+            }
+            update("setting", "button_edit", empty($be) ? null : json_encode($be, JSON_UNESCAPED_UNICODE), null, null);
+        }
+    }
+}
+if (!function_exists('statusbtn_reset_all')) {
+    function statusbtn_reset_all($lang)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
+        if (is_array($be) && isset($be[$lang]['users.status.infoFull'])) {
+            unset($be[$lang]['users.status.infoFull']);
+            if (empty($be[$lang])) {
+                unset($be[$lang]);
+            }
+            update("setting", "button_edit", empty($be) ? null : json_encode($be, JSON_UNESCAPED_UNICODE), null, null);
+        }
+    }
+}
+if (!function_exists('statusbtn_list_payload')) {
+    function statusbtn_list_payload($lang, $textbotlang)
+    {
+        $info = "🔘 <b>دکمه‌های صفحه‌ی وضعیت سرویس</b>\n➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= "این دکمه‌ها زیر پیام «وضعیت سرویس» نشون داده می‌شن (وقتی کاربر داخل «🛍 سرویس‌های من» روی یکی از سرویس‌هاش می‌زنه).\n";
+        $info .= "ℹ️ کدوم‌هاشون واقعاً نشون داده بشن به نوع پنل و تنظیمات فروشگاه بستگی داره - همیشه همه‌شون با هم نیستن.\n";
+        $info .= "➖➖➖➖➖➖➖➖➖➖\nکدوم بخش رو می‌خوای تنظیم کنی؟ 👇";
+        $kb = ['inline_keyboard' => []];
+        $kb['inline_keyboard'][] = [['text' => '🎨 رنگ‌بندی دکمه‌ها', 'callback_data' => "statusbtn|cat|{$lang}|color", 'style' => 'primary']];
+        $kb['inline_keyboard'][] = [['text' => '🎭 ایموجی دکمه‌ها', 'callback_data' => "statusbtn|cat|{$lang}|emoji", 'style' => 'primary']];
+        $kb['inline_keyboard'][] = [['text' => '📐 چیدمان دکمه‌ها', 'callback_data' => "statusbtn|cat|{$lang}|layout", 'style' => 'primary']];
+        $kb['inline_keyboard'][] = [['text' => '✏️ نام و نمایش دکمه‌ها', 'callback_data' => "statusbtn|cat|{$lang}|text", 'style' => 'primary']];
+        $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش کپشن پیام وضعیت سرویس', 'callback_data' => "bt_edit|{$lang}|users.status.infoFull", 'style' => 'primary']];
+        $kb['inline_keyboard'][] = [['text' => '🔁 ریست همه‌ی دکمه‌ها به پیش‌فرض', 'callback_data' => "statusbtn|rstall|{$lang}", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "bt_edit|{$lang}|users.status.infoFull", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
+        return [$info, json_encode($kb)];
+    }
+}
+if (!function_exists('statusbtn_cat_payload')) {
+    // one live-preview list per category, exactly like color_editor_payload/
+    // emoji_sticker_editor_payload: every row already reflects every OTHER
+    // category's overrides too (honest live preview), tapping a row acts
+    // immediately - cycle in place for color, prompt for emoji/text
+    function statusbtn_cat_payload($lang, $cat, $textbotlang)
+    {
+        $defs = statusbtn_defs($textbotlang);
+        $kb = ['inline_keyboard' => []];
+        foreach ($defs as $key => $d) {
+            $rendered = statusbtn_render($lang, $key, $textbotlang);
+            $hiddenMark = statusbtn_is_hidden($lang, $key) ? '🚫 ' : '';
+            if ($cat === 'color') {
+                $kb['inline_keyboard'][] = [['text' => $hiddenMark . $rendered['text'], 'callback_data' => "statusbtn|colorcyc|{$lang}|{$key}", 'style' => $rendered['style']]];
+            } elseif ($cat === 'emoji') {
+                $ov = statusbtn_override($lang, $key);
+                $pos = (isset($ov['pos']) && $ov['pos'] === 'left') ? 'left' : 'right';
+                $mainBtn = ['text' => $hiddenMark . $rendered['text'], 'callback_data' => "statusbtn|emoji|{$lang}|{$key}", 'style' => $rendered['style']];
+                if (isset($rendered['icon_custom_emoji_id'])) {
+                    $mainBtn['icon_custom_emoji_id'] = $rendered['icon_custom_emoji_id'];
+                }
+                $posBtn = ['text' => ($pos === 'left') ? '⬅️' : '➡️', 'callback_data' => "statusbtn|postoggle|{$lang}|{$key}"];
+                $kb['inline_keyboard'][] = [$mainBtn, $posBtn];
+            } else {
+                $hidden = statusbtn_is_hidden($lang, $key);
+                $mainBtn = ['text' => $hiddenMark . $rendered['text'], 'callback_data' => "statusbtn|text|{$lang}|{$key}", 'style' => $rendered['style']];
+                $hideBtn = ['text' => $hidden ? '👁' : '🚫', 'callback_data' => "statusbtn|hidetog|{$lang}|{$key}", 'style' => $hidden ? 'danger' : 'primary'];
+                $kb['inline_keyboard'][] = [$mainBtn, $hideBtn];
+            }
+        }
+        $captions = [
+            'color' => "🎨 <b>رنگ‌بندی دکمه‌های صفحه‌ی وضعیت</b>\n\nاین لیست، پیش‌نمایش زنده‌ست 👁\nروی هر دکمه بزن تا رنگش عوض بشه 👇\n🔵 آبی ← 🟢 سبز ← 🔴 قرمز ← ⚪️ پیش‌فرض\n🚫 = دکمه‌ی پنهان‌شده",
+            'emoji' => "🎭 <b>ایموجی دکمه‌های صفحه‌ی وضعیت</b>\n\nروی هر دکمه بزن و ایموجی جدیدش رو بفرست 👇\n📍 دکمه‌ی کوچیک کنارش (⬅️/➡️) جای ایموجی رو (چپ یا راست متن) عوض می‌کنه\n💎 ایموجی پریمیوم همیشه سمت راست میاد (محدودیت خود تلگرامه)\n🚫 = دکمه‌ی پنهان‌شده",
+            'text' => "✏️ <b>نام و نمایش دکمه‌های صفحه‌ی وضعیت</b>\n\n🔹 روی متن دکمه بزن تا متنش رو عوض کنی\n🔹 دکمه‌ی کوچیک کنارش، اون دکمه رو کلاً از دید کاربر پنهان یا آشکار می‌کنه\n🚫 = دکمه‌ی پنهان‌شده (کاربر اصلاً نمی‌بینتش) | 👁 = دوباره آشکارش می‌کنه",
+        ];
+        $info = $captions[$cat] ?? $captions['color'];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبلی', 'callback_data' => "statusbtn|list|{$lang}", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
+        return [$info, json_encode($kb)];
+    }
+}
+if (!function_exists('statusbtn_cycle_style')) {
+    // mirrors btncolor-'s exact 4-state cycle (none/primary/success/danger)
+    // - "none" clears just the style field, falling back to that button's
+    // own hardcoded default, same granular per-field unset the rest of this
+    // family already uses
+    function statusbtn_cycle_style($lang, $key)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
+        if (!is_array($be)) {
+            $be = [];
+        }
+        $order = ['', 'primary', 'success', 'danger'];
+        $cur = $be[$lang]['users.status.infoFull'][$key]['style'] ?? '';
+        if (!in_array($cur, $order, true)) {
+            $cur = '';
+        }
+        $idx = array_search($cur, $order, true);
+        $next = $order[($idx + 1) % count($order)];
+        if ($next === '') {
+            unset($be[$lang]['users.status.infoFull'][$key]['style']);
+            if (empty($be[$lang]['users.status.infoFull'][$key])) {
+                unset($be[$lang]['users.status.infoFull'][$key]);
+            }
+            if (empty($be[$lang]['users.status.infoFull'])) {
+                unset($be[$lang]['users.status.infoFull']);
+            }
+            if (empty($be[$lang])) {
+                unset($be[$lang]);
+            }
+        } else {
+            $be[$lang]['users.status.infoFull'][$key]['style'] = $next;
+        }
+        update("setting", "button_edit", empty($be) ? null : json_encode($be, JSON_UNESCAPED_UNICODE), null, null);
+    }
+}
+if (!function_exists('statusbtn_toggle_pos')) {
+    function statusbtn_toggle_pos($lang, $key)
+    {
+        $ov = statusbtn_override($lang, $key);
+        $cur = (isset($ov['pos']) && $ov['pos'] === 'left') ? 'left' : 'right';
+        statusbtn_set_field($lang, $key, 'pos', ($cur === 'left') ? 'right' : 'left');
+    }
+}
+if (!function_exists('statusbtn_is_hidden')) {
+    function statusbtn_is_hidden($lang, $key)
+    {
+        $ov = statusbtn_override($lang, $key);
+        return !empty($ov['hidden']);
+    }
+}
+if (!function_exists('statusbtn_toggle_hidden')) {
+    function statusbtn_toggle_hidden($lang, $key)
+    {
+        statusbtn_set_field($lang, $key, 'hidden', !statusbtn_is_hidden($lang, $key));
+    }
+}
+if (!function_exists('statusbtn_order')) {
+    // the order lives at $be[$lang]['users.status.infoFull']['__order'] - a
+    // sibling of the per-key override entries, using a reserved key none of
+    // the 13 real $keyboarddate keys can ever collide with (they're all
+    // plain identifiers, never double-underscore-prefixed)
+    function statusbtn_order($lang)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
+        return (is_array($be) && isset($be[$lang]['users.status.infoFull']['__order']) && is_array($be[$lang]['users.status.infoFull']['__order']))
+            ? $be[$lang]['users.status.infoFull']['__order']
+            : [];
+    }
+}
+if (!function_exists('statusbtn_set_order')) {
+    function statusbtn_set_order($lang, array $order)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
+        if (!is_array($be)) {
+            $be = [];
+        }
+        $be[$lang]['users.status.infoFull']['__order'] = array_values($order);
+        update("setting", "button_edit", json_encode($be, JSON_UNESCAPED_UNICODE), null, null);
+    }
+}
+if (!function_exists('statusbtn_reset_order')) {
+    function statusbtn_reset_order($lang)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
+        if (is_array($be) && isset($be[$lang]['users.status.infoFull']['__order'])) {
+            unset($be[$lang]['users.status.infoFull']['__order']);
+            if (empty($be[$lang]['users.status.infoFull'])) {
+                unset($be[$lang]['users.status.infoFull']);
+            }
+            if (empty($be[$lang])) {
+                unset($be[$lang]);
+            }
+            update("setting", "button_edit", empty($be) ? null : json_encode($be, JSON_UNESCAPED_UNICODE), null, null);
+        }
+    }
+}
+if (!function_exists('statusbtn_apply_order')) {
+    // saved order first (dropping any stale key no longer in $allKeys), then
+    // anything not yet mentioned appended in its original definition order -
+    // so a future 14th status button just shows up at the end instead of
+    // vanishing until the admin re-visits چیدمان
+    function statusbtn_apply_order(array $allKeys, array $savedOrder)
+    {
+        $ordered = [];
+        foreach ($savedOrder as $k) {
+            if (in_array($k, $allKeys, true) && !in_array($k, $ordered, true)) {
+                $ordered[] = $k;
+            }
+        }
+        foreach ($allKeys as $k) {
+            if (!in_array($k, $ordered, true)) {
+                $ordered[] = $k;
+            }
+        }
+        return $ordered;
+    }
+}
+if (!function_exists('statusbtn_ordered_keys')) {
+    function statusbtn_ordered_keys($lang, $textbotlang)
+    {
+        return statusbtn_apply_order(array_keys(statusbtn_defs($textbotlang)), statusbtn_order($lang));
+    }
+}
+if (!function_exists('statusbtn_layout_payload')) {
+    // pick-then-swap, index-addressed exactly like help_lay_pick/help_lay_swap:
+    // first tap marks an item selected (🔵), second tap on any OTHER item
+    // swaps their positions in the saved order and clears the selection
+    function statusbtn_layout_payload($lang, $textbotlang, $selectedIdx = null)
+    {
+        $orderedKeys = statusbtn_ordered_keys($lang, $textbotlang);
+        $kb = ['inline_keyboard' => []];
+        foreach ($orderedKeys as $idx => $key) {
+            $rendered = statusbtn_render($lang, $key, $textbotlang);
+            $label = (statusbtn_is_hidden($lang, $key) ? '🚫 ' : '') . $rendered['text'];
+            $isSel = ($selectedIdx !== null && (int) $selectedIdx === $idx);
+            if ($isSel) {
+                $btn = ['text' => '🔵 ' . $label, 'callback_data' => "statusbtn|laycancel|{$lang}"];
+            } elseif ($selectedIdx !== null) {
+                $btn = ['text' => $label, 'callback_data' => "statusbtn|layswap|{$lang}|{$selectedIdx}|{$idx}"];
+            } else {
+                $btn = ['text' => $label, 'callback_data' => "statusbtn|laypick|{$lang}|{$idx}"];
+            }
+            $btn['style'] = $rendered['style'];
+            $kb['inline_keyboard'][] = [$btn];
+        }
+        $kb['inline_keyboard'][] = [['text' => '🔁 ریست چیدمان', 'callback_data' => "statusbtn|layreset|{$lang}"]];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبلی', 'callback_data' => "statusbtn|list|{$lang}", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
+        $info = "📐 <b>چیدمان دکمه‌های صفحه‌ی وضعیت</b>\n\nروی یه دکمه بزن تا انتخاب بشه 🔵، بعد روی دکمه‌ی مقصد بزن تا جاشون با هم عوض بشه 👇\nرنگ و ایموجی دکمه‌ها همراهشون منتقل می‌شن\n🚫 = دکمه‌ی پنهان‌شده";
+        return [$info, json_encode($kb)];
+    }
+}
+if (!function_exists('statusbtn_detail_payload')) {
+    function statusbtn_detail_payload($lang, $key, $textbotlang)
+    {
+        $defs = statusbtn_defs($textbotlang);
+        if (!isset($defs[$key])) {
+            return statusbtn_list_payload($lang, $textbotlang);
+        }
+        $d = $defs[$key];
+        $cur = statusbtn_current($lang, $key, $textbotlang);
+        $ov = statusbtn_override($lang, $key);
+        $curPos = (isset($ov['pos']) && $ov['pos'] === 'left') ? 'left' : 'right';
+        $curSimple = !empty($ov['simple']);
+        $hasEmoji = !empty($ov['emoji']) || !empty($ov['emojiIcon']);
+        $previewBtn = statusbtn_render($lang, $key, $textbotlang);
+        $previewBtn['callback_data'] = 'none';
+        $info = "🔘 <b>ویرایش {$d['name']}</b>\n➖➖➖➖➖➖➖➖➖➖\n";
+        if ($key === 'changestatus') {
+            $info .= "ℹ️ این دکمه بین «روشن کردن» و «خاموش کردن» جابه‌جا می‌شه (بسته به وضعیت فعلی سرویس). اگه متن سفارشی بذاری، همون متن به‌جای هر دو حالت نشون داده می‌شه.\n";
+        }
+        $info .= "👁 پیش‌نمایش زنده 👇";
+        $kb = ['inline_keyboard' => []];
+        $kb['inline_keyboard'][] = [$previewBtn];
+        $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش متن', 'callback_data' => "statusbtn|text|{$lang}|{$key}", 'style' => (isset($ov['text']) && $ov['text'] !== '') ? 'success' : 'primary']];
+        $kb['inline_keyboard'][] = [
+            ['text' => ($cur['style'] === 'primary' ? '✅ ' : '') . '🔵 آبی', 'callback_data' => "statusbtn|style|{$lang}|{$key}|primary", 'style' => 'primary'],
+            ['text' => ($cur['style'] === 'success' ? '✅ ' : '') . '🟢 سبز', 'callback_data' => "statusbtn|style|{$lang}|{$key}|success", 'style' => 'success'],
+            ['text' => ($cur['style'] === 'danger' ? '✅ ' : '') . '🔴 قرمز', 'callback_data' => "statusbtn|style|{$lang}|{$key}|danger", 'style' => 'danger'],
+        ];
+        $kb['inline_keyboard'][] = [['text' => ($hasEmoji ? '✅ ' : '') . '💎 ایموجی دکمه', 'callback_data' => "statusbtn|emoji|{$lang}|{$key}", 'style' => $hasEmoji ? 'success' : 'primary']];
+        $kb['inline_keyboard'][] = [['text' => ($curSimple ? '✅ ' : '') . '🎭 حالت ساده (بدون ایموجی)', 'callback_data' => "statusbtn|simple|{$lang}|{$key}", 'style' => $curSimple ? 'success' : 'primary']];
+        $kb['inline_keyboard'][] = [
+            ['text' => ($curPos === 'right' ? '✅ ' : '') . '➡️ راست', 'callback_data' => "statusbtn|pos|{$lang}|{$key}|right", 'style' => 'primary'],
+            ['text' => ($curPos === 'left' ? '✅ ' : '') . '⬅️ چپ', 'callback_data' => "statusbtn|pos|{$lang}|{$key}|left", 'style' => 'primary'],
+        ];
+        $kb['inline_keyboard'][] = [['text' => '🔁 ریست این دکمه', 'callback_data' => "statusbtn|rst|{$lang}|{$key}", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "statusbtn|list|{$lang}", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
+        return [$info, json_encode($kb)];
+    }
+}
+if (!function_exists('bottext_key_touched')) {
+    function bottext_key_touched($key, $lang)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $te = json_decode((string) ($setting['text_edit'] ?? ''), true);
+        $layout = json_decode((string) ($setting['keyboardmain'] ?? ''), true);
+        $st = (is_array($layout) && isset($layout['text_stickers']) && is_array($layout['text_stickers'])) ? $layout['text_stickers'] : [];
+        $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
+        $textCustom = is_array($te) && isset($te[$lang]) && bottext_dotted_isset($te[$lang], $key);
+        $stickerCustom = bt_media_lookup($st, $key, $lang) !== '';
+        $btnCustom = is_array($be) && !empty($be[$lang][$key]);
+        return $textCustom || $stickerCustom || $btnCustom;
+    }
+}
+if (!function_exists('config_delivery_cfgcol_touched')) {
+    function config_delivery_cfgcol_touched($lang)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
+        return !empty($be[$lang]['configDisplay']) || (string) ($setting['configColOrder'] ?? '') !== '';
+    }
+}
+if (!function_exists('config_delivery_default_mode')) {
+    // Mode '1' = deliver the full service message only.
+    // Mode '2' = that same message, PLUS a second message carrying the
+    //            config-picker buttons (useful for multi-config services).
+    // Every panel starts on mode 1, for both purchase and usertest, including
+    // panels added later - the admin asked for that explicitly, so it is a
+    // hardcoded default rather than something inherited from the legacy
+    // bot-wide toggle.
+    function config_delivery_default_mode()
+    {
+        return '1';
+    }
+}
+if (!function_exists('config_delivery_map')) {
+    // shape: {"purchase": {"<code_panel>": "1"|"2"}, "usertest": {...}}
+    // Only NON-default values are stored, so an untouched install keeps this
+    // column NULL and every panel simply answers with the default.
+    function config_delivery_map()
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $m = json_decode((string) ($setting['configDeliveryMode'] ?? ''), true);
+        return is_array($m) ? $m : [];
+    }
+}
+if (!function_exists('config_delivery_map_save')) {
+    function config_delivery_map_save(array $map)
+    {
+        update("setting", "configDeliveryMode", empty($map) ? null : json_encode($map, JSON_UNESCAPED_UNICODE), null, null);
+    }
+}
+if (!function_exists('config_delivery_mode')) {
+    function config_delivery_mode($kind, $codePanel)
+    {
+        $map = config_delivery_map();
+        $v = ($codePanel === null) ? null : ($map[$kind][$codePanel] ?? null);
+        return in_array($v, ['1', '2'], true) ? $v : config_delivery_default_mode();
+    }
+}
+if (!function_exists('config_delivery_set_mode')) {
+    function config_delivery_set_mode($kind, $codePanel, $mode)
+    {
+        if (!in_array($mode, ['1', '2'], true)) {
+            return;
+        }
+        $map = config_delivery_map();
+        if ($mode === config_delivery_default_mode()) {
+            // storing only deviations keeps "has the admin touched this?"
+            // answerable without a separate flag
+            unset($map[$kind][$codePanel]);
+            if (empty($map[$kind])) {
+                unset($map[$kind]);
+            }
+        } else {
+            $map[$kind][$codePanel] = $mode;
+        }
+        config_delivery_map_save($map);
+    }
+}
+if (!function_exists('config_delivery_panel_reset')) {
+    // $kind = null resets BOTH kinds for this panel (kept for completeness);
+    // a specific kind resets ONLY that one - used by the kind-scoped screens
+    // so resetting purchase never silently also resets usertest, or vice versa
+    function config_delivery_panel_reset($codePanel, $kind = null)
+    {
+        $map = config_delivery_map();
+        $kinds = ($kind === null) ? ['purchase', 'usertest'] : [$kind];
+        foreach ($kinds as $k) {
+            unset($map[$k][$codePanel]);
+            if (isset($map[$k]) && empty($map[$k])) {
+                unset($map[$k]);
+            }
+        }
+        config_delivery_map_save($map);
+    }
+}
+if (!function_exists('config_delivery_touched')) {
+    function config_delivery_touched($kind = null)
+    {
+        $map = config_delivery_map();
+        if ($kind !== null) {
+            return !empty($map[$kind]);
+        }
+        return !empty($map['purchase']) || !empty($map['usertest']);
+    }
+}
+if (!function_exists('config_delivery_mode_fa')) {
+    function config_delivery_mode_fa($mode)
+    {
+        return $mode === '1' ? '۱' : '۲';
+    }
+}
+if (!function_exists('config_delivery_back_cb')) {
+    // 'u' = opened from 🔑 تنظیم اکانت تست, anything else = from the
+    // 🛒 پیام‌های مراحل خرید group. Threaded through every sub-screen so a
+    // round-trip cannot lose track of where the admin actually came from.
+    function config_delivery_back_cb($lang, $origin)
+    {
+        return ($origin === 'u')
+            ? "bt_edit|{$lang}|users.usertest.selectUsernamePrompt"
+            : "bt_group|{$lang}|buyflow";
+    }
+}
+if (!function_exists('config_delivery_panels_payload')) {
+    function config_delivery_panels_payload($lang, $origin = 'b')
+    {
+        $kind = ($origin === 'u') ? 'usertest' : 'purchase';
+        $kindLabel = ($kind === 'usertest') ? 'اکانت تست' : 'خرید';
+        $panels = select("marzban_panel", "*", null, null, "fetchAll");
+        if (!is_array($panels)) {
+            $panels = [];
+        }
+        $info = "📌 <b>نحوه‌ی نمایش کانفیگ (هنگام {$kindLabel})</b>\n➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= "تعیین می‌کنه وقتی کاربر " . ($kind === 'usertest' ? 'اکانت تست می‌گیره' : 'سرویس می‌خره') . "، بعد از تحویل چی ببینه.\n";
+        $info .= "برای هر پنل جداست.\n";
+        $info .= "➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= empty($panels) ? "⚠️ هنوز هیچ پنلی اضافه نشده." : "👇 اول پنل رو انتخاب کن:";
+        $kb = ['inline_keyboard' => []];
+        $map = config_delivery_map();
+        foreach ($panels as $p) {
+            $code = $p['code_panel'];
+            $m = config_delivery_mode($kind, $code);
+            $touched = isset($map[$kind][$code]);
+            $label = "🖥 {$p['name_panel']}  •  حالت " . config_delivery_mode_fa($m);
+            $kb['inline_keyboard'][] = [['text' => $label, 'callback_data' => "cfgdeliv|p|{$lang}|{$code}|{$origin}", 'style' => $touched ? 'success' : 'primary']];
+        }
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => config_delivery_back_cb($lang, $origin), 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
+        return [$info, json_encode($kb)];
+    }
+}
+if (!function_exists('config_delivery_panel_payload')) {
+    function config_delivery_panel_payload($lang, $codePanel, $origin = 'b')
+    {
+        $kind = ($origin === 'u') ? 'usertest' : 'purchase';
+        $kindLabel = ($kind === 'usertest') ? 'اکانت تست' : 'خرید';
+        $panel = select("marzban_panel", "*", "code_panel", $codePanel, "select");
+        $name = is_array($panel) ? ($panel['name_panel'] ?? $codePanel) : $codePanel;
+        $cur = config_delivery_mode($kind, $codePanel);
+        $info = "🖥 <b>پنل: " . htmlspecialchars((string) $name, ENT_QUOTES) . "</b>\n";
+        $info .= "📌 نحوه‌ی نمایش کانفیگ (هنگام {$kindLabel})\n➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= "بعد از اینکه سرویس تحویل داده شد، کاربر چی ببینه؟\n\n";
+        $info .= "🔹 <b>حالت ۱ — فقط پیام کامل</b>\n";
+        $info .= "مشخصات سرویس (نام، لوکیشن، مدت، حجم) و لینک اتصال، توی یک پیام.\n\n";
+        $info .= "🔹 <b>حالت ۲ — پیام کامل + صفحه‌ی کانفیگ</b>\n";
+        $info .= "همون پیام بالا، بعلاوه‌ی یه پیام جدا با دکمه‌های انتخاب کانفیگ.\n";
+        $info .= "مناسب سرویس‌هایی که چند تا کانفیگ دارن.\n";
+        $info .= "➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= "الان: <b>حالت " . config_delivery_mode_fa($cur) . "</b>";
+        $kb = ['inline_keyboard' => []];
+        $kb['inline_keyboard'][] = [
+            ['text' => ($cur === '1' ? '✅ ' : '') . 'حالت ۱ — فقط پیام کامل', 'callback_data' => "cfgdeliv|set|{$lang}|{$codePanel}|{$kind}|1|{$origin}", 'style' => $cur === '1' ? 'success' : 'primary'],
+        ];
+        $kb['inline_keyboard'][] = [
+            ['text' => ($cur === '2' ? '✅ ' : '') . 'حالت ۲ — + صفحه‌ی کانفیگ', 'callback_data' => "cfgdeliv|set|{$lang}|{$codePanel}|{$kind}|2|{$origin}", 'style' => $cur === '2' ? 'success' : 'primary'],
+        ];
+        $kb['inline_keyboard'][] = [['text' => bt_section_meta('cfgdeliv_edit')['label'], 'callback_data' => 'bt_sep|cfgdeliv_edit']];
+        if ($kind === 'purchase') {
+            $kb['inline_keyboard'][] = [['text' => '📝 پیام کامل (حالت ۱)', 'callback_data' => "cfgdeliv|msg|{$lang}|{$codePanel}|{$origin}|ap", 'style' => bottext_key_touched('textbot.afterPay', $lang) ? 'success' : 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '📝 کپشن صفحه‌ی کانفیگ (حالت ۲)', 'callback_data' => "cfgdeliv|msg|{$lang}|{$codePanel}|{$origin}|cb", 'style' => bottext_key_touched('textbot.getConfigHintBuy', $lang) ? 'success' : 'primary']];
+        } else {
+            $kb['inline_keyboard'][] = [['text' => '📝 پیام کامل (حالت ۱)', 'callback_data' => "cfgdeliv|msg|{$lang}|{$codePanel}|{$origin}|at", 'style' => bottext_key_touched('textbot.afterText', $lang) ? 'success' : 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '📝 کپشن صفحه‌ی کانفیگ (حالت ۲)', 'callback_data' => "cfgdeliv|msg|{$lang}|{$codePanel}|{$origin}|ct", 'style' => bottext_key_touched('textbot.getConfigHintTest', $lang) ? 'success' : 'primary']];
+        }
+        $kb['inline_keyboard'][] = [['text' => '🎨 دکمه‌ها و ترتیب کانفیگ‌ها (مشترک بین خرید و تست)', 'callback_data' => "cfgdeliv|cfgcol|{$lang}|{$codePanel}|{$origin}", 'style' => config_delivery_cfgcol_touched($lang) ? 'success' : 'primary']];
+        $kb['inline_keyboard'][] = [['text' => '🔁 ریست حالت این پنل به پیش‌فرض', 'callback_data' => "cfgdeliv|rst|{$lang}|{$codePanel}|{$kind}|{$origin}", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به لیست پنل‌ها', 'callback_data' => "cfgdeliv|list|{$lang}|{$origin}", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
+        return [$info, json_encode($kb)];
+    }
+}if (!function_exists('bottext_reset_keys')) {
     // The single place that knows every store a bot-message item can be
     // customized in. The per-item reset, the 🛒 group reset and the whole-list
     // reset all go through here, so they cannot drift apart again.
@@ -4252,6 +4861,34 @@ if (!function_exists('bt_section_meta')) {
                 'label' => '🧾 پیش‌فاکتور و پیام بعد از خرید',
                 'alert' => 'این بخش کپشن پیش‌فاکتور و پیامی که درست بعد از تکمیل‌شدن خرید (همراه کانفیگ) برای کاربر فرستاده می‌شه رو مدیریت می‌کنه.',
             ],
+            'cfgdeliv_link' => [
+                'label' => '📌 نحوه‌ی نمایش کانفیگ',
+                'alert' => 'این بخش تعیین می‌کنه که آیا یک پیام جداگونه با دکمه‌ی «دریافت کانفیگ» هم بعد از پیام اصلی تحویل سرویس فرستاده بشه یا نه - نه متن پیام‌ها رو.',
+            ],
+            'cfgdeliv_panels' => [
+                'label' => '🖥 اختصاصی‌سازی هر پنل',
+                'alert' => 'مقدار سراسری بالا پیش‌فرض همه‌ی پنل‌هاست. با لمس هر پنل می‌تونی فقط همون پنل رو جدا از بقیه تنظیم کنی.',
+            ],
+            'cfgdeliv_buy' => [
+                'label' => '🛒 وقتی کاربر سرویس می‌خره',
+                'alert' => 'این تنظیم فقط روی سرویس‌هایی اثر داره که کاربر می‌خره - اکانت تست تنظیم جدا خودشو داره.',
+            ],
+            'cfgdeliv_test' => [
+                'label' => '🎁 وقتی کاربر اکانت تست می‌گیره',
+                'alert' => 'این تنظیم فقط روی اکانت تست اثر داره - خرید تنظیم جدا خودشو داره.',
+            ],
+            'cfgdeliv_edit' => [
+                'label' => '✏️ ویرایش متن و دکمه‌ها',
+                'alert' => 'برخلاف حالت‌های بالا (که برای هر پنل جدان)، متن و دکمه‌های این پیام‌ها بین همه‌ی پنل‌ها مشترکه - یه بار ویرایش کنی، همه‌جا اعمال می‌شه.',
+            ],
+            'balance_topup' => [
+                'label' => '💳 شارژ کیف پول (کارت‌به‌کارت)',
+                'alert' => 'این بخش پیام «رسید ارسال شد» و پیام تایید نهاییِ شارژ کیف پول (و دکمه‌ی تهیه اشتراک زیرش) رو مدیریت می‌کنه.',
+            ],
+            'myservices_related' => [
+                'label' => '📊 پیام‌های دیگه‌ی مرتبط',
+                'alert' => 'این دکمه تو رو به پیام دیگه‌ای می‌بره که تو مسیر سرویس‌های من فرستاده می‌شه - نه همین پیامی که الان داری تنظیمش می‌کنی.',
+            ],
             'cfgcol_actions' => [
                 'label' => '⚙️ تنظیم ترتیب ستون‌ها',
                 'alert' => 'با دکمه‌های پایین مشخص کن اول دکمه‌ی «دریافت کانفیگ» نشون داده بشه یا اول نام کانفیگ - دکمه‌های بالاتر (پیش‌نمایش) خودشون قابل لمس‌ان و به صفحه‌ی ویرایش همون آیتم می‌رن.',
@@ -4297,6 +4934,13 @@ if (!function_exists('genbtn_alias_map')) {
             // caption already covers its one button for free
             'ns' => 'users.sell.service_not_available',
             'te' => 'textbot.testExpired',
+            // same "own-key" trick as 'ns' - service_sell's one static button
+            // (the list's close button; the per-service rows above it are a
+            // live listing, not something a label override could apply to)
+            'sc' => 'users.sell.service_sell',
+            // same trick again - the one button under the wallet top-up
+            // success message
+            'bc' => 'users.Balance.chargeSuccess',
         ];
     }
 }
@@ -4335,6 +4979,16 @@ if (!function_exists('genbtn_defs')) {
         if ($alias === 'te') {
             return [
                 0 => ['name' => '🔵 دکمه خرید سرویس', 'text' => $textbotlang['keyboard']['buyService'], 'style' => 'primary', 'callback_data' => 'buy'],
+            ];
+        }
+        if ($alias === 'sc') {
+            return [
+                0 => ['name' => '🔴 دکمه بستن', 'text' => $textbotlang['bottext']['btn_close'], 'style' => 'danger', 'callback_data' => 'servclose'],
+            ];
+        }
+        if ($alias === 'bc') {
+            return [
+                0 => ['name' => '🔵 دکمه تهیه اشتراک', 'text' => $textbotlang['users']['sell']['buySubscriptionBtn'], 'style' => 'primary', 'callback_data' => 'buyfresh'],
             ];
         }
         return [];
@@ -4470,6 +5124,14 @@ if (!function_exists('genbtn_render')) {
         return $btn;
     }
 }
+if (!function_exists('myservices_close_btn')) {
+    function myservices_close_btn($lang, $textbotlang)
+    {
+        $defs = genbtn_defs('sc', $textbotlang);
+        $ov = genbtn_override($lang, 'users.sell.service_sell', 0);
+        return genbtn_render($defs[0], $ov, $defs[0]['callback_data']);
+    }
+}
 if (!function_exists('sell_selectUsername_kb')) {
     // renders the buy flow's OWN copy of the cancel/use-default keyboard - the
     // usertest flow keeps using its separate usertest_selectUsername_kb(), so
@@ -4529,12 +5191,14 @@ if (!function_exists('genbtn_list_payload')) {
         $key = genbtn_alias_to_key($alias);
         $gb_sfx = ($origin === 'u') ? '|u' : '';
         $defs = genbtn_defs($alias, $textbotlang);
-        $titles = ['su' => '🔘 دکمه‌های نام‌گذاری سرویس', 'cf' => '🔘 دکمه‌های تأیید خرید', 'ns' => '🔘 دکمه‌ی نداشتن سرویس فعال', 'te' => '🔘 دکمه‌ی پیام اتمام اکانت تست'];
+        $titles = ['su' => '🔘 دکمه‌های نام‌گذاری سرویس', 'cf' => '🔘 دکمه‌های تأیید خرید', 'ns' => '🔘 دکمه‌ی نداشتن سرویس فعال', 'te' => '🔘 دکمه‌ی پیام اتمام اکانت تست', 'sc' => '🔘 دکمه‌ی بستن (سرویس‌های من)', 'bc' => '🔘 دکمه‌ی تهیه اشتراک (شارژ کیف پول)'];
         $notes = [
             'su' => 'این ۲ دکمه، زیر پیام انتخاب نام سرویس (مرحله‌ی خرید) به کاربر نشون داده می‌شن.',
             'cf' => 'این ۲ دکمه، زیر صفحه‌ی تأیید نهایی خرید نشون داده می‌شن - هر سه حالت (عادی/تخفیف‌دار/حجم دلخواه) از این یکی استفاده می‌کنن، پس ویرایششون روی هر سه اثر می‌ذاره.',
             'ns' => 'این ۱ دکمه، زیر پیامِ "سرویس فعالی ندارید" (وقتی 🛍 سرویس‌های من خالیه) به کاربر نشون داده می‌شه.',
             'te' => 'این ۱ دکمه، زیر پیامِ «اکانت تست شما به پایان رسید» به کاربر نشون داده می‌شه (همون پیامی که کرون موقع تموم‌شدن اعتبار اکانت تست می‌فرسته).',
+            'sc' => 'این ۱ دکمه، زیر لیست سرویس‌های فعال کاربر (وقتی 🛍 سرویس‌های من حداقل یک سرویس داره) نشون داده می‌شه.',
+            'bc' => 'این ۱ دکمه، زیر پیام تایید نهاییِ شارژ کیف پول (هر روش پرداختی) نشون داده می‌شه.',
         ];
         $info = ($titles[$alias] ?? '🔘 دکمه‌ها') . "\n➖➖➖➖➖➖➖➖➖➖\n" . ($notes[$alias] ?? '') . "\n";
         $info .= "➖➖➖➖➖➖➖➖➖➖\n👁 پیش‌نمایش زنده - روی هرکدوم بزن تا ویرایشش کنی 👇";
@@ -4545,7 +5209,7 @@ if (!function_exists('genbtn_list_payload')) {
             $kb['inline_keyboard'][] = [['text' => $curText, 'callback_data' => "gbtn|open|{$lang}|{$alias}|{$idx}{$gb_sfx}", 'style' => $curStyle]];
         }
         $kb['inline_keyboard'][] = [['text' => '🔁 ریست همه به پیش‌فرض', 'callback_data' => "gbtn|rstall|{$lang}|{$alias}{$gb_sfx}", 'style' => 'danger']];
-        $backKeyMap = ['su' => 'users.sell.selectUsernamePrompt', 'cf' => 'users.sell.preInvoice', 'ns' => 'users.sell.service_not_available', 'te' => 'textbot.testExpired'];
+        $backKeyMap = ['su' => 'users.sell.selectUsernamePrompt', 'cf' => 'users.sell.preInvoice', 'ns' => 'users.sell.service_not_available', 'te' => 'textbot.testExpired', 'sc' => 'users.sell.service_sell', 'bc' => 'users.Balance.chargeSuccess'];
         $backKey = ($origin === 'u') ? 'users.usertest.selectUsernamePrompt' : ($backKeyMap[$alias] ?? 'users.sell.selectUsernamePrompt');
         $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "bt_edit|{$lang}|{$backKey}", 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
@@ -5036,20 +5700,42 @@ if (!function_exists('topup_disc_method_to_gateway')) {
     }
 }
 if (!function_exists('topup_disc_admin_restrictions_bypassed')) {
-    // true when $userId is an admin AND the 🧪 اعمال محدودیت‌ها روی خودم
-    // toggle (topup_disc_hub_payload) is off (the default) - lets an admin
-    // preview any discount's real caption/behavior without their own
-    // (inevitably non-"new", already-used) account tripping the per-user
-    // or new-users-only checks. Flip the toggle on to test the fully
-    // enforced behavior exactly as a real user would experience it.
+    // used to be an opt-in "exempt admins from their own per-user / new-
+    // users-only discount limits, for easier testing" toggle (setting.
+    // topup_disc_admin_selftest, flipped from topup_disc_hub_payload's now-
+    // removed 🧪 button). Removed on explicit request: discount limits now
+    // always apply to admins exactly like any other user, unconditionally.
     function topup_disc_admin_restrictions_bypassed($userId)
     {
-        $admin_ids = select("admin", "id_admin", null, null, "FETCH_COLUMN");
-        if (!is_array($admin_ids) || !in_array((string) $userId, array_map('strval', $admin_ids), true)) {
+        return false;
+    }
+}
+if (!function_exists('topup_disc_auto_eligible')) {
+    // single source of truth for "would this user still get the codeless
+    // auto-discount on this gateway right now" - used both to decide the real
+    // bonus at credit time (topup_disc_effective) and to decide whether to
+    // even mention it in the top-up caption beforehand, so the two can never
+    // drift out of sync the way they did before (caption used to ignore the
+    // per-user cap entirely)
+    function topup_disc_auto_eligible($userId, $lang, $gatewayKey, $auto = null)
+    {
+        if ($auto === null) {
+            $auto = topup_disc_auto_for($lang, $gatewayKey);
+        }
+        if (empty($auto['enabled'])) {
             return false;
         }
-        $setting = select("setting", "*", null, null, "select");
-        return ($setting['topup_disc_admin_selftest'] ?? '0') !== '1';
+        if (topup_disc_admin_restrictions_bypassed($userId)) {
+            return true;
+        }
+        $perUser = intval($auto['limitPerUser'] ?? 1);
+        if ($perUser > 0 && topup_disc_auto_user_count($userId, $lang, $gatewayKey) >= $perUser) {
+            return false;
+        }
+        if (!empty($auto['newUserOnly']) && topup_disc_user_has_any_paid_topup($userId)) {
+            return false;
+        }
+        return true;
     }
 }
 if (!function_exists('topup_disc_user_has_any_paid_topup')) {
@@ -5398,12 +6084,26 @@ if (!function_exists('topup_disc_method_caption')) {
         }
 
         $autos = topup_disc_live_autos($lang);
-        if (!empty($autos)) {
+        $eligibleAutos = [];
+        foreach ($autos as $gw => $a) {
+            if (topup_disc_auto_eligible($userId, $lang, $gw, $a)) {
+                $eligibleAutos[$gw] = $a;
+            }
+        }
+        if (!empty($eligibleAutos)) {
             $autoLines = ['🎯 <b>تخفیف خودکار (بدون کد)</b>'];
             $exp = 0;
-            foreach ($autos as $gw => $a) {
+            foreach ($eligibleAutos as $gw => $a) {
                 $autoLines[] = '• ' . htmlspecialchars(topup_disc_gateway_label($gw, $textbotlang), ENT_QUOTES)
                     . ': <b>' . htmlspecialchars(topup_disc_admin_value_label($a), ENT_QUOTES) . '</b>';
+                $perUser = intval($a['limitPerUser'] ?? 0);
+                if ($perUser > 0) {
+                    $used = topup_disc_auto_user_count($userId, $lang, $gw);
+                    $left = max(0, $perUser - $used);
+                    $autoLines[] = '  🔁 قابل استفاده: ' . $left . ' بار از ' . $perUser . ' بار';
+                } else {
+                    $autoLines[] = '  🔁 نامحدود';
+                }
                 $e = intval($a['expiry'] ?? 0);
                 if ($e > 0 && ($exp === 0 || $e < $exp)) {
                     $exp = $e;
@@ -5415,7 +6115,6 @@ if (!function_exists('topup_disc_method_caption')) {
             } else {
                 $autoLines[] = '⏳ اعتبار: بدون محدودیت زمانی';
             }
-            $autoLines[] = '🔁 برای همه کاربران، نامحدود';
             $parts[] = implode("\n", $autoLines);
         }
 
@@ -5451,15 +6150,6 @@ if (!function_exists('topup_disc_method_keyboard')) {
         $liveAutos = topup_disc_live_autos($lang);
         if (!$anyCodes && empty($liveAutos)) {
             return $kbJson;
-        }
-        // a codeless discount is otherwise invisible here - give it its own row
-        // so the user can see the terms without having to pick a gateway first
-        if (!empty($liveAutos)) {
-            $kb['inline_keyboard'][] = [[
-                'text' => '🎯 تخفیف خودکار فعال',
-                'callback_data' => 'topup_disc_auto_info',
-                'style' => 'danger',
-            ]];
         }
         if (!$anyCodes) {
             return json_encode($kb);
@@ -5691,14 +6381,12 @@ if (!function_exists('topup_disc_hub_payload')) {
         $auto = topup_disc_auto_for($lang, $key);
         $codes = topup_disc_codes_for($lang, $key);
         $autoOn = !empty($auto['enabled']) && floatval($auto['value'] ?? 0) > 0;
-        $adminSelfTest = (select("setting", "*", null, null, "select")['topup_disc_admin_selftest'] ?? '0') === '1';
 
         $info = "🎁 <b>تخفیف شارژ</b> — <code>{$key}</code>\n➖➖➖➖➖➖➖➖➖➖\n";
         $info .= "تخفیف روی شارژ کیف پول: کاربر همون مبلغ رو پرداخت می‌کنه، ولی بیشتر شارژ می‌شه.\n";
         $info .= "➖➖➖➖➖➖➖➖➖➖\n";
         $info .= "🎯 تخفیف خودکار (بدون کد): " . ($autoOn ? topup_disc_admin_value_label($auto) . ' ✅' : 'خاموش') . "\n";
         $info .= "🎟 کدهای تخفیف: " . count($codes) . "\n";
-        $info .= "🧪 محدودیت «هر کاربر»/«فقط کاربران جدید» روی خودِ ادمین‌ها: " . ($adminSelfTest ? 'فعاله (مثل یه کاربر واقعی)' : 'غیرفعاله (ادمین‌ها همیشه واجد شرایطن، برای دیدن راحت‌تر نتیجه)') . "\n";
         if (!$autoOn && floatval($auto['value'] ?? 0) > 0) {
             $info .= "\n⚠️ <b>تخفیف خودکار مقدار داره ولی خاموشه</b> — روشنش کن تا اعمال بشه.\n";
         }
@@ -5735,11 +6423,6 @@ if (!function_exists('topup_disc_hub_payload')) {
             'text' => ($tpd_nOn ? '✅ ' : '') . '🔔 اعلان‌های تخفیف (عمومی)',
             'callback_data' => "tpdnotif:{$lang}:{$key}",
             'style' => $tpd_nOn ? 'success' : 'primary',
-        ]];
-        $kb['inline_keyboard'][] = [[
-            'text' => ($adminSelfTest ? '✅ ' : '') . '🧪 اعمال محدودیت‌ها روی خودم (تست ادمین)',
-            'callback_data' => "tpdadmintest:{$lang}:{$key}",
-            'style' => $adminSelfTest ? 'success' : 'primary',
         ]];
         $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "dslang:{$lang}", 'style' => 'danger']];
         return [$info, json_encode($kb)];
@@ -6119,15 +6802,10 @@ if (!function_exists('topup_disc_effective')) {
         $auto = topup_disc_auto_for($lang, $gatewayKey);
         $autoLive = !empty($auto['enabled'])
             && (intval($auto['expiry'] ?? 0) === 0 || time() < intval($auto['expiry']));
-        if ($autoLive) {
-            $autoPerUser = intval($auto['limitPerUser'] ?? 1);
-            $autoOk = $adminBypass || (($autoPerUser === 0 || topup_disc_auto_user_count($userId, $lang, $gatewayKey) < $autoPerUser)
-                && (empty($auto['newUserOnly']) || !topup_disc_user_has_any_paid_topup($userId)));
-            if ($autoOk) {
-                $b = topup_disc_bonus_of($auto, $amount);
-                if ($b > 0) {
-                    $candidates[] = ['source' => 'auto', 'bonus' => $b, 'disc' => $auto, 'code' => ''];
-                }
+        if ($autoLive && topup_disc_auto_eligible($userId, $lang, $gatewayKey, $auto)) {
+            $b = topup_disc_bonus_of($auto, $amount);
+            if ($b > 0) {
+                $candidates[] = ['source' => 'auto', 'bonus' => $b, 'disc' => $auto, 'code' => ''];
             }
         }
         $active = topup_disc_user_active($userId);
@@ -6692,7 +7370,7 @@ if (!function_exists('config_col_order_payload')) {
     // (keyboard_config() in keyboard.php): the "دریافت کانفیگ" button, or the
     // config's display name - shows a live 2-row preview so the admin can see
     // exactly what the header + a sample row will look like before saving
-    function config_col_order_payload($textbotlang, $originLang = null, $originKey = null)
+    function config_col_order_payload($textbotlang, $originLang = null, $originKey = null, $backCallback = null, $captionKey = 'users.status.getConfigHint')
     {
         $lang = $originLang ?? 'fa';
         $setting = select("setting", "*", null, null, "select");
@@ -6748,8 +7426,10 @@ if (!function_exists('config_col_order_payload')) {
             'style' => ($nameFirst ? 'success' : 'primary'),
         ]];
         if ($originLang !== null) {
-            $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش کپشن این بخش', 'callback_data' => "bt_edit|{$originLang}|users.status.getConfigHint", 'style' => 'primary']];
-            $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "bt_edit|{$originLang}|{$originKey}", 'style' => 'danger']];
+            if ($captionKey !== null) {
+                $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش کپشن این بخش', 'callback_data' => "bt_edit|{$originLang}|{$captionKey}", 'style' => 'primary']];
+            }
+            $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => $backCallback ?? "bt_edit|{$originLang}|{$originKey}", 'style' => 'danger']];
         }
         return [$info, json_encode($kb)];
     }
@@ -7472,7 +8152,7 @@ function isBase64($string)
     }
     return false;
 }
-function sendMessageService($panel_info, $config, $sub_link, $username_service, $reply_markup, $caption, $invoice_id, $user_id = null, $image = 'images.jpg')
+function sendMessageService($panel_info, $config, $sub_link, $username_service, $reply_markup, $caption, $invoice_id, $user_id = null, $image = 'images.jpg', $kind = 'purchase')
 {
     global $setting, $from_id, $textbotlang;
     if (!check_active_btn($setting['keyboardmain'], "text_help"))
@@ -7518,9 +8198,11 @@ function sendMessageService($panel_info, $config, $sub_link, $username_service, 
     } else {
         sendmessage($user_id, $caption, $reply_markup, 'HTML');
     }
-    if ($panel_info['config'] == "onconfig" && $setting['status_keyboard_config'] == "1") {
+    if ($panel_info['config'] == "onconfig" && config_delivery_mode($kind, $panel_info['code_panel'] ?? null) === "2") {
         if (is_array($config)) {
-            sendmessage($user_id, $textbotlang['hardcoded']['getConfigHint'], keyboard_config($config, $invoice_id, false), 'HTML');
+            $cd_hintKey = ($kind === 'usertest') ? 'textbot.getConfigHintTest' : 'textbot.getConfigHintBuy';
+            $cd_hintText = bottext_resolve_key($cd_hintKey);
+            sendmessage($user_id, $cd_hintText !== '' ? $cd_hintText : $textbotlang['hardcoded']['getConfigHint'], keyboard_config($config, $invoice_id, false), 'HTML');
         }
     }
 }
