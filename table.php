@@ -141,7 +141,7 @@ try {
         'uptime_node' => false,
         'uptime_panel' => false,
     ));
-    $keyboardmain = '{"keyboard":[[{"text":"text_sell"},{"text":"text_extend"}],[{"text":"text_usertest"},{"text":"text_wheel_luck"}],[{"text":"text_Purchased_services"},{"text":"accountwallet"}],[{"text":"addbalance"}],[{"text":"text_affiliates"},{"text":"text_Tariff_list"}],[{"text":"text_support"},{"text":"text_help"}],[{"text":"text_change_language"}]]}';
+    $keyboardmain = '{"keyboard":[[{"text":"text_sell"},{"text":"text_extend"}],[{"text":"text_usertest"},{"text":"text_wheel_luck","hidden":true}],[{"text":"text_Purchased_services"},{"text":"accountwallet"}],[{"text":"addbalance"}],[{"text":"text_affiliates"},{"text":"text_Tariff_list"}],[{"text":"text_support"},{"text":"text_help"}],[{"text":"text_change_language","hidden":true}]]}';
     $tableExists = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$tableExists) {
         $stmt = $pdo->prepare("CREATE TABLE $tableName (
@@ -240,6 +240,9 @@ timeauto_not_verify,status_keyboard_config,cron_status
         addFieldToTable("setting", "statusnoteforf", "1", "varchar(20)");
         addFieldToTable("setting", "timeauto_not_verify", "4", "varchar(20)");
         addFieldToTable("setting", "statuscopycart", "0", "varchar(20)");
+        addFieldToTable("setting", "miniapp_status", "offminiapp", "VARCHAR(20)");
+        addFieldToTable("setting", "miniapp_bot_logo", "0", "VARCHAR(10)");
+        addFieldToTable("setting", "miniapp_bot_name", "", "VARCHAR(60)");
         addFieldToTable("setting", "keyboardmain", $keyboardmain, "TEXT");
         addFieldToTable("setting", "Dice", '0', "varchar(45)");
         addFieldToTable("setting", "Debtsettlement", '1', "varchar(45)");
@@ -1378,6 +1381,14 @@ addFieldToTable("setting", "lang_gwsettings", '{}', "TEXT");
 addFieldToTable("setting", "gw_currency_map", '{"card":"IRT","zarinpal":"IRT","aqayepardakht":"IRT","iranpay1":"IRT","iranpay2":"IRT","iranpay3":"IRT","paymentnotverify":"IRT","plisio":"USD","nowpayment":"USD","digitaltron":"USD"}', "TEXT");
 addFieldToTable("product", "currency", "IRT", "VARCHAR(10)");
 addFieldToTable("user", "currency", "IRT", "VARCHAR(10)");
+addFieldToTable("channels", "id", null, "INT AUTO_INCREMENT PRIMARY KEY");
+addFieldToTable("channels", "style", null, "VARCHAR(20)");
+addFieldToTable("channels", "custom_text", null, "VARCHAR(300)");
+addFieldToTable("channels", "emoji", null, "VARCHAR(50)");
+addFieldToTable("channels", "icon_emoji", null, "VARCHAR(100)");
+addFieldToTable("channels", "emoji_pos", null, "VARCHAR(10)");
+addFieldToTable("channels", "hidden", null, "VARCHAR(5)");
+addFieldToTable("setting", "channelButtonsOrder", null, "TEXT");
 try {
     $result = $pdo->query("SHOW TABLES LIKE 'reagent_report'");
     $table_exists = ($result->rowCount() > 0);

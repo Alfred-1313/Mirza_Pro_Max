@@ -4172,14 +4172,14 @@ if (!function_exists('statusbtn_detail_payload')) {
         $info .= "👁 پیش‌نمایش زنده 👇";
         $kb = ['inline_keyboard' => []];
         $kb['inline_keyboard'][] = [$previewBtn];
-        $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش متن', 'callback_data' => "statusbtn|text|{$lang}|{$key}", 'style' => (isset($ov['text']) && $ov['text'] !== '') ? 'success' : 'primary']];
+        $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش متن', 'callback_data' => "statusbtn|text|{$lang}|{$key}", 'style' => 'primary']];
         $kb['inline_keyboard'][] = [
             ['text' => ($cur['style'] === 'primary' ? '✅ ' : '') . '🔵 آبی', 'callback_data' => "statusbtn|style|{$lang}|{$key}|primary", 'style' => 'primary'],
             ['text' => ($cur['style'] === 'success' ? '✅ ' : '') . '🟢 سبز', 'callback_data' => "statusbtn|style|{$lang}|{$key}|success", 'style' => 'success'],
             ['text' => ($cur['style'] === 'danger' ? '✅ ' : '') . '🔴 قرمز', 'callback_data' => "statusbtn|style|{$lang}|{$key}|danger", 'style' => 'danger'],
         ];
-        $kb['inline_keyboard'][] = [['text' => ($hasEmoji ? '✅ ' : '') . '💎 ایموجی دکمه', 'callback_data' => "statusbtn|emoji|{$lang}|{$key}", 'style' => $hasEmoji ? 'success' : 'primary']];
-        $kb['inline_keyboard'][] = [['text' => ($curSimple ? '✅ ' : '') . '🎭 حالت ساده (بدون ایموجی)', 'callback_data' => "statusbtn|simple|{$lang}|{$key}", 'style' => $curSimple ? 'success' : 'primary']];
+        $kb['inline_keyboard'][] = [['text' => ($hasEmoji ? '✅ ' : '') . '💎 ایموجی دکمه', 'callback_data' => "statusbtn|emoji|{$lang}|{$key}", 'style' => 'primary']];
+        $kb['inline_keyboard'][] = [['text' => ($curSimple ? '✅ ' : '') . '🎭 حالت ساده (بدون ایموجی)', 'callback_data' => "statusbtn|simple|{$lang}|{$key}", 'style' => 'primary']];
         $kb['inline_keyboard'][] = [
             ['text' => ($curPos === 'right' ? '✅ ' : '') . '➡️ راست', 'callback_data' => "statusbtn|pos|{$lang}|{$key}|right", 'style' => 'primary'],
             ['text' => ($curPos === 'left' ? '✅ ' : '') . '⬅️ چپ', 'callback_data' => "statusbtn|pos|{$lang}|{$key}|left", 'style' => 'primary'],
@@ -4335,7 +4335,7 @@ if (!function_exists('config_delivery_panels_payload')) {
             $m = config_delivery_mode($kind, $code);
             $touched = isset($map[$kind][$code]);
             $label = "🖥 {$p['name_panel']}  •  حالت " . config_delivery_mode_fa($m);
-            $kb['inline_keyboard'][] = [['text' => $label, 'callback_data' => "cfgdeliv|p|{$lang}|{$code}|{$origin}", 'style' => $touched ? 'success' : 'primary']];
+            $kb['inline_keyboard'][] = [['text' => $label, 'callback_data' => "cfgdeliv|p|{$lang}|{$code}|{$origin}", 'style' => 'primary']];
         }
         $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => config_delivery_back_cb($lang, $origin), 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
@@ -4369,13 +4369,13 @@ if (!function_exists('config_delivery_panel_payload')) {
         ];
         $kb['inline_keyboard'][] = [['text' => bt_section_meta('cfgdeliv_edit')['label'], 'callback_data' => 'bt_sep|cfgdeliv_edit']];
         if ($kind === 'purchase') {
-            $kb['inline_keyboard'][] = [['text' => '📝 پیام کامل (حالت ۱)', 'callback_data' => "cfgdeliv|msg|{$lang}|{$codePanel}|{$origin}|ap", 'style' => bottext_key_touched('textbot.afterPay', $lang) ? 'success' : 'primary']];
-            $kb['inline_keyboard'][] = [['text' => '📝 کپشن صفحه‌ی کانفیگ (حالت ۲)', 'callback_data' => "cfgdeliv|msg|{$lang}|{$codePanel}|{$origin}|cb", 'style' => bottext_key_touched('textbot.getConfigHintBuy', $lang) ? 'success' : 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '📝 پیام کامل (حالت ۱)', 'callback_data' => "cfgdeliv|msg|{$lang}|{$codePanel}|{$origin}|ap", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '📝 کپشن صفحه‌ی کانفیگ (حالت ۲)', 'callback_data' => "cfgdeliv|msg|{$lang}|{$codePanel}|{$origin}|cb", 'style' => 'primary']];
         } else {
-            $kb['inline_keyboard'][] = [['text' => '📝 پیام کامل (حالت ۱)', 'callback_data' => "cfgdeliv|msg|{$lang}|{$codePanel}|{$origin}|at", 'style' => bottext_key_touched('textbot.afterText', $lang) ? 'success' : 'primary']];
-            $kb['inline_keyboard'][] = [['text' => '📝 کپشن صفحه‌ی کانفیگ (حالت ۲)', 'callback_data' => "cfgdeliv|msg|{$lang}|{$codePanel}|{$origin}|ct", 'style' => bottext_key_touched('textbot.getConfigHintTest', $lang) ? 'success' : 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '📝 پیام کامل (حالت ۱)', 'callback_data' => "cfgdeliv|msg|{$lang}|{$codePanel}|{$origin}|at", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '📝 کپشن صفحه‌ی کانفیگ (حالت ۲)', 'callback_data' => "cfgdeliv|msg|{$lang}|{$codePanel}|{$origin}|ct", 'style' => 'primary']];
         }
-        $kb['inline_keyboard'][] = [['text' => '🎨 دکمه‌ها و ترتیب کانفیگ‌ها (مشترک بین خرید و تست)', 'callback_data' => "cfgdeliv|cfgcol|{$lang}|{$codePanel}|{$origin}", 'style' => config_delivery_cfgcol_touched($lang) ? 'success' : 'primary']];
+        $kb['inline_keyboard'][] = [['text' => '🎨 دکمه‌ها و ترتیب کانفیگ‌ها (مشترک بین خرید و تست)', 'callback_data' => "cfgdeliv|cfgcol|{$lang}|{$codePanel}|{$origin}", 'style' => 'primary']];
         $kb['inline_keyboard'][] = [['text' => '🔁 ریست حالت این پنل به پیش‌فرض', 'callback_data' => "cfgdeliv|rst|{$lang}|{$codePanel}|{$kind}|{$origin}", 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به لیست پنل‌ها', 'callback_data' => "cfgdeliv|list|{$lang}|{$origin}", 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
@@ -4653,8 +4653,7 @@ if (!function_exists('bt_reset_picker_payload')) {
             $kb['inline_keyboard'][] = [[
                 'text' => ($on ? '✅ ' : '❌ ') . $s['label'] . ' (' . $n . ')',
                 'callback_data' => "bt_rsttog|{$lang}|{$mask}|{$s['bit']}",
-                // green = this category actually HAS customizations to lose
-                'style' => $n > 0 ? 'success' : 'primary',
+                'style' => 'primary',
             ]];
         }
         $kb['inline_keyboard'][] = [
@@ -4737,6 +4736,151 @@ if (!function_exists('mainmenu_sticker_reset_all')) {
         }
         update("setting", "keyboardmain", json_encode($layout, JSON_UNESCAPED_UNICODE), null, null);
         return true;
+    }
+}
+if (!function_exists('strip_leading_emoji')) {
+    // Also defined (guarded) in admin.php for the main-menu button screens;
+    // duplicated here so channel_button_text() below can use it from the
+    // end-user request path (index.php), which never loads admin.php.
+    function strip_leading_emoji($s)
+    {
+        return trim(preg_replace('/^[\x{203C}\x{2049}\x{2139}\x{2194}-\x{2199}\x{21A9}-\x{21AA}\x{231A}-\x{231B}\x{23E9}-\x{23EC}\x{23F0}\x{23F3}\x{24C2}\x{25AA}-\x{25AB}\x{25B6}\x{25C0}\x{25FB}-\x{25FE}\x{2600}-\x{27BF}\x{2934}-\x{2935}\x{2B05}-\x{2B07}\x{2B1B}-\x{2B1C}\x{2B50}\x{2B55}\x{3030}\x{303D}\x{3297}\x{3299}\x{FE0E}\x{FE0F}\x{200D}\x{2764}\x{20E3}\x{1F000}-\x{1FAFF}\x{1F1E6}-\x{1F1FF}\s]*/u', '', (string) $s));
+    }
+}
+if (!function_exists('split_leading_emoji')) {
+    function split_leading_emoji($s)
+    {
+        $s = (string) $s;
+        $rest = strip_leading_emoji($s);
+        if ($rest === '' || $rest === $s) {
+            return ['', $s];
+        }
+        $emoji = trim(mb_substr($s, 0, mb_strlen($s) - mb_strlen($rest)));
+        return [$emoji, $rest];
+    }
+}
+if (!function_exists('channels_effective_order')) {
+    // Applies the admin's custom channel-button order on top of the raw
+    // `channels` rows: stored order first (skipping any id no longer
+    // present), then any channel NOT yet in that list appended at the end in
+    // natural id order - so a channel added after the order was last saved
+    // is never silently dropped from the join-gate message.
+    function channels_effective_order()
+    {
+        $rows = select("channels", "*", null, null, "fetchAll");
+        if (!is_array($rows)) {
+            return [];
+        }
+        $byId = [];
+        foreach ($rows as $r) {
+            $byId[(int) $r['id']] = $r;
+        }
+        $setting = select("setting", "*", null, null, "select");
+        $order = json_decode((string) ($setting['channelButtonsOrder'] ?? ''), true);
+        $ordered = [];
+        if (is_array($order)) {
+            foreach ($order as $oid) {
+                $oid = (int) $oid;
+                if (isset($byId[$oid])) {
+                    $ordered[] = $byId[$oid];
+                    unset($byId[$oid]);
+                }
+            }
+        }
+        foreach ($byId as $r) {
+            $ordered[] = $r;
+        }
+        return $ordered;
+    }
+}
+if (!function_exists('channel_button_style')) {
+    function channel_button_style($row)
+    {
+        $s = $row['style'] ?? '';
+        return in_array($s, ['primary', 'success', 'danger'], true) ? $s : '';
+    }
+}
+if (!function_exists('channel_button_name')) {
+    function channel_button_name($row)
+    {
+        $t = trim((string) ($row['custom_text'] ?? ''));
+        return $t !== '' ? $t : (string) $row['remark'];
+    }
+}
+if (!function_exists('channel_button_text')) {
+    // Builds the exact button label the real join-gate message shows,
+    // applying the emoji override (text or premium) and its per-item
+    // left/right position - mirrors the main-menu emoji preview logic
+    // (emoji_sticker_editor_payload) but per-row instead of one global
+    // switch. Returns [label, iconCustomEmojiId] - the caller sets
+    // icon_custom_emoji_id on the button only when the second value isn't ''.
+    function channel_button_text($row, $forAdminPreview = false)
+    {
+        $name = channel_button_name($row);
+        $iconEmoji = (string) ($row['icon_emoji'] ?? '');
+        $emoji = (string) ($row['emoji'] ?? '');
+        $pos = ($row['emoji_pos'] ?? '') === 'left' ? 'left' : 'right';
+        $text = $name;
+        $iconId = '';
+        if ($iconEmoji !== '') {
+            $text = strip_leading_emoji($name);
+            $iconId = $iconEmoji;
+        } elseif ($emoji !== '') {
+            $text = ($pos === 'left') ? ($name . ' ' . $emoji) : ($emoji . ' ' . $name);
+        }
+        if ($forAdminPreview && !empty($row['hidden'])) {
+            $text = '🚫 ' . $text;
+        }
+        return [$text, $iconId];
+    }
+}
+if (!function_exists('channel_buttons_any_customized')) {
+    function channel_buttons_any_customized()
+    {
+        $rows = select("channels", "*", null, null, "fetchAll");
+        if (is_array($rows)) {
+            foreach ($rows as $r) {
+                if (($r['style'] ?? '') !== '' || ($r['custom_text'] ?? '') !== '' || ($r['emoji'] ?? '') !== ''
+                    || ($r['icon_emoji'] ?? '') !== '' || !empty($r['hidden'])) {
+                    return true;
+                }
+            }
+        }
+        $setting = select("setting", "*", null, null, "select");
+        return (string) ($setting['channelButtonsOrder'] ?? '') !== '';
+    }
+}
+if (!function_exists('channel_buttons_reset')) {
+    // $parts: any of 'color', 'emoji', 'rename', 'visibility', 'layout'.
+    // Mirrors mainmenu_appearance_reset()'s shape/semantics, applied to the
+    // channels table + its order setting. Resetting clears the override
+    // columns (NULL) rather than writing the default back over them, so a
+    // channel added later never inherits a stale "default" value.
+    function channel_buttons_reset(array $parts)
+    {
+        global $pdo;
+        $fields = [];
+        if (in_array('color', $parts, true)) {
+            $fields[] = 'style';
+        }
+        if (in_array('emoji', $parts, true)) {
+            $fields[] = 'emoji';
+            $fields[] = 'icon_emoji';
+            $fields[] = 'emoji_pos';
+        }
+        if (in_array('rename', $parts, true)) {
+            $fields[] = 'custom_text';
+        }
+        if (in_array('visibility', $parts, true)) {
+            $fields[] = 'hidden';
+        }
+        if (!empty($fields)) {
+            $setClause = implode(', ', array_map(function ($f) { return "`$f` = NULL"; }, $fields));
+            $pdo->exec("UPDATE channels SET $setClause");
+        }
+        if (in_array('layout', $parts, true)) {
+            update("setting", "channelButtonsOrder", null, null, null);
+        }
     }
 }
 if (!function_exists('bottext_merge_overrides')) {
@@ -5181,6 +5325,25 @@ if (!function_exists('test_expired_kb')) {
         return json_encode(['inline_keyboard' => [[genbtn_render($defs[0], $ov, $defs[0]['callback_data'])]]]);
     }
 }
+if (!function_exists('notify_test_expired')) {
+    // Shared by cronbot/configtest.php (the normal path) AND every place in
+    // index.php that silently disables a stale test invoice while a user is
+    // just browsing 🛍 سرویس‌های من (see e.g. the "user not found" branches) -
+    // both paths race to be the one that flips Status to 'disabled', and
+    // whichever wins used to leave the loser's notification code dead. This
+    // makes the notification fire wherever the disable actually happens.
+    function notify_test_expired($invoiceRow, $textbotlang)
+    {
+        $user = select("user", "*", "id", $invoiceRow['id_user'], "select");
+        if (!$user || intval($user['status_cron'] ?? 0) == 0) {
+            return;
+        }
+        $Response = test_expired_kb($user['lang'] ?? 'fa', $textbotlang);
+        $textexpire = str_replace('{username}', $invoiceRow['username'], $textbotlang['textbot']['testExpired']);
+        $textexpire = strtr($textexpire, bottext_user_placeholders($user, $invoiceRow['id_user']));
+        sendmessage($invoiceRow['id_user'], $textexpire, $Response, 'HTML');
+    }
+}
 if (!function_exists('genbtn_list_payload')) {
     // $origin: '' = opened from the alias's own caption item (default), 'u' =
     // opened from the 🔑 تنظیم اکانت تست screen. Only affects where 🔙 بازگشت
@@ -5235,14 +5398,14 @@ if (!function_exists('genbtn_detail_payload')) {
         $info = "🔘 <b>ویرایش {$d['name']}</b>\n➖➖➖➖➖➖➖➖➖➖\n👁 پیش‌نمایش زنده 👇";
         $kb = ['inline_keyboard' => []];
         $kb['inline_keyboard'][] = [$previewBtn];
-        $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش متن', 'callback_data' => "gbtn|text|{$lang}|{$alias}|{$idx}{$gb_sfx}", 'style' => (isset($ov['text']) && $ov['text'] !== '') ? 'success' : 'primary']];
+        $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش متن', 'callback_data' => "gbtn|text|{$lang}|{$alias}|{$idx}{$gb_sfx}", 'style' => 'primary']];
         $kb['inline_keyboard'][] = [
             ['text' => ($curStyle === 'primary' ? '✅ ' : '') . '🔵 آبی', 'callback_data' => "gbtn|style|{$lang}|{$alias}|{$idx}|primary{$gb_sfx}", 'style' => 'primary'],
             ['text' => ($curStyle === 'success' ? '✅ ' : '') . '🟢 سبز', 'callback_data' => "gbtn|style|{$lang}|{$alias}|{$idx}|success{$gb_sfx}", 'style' => 'success'],
             ['text' => ($curStyle === 'danger' ? '✅ ' : '') . '🔴 قرمز', 'callback_data' => "gbtn|style|{$lang}|{$alias}|{$idx}|danger{$gb_sfx}", 'style' => 'danger'],
         ];
-        $kb['inline_keyboard'][] = [['text' => ($hasEmoji ? '✅ ' : '') . '💎 ایموجی دکمه', 'callback_data' => "gbtn|emoji|{$lang}|{$alias}|{$idx}{$gb_sfx}", 'style' => $hasEmoji ? 'success' : 'primary']];
-        $kb['inline_keyboard'][] = [['text' => ($curSimple ? '✅ ' : '') . '🎭 حالت ساده (بدون ایموجی)', 'callback_data' => "gbtn|simple|{$lang}|{$alias}|{$idx}{$gb_sfx}", 'style' => $curSimple ? 'success' : 'primary']];
+        $kb['inline_keyboard'][] = [['text' => ($hasEmoji ? '✅ ' : '') . '💎 ایموجی دکمه', 'callback_data' => "gbtn|emoji|{$lang}|{$alias}|{$idx}{$gb_sfx}", 'style' => 'primary']];
+        $kb['inline_keyboard'][] = [['text' => ($curSimple ? '✅ ' : '') . '🎭 حالت ساده (بدون ایموجی)', 'callback_data' => "gbtn|simple|{$lang}|{$alias}|{$idx}{$gb_sfx}", 'style' => 'primary']];
         $kb['inline_keyboard'][] = [
             ['text' => ($curPos === 'right' ? '✅ ' : '') . '➡️ راست', 'callback_data' => "gbtn|pos|{$lang}|{$alias}|{$idx}|right{$gb_sfx}", 'style' => 'primary'],
             ['text' => ($curPos === 'left' ? '✅ ' : '') . '⬅️ چپ', 'callback_data' => "gbtn|pos|{$lang}|{$alias}|{$idx}|left{$gb_sfx}", 'style' => 'primary'],
@@ -5324,7 +5487,7 @@ if (!function_exists('usertest_prompt_button_detail_payload')) {
         $info .= "👁 پیش‌نمایش زنده 👇";
         $kb = ['inline_keyboard' => []];
         $kb['inline_keyboard'][] = [['text' => $curText, 'callback_data' => 'none', 'style' => $curStyle]];
-        $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش متن', 'callback_data' => "btact|btntext|{$lang}|{$idx}", 'style' => (isset($ov['text']) && $ov['text'] !== '') ? 'success' : 'primary']];
+        $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش متن', 'callback_data' => "btact|btntext|{$lang}|{$idx}", 'style' => 'primary']];
         $kb['inline_keyboard'][] = [
             ['text' => ($curStyle === 'primary' ? '✅ ' : '') . '🔵 آبی', 'callback_data' => "btact|btnstyle|{$lang}|{$idx}|primary", 'style' => 'primary'],
             ['text' => ($curStyle === 'success' ? '✅ ' : '') . '🟢 سبز', 'callback_data' => "btact|btnstyle|{$lang}|{$idx}|success", 'style' => 'success'],

@@ -271,8 +271,12 @@ return array (
         'label' => '🎁 پیام تخفیف (وقتی تخفیف روی شارژ اعمال بشه)',
         'key' => 'users.Balance.chargeSuccessDiscount',
       ),
+      array (
+        'label' => '📯 پیام عضویت اجباری کانال',
+        'key' => 'textbot.channel',
+      ),
     ),
-  ),  'language' => 
+  ),  'language' =>
   array (
     'selectPrompt' => '🌏 زبان مورد نظر خود را انتخاب نمایید.',
     'changeButton' => '🌏 تغییر زبان',
@@ -6256,8 +6260,46 @@ nowpayments.io
     'featureStatus' => '⚙️ وضعیت قابلیت ها',
     'financial' => '💎 مالی',
     'firstConnectTime' => '⚙️ زمان اولین اتصال',
-    'firstConnection' => '📊 اولین اتصال',
-    'firstConnectionTest' => '📊 اولین اتصال اکانت تست',
+    'firstConnection' => '⏳ شروع تایم از اولین اتصال کاربر',
+    'firstConnectionTest' => '⏳ شروع تایم تست از اولین اتصال کاربر',
+    'startTimingBuy' => '⏳ شروع شمارش زمان اشتراک',
+    'startTimingTest' => '⏳ شروع شمارش زمان تست',
+    'onHoldOptionConnect' => '🔌 از اولین اتصال کاربر',
+    'onHoldOptionImmediate' => '⚡️ همان لحظه دریافت',
+    'autoDeleteExpiredTest' => '🗑 حذف خودکار تست منقضی',
+    'delUsertestTitle' => "🗑 حذف خودکار اکانت‌های تست منقضی\n\nوضعیت فعلی: %s",
+    'delUsertestStatusOff' => 'خاموش',
+    'delUsertestStatusOn' => 'بعد از %s ساعت از لحظهٔ دریافت تست، در صورت عدم استفاده پاک می‌شود',
+    'delUsertestOff' => '❌ خاموش کردن',
+    'delUsertestSetHours' => '✏️ تنظیم تعداد ساعت',
+    'delUsertestAskHours' => 'عدد ساعت مورد نظر رو بفرست (مثلاً 1 یا 3 یا 24):',
+    'miniAppToggleBtn' => '🛍 روشن/خاموش مینی‌اپ',
+    'miniAppToggleConfirm' => '🛍 وضعیت مینی‌اپ: %s',
+    'miniAppToggleTitle' => '🛍 مینی‌اپ فروشگاهی
+
+با دکمه زیر روشن/خاموشش کنید:',
+    'miniAppSettingsBtn' => '📱 تنظیمات مینی‌اپ',
+    'miniAppHubTitle' => '📱 تنظیمات مینی‌اپ
+
+از دکمه‌های زیر مدیریتش کنید:',
+    'miniAppBrandingHubBtn' => '🎨 برندینگ مینی‌اپ',
+    'miniAppBrandingTitle' => '🎨 برندینگ مینی‌اپ
+
+لوگو و نامی که بالای صفحه مینی‌اپ (کنار پروفایل ربات) نمایش داده می‌شه رو از اینجا تنظیم کنید.
+
+نام فعلی: %s
+لوگو: %s',
+    'miniAppBrandingLogoSet' => 'تنظیم شده ✅',
+    'miniAppBrandingLogoDefault' => 'پیش‌فرض',
+    'miniAppSetLogoBtn' => '🖼 تنظیم لوگوی ربات',
+    'miniAppSetNameBtn' => '✏️ تنظیم نام ربات',
+    'miniAppResetBrandingBtn' => '♻️ بازنشانی برندینگ',
+    'miniAppAskLogo' => 'عکس لوگوی ربات رو به صورت عکس (Photo) ارسال کنید:',
+    'miniAppAskName' => 'نامی که بالای مینی‌اپ نمایش داده بشه رو بفرستید (حداکثر ۴۰ کاراکتر):',
+    'miniAppLogoSaved' => '🖼 لوگو با موفقیت تنظیم شد',
+    'miniAppNameSaved' => '✏️ نام با موفقیت تنظیم شد',
+    'miniAppBrandingReset' => '♻️ برندینگ به حالت پیش‌فرض بازگشت',
+    'miniAppNameTooLong' => 'نام نباید بیشتر از ۴۰ کاراکتر باشه',
     'firstPurchaseBtn' => 'خرید اول',
     'firstPurchaseCommission' => '🎉 پورسانت فقط برای خرید اول',
     'firstPurchaseWheel' => '🎲 گردونه شانس خرید اول',

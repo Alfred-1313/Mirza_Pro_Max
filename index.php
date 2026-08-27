@@ -310,18 +310,30 @@ if ($user['joinchannel'] != "active") {
             $keyboardchannel = [
                 'inline_keyboard' => [],
             ];
-            foreach ($channels as $channel) {
-                $channelremark = select("channels", "*", 'link', $channel, "select");
+            foreach (channels_effective_order() as $channelremark) {
                 if ($channelremark['remark'] == null)
                     continue;
                 if ($channelremark['linkjoin'] == null)
                     continue;
-                $keyboardchannel['inline_keyboard'][] = [
-                    [
-                        'text' => "{$channelremark['remark']}",
-                        'url' => $channelremark['linkjoin']
-                    ],
+                // hidden here means gone from the real message too, not just
+                // the admin preview - channel_button_text() only marks it
+                // with 🚫 for admin screens (forAdminPreview=true), so a
+                // plain call here never leaks that marker to real users
+                if (!empty($channelremark['hidden']))
+                    continue;
+                list($cbc_text, $cbc_iconId) = channel_button_text($channelremark);
+                $cbc_btn = [
+                    'text' => $cbc_text,
+                    'url' => $channelremark['linkjoin']
                 ];
+                if ($cbc_iconId !== '') {
+                    $cbc_btn['icon_custom_emoji_id'] = $cbc_iconId;
+                }
+                $cbc_style = channel_button_style($channelremark);
+                if ($cbc_style !== '') {
+                    $cbc_btn['style'] = $cbc_style;
+                }
+                $keyboardchannel['inline_keyboard'][] = [$cbc_btn];
             }
             $keyboardchannel['inline_keyboard'][] = [['text' => $textbotlang['users']['channel']['confirmjoin'], 'callback_data' => "confirmchannel"]];
             $keyboardchannel = json_encode($keyboardchannel);
@@ -364,18 +376,30 @@ if ($user['joinchannel'] != "active") {
             $keyboardchannel = [
                 'inline_keyboard' => [],
             ];
-            foreach ($channels as $channel) {
-                $channelremark = select("channels", "*", 'link', $channel, "select");
+            foreach (channels_effective_order() as $channelremark) {
                 if ($channelremark['remark'] == null)
                     continue;
                 if ($channelremark['linkjoin'] == null)
                     continue;
-                $keyboardchannel['inline_keyboard'][] = [
-                    [
-                        'text' => "{$channelremark['remark']}",
-                        'url' => $channelremark['linkjoin']
-                    ],
+                // hidden here means gone from the real message too, not just
+                // the admin preview - channel_button_text() only marks it
+                // with 🚫 for admin screens (forAdminPreview=true), so a
+                // plain call here never leaks that marker to real users
+                if (!empty($channelremark['hidden']))
+                    continue;
+                list($cbc_text, $cbc_iconId) = channel_button_text($channelremark);
+                $cbc_btn = [
+                    'text' => $cbc_text,
+                    'url' => $channelremark['linkjoin']
                 ];
+                if ($cbc_iconId !== '') {
+                    $cbc_btn['icon_custom_emoji_id'] = $cbc_iconId;
+                }
+                $cbc_style = channel_button_style($channelremark);
+                if ($cbc_style !== '') {
+                    $cbc_btn['style'] = $cbc_style;
+                }
+                $keyboardchannel['inline_keyboard'][] = [$cbc_btn];
             }
             $keyboardchannel['inline_keyboard'][] = [['text' => $textbotlang['users']['channel']['confirmjoin'], 'callback_data' => "confirmchannel"]];
             $keyboardchannel = json_encode($keyboardchannel);
@@ -385,20 +409,28 @@ if ($user['joinchannel'] != "active") {
     }
 }
 if ($text == "/start" || $datain == "start" || $text == "start") {
-    sendmessage($from_id, strtr($textbotlang['users']['text_start'], bottext_user_placeholders($user, $from_id)), $keyboard, "html");
     update("user", "Processing_value", "0", "id", $from_id);
     update("user", "Processing_value_one", "0", "id", $from_id);
     update("user", "Processing_value_tow", "0", "id", $from_id);
     update("user", "Processing_value_four", "0", "id", $from_id);
     step('home', $from_id);
     $lsw_start = json_decode((string) ($setting['lang_switch'] ?? ''), true);
+    // If the language picker is about to be shown, defer "سلام خوش‌آمدید" to
+    // the setlang: handler (which already sends it) instead of sending it
+    // here too - otherwise the user gets it twice in the same /start.
+    $lsw_will_show_start = false;
     if (is_array($lsw_start) && (($lsw_start['enabled'] ?? '0') === '1')) {
         $lsw_mode_start = ((($lsw_start['mode'] ?? 'once') === 'always')) ? 'always' : 'once';
         if ($lsw_mode_start === 'always' || ($user['lang_prompted'] ?? '0') !== '1') {
-            list($lsw_caption_start, $lsw_kb_start) = language_picker_payload();
-            sendmessage($from_id, $lsw_caption_start, $lsw_kb_start, null);
-            update("user", "lang_prompted", "1", "id", $from_id);
+            $lsw_will_show_start = true;
         }
+    }
+    if ($lsw_will_show_start) {
+        list($lsw_caption_start, $lsw_kb_start) = language_picker_payload();
+        sendmessage($from_id, $lsw_caption_start, $lsw_kb_start, null);
+        update("user", "lang_prompted", "1", "id", $from_id);
+    } else {
+        sendmessage($from_id, strtr($textbotlang['users']['text_start'], bottext_user_placeholders($user, $from_id)), $keyboard, "html");
     }
     return;
 } elseif ($text == "/language" || in_array($text, language_button_labels(), true)) {
@@ -452,7 +484,10 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             $rowDataUserOut = $ManagePanel->DataUser($row['Service_location'], $row['username']);
             if (isset($rowDataUserOut['msg']) && strcasecmp(trim((string) $rowDataUserOut['msg']), "user not found") === 0) {
-                update("invoice", "Status", "disabledn", "id_invoice", $row['id_invoice']);
+                update("invoice", "Status", "disabled", "id_invoice", $row['id_invoice']);
+                if ($row['name_product'] === $textbotlang['Admin']['adminphp']['db_test_service_name']) {
+                    notify_test_expired($row, $textbotlang);
+                }
                 continue;
             }
             $data = "";
@@ -469,7 +504,10 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             $rowDataUserOut = $ManagePanel->DataUser($row['Service_location'], $row['username']);
             if (isset($rowDataUserOut['msg']) && strcasecmp(trim((string) $rowDataUserOut['msg']), "user not found") === 0) {
-                update("invoice", "Status", "disabledn", "id_invoice", $row['id_invoice']);
+                update("invoice", "Status", "disabled", "id_invoice", $row['id_invoice']);
+                if ($row['name_product'] === $textbotlang['Admin']['adminphp']['db_test_service_name']) {
+                    notify_test_expired($row, $textbotlang);
+                }
                 continue;
             }
             $keyboardlists['inline_keyboard'][] = [
@@ -586,7 +624,10 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             $rowDataUserOut = $ManagePanel->DataUser($row['Service_location'], $row['username']);
             if (isset($rowDataUserOut['msg']) && strcasecmp(trim((string) $rowDataUserOut['msg']), "user not found") === 0) {
-                update("invoice", "Status", "disabledn", "id_invoice", $row['id_invoice']);
+                update("invoice", "Status", "disabled", "id_invoice", $row['id_invoice']);
+                if ($row['name_product'] === $textbotlang['Admin']['adminphp']['db_test_service_name']) {
+                    notify_test_expired($row, $textbotlang);
+                }
                 continue;
             }
             $data = "";
@@ -603,7 +644,10 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             $rowDataUserOut = $ManagePanel->DataUser($row['Service_location'], $row['username']);
             if (isset($rowDataUserOut['msg']) && strcasecmp(trim((string) $rowDataUserOut['msg']), "user not found") === 0) {
-                update("invoice", "Status", "disabledn", "id_invoice", $row['id_invoice']);
+                update("invoice", "Status", "disabled", "id_invoice", $row['id_invoice']);
+                if ($row['name_product'] === $textbotlang['Admin']['adminphp']['db_test_service_name']) {
+                    notify_test_expired($row, $textbotlang);
+                }
                 continue;
             }
             $keyboardlists['inline_keyboard'][] = [
@@ -671,7 +715,10 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             $rowDataUserOut = $ManagePanel->DataUser($row['Service_location'], $row['username']);
             if (isset($rowDataUserOut['msg']) && strcasecmp(trim((string) $rowDataUserOut['msg']), "user not found") === 0) {
-                update("invoice", "Status", "disabledn", "id_invoice", $row['id_invoice']);
+                update("invoice", "Status", "disabled", "id_invoice", $row['id_invoice']);
+                if ($row['name_product'] === $textbotlang['Admin']['adminphp']['db_test_service_name']) {
+                    notify_test_expired($row, $textbotlang);
+                }
                 continue;
             }
             $data = "";
@@ -688,7 +735,10 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             $rowDataUserOut = $ManagePanel->DataUser($row['Service_location'], $row['username']);
             if (isset($rowDataUserOut['msg']) && strcasecmp(trim((string) $rowDataUserOut['msg']), "user not found") === 0) {
-                update("invoice", "Status", "disabledn", "id_invoice", $row['id_invoice']);
+                update("invoice", "Status", "disabled", "id_invoice", $row['id_invoice']);
+                if ($row['name_product'] === $textbotlang['Admin']['adminphp']['db_test_service_name']) {
+                    notify_test_expired($row, $textbotlang);
+                }
                 continue;
             }
             $keyboardlists['inline_keyboard'][] = [
@@ -928,7 +978,10 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     }
     $DataUserOut = $ManagePanel->DataUser($nameloc['Service_location'], $nameloc['username']);
     if (isset($DataUserOut['msg']) && $DataUserOut['msg'] == "User not found") {
-        update("invoice", "Status", "disabledn", "id_invoice", $nameloc['id_invoice']);
+        update("invoice", "Status", "disabled", "id_invoice", $nameloc['id_invoice']);
+        if ($nameloc['name_product'] === $textbotlang['Admin']['adminphp']['db_test_service_name']) {
+            notify_test_expired($nameloc, $textbotlang);
+        }
         sendmessage($from_id, $textbotlang['users']['status']['userNotFound'], $keyboard, 'html');
         step('home', $from_id);
         return;

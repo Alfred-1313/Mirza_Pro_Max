@@ -416,6 +416,9 @@ if (!function_exists('bottext_item_menu_payload')) {
         if ($bt_key === 'users.Balance.chargeSuccessDiscount') {
             $bt_label = '🎁 پیام تخفیف (وقتی تخفیف روی شارژ اعمال بشه)';
         }
+        if ($bt_key === 'textbot.channel') {
+            $bt_label = '📯 پیام عضویت اجباری کانال';
+        }
         $bt_extra_note = '';
         if ($bt_key === 'textbot.afterText') {
             $bt_extra_note = "\nℹ️ این همون پیامیه که درست بعد از ساخته‌شدن اکانت تست، همراه کانفیگ و QR برای کاربر فرستاده می‌شه.\n⚠️ متن پیش‌فرضش با «✅ سرویس با موفقیت ایجاد شد» شروع می‌شه و کلمه‌ی «تست» توش نیست - برای همین شبیه پیام خرید به نظر می‌رسه، ولی فقط تو مسیر اکانت تست فرستاده می‌شه.\n";
@@ -440,6 +443,9 @@ if (!function_exists('bottext_item_menu_payload')) {
         }
         if ($bt_key === 'users.Balance.chargeSuccessDiscount') {
             $bt_extra_note = "\nℹ️ این فقط اون بخشیه که (به‌صورت quote) به پیام تایید شارژ اضافه می‌شه، فقط وقتی تخفیفی اعمال شده باشه. متن اصلی پیام از «💲 پیام و دکمه‌ی تایید شارژ کیف پول» قابل ویرایشه.\n";
+        }
+        if ($bt_key === 'textbot.channel') {
+            $bt_extra_note = "\nℹ️ این پیام وقتی نشون داده می‌شه که «عضویت اجباری کانال» فعال باشه (از ✏️ مدیریت ربات ← 📯 تنظیمات کانال) و کاربر هنوز عضو نشده باشه.\n💡 دکمه‌های زیرش (یکی به ازای هر کانال) رنگ/ایموجی/چیدمان/نام و نمایششون از دکمه‌ی پایین همین صفحه قابل تنظیمه.\n";
         }
         foreach (($textbotlang['bottext']['items'] ?? []) as $bt_it) {
             if (($bt_it['key'] ?? '') === $bt_key) {
@@ -469,7 +475,7 @@ if (!function_exists('bottext_item_menu_payload')) {
         };
         // reaction needs a triggering user message — only these keys have one
         $bt_can_react = in_array($bt_key, ['users.text_start', 'textbot.faqDesc', 'textbot.tariffListDesc', 'textbot.rules', 'users.unknownMsg'], true);
-        $bt_has_buttons = in_array($bt_key, ['users.usertest.selectUsernamePrompt', 'users.Balance.insufficientBalanceSimple', 'users.sell.selectUsernamePrompt', 'users.sell.preInvoice', 'users.sell.preInvoice2', 'textbot.preInvoice', 'users.sell.service_not_available', 'textbot.testExpired', 'users.sell.service_sell', 'users.status.infoFull', 'users.Balance.chargeSuccess'], true);
+        $bt_has_buttons = in_array($bt_key, ['users.usertest.selectUsernamePrompt', 'users.Balance.insufficientBalanceSimple', 'users.sell.selectUsernamePrompt', 'users.sell.preInvoice', 'users.sell.preInvoice2', 'textbot.preInvoice', 'users.sell.service_not_available', 'textbot.testExpired', 'users.sell.service_sell', 'users.status.infoFull', 'users.Balance.chargeSuccess', 'textbot.channel'], true);
         $info = "📝 <b>{$bt_label}</b>\n➖➖➖➖➖➖➖➖➖➖\n{$bt_extra_note}";
         $info .= "✏️ متن: " . ($bt_custom ? "سفارشی ✅" : "پیش‌فرض") . "\n";
         $info .= "🖼 استیکر: " . ($bt_sticker !== '' ? "ست شده ✅" : "ندارد ❌") . "\n";
@@ -493,6 +499,8 @@ if (!function_exists('bottext_item_menu_payload')) {
                 $bt_btn_label = '🔘 دکمه‌های صفحه‌ی وضعیت (تا ۱۳ تا)';
             } elseif ($bt_key === 'users.Balance.chargeSuccess') {
                 $bt_btn_label = '🔘 دکمه تهیه اشتراک';
+            } elseif ($bt_key === 'textbot.channel') {
+                $bt_btn_label = '📯 دکمه‌های کانال';
             }
             // 'cf' is shared across three caption screens - checked here so its
             // own status line is accurate no matter which of the three is open
@@ -501,15 +509,22 @@ if (!function_exists('bottext_item_menu_payload')) {
             } else {
                 $bt_be_key = $bt_key;
             }
-            $bt_btn_custom = is_array($bt_be) && !empty($bt_be[$bt_lang][$bt_be_key]);
+            // textbot.channel's buttons live on the channels table + its own
+            // order setting, not in the shared button_edit blob every other
+            // item uses - so its customized-state check is computed there too.
+            if ($bt_key === 'textbot.channel') {
+                $bt_btn_custom = channel_buttons_any_customized();
+            } else {
+                $bt_btn_custom = is_array($bt_be) && !empty($bt_be[$bt_lang][$bt_be_key]);
+            }
             $info .= "{$bt_btn_label}: " . ($bt_btn_custom ? "سفارشی ✅" : "پیش‌فرض") . "\n";
         }
         $info .= "➖➖➖➖➖➖➖➖➖➖\n👇 بخشی که می‌خوای تنظیم کنی رو انتخاب کن:";
         $kb = ['inline_keyboard' => []];
-        $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش کپشن', 'callback_data' => "btact|text|{$bt_lang}|{$bt_key}", 'style' => $bt_custom ? 'success' : 'primary']];
-        $bt_row = [['text' => '🖼 استیکر', 'callback_data' => "btact|sticker|{$bt_lang}|{$bt_key}", 'style' => $bt_sticker !== '' ? 'success' : 'primary']];
+        $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش کپشن', 'callback_data' => "btact|text|{$bt_lang}|{$bt_key}", 'style' => 'primary']];
+        $bt_row = [['text' => '🖼 استیکر', 'callback_data' => "btact|sticker|{$bt_lang}|{$bt_key}", 'style' => 'primary']];
         if ($bt_can_react) {
-            $bt_row[] = ['text' => '❤️ ری‌اکشن', 'callback_data' => "btact|react|{$bt_lang}|{$bt_key}", 'style' => $bt_react !== '' ? 'success' : 'primary'];
+            $bt_row[] = ['text' => '❤️ ری‌اکشن', 'callback_data' => "btact|react|{$bt_lang}|{$bt_key}", 'style' => 'primary'];
         }
         $kb['inline_keyboard'][] = $bt_row;
         // usertest renders its own preview/reset rows early (right after its
@@ -519,33 +534,35 @@ if (!function_exists('bottext_item_menu_payload')) {
         // "other messages" section below
         $bt_prev_inline = false;
         if ($bt_key === 'users.usertest.selectUsernamePrompt') {
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های انصراف/پیش‌فرض', 'callback_data' => "btact|btns|{$bt_lang}", 'style' => $bt_btn_custom ? 'success' : 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های انصراف/پیش‌فرض', 'callback_data' => "btact|btns|{$bt_lang}", 'style' => 'primary']];
             $kb['inline_keyboard'][] = [['text' => '👁 پیش‌نمایش', 'callback_data' => "btact|prev|{$bt_lang}|{$bt_key}", 'style' => 'primary']];
             $bt_prev_inline = true;
             // white, non-navigating divider (established session pattern) - makes
             // clear the next rows are OTHER messages in the test-account flow,
             // not more controls for the prompt this screen is already editing
             $kb['inline_keyboard'][] = [['text' => bt_section_meta('usertest_related')['label'], 'callback_data' => 'bt_sep|usertest_related']];
-            $kb['inline_keyboard'][] = [['text' => '⏰ پیام اتمام اکانت تست', 'callback_data' => "bt_edit|{$bt_lang}|textbot.testExpired", 'style' => $bt_is_customized('textbot.testExpired') ? 'success' : 'primary']];
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌ی پیام اتمام اکانت تست', 'callback_data' => "gbtn|list|{$bt_lang}|te|u", 'style' => (!empty($bt_be[$bt_lang]['textbot.testExpired'])) ? 'success' : 'primary']];
-            $kb['inline_keyboard'][] = [['text' => '📌 نحوه‌ی نمایش کانفیگ', 'callback_data' => "cfgdeliv|list|{$bt_lang}|u", 'style' => config_delivery_touched('usertest') ? 'success' : 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '⏰ پیام اتمام اکانت تست', 'callback_data' => "bt_edit|{$bt_lang}|textbot.testExpired", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌ی پیام اتمام اکانت تست', 'callback_data' => "gbtn|list|{$bt_lang}|te|u", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '📌 نحوه‌ی نمایش کانفیگ', 'callback_data' => "cfgdeliv|list|{$bt_lang}|u", 'style' => 'primary']];
         } elseif ($bt_key === 'users.Balance.insufficientBalanceSimple') {
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه افزایش موجودی', 'callback_data' => "btact|bbtn|{$bt_lang}", 'style' => $bt_btn_custom ? 'success' : 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه افزایش موجودی', 'callback_data' => "btact|bbtn|{$bt_lang}", 'style' => 'primary']];
         } elseif ($bt_key === 'users.sell.selectUsernamePrompt') {
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های انصراف/پیش‌فرض', 'callback_data' => "gbtn|list|{$bt_lang}|su", 'style' => $bt_btn_custom ? 'success' : 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های انصراف/پیش‌فرض', 'callback_data' => "gbtn|list|{$bt_lang}|su", 'style' => 'primary']];
         } elseif (in_array($bt_key, ['users.sell.preInvoice', 'users.sell.preInvoice2', 'textbot.preInvoice'], true)) {
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های تأیید خرید', 'callback_data' => "gbtn|list|{$bt_lang}|cf", 'style' => $bt_btn_custom ? 'success' : 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های تأیید خرید', 'callback_data' => "gbtn|list|{$bt_lang}|cf", 'style' => 'primary']];
         } elseif ($bt_key === 'users.sell.service_not_available') {
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه تهیه اشتراک', 'callback_data' => "gbtn|list|{$bt_lang}|ns", 'style' => $bt_btn_custom ? 'success' : 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه تهیه اشتراک', 'callback_data' => "gbtn|list|{$bt_lang}|ns", 'style' => 'primary']];
         } elseif ($bt_key === 'textbot.testExpired') {
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه خرید سرویس', 'callback_data' => "gbtn|list|{$bt_lang}|te", 'style' => $bt_btn_custom ? 'success' : 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه خرید سرویس', 'callback_data' => "gbtn|list|{$bt_lang}|te", 'style' => 'primary']];
         } elseif ($bt_key === 'users.sell.service_sell') {
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه بستن', 'callback_data' => "gbtn|list|{$bt_lang}|sc", 'style' => $bt_btn_custom ? 'success' : 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه بستن', 'callback_data' => "gbtn|list|{$bt_lang}|sc", 'style' => 'primary']];
         } elseif ($bt_key === 'users.status.infoFull') {
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های صفحه‌ی وضعیت', 'callback_data' => "statusbtn|list|{$bt_lang}", 'style' => $bt_btn_custom ? 'success' : 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های صفحه‌ی وضعیت', 'callback_data' => "statusbtn|list|{$bt_lang}", 'style' => 'primary']];
         } elseif ($bt_key === 'users.Balance.chargeSuccess') {
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه تهیه اشتراک', 'callback_data' => "gbtn|list|{$bt_lang}|bc", 'style' => $bt_btn_custom ? 'success' : 'primary']];
-            $kb['inline_keyboard'][] = [['text' => '🎁 ویرایش متن بلوک تخفیف', 'callback_data' => "bt_edit|{$bt_lang}|users.Balance.chargeSuccessDiscount", 'style' => $bt_is_customized('users.Balance.chargeSuccessDiscount') ? 'success' : 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه تهیه اشتراک', 'callback_data' => "gbtn|list|{$bt_lang}|bc", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '🎁 ویرایش متن بلوک تخفیف', 'callback_data' => "bt_edit|{$bt_lang}|users.Balance.chargeSuccessDiscount", 'style' => 'primary']];
+        } elseif ($bt_key === 'textbot.channel') {
+            $kb['inline_keyboard'][] = [['text' => '📯 ویرایش دکمه‌های کانال‌ها', 'callback_data' => "chnbtn_hub", 'style' => 'primary']];
         }
         if (!$bt_prev_inline) {
             $kb['inline_keyboard'][] = [['text' => '👁 پیش‌نمایش', 'callback_data' => "btact|prev|{$bt_lang}|{$bt_key}", 'style' => 'primary']];
@@ -804,6 +821,144 @@ if (!function_exists('rename_editor_payload')) {
         }
         $kb['inline_keyboard'][] = [['text' => '🔄 ریست به پیش‌فرض', 'callback_data' => "renamereset"]];
         $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبلی', 'callback_data' => 'bt_btnsettings', 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']];
+        return json_encode($kb);
+    }
+}
+
+//----------------[  channel join-gate button settings: glass hub + category
+// lists  ]----------------
+// Same 3-layer pattern as the main-menu button settings above (hub ->
+// category list -> immediate per-item action), applied to the dynamic
+// `channels` table instead of the fixed keyboardmain grid. Every list here
+// is a live, honest preview: it renders the SAME channel_button_text()/
+// channel_button_style() the real join-gate message in index.php uses, so
+// a 🚫-marked or coloured row here is exactly what a user would see.
+if (!function_exists('chnbtn_hub_payload')) {
+    function chnbtn_hub_payload($textbotlang)
+    {
+        $kb = ['inline_keyboard' => [
+            [['text' => '🎨 رنگ دکمه‌های کانال', 'callback_data' => 'chnbtn_open:color', 'style' => 'primary']],
+            [['text' => '🎭 ایموجی دکمه‌های کانال', 'callback_data' => 'chnbtn_open:emoji', 'style' => 'primary']],
+            [['text' => '📐 چیدمان دکمه‌های کانال', 'callback_data' => 'chnbtn_open:layout', 'style' => 'primary']],
+            [['text' => '✏️ نام و نمایش دکمه‌های کانال', 'callback_data' => 'chnbtn_open:rename', 'style' => 'primary']],
+            [['text' => '🔄 ریست همه‌ی دکمه‌های کانال', 'callback_data' => 'chnbtn_rstall', 'style' => 'danger']],
+            [['text' => '🔙 بازگشت', 'callback_data' => 'bt_edit|fa|textbot.channel', 'style' => 'danger']],
+            [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']],
+        ]];
+        return json_encode($kb);
+    }
+}
+if (!function_exists('chnbtn_color_payload')) {
+    function chnbtn_color_payload($textbotlang)
+    {
+        $rows = channels_effective_order();
+        $styleEmoji = ['' => '⚪', 'primary' => '🔵', 'success' => '🟢', 'danger' => '🔴'];
+        $kb = ['inline_keyboard' => []];
+        foreach ($rows as $row) {
+            $style = channel_button_style($row);
+            $name = channel_button_name($row);
+            $kbBtn = [
+                'text' => (!empty($row['hidden']) ? '🚫 ' : '') . $name . ' ' . $styleEmoji[$style],
+                'callback_data' => "chncolor-{$row['id']}",
+            ];
+            if ($style !== '') {
+                $kbBtn['style'] = $style;
+            }
+            $kb['inline_keyboard'][] = [$kbBtn];
+        }
+        if (empty($rows)) {
+            $kb['inline_keyboard'][] = [['text' => '📭 هیچ کانالی ثبت نشده', 'callback_data' => 'chnbtn_hub']];
+        }
+        $kb['inline_keyboard'][] = [['text' => '🔄 ریست رنگ همه', 'callback_data' => 'chncolorreset', 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبلی', 'callback_data' => 'chnbtn_hub', 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']];
+        return json_encode($kb);
+    }
+}
+if (!function_exists('chnbtn_emoji_payload')) {
+    function chnbtn_emoji_payload($textbotlang)
+    {
+        $rows = channels_effective_order();
+        $kb = ['inline_keyboard' => []];
+        foreach ($rows as $row) {
+            list($text, $iconId) = channel_button_text($row, true);
+            $mainBtn = ['text' => $text, 'callback_data' => "chnemoji-{$row['id']}"];
+            if ($iconId !== '') {
+                $mainBtn['icon_custom_emoji_id'] = $iconId;
+            }
+            $style = channel_button_style($row);
+            if ($style !== '') {
+                $mainBtn['style'] = $style;
+            }
+            $pos = ($row['emoji_pos'] ?? '') === 'left' ? 'left' : 'right';
+            $posBtn = ['text' => ($pos === 'left') ? '⬅️' : '➡️', 'callback_data' => "chnemojipos-{$row['id']}"];
+            $kb['inline_keyboard'][] = [$mainBtn, $posBtn];
+        }
+        if (empty($rows)) {
+            $kb['inline_keyboard'][] = [['text' => '📭 هیچ کانالی ثبت نشده', 'callback_data' => 'chnbtn_hub']];
+        }
+        $kb['inline_keyboard'][] = [['text' => '🔄 ریست ایموجی همه', 'callback_data' => 'chnemojireset', 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبلی', 'callback_data' => 'chnbtn_hub', 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']];
+        return json_encode($kb);
+    }
+}
+if (!function_exists('chnbtn_layout_payload')) {
+    function chnbtn_layout_payload($textbotlang, $selected = null)
+    {
+        $rows = channels_effective_order();
+        $kb = ['inline_keyboard' => []];
+        foreach ($rows as $row) {
+            $name = channel_button_name($row);
+            if (!empty($row['hidden'])) {
+                $name = '🚫 ' . $name;
+            }
+            $isSel = ($selected !== null && (int) $selected === (int) $row['id']);
+            if ($isSel) {
+                $name = '🔵 ' . $name;
+                $cb = 'chnlayoutcancel';
+            } elseif ($selected !== null) {
+                $cb = "chnlayoutswap-{$selected}-{$row['id']}";
+            } else {
+                $cb = "chnlayoutbtn-{$row['id']}";
+            }
+            $kbBtn = ['text' => $name, 'callback_data' => $cb];
+            $style = channel_button_style($row);
+            if ($style !== '') {
+                $kbBtn['style'] = $style;
+            }
+            $kb['inline_keyboard'][] = [$kbBtn];
+        }
+        if (empty($rows)) {
+            $kb['inline_keyboard'][] = [['text' => '📭 هیچ کانالی ثبت نشده', 'callback_data' => 'chnbtn_hub']];
+        }
+        $kb['inline_keyboard'][] = [['text' => '🔄 ریست چیدمان به پیش‌فرض', 'callback_data' => 'chnlayoutreset', 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبلی', 'callback_data' => 'chnbtn_hub', 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']];
+        return json_encode($kb);
+    }
+}
+if (!function_exists('chnbtn_rename_payload')) {
+    function chnbtn_rename_payload($textbotlang)
+    {
+        $rows = channels_effective_order();
+        $kb = ['inline_keyboard' => []];
+        foreach ($rows as $row) {
+            $name = channel_button_name($row);
+            $mainBtn = ['text' => $name, 'callback_data' => "chnrentext-{$row['id']}"];
+            $style = channel_button_style($row);
+            if ($style !== '') {
+                $mainBtn['style'] = $style;
+            }
+            $hidBtn = ['text' => !empty($row['hidden']) ? '🚫' : '👁', 'callback_data' => "chnrenhide-{$row['id']}"];
+            $kb['inline_keyboard'][] = [$mainBtn, $hidBtn];
+        }
+        if (empty($rows)) {
+            $kb['inline_keyboard'][] = [['text' => '📭 هیچ کانالی ثبت نشده', 'callback_data' => 'chnbtn_hub']];
+        }
+        $kb['inline_keyboard'][] = [['text' => '🔄 ریست نام و نمایش همه', 'callback_data' => 'chnrenreset', 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبلی', 'callback_data' => 'chnbtn_hub', 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']];
         return json_encode($kb);
     }
@@ -2058,7 +2213,8 @@ if (!function_exists('panel_feature_keyboard')) {
         $rows = [];
         $rows[] = [$btn($panel['status'] == 'active', $textbotlang['keyboard']['showPanel'], "editpanel-statusbuy-{$panel['status']}-{$code}")];
         $rows[] = [$btn($panel['TestAccount'] == 'ONTestAccount', $textbotlang['keyboard']['showTestAccount'], "editpanel-statustest-{$panel['TestAccount']}-{$code}")];
-        // ibsng / mikrotik support only the two toggles above
+        $rows[] = [['text' => $textbotlang['keyboard']['autoDeleteExpiredTest'], 'callback_data' => "editpanel-delusertestmenu-x-{$code}"]];
+        // ibsng / mikrotik support only the three toggles above
         if (in_array($type, ["ibsng", "mikrotik"], true)) {
             return $rows;
         }
@@ -2067,9 +2223,9 @@ if (!function_exists('panel_feature_keyboard')) {
             $rows[] = [$btn($panel['config'] == 'onconfig', $textbotlang['keyboard']['sendConfig'], "editpanel-stautsconfig-{$panel['config']}-{$code}")];
             $rows[] = [$btn($panel['sublink'] == 'onsublink', $textbotlang['keyboard']['sendSubLink'], "editpanel-sublink-{$panel['sublink']}-{$code}")];
         }
-        if (in_array($type, ['marzban', "x-ui_single", "marzneshin"])) {
-            $rows[] = [$btn($panel['conecton'] == 'onconecton', $textbotlang['keyboard']['firstConnection'], "editpanel-connecton-{$panel['conecton']}-{$code}")];
-            $rows[] = [$btn($panel['on_hold_test'] == '1', $textbotlang['keyboard']['firstConnectionTest'], "editpanel-on_hold_Test-{$panel['on_hold_test']}-{$code}")];
+        if (in_array($type, ['marzban', "x-ui_single", "marzneshin", "rebecca"])) {
+            $rows[] = [['text' => $textbotlang['keyboard']['startTimingBuy'], 'callback_data' => "editpanel-onholdmenu-buy-{$code}"]];
+            $rows[] = [['text' => $textbotlang['keyboard']['startTimingTest'], 'callback_data' => "editpanel-onholdmenu-test-{$code}"]];
         }
         if (!in_array($type, ["Manualsale", "WGDashboard"])) {
             $rows[] = [$btn($panel['changeloc'] == 'onchangeloc', $textbotlang['keyboard']['changeLocation'], "editpanel-changeloc-{$panel['changeloc']}-{$code}")];
@@ -2089,6 +2245,114 @@ if (!function_exists('panel_feature_keyboard')) {
             $btn($cvn2 == '1', '♻️ n2', "editpanel-customstatusn2-{$cvn2}-{$code}"),
         ];
         return $rows;
+    }
+}
+if (!function_exists('panel_onhold_submenu_keyboard')) {
+    // Sub-menu for ONE of the two "when does the timer start" settings
+    // (kind: 'buy' -> marzban_panel.conecton, 'test' -> marzban_panel.on_hold_test).
+    // Exactly one of the two options is ever selected (radio, not a toggle),
+    // so the selected one is the only one rendered green/checked.
+    function panel_onhold_submenu_keyboard($panel, $kind, $textbotlang)
+    {
+        $code = $panel['code_panel'];
+        $isHold = ($kind === 'test') ? ($panel['on_hold_test'] == '1') : ($panel['conecton'] == 'onconecton');
+        $optHold = ['text' => ($isHold ? '✅ ' : '') . $textbotlang['keyboard']['onHoldOptionConnect'], 'callback_data' => "editpanel-onholdset-{$kind}_hold-{$code}"];
+        $optNow = ['text' => (!$isHold ? '✅ ' : '') . $textbotlang['keyboard']['onHoldOptionImmediate'], 'callback_data' => "editpanel-onholdset-{$kind}_now-{$code}"];
+        if ($isHold) {
+            $optHold['style'] = 'success';
+        } else {
+            $optNow['style'] = 'success';
+        }
+        $back = ['text' => $textbotlang['users']['backbtn'], 'callback_data' => "editpanel-onholdback-{$kind}-{$code}"];
+        return ['inline_keyboard' => [[$optHold], [$optNow], [$back]]];
+    }
+}
+if (!function_exists('panel_delusertest_submenu_keyboard')) {
+    function panel_delusertest_submenu_keyboard($panel, $textbotlang)
+    {
+        $code = $panel['code_panel'];
+        $hours = intval($panel['del_usertest'] ?? 0);
+        $isOff = $hours <= 0;
+        $offBtn = ['text' => ($isOff ? '✅ ' : '') . $textbotlang['keyboard']['delUsertestOff'], 'callback_data' => "editpanel-delusertestoff-x-{$code}"];
+        $setBtn = ['text' => (!$isOff ? '✅ ' : '') . $textbotlang['keyboard']['delUsertestSetHours'], 'callback_data' => "editpanel-delusertestask-x-{$code}"];
+        if ($isOff) {
+            $offBtn['style'] = 'success';
+        } else {
+            $setBtn['style'] = 'success';
+        }
+        $back = ['text' => $textbotlang['users']['backbtn'], 'callback_data' => "editpanel-onholdback-x-{$code}"];
+        return ['inline_keyboard' => [[$offBtn], [$setBtn], [$back]]];
+    }
+}
+if (!function_exists('miniapp_toggle_keyboard')) {
+    function miniapp_toggle_keyboard($setting, $textbotlang)
+    {
+        $isOn = (($setting['miniapp_status'] ?? 'offminiapp') === 'onminiapp');
+        $btn = [
+            'text' => ($isOn ? '✅ ' : '❌ ') . $textbotlang['keyboard']['miniAppToggleBtn'],
+            'callback_data' => 'miniappToggle',
+            'style' => $isOn ? 'success' : 'danger',
+        ];
+        $back = ['text' => $textbotlang['users']['backbtn'], 'callback_data' => 'miniappHubBack'];
+        return json_encode(['inline_keyboard' => [[$btn], [$back]]]);
+    }
+}
+if (!function_exists('miniapp_toggle_caption')) {
+    function miniapp_toggle_caption($setting, $textbotlang, $miniAppInstructionText)
+    {
+        $isOn = (($setting['miniapp_status'] ?? 'offminiapp') === 'onminiapp');
+        $caption = $textbotlang['keyboard']['miniAppToggleTitle'];
+        if ($isOn) {
+            $caption .= "\n\n<blockquote>" . $miniAppInstructionText . "</blockquote>";
+        }
+        return $caption;
+    }
+}
+if (!function_exists('miniapp_hub_keyboard')) {
+    function miniapp_hub_keyboard($textbotlang)
+    {
+        return json_encode(['inline_keyboard' => [
+            [['text' => $textbotlang['keyboard']['miniAppToggleBtn'], 'callback_data' => 'miniappHubToggle']],
+            [['text' => $textbotlang['keyboard']['miniAppBrandingHubBtn'], 'callback_data' => 'miniappHubBranding']]
+        ]]);
+    }
+}
+if (!function_exists('miniapp_hub_caption')) {
+    function miniapp_hub_caption($textbotlang)
+    {
+        return $textbotlang['keyboard']['miniAppHubTitle'];
+    }
+}
+if (!function_exists('miniapp_branding_keyboard')) {
+    function miniapp_branding_keyboard($setting, $textbotlang)
+    {
+        $hasLogo = ($setting['miniapp_bot_logo'] ?? '0') === '1';
+        $hasName = !empty($setting['miniapp_bot_name']);
+        $buttons = [
+            [['text' => $textbotlang['keyboard']['miniAppSetLogoBtn'], 'callback_data' => 'miniappSetLogo']],
+            [['text' => $textbotlang['keyboard']['miniAppSetNameBtn'], 'callback_data' => 'miniappSetName']]
+        ];
+        if ($hasLogo || $hasName) {
+            $buttons[] = [['text' => $textbotlang['keyboard']['miniAppResetBrandingBtn'], 'callback_data' => 'miniappResetBranding', 'style' => 'danger']];
+        }
+        $buttons[] = [['text' => $textbotlang['users']['backbtn'], 'callback_data' => 'miniappHubBack']];
+        return json_encode(['inline_keyboard' => $buttons]);
+    }
+}
+if (!function_exists('miniapp_branding_caption')) {
+    function miniapp_branding_caption($setting, $textbotlang)
+    {
+        $name = !empty($setting['miniapp_bot_name']) ? $setting['miniapp_bot_name'] : $textbotlang['keyboard']['miniAppBrandingLogoDefault'];
+        $logo = (($setting['miniapp_bot_logo'] ?? '0') === '1') ? $textbotlang['keyboard']['miniAppBrandingLogoSet'] : $textbotlang['keyboard']['miniAppBrandingLogoDefault'];
+        return sprintf($textbotlang['keyboard']['miniAppBrandingTitle'], htmlspecialchars((string) $name, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'), $logo);
+    }
+}
+if (!function_exists('panel_delusertest_caption')) {
+    function panel_delusertest_caption($panel, $textbotlang)
+    {
+        $hours = intval($panel['del_usertest'] ?? 0);
+        $status = $hours > 0 ? sprintf($textbotlang['keyboard']['delUsertestStatusOn'], $hours) : $textbotlang['keyboard']['delUsertestStatusOff'];
+        return sprintf($textbotlang['keyboard']['delUsertestTitle'], $status);
     }
 }
 if (!function_exists('panel_feature_caption')) {
@@ -3297,6 +3561,204 @@ if ($datain == "renamereset" && $adminrulecheck['rule'] == "administrator") {
     }
     $rn_kb = rename_editor_payload($textbotlang);
     Editmessagetext($from_id, $message_id, "🔄 نام و نمایش دکمه‌ها به پیش‌فرض برگشت (رنگ و ایموجی و استیکرها حفظ شدن)\n\n✏️ <b>نام و نمایش دکمه‌های منو</b> 👇", $rn_kb, 'HTML');
+    return;
+}
+
+//----------------[  channel join-gate button settings: dispatchers  ]----------------
+if ($datain == "chnbtn_hub" && $adminrulecheck['rule'] == "administrator") {
+    $ch_kb = chnbtn_hub_payload($textbotlang);
+    Editmessagetext($from_id, $message_id, "📯 <b>دکمه‌های کانال</b>\n\nرنگ، ایموجی، چیدمان و نام/نمایش دکمه‌های پیام «عضویت اجباری» رو از اینجا تنظیم کن 👇", $ch_kb, 'HTML');
+    return;
+}
+if ($datain == "chnbtn_open:color" && $adminrulecheck['rule'] == "administrator") {
+    $ch_kb = chnbtn_color_payload($textbotlang);
+    Editmessagetext($from_id, $message_id, "🎨 <b>رنگ دکمه‌های کانال</b>\n\nاین لیست، پیش‌نمایش زنده‌ست 🎨\nروی هر دکمه بزن تا رنگش عوض بشه 👇\n⚪ پیش‌فرض ← 🔵 آبی ← 🟢 سبز ← 🔴 قرمز\n🚫 = مخفی شده", $ch_kb, 'HTML');
+    return;
+}
+if ($datain == "chnbtn_open:emoji" && $adminrulecheck['rule'] == "administrator") {
+    $ch_kb = chnbtn_emoji_payload($textbotlang);
+    Editmessagetext($from_id, $message_id, "🎭 <b>ایموجی دکمه‌های کانال</b>\n\nروی دکمه بزن و ایموجی جدید بفرست؛ دکمه‌ی کوچیک کنارش (⬅️/➡️) جای ایموجی رو فوری عوض می‌کنه 👇", $ch_kb, 'HTML');
+    return;
+}
+if ($datain == "chnbtn_open:layout" && $adminrulecheck['rule'] == "administrator") {
+    $ch_kb = chnbtn_layout_payload($textbotlang);
+    Editmessagetext($from_id, $message_id, "📐 <b>چیدمان دکمه‌های کانال</b>\n\n🔹 روی یه دکمه بزن تا انتخاب بشه، بعد روی مقصد بزن تا جاشون عوض بشه\n🚫 = مخفی شده\n👇", $ch_kb, 'HTML');
+    return;
+}
+if ($datain == "chnbtn_open:rename" && $adminrulecheck['rule'] == "administrator") {
+    $ch_kb = chnbtn_rename_payload($textbotlang);
+    Editmessagetext($from_id, $message_id, "✏️ <b>نام و نمایش دکمه‌های کانال</b>\n\n🔹 روی متن دکمه بزن تا اسمش رو عوض کنی\n🔹 دکمه‌ی 👁/🚫 کنارش نمایش/مخفی‌بودنش رو فوری عوض می‌کنه\n👇", $ch_kb, 'HTML');
+    return;
+}
+if ($datain == "chnbtn_rstall" && $adminrulecheck['rule'] == "administrator") {
+    channel_buttons_reset(['color', 'emoji', 'rename', 'visibility', 'layout']);
+    $ch_kb = chnbtn_hub_payload($textbotlang);
+    Editmessagetext($from_id, $message_id, "🔄 همه‌ی سفارشی‌سازی‌های دکمه‌های کانال پاک شد.\n\n📯 <b>دکمه‌های کانال</b> 👇", $ch_kb, 'HTML');
+    return;
+}
+if (preg_match('/^chncolor-(\d+)$/', $datain, $cc_m) && $adminrulecheck['rule'] == "administrator") {
+    $cc_id = (int) $cc_m[1];
+    $cc_row = select("channels", "*", "id", $cc_id, "select");
+    if (is_array($cc_row)) {
+        $cc_order = ['', 'primary', 'success', 'danger'];
+        $cc_cur = channel_button_style($cc_row);
+        $cc_idx = array_search($cc_cur, $cc_order, true);
+        if ($cc_idx === false) {
+            $cc_idx = 0;
+        }
+        $cc_next = $cc_order[($cc_idx + 1) % count($cc_order)];
+        update("channels", "style", $cc_next === '' ? null : $cc_next, "id", $cc_id);
+    }
+    $cc_kb = chnbtn_color_payload($textbotlang);
+    Editmessagetext($from_id, $message_id, "🎨 <b>رنگ دکمه‌های کانال</b>\n\nاین لیست، پیش‌نمایش زنده‌ست 🎨\nروی هر دکمه بزن تا رنگش عوض بشه 👇\n⚪ پیش‌فرض ← 🔵 آبی ← 🟢 سبز ← 🔴 قرمز\n🚫 = مخفی شده", $cc_kb, 'HTML');
+    return;
+}
+if ($datain == "chncolorreset" && $adminrulecheck['rule'] == "administrator") {
+    channel_buttons_reset(['color']);
+    $cr_kb = chnbtn_color_payload($textbotlang);
+    Editmessagetext($from_id, $message_id, "🔄 رنگ همه‌ی دکمه‌ها به پیش‌فرض برگشت.\n\n🎨 <b>رنگ دکمه‌های کانال</b> 👇", $cr_kb, 'HTML');
+    return;
+}
+if (preg_match('/^chnemoji-(\d+)$/', $datain, $ce_m) && $adminrulecheck['rule'] == "administrator") {
+    $ce_id = (int) $ce_m[1];
+    $ce_row = select("channels", "*", "id", $ce_id, "select");
+    $ce_name = is_array($ce_row) ? channel_button_name($ce_row) : '';
+    step("setchnemoji-{$ce_id}", $from_id);
+    sendmessage($from_id, "😀 ایموجی برای <b>{$ce_name}</b> رو بفرست ✍️\n\n🔹 ایموجی معمولی → کنار متن دکمه (چپ/راستش با دکمه‌ی کوچیک کنارش تو لیست تنظیم می‌شه)\n💎 ایموجی پریمیوم → آیکون کنار متن\n\n(برای حذف ایموجی، عدد 0 رو بفرست)", $backadmin, 'HTML');
+    return;
+}
+if (preg_match('/^setchnemoji-(\d+)$/', (string) $user['step'], $ce_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+    $ce_id = (int) $ce_m[1];
+    $ce_icon_id = '';
+    if (!empty($update['message']['entities']) && is_array($update['message']['entities'])) {
+        foreach ($update['message']['entities'] as $ce_ent) {
+            if (($ce_ent['type'] ?? '') === 'custom_emoji' && !empty($ce_ent['custom_emoji_id'])) {
+                $ce_icon_id = $ce_ent['custom_emoji_id'];
+                break;
+            }
+        }
+    }
+    if ($text == '0') {
+        update("channels", "emoji", null, "id", $ce_id);
+        update("channels", "icon_emoji", null, "id", $ce_id);
+        update("channels", "emoji_pos", null, "id", $ce_id);
+        $ce_msg = "✅ ایموجی حذف شد و به پیش‌فرض برگشت.";
+    } elseif ($ce_icon_id !== '') {
+        update("channels", "icon_emoji", $ce_icon_id, "id", $ce_id);
+        update("channels", "emoji", null, "id", $ce_id);
+        $ce_msg = "✅ ایموجی پریمیوم ذخیره شد! 💎";
+    } else {
+        preg_match('/^\X/u', trim((string) $text), $ce_em);
+        $ce_emoji = $ce_em[0] ?? '';
+        if ($ce_emoji === '' || preg_match('/^[0-9a-zA-Z]$/', $ce_emoji)) {
+            sendmessage($from_id, "⚠️ لطفاً فقط یه ایموجی بفرست 😅", $backadmin, 'HTML');
+            return;
+        }
+        update("channels", "emoji", $ce_emoji, "id", $ce_id);
+        update("channels", "icon_emoji", null, "id", $ce_id);
+        $ce_msg = "✅ ایموجی {$ce_emoji} ذخیره شد!";
+    }
+    step('chnbtn_emoji_list', $from_id);
+    $ce_kb = chnbtn_emoji_payload($textbotlang);
+    sendmessage($from_id, $ce_msg . "\n\n🎭 <b>ایموجی دکمه‌های کانال</b>\nروی دکمه بعدی بزن یا برگرد 👇", $ce_kb, 'HTML');
+    return;
+}
+if (preg_match('/^chnemojipos-(\d+)$/', $datain, $cp_m) && $adminrulecheck['rule'] == "administrator") {
+    $cp_id = (int) $cp_m[1];
+    $cp_row = select("channels", "*", "id", $cp_id, "select");
+    $cp_cur = (is_array($cp_row) && ($cp_row['emoji_pos'] ?? '') === 'left') ? 'left' : 'right';
+    update("channels", "emoji_pos", $cp_cur === 'left' ? 'right' : 'left', "id", $cp_id);
+    $cp_kb = chnbtn_emoji_payload($textbotlang);
+    Editmessagetext($from_id, $message_id, "🎭 <b>ایموجی دکمه‌های کانال</b>\n\nروی دکمه بزن و ایموجی جدید بفرست؛ دکمه‌ی کوچیک کنارش (⬅️/➡️) جای ایموجی رو فوری عوض می‌کنه 👇", $cp_kb, 'HTML');
+    return;
+}
+if ($datain == "chnemojireset" && $adminrulecheck['rule'] == "administrator") {
+    channel_buttons_reset(['emoji']);
+    $cer_kb = chnbtn_emoji_payload($textbotlang);
+    Editmessagetext($from_id, $message_id, "🔄 همه ایموجی‌های سفارشی پاک شدن.\n\n🎭 <b>ایموجی دکمه‌های کانال</b> 👇", $cer_kb, 'HTML');
+    return;
+}
+if (preg_match('/^chnlayoutbtn-(\d+)$/', $datain, $lb_m) && $adminrulecheck['rule'] == "administrator") {
+    $lb_kb = chnbtn_layout_payload($textbotlang, (int) $lb_m[1]);
+    Editmessagetext($from_id, $message_id, "📐 <b>چیدمان دکمه‌های کانال</b>\n\n🔹 روی دکمه‌ی مقصد بزن تا جاشون عوض بشه\n🔹 دوباره بزن روی همینی که انتخاب کردی تا انصراف بدی\n👇", $lb_kb, 'HTML');
+    return;
+}
+if (preg_match('/^chnlayoutswap-(\d+)-(\d+)$/', $datain, $ln_m) && $adminrulecheck['rule'] == "administrator") {
+    $ln_sel = (int) $ln_m[1];
+    $ln_target = (int) $ln_m[2];
+    $ln_rows = channels_effective_order();
+    $ln_ids = array_map(function ($r) {
+        return (int) $r['id'];
+    }, $ln_rows);
+    $ln_selIdx = array_search($ln_sel, $ln_ids, true);
+    $ln_targetIdx = array_search($ln_target, $ln_ids, true);
+    if ($ln_selIdx !== false && $ln_targetIdx !== false) {
+        $ln_tmp = $ln_ids[$ln_selIdx];
+        $ln_ids[$ln_selIdx] = $ln_ids[$ln_targetIdx];
+        $ln_ids[$ln_targetIdx] = $ln_tmp;
+        update("setting", "channelButtonsOrder", json_encode($ln_ids), null, null);
+    }
+    $ln_kb = chnbtn_layout_payload($textbotlang);
+    Editmessagetext($from_id, $message_id, "📐 <b>چیدمان دکمه‌های کانال</b>\n\n🔹 روی یه دکمه بزن تا انتخاب بشه، بعد روی مقصد بزن\n👇", $ln_kb, 'HTML');
+    return;
+}
+if ($datain == "chnlayoutcancel" && $adminrulecheck['rule'] == "administrator") {
+    $lc_kb = chnbtn_layout_payload($textbotlang);
+    Editmessagetext($from_id, $message_id, "📐 <b>چیدمان دکمه‌های کانال</b>\n\n🔹 روی یه دکمه بزن تا انتخاب بشه، بعد روی مقصد بزن\n👇", $lc_kb, 'HTML');
+    return;
+}
+if ($datain == "chnlayoutreset" && $adminrulecheck['rule'] == "administrator") {
+    channel_buttons_reset(['layout']);
+    $lr_kb = chnbtn_layout_payload($textbotlang);
+    Editmessagetext($from_id, $message_id, "🔄 چیدمان به پیش‌فرض برگشت.\n\n📐 <b>چیدمان دکمه‌های کانال</b> 👇", $lr_kb, 'HTML');
+    return;
+}
+if (preg_match('/^chnrentext-(\d+)$/', $datain, $rt_m) && $adminrulecheck['rule'] == "administrator") {
+    $rt_id = (int) $rt_m[1];
+    $rt_row = select("channels", "*", "id", $rt_id, "select");
+    $rt_name = is_array($rt_row) ? channel_button_name($rt_row) : '';
+    step("setchnrename-{$rt_id}", $from_id);
+    sendmessage($from_id, "✏️ نام جدید برای <b>{$rt_name}</b> رو بفرست ✍️\n\n(برای برگشت به نام اصلی، عدد 0 رو بفرست)", $backadmin, 'HTML');
+    return;
+}
+if (preg_match('/^setchnrename-(\d+)$/', (string) $user['step'], $rt_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+    $rt_id = (int) $rt_m[1];
+    if ($text == '0') {
+        update("channels", "custom_text", null, "id", $rt_id);
+        $rt_msg = "✅ نام دکمه به پیش‌فرض برگشت.";
+    } elseif (!empty($text)) {
+        update("channels", "custom_text", trim((string) $text), "id", $rt_id);
+        $rt_msg = "✅ نام دکمه تغییر کرد!";
+    } else {
+        sendmessage($from_id, "⚠️ لطفاً نام جدید رو به صورت متن بفرست 😅", $backadmin, 'HTML');
+        return;
+    }
+    step('chnbtn_rename_list', $from_id);
+    $rt_kb = chnbtn_rename_payload($textbotlang);
+    sendmessage($from_id, $rt_msg . "\n\n✏️ <b>نام و نمایش دکمه‌های کانال</b>\nروی دکمه بعدی بزن یا برگرد 👇", $rt_kb, 'HTML');
+    return;
+}
+if (preg_match('/^chnrenhide-(\d+)$/', $datain, $rh_m) && $adminrulecheck['rule'] == "administrator") {
+    $rh_id = (int) $rh_m[1];
+    $rh_row = select("channels", "*", "id", $rh_id, "select");
+    $rh_msg = "⚠️ کانال پیدا نشد.";
+    if (is_array($rh_row)) {
+        if (!empty($rh_row['hidden'])) {
+            update("channels", "hidden", null, "id", $rh_id);
+            $rh_msg = "✅ دکمه دوباره نمایش داده می‌شه 👁";
+        } else {
+            update("channels", "hidden", "1", "id", $rh_id);
+            $rh_msg = "✅ دکمه از پیام مخفی شد 🚫";
+        }
+    }
+    $rh_kb = chnbtn_rename_payload($textbotlang);
+    Editmessagetext($from_id, $message_id, $rh_msg . "\n\n✏️ <b>نام و نمایش دکمه‌های کانال</b> 👇", $rh_kb, 'HTML');
+    return;
+}
+if ($datain == "chnrenreset" && $adminrulecheck['rule'] == "administrator") {
+    channel_buttons_reset(['rename', 'visibility']);
+    $rr_kb = chnbtn_rename_payload($textbotlang);
+    Editmessagetext($from_id, $message_id, "🔄 نام و نمایش همه به پیش‌فرض برگشت.\n\n✏️ <b>نام و نمایش دکمه‌های کانال</b> 👇", $rr_kb, 'HTML');
     return;
 }
 
@@ -4852,6 +5314,9 @@ if (in_array($text, $textadmin) || $datain == "admin") {    if ($datain == "admi
     sendmessage($from_id, $bk_caption, $bk_kb, 'HTML');
 } elseif ($text == $textbotlang['keyboard']['channelSettings'] && $adminrulecheck['rule'] == "administrator") {
     sendmessage($from_id, $textbotlang['Admin']['channel']['description'], $channelkeyboard, 'HTML');
+    // closest logical place for the button-customization tool's entry point:
+    // right where the admin is already managing which channels exist
+    sendmessage($from_id, "🎨 رنگ/ایموجی/چیدمان/نام دکمه‌های کانال‌ها رو هم می‌تونی از اینجا تنظیم کنی 👇", json_encode(['inline_keyboard' => [[['text' => '📯 دکمه‌های کانال', 'callback_data' => 'chnbtn_hub', 'style' => 'primary']]]]), 'HTML');
 } elseif ($text == $textbotlang['Admin']['Status']['btn'] || $datain == "stat_all_bot") {
     $Balanceall = select("user", "SUM(Balance)", null, null, "select")['SUM(Balance)'];
     $statistics = select("user", "*", null, null, "count");
@@ -8461,6 +8926,57 @@ elseif ($datain == "systemsms") {
     sendmessage($from_id, $textbotlang['Admin']['manageadmin']['listAndDelete'], $keyboardadmin, 'HTML');
 } elseif ($text == $textbotlang['keyboard']['generalSettings'] && $adminrulecheck['rule'] == "administrator") {
     sendmessage($from_id, $textbotlang['users']['selectoption'], $setting_panel, 'HTML');
+} elseif ($text == $textbotlang['keyboard']['miniAppSettingsBtn'] && $adminrulecheck['rule'] == "administrator") {
+    sendmessage($from_id, miniapp_hub_caption($textbotlang), miniapp_hub_keyboard($textbotlang), 'HTML');
+} elseif ($datain == "miniappHubToggle" && $adminrulecheck['rule'] == "administrator") {
+    Editmessagetext($from_id, $message_id, miniapp_toggle_caption($setting, $textbotlang, $miniAppInstructionText), miniapp_toggle_keyboard($setting, $textbotlang));
+} elseif ($datain == "miniappToggle" && $adminrulecheck['rule'] == "administrator") {
+    $miniapp_new_status = (($setting['miniapp_status'] ?? 'offminiapp') === 'onminiapp') ? 'offminiapp' : 'onminiapp';
+    update("setting", "miniapp_status", $miniapp_new_status);
+    $setting = select("setting", "*", null, null, "select");
+    Editmessagetext($from_id, $message_id, miniapp_toggle_caption($setting, $textbotlang, $miniAppInstructionText), miniapp_toggle_keyboard($setting, $textbotlang));
+} elseif ($datain == "miniappHubBranding" && $adminrulecheck['rule'] == "administrator") {
+    Editmessagetext($from_id, $message_id, miniapp_branding_caption($setting, $textbotlang), miniapp_branding_keyboard($setting, $textbotlang));
+} elseif ($datain == "miniappHubBack" && $adminrulecheck['rule'] == "administrator") {
+    Editmessagetext($from_id, $message_id, miniapp_hub_caption($textbotlang), miniapp_hub_keyboard($textbotlang));
+} elseif ($datain == "miniappSetLogo" && $adminrulecheck['rule'] == "administrator") {
+    sendmessage($from_id, $textbotlang['keyboard']['miniAppAskLogo'], $backadmin, 'HTML');
+    step("miniapp_setlogo", $from_id);
+} elseif ($datain == "miniappSetName" && $adminrulecheck['rule'] == "administrator") {
+    sendmessage($from_id, $textbotlang['keyboard']['miniAppAskName'], $backadmin, 'HTML');
+    step("miniapp_setname", $from_id);
+} elseif ($datain == "miniappResetBranding" && $adminrulecheck['rule'] == "administrator") {
+    update("setting", "miniapp_bot_logo", "0");
+    update("setting", "miniapp_bot_name", "");
+    $miniappLogoPathReset = __DIR__ . "/app/assets/bot_logo.jpg";
+    if (file_exists($miniappLogoPathReset)) {
+        unlink($miniappLogoPathReset);
+    }
+    $setting = select("setting", "*", null, null, "select");
+    Editmessagetext($from_id, $message_id, miniapp_branding_caption($setting, $textbotlang), miniapp_branding_keyboard($setting, $textbotlang));
+} elseif ($user['step'] == "miniapp_setlogo" && $adminrulecheck['rule'] == "administrator") {
+    if (!$photo) {
+        sendmessage($from_id, $textbotlang['Admin']['managepanel']['invalidImage'], $backadmin, 'HTML');
+        return;
+    }
+    $response = getFileddire($photoid);
+    if ($response['ok']) {
+        $filePath = $response['result']['file_path'];
+        $fileUrl = "https://api.telegram.org/file/bot$APIKEY/$filePath";
+        $fileContent = file_get_contents($fileUrl);
+        file_put_contents(__DIR__ . "/app/assets/bot_logo.jpg", $fileContent);
+        update("setting", "miniapp_bot_logo", "1");
+        sendmessage($from_id, $textbotlang['keyboard']['miniAppLogoSaved'], $setting_panel, 'HTML');
+        step("home", $from_id);
+    }
+} elseif ($user['step'] == "miniapp_setname" && $adminrulecheck['rule'] == "administrator") {
+    if (mb_strlen((string) $text) > 40) {
+        sendmessage($from_id, $textbotlang['keyboard']['miniAppNameTooLong'], $backadmin, 'HTML');
+        return;
+    }
+    update("setting", "miniapp_bot_name", $text);
+    sendmessage($from_id, $textbotlang['keyboard']['miniAppNameSaved'], $setting_panel, 'HTML');
+    step("home", $from_id);
 } elseif ($text == $textbotlang['keyboard']['supportSection'] && $adminrulecheck['rule'] == "administrator") {
     sendmessage($from_id, $textbotlang['users']['selectoption'], $supportcenter, 'HTML');
 } elseif (preg_match('/Confirm_pay_(\w+)/', $datain, $dataget) && ($adminrulecheck['rule'] == "administrator" || $adminrulecheck['rule'] == "Seller")) {
@@ -15677,13 +16193,6 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
             $valuenew = "ONTestAccount";
         }
         update("marzban_panel", "TestAccount", $valuenew, "code_panel", $code_panel);
-    } elseif ($type == "connecton") {
-        if ($value == "onconecton") {
-            $valuenew = "offconecton";
-        } else {
-            $valuenew = "onconecton";
-        }
-        update("marzban_panel", "conecton", $valuenew, "code_panel", $code_panel);
     } elseif ($type == "stautsextend") {
         if ($value == "on_extend") {
             $valuenew = "off_extend";
@@ -15742,19 +16251,64 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
         }
         $customvlume['n2'] = $valuenew;
         update("marzban_panel", "customvolume", json_encode($customvlume), "code_panel", $code_panel);
-    } elseif ($type == "on_hold_Test") {
-        if ($value == "0") {
-            $valuenew = "1";
+    } elseif ($type == "onholdmenu") {
+        $panel = select("marzban_panel", "*", "code_panel", $code_panel, "select");
+        $kb = json_encode(panel_onhold_submenu_keyboard($panel, $value, $textbotlang));
+        $caption = ($value === 'test') ? $textbotlang['keyboard']['startTimingTest'] : $textbotlang['keyboard']['startTimingBuy'];
+        Editmessagetext($from_id, $message_id, $caption, $kb);
+        return;
+    } elseif ($type == "onholdset") {
+        $parts = explode('_', $value, 2);
+        $kind = $parts[0] ?? '';
+        $mode = $parts[1] ?? '';
+        if ($kind === 'test') {
+            update("marzban_panel", "on_hold_test", $mode === 'hold' ? '1' : '0', "code_panel", $code_panel);
         } else {
-            $valuenew = "0";
+            update("marzban_panel", "conecton", $mode === 'hold' ? 'onconecton' : 'offconecton', "code_panel", $code_panel);
         }
-        update("marzban_panel", "on_hold_test", $valuenew, "code_panel", $code_panel);
+        $panel = select("marzban_panel", "*", "code_panel", $code_panel, "select");
+        $kb = json_encode(panel_onhold_submenu_keyboard($panel, $kind, $textbotlang));
+        $caption = ($kind === 'test') ? $textbotlang['keyboard']['startTimingTest'] : $textbotlang['keyboard']['startTimingBuy'];
+        Editmessagetext($from_id, $message_id, $caption, $kb);
+        return;
+    } elseif ($type == "onholdback") {
+        $panel = select("marzban_panel", "*", "code_panel", $code_panel, "select");
+        $Bot_Status = json_encode(['inline_keyboard' => panel_feature_keyboard($panel, $textbotlang)]);
+        Editmessagetext($from_id, $message_id, panel_feature_caption($panel, $textbotlang), $Bot_Status);
+        return;
+    } elseif ($type == "delusertestmenu") {
+        $panel = select("marzban_panel", "*", "code_panel", $code_panel, "select");
+        $kb = json_encode(panel_delusertest_submenu_keyboard($panel, $textbotlang));
+        Editmessagetext($from_id, $message_id, panel_delusertest_caption($panel, $textbotlang), $kb);
+        return;
+    } elseif ($type == "delusertestoff") {
+        update("marzban_panel", "del_usertest", "0", "code_panel", $code_panel);
+        $panel = select("marzban_panel", "*", "code_panel", $code_panel, "select");
+        $kb = json_encode(panel_delusertest_submenu_keyboard($panel, $textbotlang));
+        Editmessagetext($from_id, $message_id, panel_delusertest_caption($panel, $textbotlang), $kb);
+        return;
+    } elseif ($type == "delusertestask") {
+        step("setdelusertesthours-{$code_panel}", $from_id);
+        $cancelKb = json_encode(['inline_keyboard' => [[['text' => $textbotlang['users']['backbtn'], 'callback_data' => "editpanel-delusertestmenu-x-{$code_panel}"]]]]);
+        Editmessagetext($from_id, $message_id, $textbotlang['keyboard']['delUsertestAskHours'], $cancelKb);
+        return;
     }
     $panel = select("marzban_panel", "*", "code_panel", $code_panel, "select");
     $Bot_Status = json_encode(['inline_keyboard' => panel_feature_keyboard($panel, $textbotlang)]);
     Editmessagetext($from_id, $message_id, panel_feature_caption($panel, $textbotlang), $Bot_Status);
 } elseif ($datain == "startelegram") {
     sendmessage($from_id, $textbotlang['users']['selectoption'], $Startelegram, 'HTML');
+} elseif (preg_match('/^setdelusertesthours-(.+)$/', (string) $user['step'], $sdt_m) && $adminrulecheck['rule'] == "administrator") {
+    $sdt_code_panel = $sdt_m[1];
+    if (!ctype_digit((string) $text)) {
+        sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
+        return;
+    }
+    update("marzban_panel", "del_usertest", $text, "code_panel", $sdt_code_panel);
+    step('home', $from_id);
+    $sdt_panel = select("marzban_panel", "*", "code_panel", $sdt_code_panel, "select");
+    $sdt_kb = json_encode(panel_delusertest_submenu_keyboard($sdt_panel, $textbotlang));
+    sendmessage($from_id, panel_delusertest_caption($sdt_panel, $textbotlang), $sdt_kb, 'HTML');
 } elseif ($text == $textbotlang['keyboard']['minAmountStar']) {
     sendmessage($from_id, $textbotlang['Admin']['Balance']['askMinDeposit'], $backadmin, 'HTML');
     step("getmainaqstar", $from_id);

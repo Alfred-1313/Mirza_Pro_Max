@@ -292,7 +292,6 @@ if ($adminrulecheck['rule'] == "administrator") {
         'keyboard' => [
             [['text' => $textbotlang['Admin']['Status']['btn']]],
             [['text' => $textbotlang['Admin']['btnKeyboard']['managementPanel']], ['text' => $textbotlang['Admin']['btnKeyboard']['addPanel']]],
-            [['text' => $textbotlang['keyboard']['quickSetTimePrice']], ['text' => $textbotlang['keyboard']['quickSetVolumePrice']]],
             [['text' => $textbotlang['Admin']['btnKeyboard']['manageUser']], ['text' => $textbotlang['keyboard']['shopSettings']]],
             [['text' => $textbotlang['keyboard']['supportSection']], ['text' => $textbotlang['keyboard']['educationSection']]],
             [['text' => $textbotlang['keyboard']['botReport']], ['text' => $textbotlang['keyboard']['panelFeatures']]],
@@ -371,6 +370,7 @@ $setting_panel = json_encode([
         [['text' => $textbotlang['keyboard']['featureStatus']]],
         [['text' => $textbotlang['keyboard']['botReports']], ['text' => $textbotlang['keyboard']['channelSettings']]],
         [['text' => $textbotlang['keyboard']['activateWebPanel']]],
+        [['text' => $textbotlang['keyboard']['miniAppSettingsBtn']]],
         [['text' => $textbotlang['keyboard']['optimizeBot']]],
         [['text' => $textbotlang['keyboard']['adminSection']]],
         [['text' => $textbotlang['keyboard']['setTestAccountLimitAll']]],
@@ -534,8 +534,6 @@ $shopkeyboard = json_encode([
         [['text' => $textbotlang['keyboard']['manageProducts']], ['text' => $textbotlang['keyboard']['manageCategory']]],
         [['text' => $textbotlang['keyboard']['financial']], ['text' => $textbotlang['Admin']['LangScope']['hubBtn']]],
         [['text' => $textbotlang['keyboard']['topupPackages']]],
-        [['text' => $textbotlang['keyboard']['createGiftCode']], ['text' => $textbotlang['keyboard']['deleteGiftCode']]],
-        [['text' => $textbotlang['keyboard']['minBulkBalance']], ['text' => $textbotlang['keyboard']['renewalCashback']]],
         [['text' => $textbotlang['Admin']['backAdminBtn']], ['text' => $textbotlang['Admin']['backMenuBtn']]]
     ],
     'resize_keyboard' => true
@@ -2321,7 +2319,7 @@ function keyboard_list_text($lang, $groupFilter = null)
         }
         if ($groupFilter === 'buyflow') {
             $keyboard_text['inline_keyboard'][] = [['text' => bt_section_meta('cfgdeliv_link')['label'], 'callback_data' => 'bt_sep|cfgdeliv_link']];
-            $keyboard_text['inline_keyboard'][] = [['text' => '📌 نحوه‌ی نمایش کانفیگ', 'callback_data' => "cfgdeliv|list|{$lang}|b", 'style' => config_delivery_touched('purchase') ? 'success' : 'primary']];
+            $keyboard_text['inline_keyboard'][] = [['text' => '📌 نحوه‌ی نمایش کانفیگ', 'callback_data' => "cfgdeliv|list|{$lang}|b", 'style' => 'primary']];
         }
         $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['resetAllLabel'], 'callback_data' => "bt_group_resetall|$lang|$groupFilter", 'style' => 'danger']];
         $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['backToListLabel'], 'callback_data' => "btact|back|$lang", 'style' => 'danger']];
@@ -2379,7 +2377,7 @@ function keyboard_list_text($lang, $groupFilter = null)
                         break;
                     }
                 }
-                $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['groupBuyflowLabel'], 'callback_data' => "bt_group|$lang|buyflow", 'style' => $bt_group_custom ? 'success' : 'primary']];
+                $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['groupBuyflowLabel'], 'callback_data' => "bt_group|$lang|buyflow", 'style' => 'primary']];
             }
             if (!empty($bt_grouped['myservices'])) {
                 $bt_svc_custom = false;
@@ -2390,7 +2388,7 @@ function keyboard_list_text($lang, $groupFilter = null)
                         break;
                     }
                 }
-                $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['groupServicesLabel'], 'callback_data' => "bt_group|$lang|myservices", 'style' => $bt_svc_custom ? 'success' : 'primary']];
+                $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['groupServicesLabel'], 'callback_data' => "bt_group|$lang|myservices", 'style' => 'primary']];
             }
         }
     }
