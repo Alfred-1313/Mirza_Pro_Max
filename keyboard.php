@@ -414,11 +414,11 @@ $keyboard_btnsettings = json_encode([
 $PaySettingcard = getPaySettingValue("Cartstatus");
 $PaySettingnow = getPaySettingValue("nowpaymentstatus");
 $PaySettingaqayepardakht = getPaySettingValue("statusaqayepardakht");
-$PaySettingpv = getPaySettingValue("Cartstatuspv");
+$PaySettingpv = pay_value("Cartstatuspv", $users['lang'] ?? null, 'offcardpv');
 $usernamecart = getPaySettingValue("CartDirect");
 $Swapino = getPaySettingValue("statusSwapWallet");
 $trnadoo = getPaySettingValue("statustarnado");
-$paymentverify = getPaySettingValue("checkpaycartfirst");
+$paymentverify = pay_value("checkpaycartfirst", $users['lang'] ?? null, 'offpayverify');
 $stmt = $pdo->prepare("SELECT * FROM Payment_report WHERE id_user = :user_id AND payment_Status = 'paid' ");
 $stmt->bindValue(':user_id', $from_id);
 $stmt->execute();
@@ -2030,15 +2030,16 @@ $Exception_auto_cart_keyboard = json_encode([
     ],
     'resize_keyboard' => true
 ]);
-function keyboard_config($config_split, $id_invoice, $back_active = true)
+function keyboard_config($config_split, $id_invoice, $back_active = true, $kind = 'usertest')
 {
     global $textbotlang, $user;
     $cc_lang = $user['lang'] ?? 'fa';
     $cc_setting = select("setting", "*", null, null, "select");
-    $cc_nameFirst = (($cc_setting['configColOrder'] ?? '') === 'name_first');
-    $cc_get = configdisplay_element_current($cc_lang, 0, $textbotlang);
-    $cc_hConfig = configdisplay_element_current($cc_lang, 1, $textbotlang);
-    $cc_hName = configdisplay_element_current($cc_lang, 2, $textbotlang);
+    $cc_colOrderField = ($kind === 'buy') ? 'configColOrderBuy' : 'configColOrder';
+    $cc_nameFirst = (($cc_setting[$cc_colOrderField] ?? '') === 'name_first');
+    $cc_get = configdisplay_element_current($cc_lang, 0, $textbotlang, $kind);
+    $cc_hConfig = configdisplay_element_current($cc_lang, 1, $textbotlang, $kind);
+    $cc_hName = configdisplay_element_current($cc_lang, 2, $textbotlang, $kind);
     $keyboard_config = ['inline_keyboard' => []];
     $cc_headerConfig = ['text' => $cc_hConfig['text'], 'callback_data' => "none"];
     if ($cc_hConfig['style'] !== '') {
@@ -2072,14 +2073,20 @@ function keyboard_config($config_split, $id_invoice, $back_active = true)
         $keyboard_config['inline_keyboard'][] = $cc_nameFirst ? [$cc_nameBtn, $cc_getBtn] : [$cc_getBtn, $cc_nameBtn];
 
     }
-    $cc_getAll = configdisplay_element_current($cc_lang, 3, $textbotlang);
+    $cc_getAll = configdisplay_element_current($cc_lang, 3, $textbotlang, $kind);
     $cc_getAllBtn = ['text' => $cc_getAll['text'], 'callback_data' => "configget_$id_invoice" . "_1520"];
     if ($cc_getAll['style'] !== '') {
         $cc_getAllBtn['style'] = $cc_getAll['style'];
     }
     $keyboard_config['inline_keyboard'][] = [$cc_getAllBtn];
     if ($back_active) {
-        $keyboard_config['inline_keyboard'][] = [['text' => $textbotlang['users']['status']['backinfo'], 'callback_data' => "product_$id_invoice"]];
+        // the buy path got its own red "بازگشت به منوی قبل" per admin request -
+        // usertest's back button is untouched, still the shared "↪️ بازگشت"
+        if ($kind === 'buy') {
+            $keyboard_config['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "product_$id_invoice", 'style' => 'danger']];
+        } else {
+            $keyboard_config['inline_keyboard'][] = [['text' => $textbotlang['users']['status']['backinfo'], 'callback_data' => "product_$id_invoice"]];
+        }
     }
     return json_encode($keyboard_config);
 }
@@ -2250,6 +2257,11 @@ function keyboard_list_text($lang, $groupFilter = null)
         'textbot.preInvoice' => function ($lang, $be, $setting) {
             return !empty($be[$lang]['users.sell.confirmButtons']);
         },
+        // the buy-only config-column display settings (separate from usertest's above)
+        'users.status.getConfigHintBuy' => function ($lang, $be, $setting) {
+            return !empty($be[$lang]['configDisplayBuy'])
+                || (string) ($setting['configColOrderBuy'] ?? '') !== '';
+        },
     ];
     $bt_decorate = function ($key, $label) use ($lang, $bt_list_edit, $bt_list_st, $bt_list_re, $bt_can_react_keys, $bt_list_be, $bt_list_setting, $bt_extra_stores) {
         // a real dotted lookup, not [$parts[0]][$parts[1]]: three-part keys such as
@@ -2304,6 +2316,13 @@ function keyboard_list_text($lang, $groupFilter = null)
                 $keyboard_text['inline_keyboard'][] = [['text' => bt_section_meta('myservices_related')['label'], 'callback_data' => 'bt_sep|myservices_related']];
                 list($bt_sf_label, $bt_sf_style) = $bt_decorate('users.status.infoFull', '📊 پیام و دکمه‌های صفحه‌ی وضعیت سرویس');
                 $keyboard_text['inline_keyboard'][] = [['text' => $bt_sf_label, 'callback_data' => "bt_edit|$lang|users.status.infoFull", 'style' => ($bt_sf_style !== '' ? $bt_sf_style : 'primary')]];
+            }
+            if ($groupFilter === 'myservices' && $data['key'] === 'users.status.getConfigHintBuy') {
+                // caption is edited via the normal bt_edit button above - this
+                // extra row opens the buy-only column-order/button-styling hub,
+                // a full independent clone of usertest's "🗂 تنظیم نمایش و کپشن
+                // کانفیگ" (function.php: config_col_order_payload($kind='buy'))
+                $keyboard_text['inline_keyboard'][] = [['text' => '🗂 تنظیم ترتیب و رنگ دکمه‌های دریافت کانفیگ', 'callback_data' => "btact|cfgcolbuy|{$lang}|users.status.getConfigHintBuy", 'style' => 'primary']];
             }
             if ($groupFilter === 'buyflow' && $data['key'] === 'users.sell.serviceSelectFirst') {
                 // the 3 sub-screens BtnStyle's own hub offered are exposed

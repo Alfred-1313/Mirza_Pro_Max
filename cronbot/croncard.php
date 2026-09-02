@@ -12,16 +12,22 @@ $ManagePanel = new ManagePanel();
 $setting = select("setting", "*");
 if ($setting['Bot_Status'] == "botstatusoff")
     return;
-$autoconfirm = select("PaySetting", "ValuePay", "NamePay", "autoconfirmcart", "select")['ValuePay'];
-if ($autoconfirm != "onauto")
-    return;
 $paymentreports = select("topicid", "idreport", "report", "paymentreport", "select")['idreport'];
 $stmt = $pdo->prepare("SELECT * FROM Payment_report WHERE payment_Status = 'waiting' AND (Payment_Method = 'cart to cart' OR Payment_Method = 'arze digital offline') AND bottype IS NULL");
 $stmt->execute();
 while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-    $timecheck = $setting['timeauto_not_verify'] * 60;
     if ($row['at_updated'] == null)
         continue;
+    $Balance_id = select("user", "*", "id", $row['id_user'], "select");
+    // autoconfirmcart/timeauto_not_verify are per-language overrides now (see
+    // card_legacy_settings_payload() in admin.php) - each row is checked
+    // against ITS OWN payer's language instead of one bot-wide switch, same
+    // per-row lang lookup payment_expire.php already uses.
+    $payer_lang = is_array($Balance_id) && !empty($Balance_id['lang']) ? $Balance_id['lang'] : 'fa';
+    $autoconfirm = pay_value("autoconfirmcart", $payer_lang, 'offauto');
+    if ($autoconfirm != "onauto")
+        continue;
+    $timecheck = pay_value("timeauto_not_verify", $payer_lang, $setting['timeauto_not_verify']) * 60;
     $since_start = time() - strtotime($row['at_updated']);
     if ($since_start >= 3600)
         continue;
@@ -30,7 +36,6 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
     $Payment_report = $row;
     $list_Exceptions = select("PaySetting", "ValuePay", "NamePay", "Exception_auto_cart", "select")['ValuePay'];
     $list_Exceptions = is_string($list_Exceptions) ? json_decode($list_Exceptions, true) : [];
-    $Balance_id = select("user", "*", "id", $Payment_report['id_user'], "select");
     if (in_array($Balance_id['id'], $list_Exceptions))
         continue;
     $textbotlang = languagechange();
@@ -40,6 +45,14 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
     update("Payment_report", "payment_Status", "paid", "id_order", $Payment_report['id_order']);
     update("Payment_report", "dec_not_confirmed", $textbotlang['hardcoded']['autoConfirmedByBot'], "id_order", $Payment_report['id_order']);
     DirectPayment($Payment_report['id_order'], "../images.jpg");
+    // same reasoning as the SMS webhook and the manual-approval path: once the
+    // payment is confirmed the invoice message is stale (card numbers, its
+    // countdown, its "رسید را بفرستید" button) and inviting a second payment.
+    // Harmless when the user already tapped that button, since index.php
+    // deleted it then and Telegram ignores a repeat delete.
+    if (!empty($Payment_report['message_id'])) {
+        deletemessage($Payment_report['id_user'], $Payment_report['message_id']);
+    }
     $pricecashback = select("PaySetting", "ValuePay", "NamePay", "chashbackcart", "select")['ValuePay'];
     $Balance_id = select("user", "*", "id", $Payment_report['id_user'], "select");
     if ($pricecashback != "0") {

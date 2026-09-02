@@ -75,6 +75,7 @@ try {
         addFieldToTable($tableName, 'message_count', '0');
         addFieldToTable($tableName, 'last_message_time', '0');
         addFieldToTable($tableName, 'Processing_value_four', '');
+        addFieldToTable($tableName, 'renew_resume_ctx', '');
         addFieldToTable($tableName, 'username', 'none');
         addFieldToTable($tableName, 'Processing_value', 'none');
         addFieldToTable($tableName, 'number', 'none');
@@ -226,6 +227,10 @@ timeauto_not_verify,status_keyboard_config,cron_status
         addFieldToTable("setting", "text_edit", "{}", "JSON");
         addFieldToTable("setting", "button_edit", null, "TEXT");
         addFieldToTable("setting", "configColOrder", null, "VARCHAR(20)");
+        addFieldToTable("setting", "configColOrderBuy", null, "VARCHAR(20)");
+        addFieldToTable("setting", "cardRandomAmount", null, "VARCHAR(20)");
+        addFieldToTable("setting", "smsForwardEnabled", null, "VARCHAR(20)");
+        addFieldToTable("setting", "smsForwardSecret", null, "VARCHAR(64)");
         addFieldToTable("setting", "backup_db_password", null, "VARCHAR(255)");
         addFieldToTable("setting", "backup_bot_password", null, "VARCHAR(255)");
         addFieldToTable("setting", "backup_db_enabled", "1", "VARCHAR(1)");

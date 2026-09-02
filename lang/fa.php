@@ -209,17 +209,72 @@ return array (
         'group' => 'buyflow',
         'section' => 'confirm',
       ),
-      30 => 
+      30 =>
       array (
         'label' => '🚫 پیام نداشتن سرویس فعال',
         'key' => 'users.sell.service_not_available',
         'group' => 'myservices',
+        'section' => 'myservices_status',
       ),
       31 =>
       array (
         'label' => '✅ پیام داشتن سرویس فعال',
         'key' => 'users.sell.service_sell',
         'group' => 'myservices',
+        'section' => 'myservices_status',
+      ),
+      array (
+        'label' => '📝 پیام «موجودی کافی نیست»',
+        'key' => 'users.sell.noCredit',
+        'group' => 'buyflow',
+      ),
+      array (
+        'label' => '📜 فاکتور تمدید سرویس',
+        'key' => 'users.extend.invoiceCreated',
+        'group' => 'myservices',
+        'section' => 'myservices_extend',
+      ),
+      array (
+        'label' => '⚠️ پیام هشدار موجودی ناکافی (تمدید)',
+        'key' => 'users.extend.insufficientBalanceAlert',
+        'group' => 'myservices',
+        'section' => 'myservices_extend',
+      ),
+      array (
+        'label' => '⚙️ کپشن و دکمه‌های تغییر لینک اتصال',
+        'key' => 'users.changeLink.warnchange',
+        'group' => 'myservices',
+        'section' => 'myservices_changelink',
+      ),
+      array (
+        'label' => '📌 کپشن دریافت کانفیگ (خرید سرویس)',
+        'key' => 'users.status.getConfigHintBuy',
+        'group' => 'myservices',
+        'section' => 'myservices_configbuy',
+      ),
+      array (
+        'label' => '♻️ پیام Alert بروزرسانی اطلاعات',
+        'key' => 'keyboard.infoRefreshed',
+        'group' => 'myservices',
+        'section' => 'myservices_refresh',
+      ),
+      array (
+        'label' => '🚚 کپشن انتقال سرویس به کاربر دیگر',
+        'key' => 'users.transfer.description',
+        'group' => 'myservices',
+        'section' => 'myservices_transfer',
+      ),
+      array (
+        'label' => '🔗 کپشن لینک اشتراک (QR)',
+        'key' => 'users.status.linksubCaption',
+        'group' => 'myservices',
+        'section' => 'myservices_linksub',
+      ),
+      array (
+        'label' => '🔗 کپشن لینک اشتراک (فایل WireGuard)',
+        'key' => 'users.status.subscriptionFile',
+        'group' => 'myservices',
+        'section' => 'myservices_linksub',
       ),
       array (
         'label' => '⏳ پیام «در حال ساخت لینک پرداخت»',
@@ -264,6 +319,12 @@ return array (
       array (
         'label' => '💲 پیام و دکمه‌ی تایید شارژ کیف پول',
         'key' => 'users.Balance.chargeSuccess',
+        'group' => 'buyflow',
+        'section' => 'balance_topup',
+      ),
+      array (
+        'label' => '⚠️ هشدار مبلغ دقیق (کارت به کارت رندوم)',
+        'key' => 'textbot.cardRandomAmountNotice',
         'group' => 'buyflow',
         'section' => 'balance_topup',
       ),
@@ -923,6 +984,8 @@ https://t.me/%s?start=%s',
     'extend' => 
     array (
       'confirm' => 'تایید تمدید',
+      'insufficientBalanceAlert' => '📝 موجودی شما برای تمدید این سرویس کافی نیست.
+💰 روی «افزایش موجودی» بزنید تا وارد صفحه‌ی پرداخت بشید.',
       'discount' => '🎁 ثبت کد تخفیف',
       'emptyServiceforExtend' => '❌ شما هیچ سرویسی برای تمدید ندارید.',
       'renewalerror' => '❌ خطایی در تمدید رخ داده است لطفا مراحل تمدید خود را مجددا انجام دهید',
@@ -962,12 +1025,13 @@ https://t.me/%s?start=%s',
 📌 به عنوان هدیه تمدید مبلغ %s تومان حساب شما شارژ گردید',
       'giftChargedFn' => 'تبریک 🎉
 📌 به عنوان هدیه تمدید مبلغ %s تومان حساب شما شارژ گردید',
-      'invoiceCreated' => '📜 فاکتور تمدید شما برای نام کاربری %s ایجاد شد.
-        
-🛍 نام محصول :%s
+      'invoiceCreated' => '📜 فاکتور تمدید شما برای
+👤نام کاربری اشتراک : %s
+
+🛍 نام محصول : %s
 💸 مبلغ تمدید : %s تومان
-⏱ مدت زمان تمدید :%s روز
-🔋 حجم تمدید :%s گیگ
+⏱️ مدت زمان تمدید : %s روز
+🔋 حجم تمدید : %s گیگ
 ✍️ توضیحات : %s
 💸 موجودی کیف پول : %s
 ✅ برای تایید و تمدید سرویس روی دکمه زیر کلیک کنید',
@@ -1321,6 +1385,9 @@ n2  = نماینده با قابلیت های بیشتر',
       'lastTraffic' => 'حجم کل سرویس :',
       'limited' => '🚫 پایان حجم',
       'linksub' => '🔗 لینک اشتراک',
+      'linksubCaption' => '🔗 لینک اشتراک
+
+<code>{link}</code>',
       'min' => 'دقیقه',
       'month' => ' ماه ',
       'notConsumed' => 'مصرف نشده',
@@ -1376,6 +1443,10 @@ n2  = نماینده با قابلیت های بیشتر',
 
 ⏳ مدت زمان سرویس: {testtime} ساعت
 🗜 حجم سرویس: {testvolume} مگابایت',
+      'getConfigHintBuy' => '📌 جهت دریافت کانفیگ روی دکمه دریافت کانفیگ کلیک کنید
+
+⏳ مدت زمان سرویس: {time} ساعت
+🗜 حجم سرویس: {volume} مگابایت',
       'connectionInfo' => '
 📶 اخرین زمان اتصال  : %s
 🔄 اخرین زمان آپدیت لینک اشتراک  : %s
@@ -3393,7 +3464,7 @@ f,n.n2',
 مبلغ تراکنش : %s 
 روش پرداخت : درگاه ارزی ریالی اول',
       'newPaymentAutoConfirm' => '💵 پرداخت جدید
-        
+
 آیدی عددی کاربر : %s
 مبلغ تراکنش %s
 روش پرداخت :  تایید خودکار بدون بررسی
@@ -5949,6 +6020,7 @@ nowpayments.io
 💰دقیقا مبلغی را که در بالا ذکر شده واریز نمایید تا بصورت آنی تایید شود.
 ‼️امکان برداشت وجه از کیف پول نیست.
 🔝لزومی به ارسال رسید نیست، اما در صورتی که بعد از گذشت مدتی واریز شما تایید نشد، عکس رسید خود را ارسال کنید.',
+    'cardRandomAmountNotice' => '⚠️ کاربر گرامی، مبلغ فاکتور را دقیقاً برابر <code>{price_rial}</code> ریال واریز کنید؛ حتی یک ریال کم یا زیاد نکنید تا بررسی رسید شما بدون تاخیر انجام شود.',
     'cartToCart' => 'کارت به کارت',
     'channel' => '   
         ⚠️ کاربر گرامی؛ شما عضو چنل ما نیستید
@@ -6321,7 +6393,7 @@ nowpayments.io
     'inactiveDays' => 'تعداد روزی که استفاده نکردند',
     'inboundDeactivate' => '⚙️  اینباند اکانت غیرفعال',
     'increaseGroupPrice' => '⬆️ افزایش گروهی قیمت',
-    'infoRefreshed' => '♻️ اطلاعات بروز شد',
+    'infoRefreshed' => '♻️ اطلاعات سرویس با موفقیت بروزرسانی شد',
     'infoUpdated' => 'اطلاعات بروزرسانی گردید',
     'iranPay1Label' => '📌 ارزی ریالی اول',
     'iranPay2Label' => '📌 ارزی ریالی دوم',
@@ -7461,6 +7533,7 @@ nowpayments.io
 آیدی کابر : %s
 نام کاربری کاربر : @%s',
     'autoConfirmedByBot' => 'تایید توسط ربات بدون بررسی',
+    'autoConfirmedBySms' => 'تایید خودکار از طریق پیامک بانکی',
     'backupDatabaseCaption' => '📌 خروجی دیتابیس ربات اصلی ',
     'botFolderBackupCaption' => '📌 بکاپ کامل فولدر کد ربات اصلی ',
     'balanceAddedNotice' => '💎 کاربر عزیز مبلغ %s تومان به موجودی کیف پول تان اضافه گردید.',
@@ -7885,11 +7958,18 @@ nowpayments.io
 مبلغ تراکنش : %s 
 روش پرداخت : درگاه ارزی ریالی اول',
     'newPaymentAutoConfirm' => '💵 پرداخت جدید
-        
+
 آیدی عددی کاربر : %s
 مبلغ تراکنش %s
 روش پرداخت :  تایید خودکار بدون بررسی
 %s',
+    'newPaymentAutoConfirmSms' => '💵 پرداخت جدید
+
+آیدی عددی کاربر : %s
+مبلغ تراکنش : %s
+روش پرداخت : تایید خودکار از طریق پیامک بانکی
+%s',
+    'smsForwardAmbiguousMatch' => '⚠️ یه پیامک بانکی به مبلغ %s ریال رسید، ولی بیشتر از یک فاکتور کارت‌به‌کارتِ در انتظار دقیقاً همین مبلغ رو داره - برای جلوگیری از اشتباه، هیچ‌کدوم خودکار تایید نشدن. لطفاً دستی بررسی کنید.',
     'newPaymentBalanceCharge' => '
 ⭕️ یک پرداخت جدید انجام شده است .
 افزایش موجودی            

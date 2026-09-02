@@ -1703,7 +1703,6 @@ if (!function_exists('gw_field_registry')) {
             'card' => [
                 ['field' => 'cards', 'type' => 'cards', 'label' => 'cardsLabel'],
                 ['field' => 'CartDirect', 'type' => 'text', 'label' => 'cartDirectLabel', 'scope' => 'global'],
-                ['field' => 'chashbackcart', 'type' => 'text', 'label' => 'cashbackLabel', 'scope' => 'global'],
                 ['field' => 'cardInvoiceExpireMinutes', 'type' => 'number', 'label' => 'invoiceExpireLabel'],
             ],
             'plisio' => [
@@ -1779,6 +1778,37 @@ if (!function_exists('gw_has_any_override')) {
             }
         }
         return false;
+    }
+}
+if (!function_exists('card_legacy_toggle_fields')) {
+    // The 3 legacy card-to-card ON/OFF switches that became per-language
+    // overrides (see card_legacy_settings_payload() in admin.php). Each still
+    // stores its historical on/off literal string, unchanged, so every
+    // existing read site (keyboard.php, croncard.php) keeps working exactly
+    // as before once routed through pay_value() instead of a flat global read.
+    function card_legacy_toggle_fields()
+    {
+        return [
+            'Cartstatuspv' => ['on' => 'oncardpv', 'off' => 'offcardpv', 'label' => '💳 پرداخت مستقیم در پیوی'],
+            'checkpaycartfirst' => ['on' => 'onpayverify', 'off' => 'offpayverify', 'label' => '🔒 نمایش کارت پس از اولین پرداخت'],
+            'autoconfirmcart' => ['on' => 'onauto', 'off' => 'offauto', 'label' => '🤖 تایید رسید بدون بررسی'],
+        ];
+    }
+}
+if (!function_exists('card_legacy_has_any_override')) {
+    // Drives the green "this language is customised" state on the main
+    // screen's entry button - deliberately scoped to only the 5 per-language
+    // fields (not the 4 global ones below them), since a global change isn't
+    // "this language's" customisation and would wrongly turn every language's
+    // entry button green at once.
+    function card_legacy_has_any_override($lang)
+    {
+        foreach (array_keys(card_legacy_toggle_fields()) as $f) {
+            if (gw_pay_override_has($f, $lang)) {
+                return true;
+            }
+        }
+        return gw_pay_override_has('timeauto_not_verify', $lang) || gw_pay_override_has('helpcart', $lang);
     }
 }
 if (!function_exists('gw_lang_has_any_override')) {
@@ -2236,6 +2266,190 @@ if (!function_exists('topup_btnstyle_set')) {
     }
 }
 
+if (!function_exists('sms_forward_toggle')) {
+    // Flips setting.smsForwardEnabled. Turning it ON also force-enables
+    // cardRandomAmount (every invoice needs a unique amount for a future SMS
+    // match to be unambiguous) and makes sure a webhook secret exists (the
+    // URL built from it is what the admin pastes into their phone's SMS
+    // forwarder app). Turning it back OFF deliberately leaves cardRandomAmount
+    // and the secret as-is, since the admin may still want unique amounts on
+    // their own merit and re-enabling later shouldn't invalidate an already-
+    // configured phone app. Returns the PREVIOUS (pre-toggle) state so the
+    // caller knows which way it just flipped without a second query.
+    function sms_forward_toggle()
+    {
+        $wasOn = ((select("setting", "smsForwardEnabled", null, null, "select")['smsForwardEnabled'] ?? '0') === '1');
+        if ($wasOn) {
+            update("setting", "smsForwardEnabled", '0', null, null);
+        } else {
+            update("setting", "smsForwardEnabled", '1', null, null);
+            update("setting", "cardRandomAmount", '1', null, null);
+            sms_forward_ensure_secret();
+        }
+        return $wasOn;
+    }
+}
+if (!function_exists('sms_forward_ensure_secret')) {
+    // Generates setting.smsForwardSecret once, if it doesn't already exist.
+    // This secret is the ENTIRE trust boundary for the webhook endpoint (see
+    // cronbot/sms_webhook.php) - anyone who knows it can trigger a payment
+    // match, so it's long and random, never derived from anything guessable.
+    function sms_forward_ensure_secret()
+    {
+        $current = (string) (select("setting", "smsForwardSecret", null, null, "select")['smsForwardSecret'] ?? '');
+        if ($current !== '') {
+            return $current;
+        }
+        $fresh = bin2hex(random_bytes(24));
+        update("setting", "smsForwardSecret", $fresh, null, null);
+        return $fresh;
+    }
+}
+if (!function_exists('sms_forward_regenerate_secret')) {
+    // Invalidates the old webhook URL (whatever's already pasted into the
+    // phone app stops working) and issues a fresh one - for when the admin
+    // suspects the old URL leaked, or is resetting up on a new phone.
+    function sms_forward_regenerate_secret()
+    {
+        $fresh = bin2hex(random_bytes(24));
+        update("setting", "smsForwardSecret", $fresh, null, null);
+        return $fresh;
+    }
+}
+if (!function_exists('sms_forward_webhook_url')) {
+    function sms_forward_webhook_url()
+    {
+        global $domainhosts;
+        $secret = sms_forward_ensure_secret();
+        return "https://{$domainhosts}/cronbot/sms_webhook.php?secret={$secret}";
+    }
+}
+if (!function_exists('sms_forward_extract_amounts')) {
+    // Pulls every plausible numeric amount out of a forwarded bank SMS,
+    // regardless of digit script (ASCII / Persian / Arabic-Indic) or
+    // thousands-separator style (",", Arabic comma "،", Arabic thousands
+    // separator "٬"). Deliberately does no keyword/context filtering
+    // ("واریز" vs "برداشت" etc.) - the random-salted exact-amount match this
+    // feeds into is already an unambiguous signal on its own (see the SMS
+    // Forward plan). Returns a de-duplicated array of ints, order preserved.
+    function sms_forward_extract_amounts($text)
+    {
+        $normalized = strtr((string) $text, [
+            '۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4',
+            '۵' => '5', '۶' => '6', '۷' => '7', '۸' => '8', '۹' => '9',
+            '٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4',
+            '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
+        ]);
+        preg_match_all('/\d[\d,،٬]*\d|\d/', $normalized, $m);
+        $amounts = [];
+        foreach ($m[0] as $raw) {
+            $clean = str_replace([',', '،', '٬'], '', $raw);
+            if ($clean === '') {
+                continue;
+            }
+            $amounts[] = (int) $clean;
+        }
+        return array_values(array_unique($amounts));
+    }
+}
+if (!function_exists('sms_forward_extract_text_from_request')) {
+    // Pulls the forwarded SMS text out of an inbound webhook request,
+    // tolerating whatever shape the admin's phone-side forwarder app happens
+    // to send it in - these apps are configured by the admin with a free-text
+    // body/URL template, so the exact wrapping isn't something we control.
+    // Tries, in order: a JSON body with a recognizable field name, a JSON
+    // body with no recognizable field (concatenates every string value found,
+    // so the amount-scanning regex still has something to work with), a
+    // form-encoded ($postArr/$getArr) field with a recognizable name, then
+    // finally the raw body itself (covers an app that just POSTs the plain
+    // message text with no wrapping at all).
+    function sms_forward_extract_text_from_request($rawBody, $contentType, array $postArr, array $getArr)
+    {
+        $fieldNames = ['text', 'message', 'msg', 'body', 'sms', 'content'];
+        $rawBody = (string) $rawBody;
+        $isJson = stripos((string) $contentType, 'json') !== false
+            || (strlen(trim($rawBody)) > 0 && in_array(trim($rawBody)[0], ['{', '['], true));
+        if ($isJson) {
+            $decoded = json_decode($rawBody, true);
+            if (is_array($decoded)) {
+                foreach ($fieldNames as $name) {
+                    foreach ($decoded as $k => $v) {
+                        if (is_string($k) && strcasecmp($k, $name) === 0 && is_string($v) && $v !== '') {
+                            return $v;
+                        }
+                    }
+                }
+                $flat = [];
+                array_walk_recursive($decoded, function ($v) use (&$flat) {
+                    if (is_string($v)) {
+                        $flat[] = $v;
+                    }
+                });
+                if (!empty($flat)) {
+                    return implode(' ', $flat);
+                }
+            }
+        }
+        foreach ($fieldNames as $name) {
+            foreach ($postArr as $k => $v) {
+                if (is_string($k) && strcasecmp($k, $name) === 0 && is_string($v) && $v !== '') {
+                    return $v;
+                }
+            }
+        }
+        foreach ($fieldNames as $name) {
+            foreach ($getArr as $k => $v) {
+                if (is_string($k) && strcasecmp($k, $name) === 0 && is_string($v) && $v !== '') {
+                    return $v;
+                }
+            }
+        }
+        return $rawBody;
+    }
+}
+if (!function_exists('sms_forward_find_pending_match')) {
+    // Looks for exactly one pending card-to-card invoice whose price (in
+    // rial) equals $rialAmount. 'Unpaid' is included alongside 'waiting' on
+    // purpose - per the approved plan, a matched SMS confirms the payment
+    // immediately with no receipt photo required, so a customer who never
+    // gets around to sending one is still covered. 'ambiguous' (more than
+    // one row happens to share the exact same salted amount right now) is
+    // reported separately so the caller can leave it for manual review
+    // instead of guessing which invoice the SMS was actually for.
+    function sms_forward_find_pending_match($rialAmount)
+    {
+        global $pdo;
+        $stmt = $pdo->prepare("SELECT * FROM Payment_report WHERE Payment_Method = 'cart to cart' AND payment_Status IN ('Unpaid','waiting')");
+        $stmt->execute();
+        $matches = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            if (intval($row['price']) * 10 === $rialAmount) {
+                $matches[] = $row;
+            }
+        }
+        if (count($matches) === 1) {
+            return ['status' => 'matched', 'row' => $matches[0]];
+        }
+        if (count($matches) > 1) {
+            return ['status' => 'ambiguous', 'rows' => $matches];
+        }
+        return ['status' => 'none'];
+    }
+}
+if (!function_exists('sms_forward_claim_order')) {
+    // Atomically flips one order from Unpaid/waiting to paid, returning
+    // whether THIS call is the one that made the change. Guards against a
+    // race with croncard.php's own time-based auto-confirm (or a manual
+    // admin tap) landing in the same instant - only the caller that actually
+    // moved the row should go on to call DirectPayment().
+    function sms_forward_claim_order($orderId)
+    {
+        global $pdo;
+        $stmt = $pdo->prepare("UPDATE Payment_report SET payment_Status = 'paid' WHERE id_order = :o AND payment_Status IN ('Unpaid','waiting')");
+        $stmt->execute([':o' => $orderId]);
+        return $stmt->rowCount() === 1;
+    }
+}
 if (!function_exists('topup_card_invoice_generate')) {
     // The real card-to-card invoice: pending-payment check, min/max balance
     // check, card selection, Payment_report insert, invoice message. This is
@@ -2245,7 +2459,7 @@ if (!function_exists('topup_card_invoice_generate')) {
     // AND the topup amount-confirm step (which now skips the extra confirm
     // tap and calls this directly) share one definition. Never duplicate
     // this logic at a third call site - call this function instead.
-    function card_invoice_build($from_id, $lang, $amount, $idInvoice, $textbotlang, array $setting)
+    function card_invoice_build($from_id, $lang, $amount, $idInvoice, $textbotlang, array $setting, $applyRandomAmount = true)
     {
         global $pdo;
         // shows every card configured for this language (falls back to the
@@ -2259,6 +2473,18 @@ if (!function_exists('topup_card_invoice_generate')) {
         if (empty($cardList)) {
             return null;
         }
+        // "🎲 مبلغ رندوم برای هر فاکتور" (🏬 تنظیمات فروشگاه -> 💎 مالی ->
+        // کارت به کارت): adds a small, unpredictable toman amount on top of
+        // the real price so two invoices almost never land on the exact same
+        // payable amount - lays the groundwork for a future automatic
+        // SMS-receipt-matching feature. $applyRandomAmount=false is for the
+        // "ساخت فاکتور جدید" reissue call below, which passes an amount
+        // ALREADY read back from a prior Payment_report row (already final,
+        // possibly already carrying an earlier random addition) - applying
+        // this again there would silently inflate the price on every reissue.
+        if ($applyRandomAmount && ($setting['cardRandomAmount'] ?? '0') === '1') {
+            $amount = $amount + random_int(100, 999);
+        }
         $valueprice = number_format($amount);
         $expireMinutes = (int) pay_value('cardInvoiceExpireMinutes', $lang, 30);
         if ($expireMinutes < 1) {
@@ -2269,6 +2495,20 @@ if (!function_exists('topup_card_invoice_generate')) {
             '{price}' => $valueprice,
             '{minutes}' => $expireMinutes,
         ]);
+        // shown whenever the feature is currently on - even on a reissued
+        // invoice, whose amount may already carry an earlier random addition
+        // from when it was first created - so the exact-amount warning always
+        // matches whether THIS caption's number is actually round or not.
+        // Rial (not Toman, and not $valueprice) because that is the unit
+        // typed into most bank apps/card readers' amount field, and printed
+        // WITHOUT thousands separators so it can be copied straight into that
+        // field - a pasted "502,850" is rejected by most banking apps.
+        if (($setting['cardRandomAmount'] ?? '0') === '1') {
+            $priceRial = $amount * 10;
+            $textcart .= "\n\n<blockquote><b>" . strtr($textbotlang['textbot']['cardRandomAmountNotice'], [
+                '{price_rial}' => $priceRial,
+            ]) . "</b></blockquote>";
+        }
         $dateacc = date('Y/m/d H:i:s');
         $randomString = bin2hex(random_bytes(5));
         $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice) VALUES (?,?,?,?,?,?,?)");
@@ -2470,7 +2710,7 @@ if (!function_exists('topup_card_invoice_generate')) {
             return;
         }
         deletemessage($from_id, $message_id);
-        $gethelp = select("PaySetting", "ValuePay", "NamePay", "helpcart", "select")['ValuePay'];
+        $gethelp = pay_value("helpcart", $user['lang'] ?? null, '2');
         if ($gethelp != 2) {
             $data = json_decode($gethelp, true);
             if ($data['type'] == "text") {
@@ -4420,6 +4660,7 @@ if (!function_exists('config_delivery_panel_payload')) {
             $be = [];
         }
         $clearColOrder = false;
+        $clearColOrderBuy = false;
         foreach ($keys as $key) {
             if ($doText && isset($map[$lang]) && is_array($map[$lang])) {
                 bottext_dotted_unset($map[$lang], $key);
@@ -4436,6 +4677,11 @@ if (!function_exists('config_delivery_panel_payload')) {
                     // this item also owns the config-column display settings
                     unset($be[$lang]['configDisplay']);
                     $clearColOrder = true;
+                }
+                if ($key === 'users.status.getConfigHintBuy') {
+                    // buy-only sibling of the config-column settings above
+                    unset($be[$lang]['configDisplayBuy']);
+                    $clearColOrderBuy = true;
                 }
             }
         }
@@ -4458,6 +4704,9 @@ if (!function_exists('config_delivery_panel_payload')) {
         }
         if ($clearColOrder) {
             update("setting", "configColOrder", null, null, null);
+        }
+        if ($clearColOrderBuy) {
+            update("setting", "configColOrderBuy", null, null, null);
         }
     }
 }
@@ -5037,6 +5286,54 @@ if (!function_exists('bt_section_meta')) {
                 'label' => '⚙️ تنظیم ترتیب ستون‌ها',
                 'alert' => 'با دکمه‌های پایین مشخص کن اول دکمه‌ی «دریافت کانفیگ» نشون داده بشه یا اول نام کانفیگ - دکمه‌های بالاتر (پیش‌نمایش) خودشون قابل لمس‌ان و به صفحه‌ی ویرایش همون آیتم می‌رن.',
             ],
+            'genbtn_actions' => [
+                'label' => '⚙️ عملیات',
+                'alert' => 'دکمه‌های بالاتر فقط پیش‌نمایشن - روشون بزن تا ویرایش بشن. دکمه‌های پایین (ریست/بازگشت/بستن) کار واقعی انجام می‌دن.',
+            ],
+            'myservices_status' => [
+                'label' => '📊 وضعیت سرویس (فعال/غیرفعال)',
+                'alert' => 'این بخش پیام‌هایی که وضعیت فعال یا غیرفعال بودن سرویس کاربر رو نشون می‌دن مدیریت می‌کنه.',
+            ],
+            'myservices_extend' => [
+                'label' => '♻️ تمدید سرویس',
+                'alert' => 'این بخش فاکتور تمدید سرویس و پیام هشدار موجودی ناکافیِ همون فاکتور رو مدیریت می‌کنه.',
+            ],
+            'myservices_changelink' => [
+                'label' => '🔗 تغییر لینک اتصال',
+                'alert' => 'این بخش کپشن و دکمه‌های صفحه‌ی هشدار «تغییر لینک اتصال» رو مدیریت می‌کنه.',
+            ],
+            'myservices_configbuy' => [
+                'label' => '📥 دریافت کانفیگ (خرید سرویس)',
+                'alert' => 'این بخش کپشن و چیدمان دکمه‌های صفحه‌ی «دریافت کانفیگ» رو - فقط برای سرویس‌های خریداری‌شده، جدا از اکانت تست - مدیریت می‌کنه.',
+            ],
+            'myservices_refresh' => [
+                'label' => '🔄 بروزرسانی اطلاعات',
+                'alert' => 'این بخش پیام Alert کوچیکی که بعد از لمس «بروزرسانی اطلاعات» نشون داده می‌شه رو مدیریت می‌کنه.',
+            ],
+            'myservices_transfer' => [
+                'label' => '🚚 انتقال سرویس به کاربر دیگر',
+                'alert' => 'این بخش کپشن صفحه‌ی شروع «انتقال سرویس به کاربر دیگر» رو مدیریت می‌کنه.',
+            ],
+            'myservices_linksub' => [
+                'label' => '🔗 لینک اشتراک',
+                'alert' => 'این بخش کپشن دکمه‌ی «🔗 لینک اشتراک» رو مدیریت می‌کنه - یکی برای حالت QR (بیشتر پنل‌ها)، یکی برای حالت فایل (پنل‌های WireGuard).',
+            ],
+            'topupdisc_bulk' => [
+                'label' => '⚡️ عملیات سریع',
+                'alert' => 'دکمه‌ی زیر یه میان‌بره: یکجا روی همه‌ی درگاه‌های فعال این زبان تخفیف خودکار می‌ذاره - نه یه تنظیم جدا، فقط سریع‌تر می‌کنه کاری که می‌تونی تک‌تک هم انجام بدی.',
+            ],
+            'topupdisc_auto_actions' => [
+                'label' => '⚙️ عملیات',
+                'alert' => 'دکمه‌های بالاتر تنظیمات این تخفیفن. دو دکمه‌ی پایین فوری اجرا می‌شن: یکی فقط سهمیه‌ی استفاده‌شده‌ی کاربرها رو صفر می‌کنه (تنظیمات دست‌نخورده می‌مونه)، یکی همه‌چیز (تنظیمات) رو به پیش‌فرض برمی‌گردونه.',
+            ],
+            'card_legacy_perlang' => [
+                'label' => '🌍 مخصوص همین زبان',
+                'alert' => 'این تنظیمات فقط روی همین زبون اثر می‌ذارن - هر زبون می‌تونه مقدار جدای خودش رو داشته باشه؛ تا وقتی برای یه زبون تنظیم نکنید، همون مقدار سراسری (پیش‌فرض) رو ازش استفاده می‌کنه.',
+            ],
+            'card_legacy_global' => [
+                'label' => '🌐 سراسری (همه زبان‌ها)',
+                'alert' => 'این‌ها بین همه‌ی زبون‌ها مشترکن - تغییرشون روی کل ربات اثر می‌ذاره، نه فقط یه زبون خاص.',
+            ],
             'home_general' => [
                 'label' => '💬 پیام‌های عمومی ربات',
                 'alert' => 'این بخش پیام‌های مستقل ربات (خوش‌آمدگویی، سؤالات متداول، تعرفه‌ها، قوانین) رو مدیریت می‌کنه - مربوط به هیچ مرحله‌ی خاصی نیستن.',
@@ -5085,6 +5382,12 @@ if (!function_exists('genbtn_alias_map')) {
             // same trick again - the one button under the wallet top-up
             // success message
             'bc' => 'users.Balance.chargeSuccess',
+            // own-key trick again - the renewal invoice's confirm/back pair
+            // (the افزایش موجودی button between them is the SHARED
+            // balancebtn widget, not part of this alias - one place to style
+            // it bot-wide instead of a per-screen copy)
+            'rn' => 'users.extend.invoiceCreated',
+            'cl' => 'users.changeLink.warnchange',
         ];
     }
 }
@@ -5133,6 +5436,25 @@ if (!function_exists('genbtn_defs')) {
         if ($alias === 'bc') {
             return [
                 0 => ['name' => '🔵 دکمه تهیه اشتراک', 'text' => $textbotlang['users']['sell']['buySubscriptionBtn'], 'style' => 'primary', 'callback_data' => 'buyfresh'],
+            ];
+        }
+        if ($alias === 'rn') {
+            return [
+                0 => ['name' => '🔵 دکمه تایید تمدید', 'text' => $textbotlang['users']['extend']['confirm'], 'style' => 'primary', 'callback_data' => 'none'],
+                1 => ['name' => '🔴 دکمه بازگشت به منوی قبل', 'text' => '🔙 بازگشت به منوی قبل', 'style' => 'danger', 'callback_data' => 'none'],
+                // shown only on the payment-method screen reached by tapping
+                // افزایش موجودی from the invoice (appended below the live
+                // gateway list, not part of extend_invoice_kb's own 2-button
+                // layout) - kept as idx 2 of the SAME alias since it is still
+                // the renewal invoice's own flow, own-key trick still applies.
+                // Tapping it re-renders the exact same invoice (rn_reshow_).
+                2 => ['name' => '🔴 دکمه بازگشت (از صفحه‌ی پرداخت)', 'text' => '🔙 بازگشت به منوی قبلی', 'style' => 'danger', 'callback_data' => 'none'],
+            ];
+        }
+        if ($alias === 'cl') {
+            return [
+                0 => ['name' => '🔵 دکمه تایید تغییر لینک', 'text' => $textbotlang['users']['changeLink']['confirm'], 'style' => 'primary', 'callback_data' => 'none'],
+                1 => ['name' => '🔴 دکمه بازگشت به منوی قبل', 'text' => '🔙 بازگشت به منوی قبل', 'style' => 'danger', 'callback_data' => 'none'],
             ];
         }
         return [];
@@ -5248,7 +5570,10 @@ if (!function_exists('genbtn_render')) {
     {
         list($text, $style) = genbtn_current($def, $ov);
         $pos = (isset($ov['pos']) && $ov['pos'] === 'left') ? 'left' : 'right';
-        $btn = ['text' => $text, 'callback_data' => $callback_data, 'style' => $style];
+        $btn = ['text' => $text, 'callback_data' => $callback_data];
+        if ($style !== '') {
+            $btn['style'] = $style;
+        }
         if (!empty($ov['simple'])) {
             $btn['text'] = strip_leading_emoji($text);
         } elseif (!empty($ov['emojiIcon'])) {
@@ -5325,6 +5650,49 @@ if (!function_exists('test_expired_kb')) {
         return json_encode(['inline_keyboard' => [[genbtn_render($defs[0], $ov, $defs[0]['callback_data'])]]]);
     }
 }
+if (!function_exists('extend_invoice_kb')) {
+    // the renewal invoice's keyboard: تایید تمدید + افزایش موجودی on one row,
+    // بازگشت به منوی قبل on its own row below. The confirm/back pair is
+    // customizable via the 'rn' genbtn alias (own-key trick against
+    // users.extend.invoiceCreated, its one caption item); افزایش موجودی
+    // reuses the SHARED balancebtn widget's text/style/emoji so admins style
+    // it once, bot-wide - but its callback_data is overridden to
+    // $topupCallback (never the shared 'Add_Balance') because Add_Balance's
+    // own dispatcher unconditionally zeroes Processing_value, which would
+    // destroy this invoice's cached id_invoice/code_product/price/etc.
+    function extend_invoice_kb($lang, $textbotlang, $confirmCallback, $backCallback, $topupCallback)
+    {
+        $defs = genbtn_defs('rn', $textbotlang);
+        $confirmOv = genbtn_override($lang, 'users.extend.invoiceCreated', 0);
+        $backOv = genbtn_override($lang, 'users.extend.invoiceCreated', 1);
+        $confirmBtn = genbtn_render($defs[0], $confirmOv, $confirmCallback);
+        $backBtn = genbtn_render($defs[1], $backOv, $backCallback);
+        $balanceBtn = balancebtn_button($lang, $textbotlang);
+        $balanceBtn['callback_data'] = $topupCallback;
+        return json_encode(['inline_keyboard' => [[$confirmBtn, $balanceBtn], [$backBtn]]]);
+    }
+}
+if (!function_exists('render_extend_invoice_from_product')) {
+    // shared tail of "show the renewal invoice": applies the user's
+    // pricediscount percentage to $product['price_product'] (always the RAW
+    // catalog/synthesized price - callers must never pre-discount it, or the
+    // discount applies twice), builds the invoiceCreated caption, and the
+    // keyboard. Used both when a product/duration is first picked and by the
+    // rn_reshow_ dispatcher (re-rendering the same invoice after a detour to
+    // the payment-method screen).
+    function render_extend_invoice_from_product($user, $textbotlang, $nameloc, $product)
+    {
+        if (intval($user['pricediscount']) != 0) {
+            $result = ($product['price_product'] * $user['pricediscount']) / 100;
+            $pricelastextend = number_format(round($product['price_product'] - $result, 0));
+        } else {
+            $pricelastextend = $product['price_product'];
+        }
+        $textextend = sprintf($textbotlang['users']['extend']['invoiceCreated'], $nameloc['username'], $product['name_product'], $pricelastextend, $product['Service_time'], $product['Volume_constraint'], $product['note'], $user['Balance']);
+        $keyboardextend = extend_invoice_kb($user['lang'] ?? 'fa', $textbotlang, "confirmserivce", "product_" . $nameloc['id_invoice'], "rn_topup_" . $nameloc['id_invoice']);
+        return [$textextend, $keyboardextend];
+    }
+}
 if (!function_exists('notify_test_expired')) {
     // Shared by cronbot/configtest.php (the normal path) AND every place in
     // index.php that silently disables a stale test invoice while a user is
@@ -5354,7 +5722,7 @@ if (!function_exists('genbtn_list_payload')) {
         $key = genbtn_alias_to_key($alias);
         $gb_sfx = ($origin === 'u') ? '|u' : '';
         $defs = genbtn_defs($alias, $textbotlang);
-        $titles = ['su' => '🔘 دکمه‌های نام‌گذاری سرویس', 'cf' => '🔘 دکمه‌های تأیید خرید', 'ns' => '🔘 دکمه‌ی نداشتن سرویس فعال', 'te' => '🔘 دکمه‌ی پیام اتمام اکانت تست', 'sc' => '🔘 دکمه‌ی بستن (سرویس‌های من)', 'bc' => '🔘 دکمه‌ی تهیه اشتراک (شارژ کیف پول)'];
+        $titles = ['su' => '🔘 دکمه‌های نام‌گذاری سرویس', 'cf' => '🔘 دکمه‌های تأیید خرید', 'ns' => '🔘 دکمه‌ی نداشتن سرویس فعال', 'te' => '🔘 دکمه‌ی پیام اتمام اکانت تست', 'sc' => '🔘 دکمه‌ی بستن (سرویس‌های من)', 'bc' => '🔘 دکمه‌ی تهیه اشتراک (شارژ کیف پول)', 'rn' => '🔘 دکمه‌های فاکتور تمدید سرویس', 'cl' => '🔘 دکمه‌های تغییر لینک اتصال'];
         $notes = [
             'su' => 'این ۲ دکمه، زیر پیام انتخاب نام سرویس (مرحله‌ی خرید) به کاربر نشون داده می‌شن.',
             'cf' => 'این ۲ دکمه، زیر صفحه‌ی تأیید نهایی خرید نشون داده می‌شن - هر سه حالت (عادی/تخفیف‌دار/حجم دلخواه) از این یکی استفاده می‌کنن، پس ویرایششون روی هر سه اثر می‌ذاره.',
@@ -5362,6 +5730,8 @@ if (!function_exists('genbtn_list_payload')) {
             'te' => 'این ۱ دکمه، زیر پیامِ «اکانت تست شما به پایان رسید» به کاربر نشون داده می‌شه (همون پیامی که کرون موقع تموم‌شدن اعتبار اکانت تست می‌فرسته).',
             'sc' => 'این ۱ دکمه، زیر لیست سرویس‌های فعال کاربر (وقتی 🛍 سرویس‌های من حداقل یک سرویس داره) نشون داده می‌شه.',
             'bc' => 'این ۱ دکمه، زیر پیام تایید نهاییِ شارژ کیف پول (هر روش پرداختی) نشون داده می‌شه.',
+            'rn' => 'دکمه‌ی ۱ و ۲ زیر فاکتور تمدید سرویس نشون داده می‌شن (دکمه‌ی «افزایش موجودی» بینشون از تنظیمات مشترک همون دکمه میاد، جدا نیست). دکمه‌ی ۳ وقتی کاربر روی «افزایش موجودی» بزنه، زیر لیست روش‌های پرداخت میاد و با تپ روش، برمی‌گردونه به همون فاکتور تمدید.',
+            'cl' => 'این ۲ دکمه، زیر پیام هشدار «تغییر لینک اتصال» (قبل از تایید نهایی) نشون داده می‌شن.',
         ];
         $info = ($titles[$alias] ?? '🔘 دکمه‌ها') . "\n➖➖➖➖➖➖➖➖➖➖\n" . ($notes[$alias] ?? '') . "\n";
         $info .= "➖➖➖➖➖➖➖➖➖➖\n👁 پیش‌نمایش زنده - روی هرکدوم بزن تا ویرایشش کنی 👇";
@@ -5371,8 +5741,13 @@ if (!function_exists('genbtn_list_payload')) {
             list($curText, $curStyle) = genbtn_current($d, $ov);
             $kb['inline_keyboard'][] = [['text' => $curText, 'callback_data' => "gbtn|open|{$lang}|{$alias}|{$idx}{$gb_sfx}", 'style' => $curStyle]];
         }
+        // white, non-navigating divider - without it, the last preview button
+        // (often red, e.g. 'cl' and 'rn's back buttons) blends visually into
+        // the real action buttons below (reset/back/close), which look the
+        // same color but do something completely different when tapped
+        $kb['inline_keyboard'][] = [['text' => bt_section_meta('genbtn_actions')['label'], 'callback_data' => 'bt_sep|genbtn_actions']];
         $kb['inline_keyboard'][] = [['text' => '🔁 ریست همه به پیش‌فرض', 'callback_data' => "gbtn|rstall|{$lang}|{$alias}{$gb_sfx}", 'style' => 'danger']];
-        $backKeyMap = ['su' => 'users.sell.selectUsernamePrompt', 'cf' => 'users.sell.preInvoice', 'ns' => 'users.sell.service_not_available', 'te' => 'textbot.testExpired', 'sc' => 'users.sell.service_sell', 'bc' => 'users.Balance.chargeSuccess'];
+        $backKeyMap = ['su' => 'users.sell.selectUsernamePrompt', 'cf' => 'users.sell.preInvoice', 'ns' => 'users.sell.service_not_available', 'te' => 'textbot.testExpired', 'sc' => 'users.sell.service_sell', 'bc' => 'users.Balance.chargeSuccess', 'rn' => 'users.extend.invoiceCreated', 'cl' => 'users.changeLink.warnchange'];
         $backKey = ($origin === 'u') ? 'users.usertest.selectUsernamePrompt' : ($backKeyMap[$alias] ?? 'users.sell.selectUsernamePrompt');
         $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "bt_edit|{$lang}|{$backKey}", 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
@@ -5517,11 +5892,13 @@ if (!function_exists('balancebtn_override')) {
             : [];
     }
 }
-if (!function_exists('balancebtn_kb')) {
-    // renders the "insufficient balance" message's own top-up button, applying any
-    // per-language text/color/premium-emoji override - this is the keyboard actually
-    // sent to users at both purchase call sites in index.php
-    function balancebtn_kb($lang, $textbotlang)
+if (!function_exists('balancebtn_button')) {
+    // the raw button array for the shared "افزایش موجودی" top-up widget,
+    // applying any per-language text/color/premium-emoji override - factored
+    // out of balancebtn_kb() so other screens (e.g. the renewal invoice) can
+    // splice this exact button into a bigger keyboard of their own instead of
+    // duplicating the override-rendering logic
+    function balancebtn_button($lang, $textbotlang)
     {
         $d = balancebtn_defs($textbotlang)[0];
         $ov = balancebtn_override($lang);
@@ -5549,7 +5926,16 @@ if (!function_exists('balancebtn_kb')) {
                 $btn['text'] = ($pos === 'left') ? trim($rest . ' ' . $emoji) : trim($emoji . ' ' . $rest);
             }
         }
-        return json_encode(['inline_keyboard' => [[$btn]]]);
+        return $btn;
+    }
+}
+if (!function_exists('balancebtn_kb')) {
+    // renders the "insufficient balance" message's own top-up button, applying any
+    // per-language text/color/premium-emoji override - this is the keyboard actually
+    // sent to users at both purchase call sites in index.php
+    function balancebtn_kb($lang, $textbotlang)
+    {
+        return json_encode(['inline_keyboard' => [[balancebtn_button($lang, $textbotlang)]]]);
     }
 }
 if (!function_exists('balancebtn_payload')) {
@@ -5926,11 +6312,21 @@ if (!function_exists('topup_disc_auto_user_count')) {
     // scoped to (lang, gateway) since a separate auto discount is configured
     // per gateway/language, same scope $auto itself is fetched at. Auto-sourced
     // topup_discount_use rows are logged with an empty code (see topup_disc_award).
+    // Only counts uses AFTER the auto discount's own 'resetAt' marker (if set) -
+    // "ریست سهمیه‌ی استفاده‌شده" advances that marker instead of deleting log
+    // rows, so admin stats (topup_disc_periodic_report etc.) never lose history.
     function topup_disc_auto_user_count($userId, $lang, $gatewayKey)
     {
         global $pdo;
-        $st = $pdo->prepare("SELECT COUNT(*) FROM topup_discount_use WHERE id_user = :u AND (code = '' OR code IS NULL) AND lang = :l AND gateway = :g");
-        $st->execute([':u' => $userId, ':l' => $lang, ':g' => $gatewayKey]);
+        $resetAt = intval(topup_disc_auto_for($lang, $gatewayKey)['resetAt'] ?? 0);
+        $sql = "SELECT COUNT(*) FROM topup_discount_use WHERE id_user = :u AND (code = '' OR code IS NULL) AND lang = :l AND gateway = :g";
+        $params = [':u' => $userId, ':l' => $lang, ':g' => $gatewayKey];
+        if ($resetAt > 0) {
+            $sql .= " AND used_at > :r";
+            $params[':r'] = (string) $resetAt;
+        }
+        $st = $pdo->prepare($sql);
+        $st->execute($params);
         return intval($st->fetchColumn());
     }
 }
@@ -6467,16 +6863,19 @@ if (!function_exists('topup_disc_gw_list_payload')) {
             $btn = [
                 'text' => trim(strip_tags((string) $label)) . ($sum !== '' ? " • {$sum}" : ''),
                 'callback_data' => "topupdisc:{$lang}:{$key}",
+                'style' => ($sum !== '') ? 'success' : 'primary',
             ];
-            if ($sum !== '') {
-                $btn['style'] = 'success';
-            }
             $kb['inline_keyboard'][] = [$btn];
         }
         if (!empty($gws)) {
-            $kb['inline_keyboard'][] = [['text' => '⚡️ اعمال همگانی روی همه درگاه‌ها', 'callback_data' => "dsbulk:{$lang}", 'style' => 'danger']];
+            // white divider - keeps this shortcut from blending into the
+            // navigation row below it (both used to be the same red 'danger'
+            // style, even though tapping one bulk-applies to every gateway
+            // and the other just leaves the screen)
+            $kb['inline_keyboard'][] = [['text' => bt_section_meta('topupdisc_bulk')['label'], 'callback_data' => 'bt_sep|topupdisc_bulk']];
+            $kb['inline_keyboard'][] = [['text' => '⚡️ اعمال همگانی روی همه درگاه‌ها', 'callback_data' => "dsbulk:{$lang}", 'style' => 'primary']];
         }
-        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به بسته‌های شارژ', 'callback_data' => "topuplang:{$lang}"]];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به بسته‌های شارژ', 'callback_data' => "topuplang:{$lang}", 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'] ?? '❌ بستن', 'callback_data' => 'dsclose', 'style' => 'danger']];
         return [$info, json_encode($kb)];
     }
@@ -6497,7 +6896,7 @@ if (!function_exists('topup_disc_bulk_payload')) {
             ['text' => '💵 مبلغ ثابت', 'callback_data' => "dsbulkm:{$lang}:fixed", 'style' => 'primary'],
         ];
         $kb['inline_keyboard'][] = [['text' => '🗑 خاموش کردن تخفیف خودکار همه درگاه‌ها', 'callback_data' => "dsbulkoff:{$lang}", 'style' => 'danger']];
-        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "dslang:{$lang}"]];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "dslang:{$lang}", 'style' => 'danger']];
         return [$info, json_encode($kb)];
     }
 }
@@ -6612,6 +7011,10 @@ if (!function_exists('topup_disc_auto_payload')) {
         $info .= "انقضا: " . ($autoExp > 0 ? jdate('Y/m/d - H:i', $autoExp) : 'ندارد') . "\n";
         $info .= "هر کاربر: " . ($perUser > 0 ? "{$perUser} بار" : 'نامحدود') . " (پیش‌فرض: ۱ بار)\n";
         $info .= "فقط کاربران جدید: " . ($newOnly ? 'بله' : 'خیر') . "\n";
+        $resetAt = intval($auto['resetAt'] ?? 0);
+        if ($resetAt > 0) {
+            $info .= "👥 آخرین ریست سهمیه: " . jdate('Y/m/d - H:i', $resetAt) . " (استفاده‌های قبل از این تاریخ حساب نمی‌شن)\n";
+        }
         if ($autoExp > 0 && time() >= $autoExp) {
             $info .= "\n⚠️ <b>مدت این تخفیف تموم شده</b> — تا تاریخش رو تمدید نکنی اعمال نمی‌شه.\n";
         }
@@ -6637,7 +7040,12 @@ if (!function_exists('topup_disc_auto_payload')) {
         $kb['inline_keyboard'][] = [['text' => '⏳ مدت اعتبار', 'callback_data' => "tpdautoexp:{$lang}:{$key}", 'style' => $autoExp > 0 ? 'success' : 'primary']];
         $kb['inline_keyboard'][] = [['text' => '👤 سهمیه هر کاربر' . ($perUser > 0 ? " ({$perUser} بار)" : ''), 'callback_data' => "tpdautolimit:{$lang}:{$key}", 'style' => $perUser > 0 ? 'success' : 'primary']];
         $kb['inline_keyboard'][] = [['text' => ($newOnly ? '✅ ' : '') . '🆕 فقط کاربران جدید', 'callback_data' => "tpdautonewonly:{$lang}:{$key}", 'style' => $newOnly ? 'success' : 'primary']];
-        $kb['inline_keyboard'][] = [['text' => '🔄 ریست همه', 'callback_data' => "tpdautoreset:{$lang}:{$key}", 'style' => 'danger']];
+        // white divider - everything above edits a SETTING, everything below
+        // is a one-tap action with an immediate, wider effect (no confirm
+        // step, matching this hub's own existing convention for such buttons)
+        $kb['inline_keyboard'][] = [['text' => bt_section_meta('topupdisc_auto_actions')['label'], 'callback_data' => 'bt_sep|topupdisc_auto_actions']];
+        $kb['inline_keyboard'][] = [['text' => '👥 ریست سهمیه‌ی استفاده‌شده', 'callback_data' => "tpdautoresetusage:{$lang}:{$key}", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '🔄 ریست تنظیمات به پیش‌فرض', 'callback_data' => "tpdautoreset:{$lang}:{$key}", 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "topupdisc:{$lang}:{$key}", 'style' => 'danger']];
         return [$info, json_encode($kb)];
     }
@@ -6740,8 +7148,24 @@ if (!function_exists('topup_disc_auto_set')) {
         $clean['expiry'] = max(0, intval($auto['expiry'] ?? 0));
         $clean['limitPerUser'] = max(0, intval($auto['limitPerUser'] ?? 1));
         $clean['newUserOnly'] = !empty($auto['newUserOnly']);
+        $clean['resetAt'] = max(0, intval($auto['resetAt'] ?? 0));
         $m[$lang][$gatewayKey]['auto'] = $clean;
         topup_disc_save($m);
+    }
+}
+if (!function_exists('topup_disc_auto_reset_usage')) {
+    // "ریست سهمیه‌ی استفاده‌شده" - lets every user hit their per-user quota
+    // (limitPerUser) again, WITHOUT touching the discount's own settings
+    // (value/mode/expiry/newUserOnly stay exactly as they were - unlike
+    // topup_disc_auto_reset() which wipes those back to defaults) and WITHOUT
+    // deleting anything from topup_discount_use, so admin stats/reports keep
+    // their full history. topup_disc_auto_user_count() only counts uses after
+    // this marker.
+    function topup_disc_auto_reset_usage($lang, $gatewayKey)
+    {
+        $auto = topup_disc_auto_for($lang, $gatewayKey);
+        $auto['resetAt'] = time();
+        topup_disc_auto_set($lang, $gatewayKey, $auto);
     }
 }
 if (!function_exists('topup_disc_codes_for')) {
@@ -7533,29 +7957,33 @@ if (!function_exists('config_col_order_payload')) {
     // (keyboard_config() in keyboard.php): the "دریافت کانفیگ" button, or the
     // config's display name - shows a live 2-row preview so the admin can see
     // exactly what the header + a sample row will look like before saving
-    function config_col_order_payload($textbotlang, $originLang = null, $originKey = null, $backCallback = null, $captionKey = 'users.status.getConfigHint')
+    function config_col_order_payload($textbotlang, $originLang = null, $originKey = null, $backCallback = null, $captionKey = 'users.status.getConfigHint', $kind = 'usertest')
     {
         $lang = $originLang ?? 'fa';
         $setting = select("setting", "*", null, null, "select");
-        $nameFirst = (($setting['configColOrder'] ?? '') === 'name_first');
-        $get = configdisplay_element_current($lang, 0, $textbotlang);
-        $hConfig = configdisplay_element_current($lang, 1, $textbotlang);
-        $hName = configdisplay_element_current($lang, 2, $textbotlang);
-        $headerConfig = ['text' => $hConfig['text'], 'callback_data' => "cfgcolel-1-{$lang}"];
+        $colOrderField = ($kind === 'buy') ? 'configColOrderBuy' : 'configColOrder';
+        $nameFirst = (($setting[$colOrderField] ?? '') === 'name_first');
+        $get = configdisplay_element_current($lang, 0, $textbotlang, $kind);
+        $hConfig = configdisplay_element_current($lang, 1, $textbotlang, $kind);
+        $hName = configdisplay_element_current($lang, 2, $textbotlang, $kind);
+        // the buy hub uses its own parallel callback tokens (cfgcolel*buy*-)
+        // so it never shares state or routing with the usertest hub below
+        $elPrefix = ($kind === 'buy') ? 'cfgcolelbuy-' : 'cfgcolel-';
+        $headerConfig = ['text' => $hConfig['text'], 'callback_data' => "{$elPrefix}1-{$lang}"];
         if ($hConfig['style'] !== '') {
             $headerConfig['style'] = $hConfig['style'];
         }
-        $headerName = ['text' => $hName['text'], 'callback_data' => "cfgcolel-2-{$lang}"];
+        $headerName = ['text' => $hName['text'], 'callback_data' => "{$elPrefix}2-{$lang}"];
         if ($hName['style'] !== '') {
             $headerName['style'] = $hName['style'];
         }
-        $sampleGet = ['text' => $get['text'], 'callback_data' => "cfgcolel-0-{$lang}"];
+        $sampleGet = ['text' => $get['text'], 'callback_data' => "{$elPrefix}0-{$lang}"];
         if ($get['style'] !== '') {
             $sampleGet['style'] = $get['style'];
         }
         $sampleName = ['text' => '🇩🇪 Germany #1', 'callback_data' => 'none'];
-        $getAll = configdisplay_element_current($lang, 3, $textbotlang);
-        $getAllBtn = ['text' => $getAll['text'], 'callback_data' => "cfgcolel-3-{$lang}"];
+        $getAll = configdisplay_element_current($lang, 3, $textbotlang, $kind);
+        $getAllBtn = ['text' => $getAll['text'], 'callback_data' => "{$elPrefix}3-{$lang}"];
         if ($getAll['style'] !== '') {
             $getAllBtn['style'] = $getAll['style'];
         }
@@ -7566,10 +7994,20 @@ if (!function_exists('config_col_order_payload')) {
         // preg_match('/config_(\w+)/', $datain, ...) branch (an unrelated "look up an
         // invoice's config list" feature) that intercepts ANY callback_data containing it,
         // before admin.php's own handlers ever run - learned this the hard way.
-        $cbConfigFirst = ($originLang !== null) ? "cfgcolbt-getfirst-{$originLang}" : 'configcolorder-config_first';
-        $cbNameFirst = ($originLang !== null) ? "cfgcolbt-namefirst-{$originLang}" : 'configcolorder-name_first';
-        $info = "🗂 <b>تنظیم نمایش و کپشن کانفیگ</b>\n➖➖➖➖➖➖➖➖➖➖\n";
-        $info .= "این بخش، نمایشِ صفحه‌ی کانفیگ‌های هر سرویس رو کنترل می‌کنه: ترتیب ستون‌ها، و متن/رنگ هرکدوم از دکمه‌ها.\n";
+        if ($kind === 'buy') {
+            $cbConfigFirst = "cfgcolbtbuy-getfirst-{$lang}";
+            $cbNameFirst = "cfgcolbtbuy-namefirst-{$lang}";
+        } else {
+            $cbConfigFirst = ($originLang !== null) ? "cfgcolbt-getfirst-{$originLang}" : 'configcolorder-config_first';
+            $cbNameFirst = ($originLang !== null) ? "cfgcolbt-namefirst-{$originLang}" : 'configcolorder-name_first';
+        }
+        $hubTitle = ($kind === 'buy') ? '🗂 تنظیم نمایش و کپشن کانفیگ (خرید سرویس)' : '🗂 تنظیم نمایش و کپشن کانفیگ';
+        $info = "🗂 <b>{$hubTitle}</b>\n➖➖➖➖➖➖➖➖➖➖\n";
+        if ($kind === 'buy') {
+            $info .= "این بخش، نمایشِ صفحه‌ی کانفیگِ سرویس‌های خریداری‌شده رو کنترل می‌کنه (جدا از اکانت تست): ترتیب ستون‌ها، و متن/رنگ هرکدوم از دکمه‌ها.\n";
+        } else {
+            $info .= "این بخش، نمایشِ صفحه‌ی کانفیگ‌های هر سرویس رو کنترل می‌کنه: ترتیب ستون‌ها، و متن/رنگ هرکدوم از دکمه‌ها.\n";
+        }
         $info .= "حالت فعلی ترتیب: <b>" . ($nameFirst ? "اول نام کانفیگ، بعد دکمه‌ی دریافت" : "اول دکمه‌ی دریافت، بعد نام کانفیگ (پیش‌فرض)") . "</b>\n";
         $info .= "➖➖➖➖➖➖➖➖➖➖\n🔹 راهنما:\n• روی متنِ هرکدوم از دکمه‌های پیش‌نمایش بزن → صفحه‌ی ویرایش همون دکمه باز می‌شه\n• اونجا هم می‌تونی متنش رو عوض کنی (✏️ ویرایش متن)، هم رنگش رو (🔵 آبی / 🟢 سبز / 🔴 قرمز)\n• برای برگردوندن یه دکمه به حالت پیش‌فرض، همونجا 🔁 ریست رو بزن\n";
         $info .= "➖➖➖➖➖➖➖➖➖➖\n👁 پیش‌نمایش زنده 👇";
@@ -7612,60 +8050,75 @@ if (!function_exists('configdisplay_element_defs')) {
         ];
     }
 }
-if (!function_exists('configdisplay_element_override')) {
-    function configdisplay_element_override($lang, $idx)
+if (!function_exists('configdisplay_element_store_key')) {
+    // 'usertest' keeps the original 'configDisplay' key (no migration needed
+    // for existing overrides); 'buy' gets its own sibling key so the my-
+    // services "دریافت کانفیگ" screen can be customized independently of
+    // the test-account one, per the admin's explicit request that the two
+    // stop sharing settings.
+    function configdisplay_element_store_key($kind)
     {
+        return $kind === 'buy' ? 'configDisplayBuy' : 'configDisplay';
+    }
+}
+if (!function_exists('configdisplay_element_override')) {
+    function configdisplay_element_override($lang, $idx, $kind = 'usertest')
+    {
+        $storeKey = configdisplay_element_store_key($kind);
         $setting = select("setting", "*", null, null, "select");
         $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
-        return (is_array($be) && isset($be[$lang]['configDisplay'][$idx]) && is_array($be[$lang]['configDisplay'][$idx]))
-            ? $be[$lang]['configDisplay'][$idx]
+        return (is_array($be) && isset($be[$lang][$storeKey][$idx]) && is_array($be[$lang][$storeKey][$idx]))
+            ? $be[$lang][$storeKey][$idx]
             : [];
     }
 }
 if (!function_exists('configdisplay_element_current')) {
-    function configdisplay_element_current($lang, $idx, $textbotlang)
+    function configdisplay_element_current($lang, $idx, $textbotlang, $kind = 'usertest')
     {
         $defs = configdisplay_element_defs($textbotlang);
         $d = $defs[$idx] ?? $defs[0];
-        $ov = configdisplay_element_override($lang, $idx);
+        $ov = configdisplay_element_override($lang, $idx, $kind);
         $text = (isset($ov['text']) && $ov['text'] !== '') ? $ov['text'] : $d['text'];
         $style = (isset($ov['style']) && in_array($ov['style'], ['primary', 'success', 'danger'], true)) ? $ov['style'] : '';
         return ['text' => $text, 'style' => $style, 'name' => $d['name']];
     }
 }
 if (!function_exists('configdisplay_element_set_text')) {
-    function configdisplay_element_set_text($lang, $idx, $text)
+    function configdisplay_element_set_text($lang, $idx, $text, $kind = 'usertest')
     {
+        $storeKey = configdisplay_element_store_key($kind);
         $setting = select("setting", "*", null, null, "select");
         $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
         if (!is_array($be)) {
             $be = [];
         }
-        $be[$lang]['configDisplay'][$idx]['text'] = $text;
+        $be[$lang][$storeKey][$idx]['text'] = $text;
         update("setting", "button_edit", json_encode($be, JSON_UNESCAPED_UNICODE), null, null);
     }
 }
 if (!function_exists('configdisplay_element_set_style')) {
-    function configdisplay_element_set_style($lang, $idx, $style)
+    function configdisplay_element_set_style($lang, $idx, $style, $kind = 'usertest')
     {
+        $storeKey = configdisplay_element_store_key($kind);
         $setting = select("setting", "*", null, null, "select");
         $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
         if (!is_array($be)) {
             $be = [];
         }
-        $be[$lang]['configDisplay'][$idx]['style'] = $style;
+        $be[$lang][$storeKey][$idx]['style'] = $style;
         update("setting", "button_edit", json_encode($be, JSON_UNESCAPED_UNICODE), null, null);
     }
 }
 if (!function_exists('configdisplay_element_reset')) {
-    function configdisplay_element_reset($lang, $idx)
+    function configdisplay_element_reset($lang, $idx, $kind = 'usertest')
     {
+        $storeKey = configdisplay_element_store_key($kind);
         $setting = select("setting", "*", null, null, "select");
         $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
-        if (is_array($be) && isset($be[$lang]['configDisplay'][$idx])) {
-            unset($be[$lang]['configDisplay'][$idx]);
-            if (empty($be[$lang]['configDisplay'])) {
-                unset($be[$lang]['configDisplay']);
+        if (is_array($be) && isset($be[$lang][$storeKey][$idx])) {
+            unset($be[$lang][$storeKey][$idx]);
+            if (empty($be[$lang][$storeKey])) {
+                unset($be[$lang][$storeKey]);
             }
             if (empty($be[$lang])) {
                 unset($be[$lang]);
@@ -7675,9 +8128,9 @@ if (!function_exists('configdisplay_element_reset')) {
     }
 }
 if (!function_exists('configdisplay_element_payload')) {
-    function configdisplay_element_payload($lang, $idx, $textbotlang)
+    function configdisplay_element_payload($lang, $idx, $textbotlang, $kind = 'usertest')
     {
-        $cur = configdisplay_element_current($lang, $idx, $textbotlang);
+        $cur = configdisplay_element_current($lang, $idx, $textbotlang, $kind);
         $info = "🔘 <b>{$cur['name']}</b>\n➖➖➖➖➖➖➖➖➖➖\n👁 پیش‌نمایش زنده 👇";
         $previewBtn = ['text' => $cur['text'], 'callback_data' => 'none'];
         if ($cur['style'] !== '') {
@@ -7685,14 +8138,25 @@ if (!function_exists('configdisplay_element_payload')) {
         }
         $kb = ['inline_keyboard' => []];
         $kb['inline_keyboard'][] = [$previewBtn];
-        $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش متن', 'callback_data' => "cfgcoltext-{$idx}-{$lang}"]];
-        $kb['inline_keyboard'][] = [
-            ['text' => ($cur['style'] === 'primary' ? '✅ ' : '') . '🔵 آبی', 'callback_data' => "cfgcolelstyle-{$idx}-primary-{$lang}", 'style' => 'primary'],
-            ['text' => ($cur['style'] === 'success' ? '✅ ' : '') . '🟢 سبز', 'callback_data' => "cfgcolelstyle-{$idx}-success-{$lang}", 'style' => 'success'],
-            ['text' => ($cur['style'] === 'danger' ? '✅ ' : '') . '🔴 قرمز', 'callback_data' => "cfgcolelstyle-{$idx}-danger-{$lang}", 'style' => 'danger'],
-        ];
-        $kb['inline_keyboard'][] = [['text' => '🔁 ریست این المان', 'callback_data' => "cfgcolelrst-{$idx}-{$lang}", 'style' => 'danger']];
-        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "btact|cfgcol|{$lang}|users.usertest.selectUsernamePrompt"]];
+        if ($kind === 'buy') {
+            $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش متن', 'callback_data' => "cfgcoltextbuy-{$idx}-{$lang}"]];
+            $kb['inline_keyboard'][] = [
+                ['text' => ($cur['style'] === 'primary' ? '✅ ' : '') . '🔵 آبی', 'callback_data' => "cfgcolelstylebuy-{$idx}-primary-{$lang}", 'style' => 'primary'],
+                ['text' => ($cur['style'] === 'success' ? '✅ ' : '') . '🟢 سبز', 'callback_data' => "cfgcolelstylebuy-{$idx}-success-{$lang}", 'style' => 'success'],
+                ['text' => ($cur['style'] === 'danger' ? '✅ ' : '') . '🔴 قرمز', 'callback_data' => "cfgcolelstylebuy-{$idx}-danger-{$lang}", 'style' => 'danger'],
+            ];
+            $kb['inline_keyboard'][] = [['text' => '🔁 ریست این المان', 'callback_data' => "cfgcolelrstbuy-{$idx}-{$lang}", 'style' => 'danger']];
+            $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "btact|cfgcolbuy|{$lang}|users.status.getConfigHintBuy"]];
+        } else {
+            $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش متن', 'callback_data' => "cfgcoltext-{$idx}-{$lang}"]];
+            $kb['inline_keyboard'][] = [
+                ['text' => ($cur['style'] === 'primary' ? '✅ ' : '') . '🔵 آبی', 'callback_data' => "cfgcolelstyle-{$idx}-primary-{$lang}", 'style' => 'primary'],
+                ['text' => ($cur['style'] === 'success' ? '✅ ' : '') . '🟢 سبز', 'callback_data' => "cfgcolelstyle-{$idx}-success-{$lang}", 'style' => 'success'],
+                ['text' => ($cur['style'] === 'danger' ? '✅ ' : '') . '🔴 قرمز', 'callback_data' => "cfgcolelstyle-{$idx}-danger-{$lang}", 'style' => 'danger'],
+            ];
+            $kb['inline_keyboard'][] = [['text' => '🔁 ریست این المان', 'callback_data' => "cfgcolelrst-{$idx}-{$lang}", 'style' => 'danger']];
+            $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "btact|cfgcol|{$lang}|users.usertest.selectUsernamePrompt"]];
+        }
         return [$info, json_encode($kb)];
     }
 }
@@ -8365,7 +8829,11 @@ function sendMessageService($panel_info, $config, $sub_link, $username_service, 
         if (is_array($config)) {
             $cd_hintKey = ($kind === 'usertest') ? 'textbot.getConfigHintTest' : 'textbot.getConfigHintBuy';
             $cd_hintText = bottext_resolve_key($cd_hintKey);
-            sendmessage($user_id, $cd_hintText !== '' ? $cd_hintText : $textbotlang['hardcoded']['getConfigHint'], keyboard_config($config, $invoice_id, false), 'HTML');
+            // sendMessageService's own $kind is 'purchase'|'usertest' - keyboard_config()'s
+            // is 'usertest'|'buy', so normalize rather than let 'purchase' silently
+            // fall through to the usertest column/button settings below
+            $cc_kbKind = ($kind === 'usertest') ? 'usertest' : 'buy';
+            sendmessage($user_id, $cd_hintText !== '' ? $cd_hintText : $textbotlang['hardcoded']['getConfigHint'], keyboard_config($config, $invoice_id, false, $cc_kbKind), 'HTML');
         }
     }
 }

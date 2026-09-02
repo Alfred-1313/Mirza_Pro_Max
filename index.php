@@ -495,8 +495,9 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
                 $data = " | {$row['note']}";
             $keyboardlists['inline_keyboard'][] = [
                 [
-                    'text' => "✨" . $row['username'] . $data . "✨",
-                    'callback_data' => "product_" . $row['id_invoice']
+                    'text' => $row['username'] . $data,
+                    'callback_data' => "product_" . $row['id_invoice'],
+                    'style' => 'primary'
                 ],
             ];
         }
@@ -512,8 +513,9 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             }
             $keyboardlists['inline_keyboard'][] = [
                 [
-                    'text' => "✨" . $row['username'] . "✨",
-                    'callback_data' => "product_" . $row['id_invoice']
+                    'text' => $row['username'],
+                    'callback_data' => "product_" . $row['id_invoice'],
+                    'style' => 'primary'
                 ],
             ];
         }
@@ -635,8 +637,9 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
                 $data = " | {$row['note']}";
             $keyboardlists['inline_keyboard'][] = [
                 [
-                    'text' => "✨" . $row['username'] . $data . "✨",
-                    'callback_data' => "product_" . $row['id_invoice']
+                    'text' => $row['username'] . $data,
+                    'callback_data' => "product_" . $row['id_invoice'],
+                    'style' => 'primary'
                 ],
             ];
         }
@@ -652,8 +655,9 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             }
             $keyboardlists['inline_keyboard'][] = [
                 [
-                    'text' => "✨" . $row['username'] . "✨",
-                    'callback_data' => "product_" . $row['id_invoice']
+                    'text' => $row['username'],
+                    'callback_data' => "product_" . $row['id_invoice'],
+                    'style' => 'primary'
                 ],
             ];
         }
@@ -726,8 +730,9 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
                 $data = " | {$row['note']}";
             $keyboardlists['inline_keyboard'][] = [
                 [
-                    'text' => "✨" . $row['username'] . $data . "✨",
-                    'callback_data' => "product_" . $row['id_invoice']
+                    'text' => $row['username'] . $data,
+                    'callback_data' => "product_" . $row['id_invoice'],
+                    'style' => 'primary'
                 ],
             ];
         }
@@ -743,8 +748,9 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             }
             $keyboardlists['inline_keyboard'][] = [
                 [
-                    'text' => "✨" . $row['username'] . "✨",
-                    'callback_data' => "product_" . $row['id_invoice']
+                    'text' => $row['username'],
+                    'callback_data' => "product_" . $row['id_invoice'],
+                    'style' => 'primary'
                 ],
             ];
         }
@@ -935,8 +941,9 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
                     $data = " | {$row['note']}";
                 $keyboardlists['inline_keyboard'][] = [
                     [
-                        'text' => "✨" . $row['username'] . $data . "✨",
-                        'callback_data' => "product_" . $row['id_invoice']
+                        'text' => $row['username'] . $data,
+                        'callback_data' => "product_" . $row['id_invoice'],
+                        'style' => 'primary'
                     ],
                 ];
             }
@@ -944,8 +951,9 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
                 $keyboardlists['inline_keyboard'][] = [
                     [
-                        'text' => "✨" . $row['username'] . "✨",
-                        'callback_data' => "product_" . $row['id_invoice']
+                        'text' => $row['username'],
+                        'callback_data' => "product_" . $row['id_invoice'],
+                        'style' => 'primary'
                     ],
                 ];
             }
@@ -1287,7 +1295,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         if (count($tempArray) > 0) {
             $keyboardsetting['inline_keyboard'][] = $tempArray;
         }
-        $keyboardsetting['inline_keyboard'][] = [['text' => $textbotlang['users']['status']['backlist'], 'callback_data' => 'backorder']];
+        $keyboardsetting['inline_keyboard'][] = [['text' => $textbotlang['users']['status']['backlist'], 'callback_data' => 'backorder', 'style' => 'danger']];
         $keyboardsetting = json_encode($keyboardsetting);
         if ($DataUserOut['sub_updated_at'] !== null) {
             $textconnect = sprintf($textbotlang['users']['status']['connectionInfo'], $lastonline, $lastupdate, $DataUserOut['sub_last_user_agent']);
@@ -1343,15 +1351,24 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         return;
     }
     $subscriptionurl = $DataUserOut['subscription_url'];
+    // both captions and the back button below are customizable via 🎨
+    // شخصی‌سازی پیام‌های ربات -> 🛍 پیام‌های سرویس‌های من, matching the same
+    // treatment given to changelink/transfer in the same group
+    $linksubBack = json_encode([
+        'inline_keyboard' => [
+            [
+                ['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "productcheckdata", 'style' => 'danger'],
+            ]
+        ]
+    ]);
+    // the previous screen (service detail/status) can't be turned into a
+    // photo/document message via Editmessagetext, so delete it outright -
+    // tapping the back button above goes to "productcheckdata", which already
+    // rebuilds that exact same detail screen fresh (same caption/buttons)
+    deletemessage($from_id, $message_id);
     if ($marzban_list_get['type'] == "WGDashboard") {
         $textsub = $textbotlang['users']['status']['subscriptionFile'];
-        $bakinfos = json_encode([
-            'inline_keyboard' => [
-                [
-                    ['text' => $textbotlang['users']['status']['backinfo'], 'callback_data' => "productcheckdata"],
-                ]
-            ]
-        ]);
+        $bakinfos = $linksubBack;
         update("user", "Processing_value", $nameloc['username'], "id", $from_id);
         $subscriptionurl = $DataUserOut['subscription_url'];
         $urlimage = "{$marzban_list_get['inboundid']}_{$nameloc['username']}.conf";
@@ -1365,17 +1382,8 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         ]);
         unlink($urlimage);
     } else {
-        $textsub = "
-{$textbotlang['users']['status']['linksub']}
-           
-<code>$subscriptionurl</code>";
-        $bakinfos = json_encode([
-            'inline_keyboard' => [
-                [
-                    ['text' => $textbotlang['users']['status']['backinfo'], 'callback_data' => "productcheckdata"],
-                ]
-            ]
-        ]);
+        $textsub = strtr($textbotlang['users']['status']['linksubCaption'], ['{link}' => $subscriptionurl]);
+        $bakinfos = $linksubBack;
         update("user", "Processing_value", $nameloc['username'], "id", $from_id);
         $subscriptionurl = $DataUserOut['subscription_url'];
         $randomString = bin2hex(random_bytes(3));
@@ -1432,11 +1440,25 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         sendmessage($from_id, $textbotlang['users']['status']['configReadError'], null, 'html');
         return;
     }
-    $cc_hintText = strtr($textbotlang['users']['status']['getConfigHint'], [
-        '{testtime}' => $nameloc['Service_time'] ?? '',
-        '{testvolume}' => $nameloc['Volume'] ?? '',
-    ]);
-    Editmessagetext($from_id, $message_id, $cc_hintText, keyboard_config($DataUserOut['links'], $nameloc['id_invoice']));
+    // usertest and a real purchase both flow through this same dispatcher -
+    // the my-services admin asked for these to have fully independent
+    // caption/column/button settings, so branch on the same test-account
+    // sentinel used elsewhere in this file (e.g. the notify_test_expired
+    // check above) rather than adding a second code path
+    $cc_isTest = ($nameloc['name_product'] === $textbotlang['Admin']['adminphp']['db_test_service_name']);
+    $cc_kind = $cc_isTest ? 'usertest' : 'buy';
+    if ($cc_isTest) {
+        $cc_hintText = strtr($textbotlang['users']['status']['getConfigHint'], [
+            '{testtime}' => $nameloc['Service_time'] ?? '',
+            '{testvolume}' => $nameloc['Volume'] ?? '',
+        ]);
+    } else {
+        $cc_hintText = strtr($textbotlang['users']['status']['getConfigHintBuy'], [
+            '{time}' => $nameloc['Service_time'] ?? '',
+            '{volume}' => $nameloc['Volume'] ?? '',
+        ]);
+    }
+    Editmessagetext($from_id, $message_id, $cc_hintText, keyboard_config($DataUserOut['links'], $nameloc['id_invoice'], true, $cc_kind));
 } elseif (preg_match('/configget_(.*)_(.*)/', $datain, $dataget)) {
     $id_invoice = $dataget[1];
     $nameloc = select("invoice", "*", "id_invoice", $id_invoice, "select");
@@ -1633,14 +1655,14 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
                 $namekeyboard = $result['name_product'] . " - " . $result['price_product'] . $textbotlang['common']['labels']['tomanUnit'];
             }
             $productextend['inline_keyboard'][] = [
-                ['text' => $namekeyboard, 'callback_data' => "serviceextendselect_" . $result['code_product']]
+                ['text' => $namekeyboard, 'callback_data' => "serviceextendselect_" . $result['code_product'], 'style' => 'primary']
             ];
         }
         $productextend['inline_keyboard'][] = [
-            ['text' => $textbotlang['keyboard']['renewCurrentPlan'], 'callback_data' => "exntedagei"]
+            ['text' => $textbotlang['keyboard']['renewCurrentPlan'], 'callback_data' => "exntedagei", 'style' => 'primary']
         ];
         $productextend['inline_keyboard'][] = [
-            ['text' => $textbotlang['keyboard']['backToServiceInfo'], 'callback_data' => "product_" . $nameloc['id_invoice']]
+            ['text' => $textbotlang['keyboard']['backToServiceInfo'], 'callback_data' => "product_" . $nameloc['id_invoice'], 'style' => 'danger']
         ];
 
         $json_list_product_lists = json_encode($productextend);
@@ -1702,16 +1724,16 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             $namekeyboard = $result['name_product'] . " - " . $result['price_product'] . $textbotlang['common']['labels']['tomanUnit'];
         }
         $productextend['inline_keyboard'][] = [
-            ['text' => $namekeyboard, 'callback_data' => "serviceextendselect_" . $result['code_product']]
+            ['text' => $namekeyboard, 'callback_data' => "serviceextendselect_" . $result['code_product'], 'style' => 'primary']
         ];
     }
     if ($nameloc['name_product'] == $textbotlang['users']['customSellVolume']['btnVolume'] || $nameloc['name_product'] == $textbotlang['users']['customSellVolume']['btnService']) {
         $productextend['inline_keyboard'][] = [
-            ['text' => $textbotlang['keyboard']['selectCurrentService'], 'callback_data' => "serviceextendselect_pre"]
+            ['text' => $textbotlang['keyboard']['selectCurrentService'], 'callback_data' => "serviceextendselect_pre", 'style' => 'primary']
         ];
     }
     $productextend['inline_keyboard'][] = [
-        ['text' => $textbotlang['keyboard']['backToServiceInfo'], 'callback_data' => "product_" . $nameloc['id_invoice']]
+        ['text' => $textbotlang['keyboard']['backToServiceInfo'], 'callback_data' => "product_" . $nameloc['id_invoice'], 'style' => 'danger']
     ];
 
     $json_list_product_lists = json_encode($productextend);
@@ -1789,24 +1811,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     savedata("save", "data_limit", $product['Volume_constraint']);
     savedata("save", "price_product", $product['price_product']);
     savedata("save", "code_product", $product['code_product']);
-    $keyboardextend = json_encode([
-        'inline_keyboard' => [
-            [
-                ['text' => $textbotlang['users']['extend']['confirm'], 'callback_data' => "confirmserivce"],
-                ['text' => $textbotlang['users']['extend']['discount'], 'callback_data' => "discountextend"],
-            ],
-            [
-                ['text' => $textbotlang['users']['backbtn'], 'callback_data' => "backuser"]
-            ]
-        ]
-    ]);
-    if (intval($user['pricediscount']) != 0) {
-        $result = ($product['price_product'] * $user['pricediscount']) / 100;
-        $pricelastextend = number_format(round($product['price_product'] - $result, 0));
-    } else {
-        $pricelastextend = $product['price_product'];
-    }
-    $textextend = sprintf($textbotlang['users']['extend']['invoiceCreated'], $nameloc['username'], $product['name_product'], $pricelastextend, $product['Service_time'], $product['Volume_constraint'], $product['note'], $user['Balance']);
+    list($textextend, $keyboardextend) = render_extend_invoice_from_product($user, $textbotlang, $nameloc, $product);
     if ($user['step'] == "getvolumecustomuserforextend") {
         sendmessage($from_id, $textextend, $keyboardextend, 'HTML');
     } else {
@@ -1900,7 +1905,6 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     update("user", "Processing_value_four", $parametrsendvalue, "id", $from_id);
     step("home", $from_id);
 } elseif ($datain == "confirmserivce" || $datain == "confirmserdiscount") {
-    Editmessagetext($from_id, $message_id, $text_inline, json_encode(['inline_keyboard' => []]));
     $partsdic = explode("_", $user['Processing_value_four']);
     $userdata = json_decode($user['Processing_value'], true);
     $id_invoice = $userdata['id_invoice'];
@@ -1918,7 +1922,6 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $custompricevalue = $eextraprice[$user['agent']];
     $eextraprice = json_decode($marzban_list_get['pricecustomtime'], true);
     $customtimevalueprice = $eextraprice[$user['agent']];
-    $randomString = bin2hex(random_bytes(2));
     if ($nameloc['name_product'] == $textbotlang['users']['customSellVolume']['btnVolume'] || $nameloc['name_product'] == $textbotlang['users']['customSellVolume']['btnService']) {
         $prodcut['code_product'] = "custom_volume";
         $prodcut['name_product'] = $nameloc['name_product'];
@@ -1952,7 +1955,6 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         $pricelastextend = $pricelastextend - $result;
         sendmessage($from_id, sprintf($textbotlang['users']['Discount']['discountapplied'], $user['pricediscount']), null, 'HTML');
     }
-    $DataUserOut = $ManagePanel->DataUser($nameloc['Service_location'], $nameloc['username']);
     if ($user['Balance'] < $pricelastextend && $user['agent'] != "n2" && intval($pricelastextend) != 0) {
         $marzbandirectpay = select('shopSetting', "*", "Namevalue", "statusdirectpabuy", "select")['value'];
         if ($marzbandirectpay == "offdirectbuy") {
@@ -1971,29 +1973,23 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             step('getprice', $from_id);
             return;
         } else {
-            $Balance_prim = $pricelastextend - $user['Balance'];
-            update("user", "Processing_value", $Balance_prim, "id", $from_id);
-            sendmessage($from_id, $noCreditText, $step_payment, 'HTML');
-            step('get_step_payment', $from_id);
-            $stmt = $pdo->prepare("INSERT IGNORE INTO service_other (id_user, username,value,type,time,price,output,status) VALUES (?, ?,?, ?, ?,?,?,?)");
-            $dateacc = date('Y/m/d H:i:s');
-            $value = json_encode(array(
-                "volumebuy" => $prodcut['Volume_constraint'],
-                "Service_time" => $prodcut['Service_time'],
-                "oldvolume" => $DataUserOut['data_limit'],
-                "oldtime" => $DataUserOut['expire'],
-                'code_product' => $prodcut['code_product'],
-                'id_order' => $randomString
-            ));
-            $type = "extend_user";
-            $status = "unpaid";
-            $extend = '';
-            $stmt->execute([$from_id, $nameloc['username'], $value, $type, $dateacc, $prodcut['price_product'], $extend, $status]);
-            update("user", "Processing_value_one", "{$nameloc['username']}%$randomString", "id", $from_id);
-            update("user", "Processing_value_tow", "getextenduser", "id", $from_id);
+            // invoice stays exactly as it is - just a popup nudge toward
+            // the "افزایش موجودی" button already on that same invoice.
+            // No Processing_value/service_other writes here anymore; those
+            // only happen once the user actually taps that button (see the
+            // rn_topup_ dispatcher), so a repeated confirm-tap never creates
+            // duplicate pending renewal orders.
+            telegram('answerCallbackQuery', [
+                'callback_query_id' => $callback_query_id,
+                'text' => $textbotlang['users']['extend']['insufficientBalanceAlert'],
+                'show_alert' => true,
+            ]);
             return;
         }
     }
+    Editmessagetext($from_id, $message_id, $text_inline, json_encode(['inline_keyboard' => []]));
+    $randomString = bin2hex(random_bytes(2));
+    $DataUserOut = $ManagePanel->DataUser($nameloc['Service_location'], $nameloc['username']);
     if ($datain == "confirmserdiscount") {
         $SellDiscountlimit = select("DiscountSell", "*", "codeDiscount", $partsdic[1], "select");
         if ($SellDiscountlimit != false) {
@@ -2102,6 +2098,169 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             'reply_markup' => $Response
         ]);
     }
+} elseif (preg_match('/^rn_topup_(\w+)/', $datain, $dataget)) {
+    // reached by tapping افزایش موجودی on the renewal invoice - owns
+    // everything the insufficient-balance branch of confirmserivce used to
+    // do (state-prep + pending order + show the payment-method screen),
+    // just moved here so a mere confirm-tap no longer creates it
+    $id_invoice = $dataget[1];
+    $userdata = json_decode($user['Processing_value'], true);
+    if (!is_array($userdata) || ($userdata['id_invoice'] ?? null) != $id_invoice) {
+        sendmessage($from_id, $textbotlang['users']['extend']['restartError'], $keyboard, 'HTML');
+        return;
+    }
+    $nameloc = select("invoice", "*", "id_invoice", $id_invoice, "select");
+    if ($nameloc == false) {
+        sendmessage($from_id, $textbotlang['users']['extend']['error'], null, 'HTML');
+        return;
+    }
+    $marzban_list_get = select("marzban_panel", "*", "name_panel", $nameloc['Service_location'], "select");
+    if ($marzban_list_get['status_extend'] == "off_extend") {
+        sendmessage($from_id, $textbotlang['users']['extend']['notSupportedPanel'], null, 'html');
+        return;
+    }
+    $eextraprice = json_decode($marzban_list_get['pricecustomvolume'], true);
+    $custompricevalue = $eextraprice[$user['agent']];
+    $eextraprice = json_decode($marzban_list_get['pricecustomtime'], true);
+    $customtimevalueprice = $eextraprice[$user['agent']];
+    $randomString = bin2hex(random_bytes(2));
+    if ($nameloc['name_product'] == $textbotlang['users']['customSellVolume']['btnVolume'] || $nameloc['name_product'] == $textbotlang['users']['customSellVolume']['btnService']) {
+        $prodcut['code_product'] = "custom_volume";
+        $prodcut['name_product'] = $nameloc['name_product'];
+        $prodcut['price_product'] = ($userdata['data_limit'] * $custompricevalue) + ($userdata['time'] * $customtimevalueprice);
+        $prodcut['Service_time'] = $userdata['time'];
+        $prodcut['Volume_constraint'] = $userdata['data_limit'];
+        $prodcut['inbounds'] = $marzban_list_get['inboundid'];
+    } else {
+        $stmt = $pdo->prepare("SELECT * FROM product WHERE (Location = :service_location OR Location = '/all') AND agent = :agent AND code_product = :code_product AND (FIND_IN_SET(:userlang, lang) OR lang = 'all' OR lang IS NULL OR lang = '')");
+        $stmt->execute([
+            ':service_location' => $nameloc['Service_location'],
+            ':agent' => $user['agent'],
+            ':code_product' => $userdata['code_product'],
+            ':userlang' => $user['lang'] ?? 'fa',
+        ]);
+        $prodcut = $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+    if ($prodcut == false || !in_array($nameloc['Status'], ['active', 'end_of_time', 'end_of_volume', 'sendedwarn', 'send_on_hold'])) {
+        sendmessage($from_id, $textbotlang['users']['extend']['error'], null, 'HTML');
+        return;
+    }
+    $pricelastextend = $prodcut['price_product'];
+    if (intval($user['pricediscount']) != 0) {
+        $result = ($pricelastextend * $user['pricediscount']) / 100;
+        $pricelastextend = $pricelastextend - $result;
+    }
+    $DataUserOut = $ManagePanel->DataUser($nameloc['Service_location'], $nameloc['username']);
+    // Processing_value is about to be overwritten with the plain top-up
+    // shortfall amount (needed by the shared payment-completion flow) -
+    // that destroys the {id_invoice,time,data_limit,price_product,
+    // code_product} blob rn_reshow_ needs to rebuild this exact invoice, so
+    // stash the resume context in the dedicated renew_resume_ctx column first
+    // (id_invoice itself already travels in the rn_reshow_ callback).
+    // NOTE: this used to reuse Processing_value_four, but that column is ALSO
+    // used elsewhere (e.g. caching the current panel name for the "تغییر
+    // لوکیشن" picker) - a real collision, so this now has its own column.
+    update("user", "renew_resume_ctx", json_encode([
+        'code_product' => $userdata['code_product'] ?? null,
+        'data_limit' => $userdata['data_limit'] ?? null,
+        'time' => $userdata['time'] ?? null,
+    ]), "id", $from_id);
+    $Balance_prim = $pricelastextend - $user['Balance'];
+    update("user", "Processing_value", $Balance_prim, "id", $from_id);
+    // decode the shared step_payment as a LOCAL copy only - never touch how
+    // $step_payment/$noCreditText themselves get built (keyboard.php), so
+    // every other call site of that shared picker keeps its own unmodified
+    // copy. Drop the shared close ("❌ بستن") row and add our own red
+    // back-to-invoice button instead.
+    $extendPaymentKb = json_decode($step_payment, true);
+    if (is_array($extendPaymentKb) && isset($extendPaymentKb['inline_keyboard'])) {
+        $extendPaymentKb['inline_keyboard'] = array_values(array_filter($extendPaymentKb['inline_keyboard'], function ($row) {
+            foreach ($row as $btn) {
+                if (($btn['callback_data'] ?? '') === 'colselist') {
+                    return false;
+                }
+            }
+            return true;
+        }));
+        $rnBackDef = genbtn_defs('rn', $textbotlang)[2];
+        $rnBackOv = genbtn_override($user['lang'] ?? 'fa', 'users.extend.invoiceCreated', 2);
+        $extendPaymentKb['inline_keyboard'][] = [genbtn_render($rnBackDef, $rnBackOv, "rn_reshow_" . $id_invoice)];
+        $extendPaymentKbJson = json_encode($extendPaymentKb);
+    } else {
+        $extendPaymentKbJson = $step_payment;
+    }
+    Editmessagetext($from_id, $message_id, topup_disc_method_caption($from_id, $user['lang'] ?? 'fa', $textbotlang), $extendPaymentKbJson);
+    step('get_step_payment', $from_id);
+    $stmt = $pdo->prepare("INSERT IGNORE INTO service_other (id_user, username,value,type,time,price,output,status) VALUES (?, ?,?, ?, ?,?,?,?)");
+    $dateacc = date('Y/m/d H:i:s');
+    $value = json_encode(array(
+        "volumebuy" => $prodcut['Volume_constraint'],
+        "Service_time" => $prodcut['Service_time'],
+        "oldvolume" => $DataUserOut['data_limit'],
+        "oldtime" => $DataUserOut['expire'],
+        'code_product' => $prodcut['code_product'],
+        'id_order' => $randomString
+    ));
+    $type = "extend_user";
+    $status = "unpaid";
+    $extend = '';
+    $stmt->execute([$from_id, $nameloc['username'], $value, $type, $dateacc, $prodcut['price_product'], $extend, $status]);
+    update("user", "Processing_value_one", "{$nameloc['username']}%$randomString", "id", $from_id);
+    update("user", "Processing_value_tow", "getextenduser", "id", $from_id);
+} elseif (preg_match('/^rn_reshow_(\w+)/', $datain, $dataget)) {
+    // reached from the red back button on the payment-method screen above.
+    // Processing_value no longer holds this renewal's blob at this point -
+    // rn_topup_ overwrote it with the top-up shortfall amount - so read the
+    // resume context rn_topup_ stashed in renew_resume_ctx instead
+    // (id_invoice itself travels in this very callback).
+    $id_invoice = $dataget[1];
+    $renewCtx = json_decode($user['renew_resume_ctx'], true);
+    if (!is_array($renewCtx) || empty($renewCtx['code_product'])) {
+        sendmessage($from_id, $textbotlang['users']['extend']['restartError'], $keyboard, 'HTML');
+        return;
+    }
+    $nameloc = select("invoice", "*", "id_invoice", $id_invoice, "select");
+    if ($nameloc == false) {
+        sendmessage($from_id, $textbotlang['users']['extend']['error'], null, 'HTML');
+        return;
+    }
+    if ($nameloc['name_product'] == $textbotlang['users']['customSellVolume']['btnVolume'] || $nameloc['name_product'] == $textbotlang['users']['customSellVolume']['btnService']) {
+        $marzban_list_get = select("marzban_panel", "*", "name_panel", $nameloc['Service_location'], "select");
+        $eextraprice = json_decode($marzban_list_get['pricecustomvolume'], true);
+        $custompricevalue = $eextraprice[$user['agent']];
+        $eextraprice = json_decode($marzban_list_get['pricecustomtime'], true);
+        $customtimevalueprice = $eextraprice[$user['agent']];
+        $product['name_product'] = $nameloc['name_product'];
+        $product['code_product'] = "customvolume";
+        $product['note'] = "";
+        $product['price_product'] = (intval($renewCtx['data_limit']) * $custompricevalue) + (intval($renewCtx['time']) * $customtimevalueprice);
+        $product['Service_time'] = $renewCtx['time'];
+        $product['Volume_constraint'] = $renewCtx['data_limit'];
+    } else {
+        $stmt = $pdo->prepare("SELECT * FROM product WHERE (Location = :service_location OR Location = '/all') AND agent = :agent AND code_product = :code_product AND (FIND_IN_SET(:userlang, lang) OR lang = 'all' OR lang IS NULL OR lang = '')");
+        $stmt->execute([
+            ':service_location' => $nameloc['Service_location'],
+            ':agent' => $user['agent'],
+            ':code_product' => $renewCtx['code_product'],
+            ':userlang' => $user['lang'] ?? 'fa',
+        ]);
+        $product = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($product == false) {
+            sendmessage($from_id, $textbotlang['users']['extend']['restartError'], $keyboard, 'HTML');
+            return;
+        }
+    }
+    // restore Processing_value to the same {id_invoice,time,data_limit,
+    // price_product,code_product} shape the invoice originally had, so a
+    // subsequent تایید تمدید tap on this re-shown invoice resolves correctly
+    // again instead of tripping over the leftover shortfall number
+    savedata("clear", "id_invoice", $id_invoice);
+    savedata("save", "time", $product['Service_time']);
+    savedata("save", "data_limit", $product['Volume_constraint']);
+    savedata("save", "price_product", $product['price_product']);
+    savedata("save", "code_product", $product['code_product']);
+    list($textextend, $keyboardextend) = render_extend_invoice_from_product($user, $textbotlang, $nameloc, $product);
+    Editmessagetext($from_id, $message_id, $textextend, $keyboardextend);
 } elseif (preg_match('/changelink_(\w+)/', $datain, $dataget)) {
     $id_invoice = $dataget[1];
     $nameloc = select("invoice", "*", "id_invoice", $id_invoice, "select");
@@ -2115,14 +2274,16 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         sendmessage($from_id, $textbotlang['users']['changeLink']['serviceInactive'], null, 'html');
         return;
     }
+    // buttons customizable via 🎨 شخصی‌سازی پیام‌های ربات -> 🛍 پیام‌های
+    // سرویس‌های من (genbtn alias 'cl'); defaults: confirm=blue, back=red
+    $cl_defs = genbtn_defs('cl', $textbotlang);
+    $cl_lang = $user['lang'] ?? 'fa';
+    $cl_confirmBtn = genbtn_render($cl_defs[0], genbtn_override($cl_lang, 'users.changeLink.warnchange', 0), "confirmchange_" . $nameloc['id_invoice']);
+    $cl_backBtn = genbtn_render($cl_defs[1], genbtn_override($cl_lang, 'users.changeLink.warnchange', 1), "product_" . $nameloc['id_invoice']);
     $keyboardextend = json_encode([
         'inline_keyboard' => [
-            [
-                ['text' => $textbotlang['users']['changeLink']['confirm'], 'callback_data' => "confirmchange_" . $nameloc['id_invoice']],
-            ],
-            [
-                ['text' => $textbotlang['users']['status']['backinfo'], 'callback_data' => "product_" . $nameloc['id_invoice']],
-            ]
+            [$cl_confirmBtn],
+            [$cl_backBtn],
         ]
     ]);
     Editmessagetext($from_id, $message_id, $textbotlang['users']['changeLink']['warnchange'], $keyboardextend);
@@ -2995,7 +3156,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $bakinfos = json_encode([
         'inline_keyboard' => [
             [
-                ['text' => $textbotlang['users']['status']['backinfo'], 'callback_data' => "product_" . $nameloc['id_invoice']],
+                ['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "product_" . $nameloc['id_invoice'], 'style' => 'danger'],
             ]
         ]
     ]);
@@ -5752,7 +5913,10 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     if (!is_array($oldRow) || (string) $oldRow['id_user'] !== (string) $from_id || $oldRow['payment_Status'] !== 'expire') {
         return;
     }
-    $built = card_invoice_build($from_id, $user['lang'] ?? 'fa', $oldRow['price'], $oldRow['id_invoice'], $textbotlang, $setting);
+    // $oldRow['price'] is already the FINAL amount from the original invoice
+    // (may already include a random addition from before) - never randomize
+    // it a second time on reissue
+    $built = card_invoice_build($from_id, $user['lang'] ?? 'fa', $oldRow['price'], $oldRow['id_invoice'], $textbotlang, $setting, false);
     if ($built === null) {
         Editmessagetext($from_id, $message_id, $textbotlang['users']['Balance']['noActiveCard'], null, 'HTML');
         return;

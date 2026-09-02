@@ -419,6 +419,36 @@ if (!function_exists('bottext_item_menu_payload')) {
         if ($bt_key === 'textbot.channel') {
             $bt_label = '📯 پیام عضویت اجباری کانال';
         }
+        if ($bt_key === 'users.extend.invoiceCreated') {
+            $bt_label = '📜 فاکتور تمدید سرویس';
+        }
+        if ($bt_key === 'users.sell.noCredit') {
+            $bt_label = '📝 پیام «موجودی کافی نیست»';
+        }
+        if ($bt_key === 'users.extend.insufficientBalanceAlert') {
+            $bt_label = '⚠️ هشدار موجودی ناکافی (تمدید)';
+        }
+        if ($bt_key === 'users.changeLink.warnchange') {
+            $bt_label = '⚙️ کپشن تغییر لینک اتصال';
+        }
+        if ($bt_key === 'users.status.getConfigHintBuy') {
+            $bt_label = '📌 کپشن دریافت کانفیگ (خرید سرویس)';
+        }
+        if ($bt_key === 'keyboard.infoRefreshed') {
+            $bt_label = '♻️ پیام Alert بروزرسانی اطلاعات';
+        }
+        if ($bt_key === 'users.transfer.description') {
+            $bt_label = '🚚 کپشن انتقال سرویس به کاربر دیگر';
+        }
+        if ($bt_key === 'textbot.cardRandomAmountNotice') {
+            $bt_label = '⚠️ هشدار مبلغ دقیق (کارت به کارت رندوم)';
+        }
+        if ($bt_key === 'users.status.linksubCaption') {
+            $bt_label = '🔗 کپشن لینک اشتراک (QR)';
+        }
+        if ($bt_key === 'users.status.subscriptionFile') {
+            $bt_label = '🔗 کپشن لینک اشتراک (فایل WireGuard)';
+        }
         $bt_extra_note = '';
         if ($bt_key === 'textbot.afterText') {
             $bt_extra_note = "\nℹ️ این همون پیامیه که درست بعد از ساخته‌شدن اکانت تست، همراه کانفیگ و QR برای کاربر فرستاده می‌شه.\n⚠️ متن پیش‌فرضش با «✅ سرویس با موفقیت ایجاد شد» شروع می‌شه و کلمه‌ی «تست» توش نیست - برای همین شبیه پیام خرید به نظر می‌رسه، ولی فقط تو مسیر اکانت تست فرستاده می‌شه.\n";
@@ -446,6 +476,36 @@ if (!function_exists('bottext_item_menu_payload')) {
         }
         if ($bt_key === 'textbot.channel') {
             $bt_extra_note = "\nℹ️ این پیام وقتی نشون داده می‌شه که «عضویت اجباری کانال» فعال باشه (از ✏️ مدیریت ربات ← 📯 تنظیمات کانال) و کاربر هنوز عضو نشده باشه.\n💡 دکمه‌های زیرش (یکی به ازای هر کانال) رنگ/ایموجی/چیدمان/نام و نمایششون از دکمه‌ی پایین همین صفحه قابل تنظیمه.\n";
+        }
+        if ($bt_key === 'users.extend.invoiceCreated') {
+            $bt_extra_note = "\nℹ️ این پیام وقتی نشون داده می‌شه که کاربر برای تمدید یه سرویس، محصول/مدت رو انتخاب کرده و آماده‌ی تأیید نهاییه.\n💡 دکمه‌ی «افزایش موجودی» بین دکمه‌های این صفحه از تنظیمات مشترک همون دکمه (پیام «موجودی کافی نیست») میاد - جدا نیست.\n💡 اگه موجودی کاربر کافی نباشه، این پیام دست‌نخورده می‌مونه و فقط یه هشدار Alert نشون داده می‌شه (⚠️ هشدار موجودی ناکافی (تمدید)) - با زدن «افزایش موجودی»، این پیام با لیست روش‌های پرداخت جایگزین می‌شه و دکمه‌ی سومِ «بازگشت» (رنگ/متن قابل تنظیم از همین‌جا) دوباره برمی‌گردونتش به همینجا.\n";
+        }
+        if ($bt_key === 'users.sell.noCredit') {
+            $bt_extra_note = "\nℹ️ این پیام وقتی نشون داده می‌شه که کاربر توی هر مرحله‌ی پرداختی (خرید، حجم/زمان اضافه، شارژ کیف پول) موجودی کافی نداشته باشه و باید یه روش پرداخت انتخاب کنه - یه پیام مشترکه، همه‌جا با هم عوض می‌شه. (تمدید سرویس دیگه از این پیام استفاده نمی‌کنه - به ⚠️ هشدار موجودی ناکافی (تمدید) نگاه کن.)\n";
+        }
+        if ($bt_key === 'users.extend.insufficientBalanceAlert') {
+            $bt_extra_note = "\nℹ️ این متن به‌صورت یه پاپ‌آپ (Alert) نشون داده می‌شه، نه یه پیام معمولی - وقتی کاربر روی «✅ تایید تمدید» بزنه و موجودیش کافی نباشه. فاکتور تمدید دست‌نخورده باقی می‌مونه.\n";
+        }
+        if ($bt_key === 'users.changeLink.warnchange') {
+            $bt_extra_note = "\nℹ️ این پیام وقتی نشون داده می‌شه که کاربر روی «⚙️ تغییر لینک» (داخل جزئیات سرویس) بزنه - قبل از تایید نهایی، هشدار می‌ده که کانفیگ‌های قبلی قطع می‌شن.\n";
+        }
+        if ($bt_key === 'users.status.getConfigHintBuy') {
+            $bt_extra_note = "\nℹ️ این پیام بعد از دریافت کانفیگِ یک سرویسِ خریداری‌شده (نه اکانت تست) نشون داده می‌شه - جدا و مستقل از پیام مشابه اکانت تست.\n💡 توکن‌های قابل استفاده تو متن: <code>{time}</code> (مدت زمان سرویس) و <code>{volume}</code> (حجم سرویس).\n💡 ترتیب و رنگ دکمه‌های زیرش از دکمه‌ی پایین همین صفحه قابل تنظیمه (مستقل از اکانت تست).\n";
+        }
+        if ($bt_key === 'keyboard.infoRefreshed') {
+            $bt_extra_note = "\nℹ️ این متن به‌صورت یه پاپ‌آپ کوچیک (Alert) نشون داده می‌شه، نه یه پیام معمولی - وقتی کاربر داخل جزئیات سرویس روی «♻️ بروزرسانی اطلاعات» بزنه.\n";
+        }
+        if ($bt_key === 'users.transfer.description') {
+            $bt_extra_note = "\nℹ️ این پیام وقتی نشون داده می‌شه که کاربر روی «🚚 انتقال سرویس به کاربر دیگر» بزنه - از کاربر می‌خواد شناسه‌ی کاربری مقصد رو بفرسته.\n";
+        }
+        if ($bt_key === 'textbot.cardRandomAmountNotice') {
+            $bt_extra_note = "\nℹ️ این پیام فقط وقتی زیر فاکتور کارت‌به‌کارت اضافه می‌شه که «🎲 مبلغ رندوم برای هر فاکتور» (🏬 تنظیمات فروشگاه ← 💎 مالی ← کارت به کارت) روشن باشه.\n💡 توکن قابل استفاده تو متن: <code>{price_rial}</code> (مبلغ نهایی فاکتور، به ریال - نه تومان).\n";
+        }
+        if ($bt_key === 'users.status.linksubCaption') {
+            $bt_extra_note = "\nℹ️ این پیام وقتی نشون داده می‌شه که کاربر روی «🔗 لینک اشتراک» بزنه - برای اکثر انواع پنل، همراه با عکس QR کد فرستاده می‌شه.\n💡 توکن قابل استفاده تو متن: <code>{link}</code> (خود لینک اشتراک).\n";
+        }
+        if ($bt_key === 'users.status.subscriptionFile') {
+            $bt_extra_note = "\nℹ️ این پیام فقط برای پنل‌های نوع WireGuard وقتی نشون داده می‌شه که کاربر روی «🔗 لینک اشتراک» بزنه - به‌جای عکس QR، یه فایل کانفیگ فرستاده می‌شه.\n";
         }
         foreach (($textbotlang['bottext']['items'] ?? []) as $bt_it) {
             if (($bt_it['key'] ?? '') === $bt_key) {
@@ -475,7 +535,13 @@ if (!function_exists('bottext_item_menu_payload')) {
         };
         // reaction needs a triggering user message — only these keys have one
         $bt_can_react = in_array($bt_key, ['users.text_start', 'textbot.faqDesc', 'textbot.tariffListDesc', 'textbot.rules', 'users.unknownMsg'], true);
-        $bt_has_buttons = in_array($bt_key, ['users.usertest.selectUsernamePrompt', 'users.Balance.insufficientBalanceSimple', 'users.sell.selectUsernamePrompt', 'users.sell.preInvoice', 'users.sell.preInvoice2', 'textbot.preInvoice', 'users.sell.service_not_available', 'textbot.testExpired', 'users.sell.service_sell', 'users.status.infoFull', 'users.Balance.chargeSuccess', 'textbot.channel'], true);
+        // NOTE: users.status.getConfigHintBuy deliberately does NOT go in this
+        // list - like its usertest counterpart users.status.getConfigHint, its
+        // "buttons" aren't genbtn-shaped (button_edit[lang][key]) but the
+        // separate configDisplayBuy/configColOrderBuy pair, so it gets its own
+        // forward link straight from the myservices list (keyboard.php) instead
+        // of the generic $bt_btn_label/$bt_btn_custom status line below.
+        $bt_has_buttons = in_array($bt_key, ['users.usertest.selectUsernamePrompt', 'users.Balance.insufficientBalanceSimple', 'users.sell.selectUsernamePrompt', 'users.sell.preInvoice', 'users.sell.preInvoice2', 'textbot.preInvoice', 'users.sell.service_not_available', 'textbot.testExpired', 'users.sell.service_sell', 'users.status.infoFull', 'users.Balance.chargeSuccess', 'textbot.channel', 'users.extend.invoiceCreated', 'users.changeLink.warnchange'], true);
         $info = "📝 <b>{$bt_label}</b>\n➖➖➖➖➖➖➖➖➖➖\n{$bt_extra_note}";
         $info .= "✏️ متن: " . ($bt_custom ? "سفارشی ✅" : "پیش‌فرض") . "\n";
         $info .= "🖼 استیکر: " . ($bt_sticker !== '' ? "ست شده ✅" : "ندارد ❌") . "\n";
@@ -501,6 +567,10 @@ if (!function_exists('bottext_item_menu_payload')) {
                 $bt_btn_label = '🔘 دکمه تهیه اشتراک';
             } elseif ($bt_key === 'textbot.channel') {
                 $bt_btn_label = '📯 دکمه‌های کانال';
+            } elseif ($bt_key === 'users.extend.invoiceCreated') {
+                $bt_btn_label = '🔘 دکمه‌های تأیید تمدید/بازگشت';
+            } elseif ($bt_key === 'users.changeLink.warnchange') {
+                $bt_btn_label = '🔘 دکمه‌های تایید/بازگشت';
             }
             // 'cf' is shared across three caption screens - checked here so its
             // own status line is accurate no matter which of the three is open
@@ -563,6 +633,11 @@ if (!function_exists('bottext_item_menu_payload')) {
             $kb['inline_keyboard'][] = [['text' => '🎁 ویرایش متن بلوک تخفیف', 'callback_data' => "bt_edit|{$bt_lang}|users.Balance.chargeSuccessDiscount", 'style' => 'primary']];
         } elseif ($bt_key === 'textbot.channel') {
             $kb['inline_keyboard'][] = [['text' => '📯 ویرایش دکمه‌های کانال‌ها', 'callback_data' => "chnbtn_hub", 'style' => 'primary']];
+        } elseif ($bt_key === 'users.extend.invoiceCreated') {
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های تأیید تمدید/بازگشت', 'callback_data' => "gbtn|list|{$bt_lang}|rn", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '💰 ویرایش دکمه‌ی افزایش موجودی', 'callback_data' => "bt_edit|{$bt_lang}|users.Balance.insufficientBalanceSimple", 'style' => 'primary']];
+        } elseif ($bt_key === 'users.changeLink.warnchange') {
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های تغییر لینک', 'callback_data' => "gbtn|list|{$bt_lang}|cl", 'style' => 'primary']];
         }
         if (!$bt_prev_inline) {
             $kb['inline_keyboard'][] = [['text' => '👁 پیش‌نمایش', 'callback_data' => "btact|prev|{$bt_lang}|{$bt_key}", 'style' => 'primary']];
@@ -1160,7 +1235,12 @@ if (!function_exists('gw_legacy_settings_datain')) {
     function gw_legacy_settings_datain($key)
     {
         $map = [
-            'card' => 'cartsetting',
+            // 'card' deliberately absent - replaced by the inline, per-language
+            // "🔧 تنظیمات فنی درگاه" screen (cardlegacy:{lang}) built directly
+            // into gateway_settings_payload(). $CartManage/cartsetting itself
+            // stays fully intact (still reachable elsewhere, still the return
+            // keyboard for ~15 unrelated flows) - only this one entry point
+            // into it is retired in favor of the new screen.
             'plisio' => 'plisiosetting',
             'nowpayment' => 'nowpaymentsetting',
             'iranpay1' => 'iranpay1setting',
@@ -1676,8 +1756,8 @@ if (!function_exists('gateway_settings_payload')) {
                 // deliberately no suffix here at all - the card list has its
                 // own screen where count/detail actually belongs
                 $btn = ['text' => $t[$field['label']], 'callback_data' => "gwcards:{$lang}"];
-                if (gw_cards_has_override($lang)) {
-                    $btn['style'] = 'success';
+                if ($key === 'card') {
+                    $btn['style'] = 'primary';
                 }
                 $kb['inline_keyboard'][] = [$btn];
                 continue;
@@ -1688,10 +1768,51 @@ if (!function_exists('gateway_settings_payload')) {
                     . $t[$field['label']] . ' — ' . $shown,
                 'callback_data' => "gwfld:{$lang}:{$key}:{$i}",
             ];
-            if ($own) {
+            if ($key === 'card') {
+                // no green-for-customised here - every field on this screen
+                // is blue no matter what; which fields ARE customised is
+                // reported as a blockquote in gateway_settings_caption()
+                // instead (see the $key==='card' block there).
+                $btn['style'] = 'primary';
+            } elseif ($own) {
                 $btn['style'] = 'success';
             }
             $kb['inline_keyboard'][] = [$btn];
+        }
+        if ($key === 'card') {
+            // global (not per-language, like CartDirect above) - one bot-wide
+            // switch, same reasoning as the on/off switch note at the top of
+            // this function: one thing to think about, not one per language.
+            // Sits outside gw_field_registry() on purpose since that registry
+            // has no boolean-toggle field type yet and this is the only field
+            // that needs one - not worth widening a system 8 other gateways
+            // share for a single one-off switch.
+            $cardToggleSetting = select("setting", "cardRandomAmount, smsForwardEnabled", null, null, "select");
+            $randOn = (($cardToggleSetting['cardRandomAmount'] ?? '0') === '1');
+            $smsFwdOn = (($cardToggleSetting['smsForwardEnabled'] ?? '0') === '1');
+            // locked ON while SMS Forward is active - matching an SMS to an
+            // invoice only works if every invoice's amount is unique, so
+            // turning random-amount off out from under an active SMS Forward
+            // setup would silently break matching. Routed to a separate
+            // no-op callback (cardrandlocked:) instead of reusing
+            // cardrandtoggle: so tapping it always explains why, rather than
+            // either silently doing nothing or (worse) toggling anyway.
+            // Blue always, on or off - the ✅ prefix carries the state.
+            $kb['inline_keyboard'][] = [[
+                'text' => ($randOn ? '✅ ' : '') . '🎲 مبلغ رندوم برای هر فاکتور' . ($smsFwdOn ? ' 🔒' : ''),
+                'callback_data' => $smsFwdOn ? "cardrandlocked:{$lang}" : "cardrandtoggle:{$lang}",
+                'style' => 'primary',
+            ]];
+            $kb['inline_keyboard'][] = [[
+                'text' => ($smsFwdOn ? '✅ ' : '') . '📲 SMS Forward',
+                'callback_data' => "smsfwdset:{$lang}",
+                'style' => 'primary',
+            ]];
+            $kb['inline_keyboard'][] = [[
+                'text' => '🔧 تنظیمات فنی درگاه (این زبان)',
+                'callback_data' => "cardlegacy:{$lang}",
+                'style' => 'primary',
+            ]];
         }
         $legacy = gw_legacy_settings_datain($key);
         if ($legacy !== null) {
@@ -1700,8 +1821,227 @@ if (!function_exists('gateway_settings_payload')) {
         if (gw_has_any_override($key, $lang)) {
             $kb['inline_keyboard'][] = [['text' => $t['resetBtn'], 'callback_data' => "gwrst:{$lang}:{$key}"]];
         }
-        $kb['inline_keyboard'][] = [['text' => $t['backBtn'], 'callback_data' => "gwlang:{$lang}"]];
+        $kb['inline_keyboard'][] = [['text' => $t['backBtn'], 'callback_data' => "gwlang:{$lang}", 'style' => 'danger']];
         return json_encode($kb);
+    }
+}
+if (!function_exists('sms_forward_settings_payload')) {
+    // Own screen for the whole SMS Forward cluster (toggle, guide, webhook
+    // URL, secret regen) - used to live crammed into gateway_settings_payload
+    // itself; pulled out here so that screen stays short, and so the guide is
+    // reachable any time (not just the one moment the toggle first flips on).
+    function sms_forward_settings_payload($lang, $textbotlang)
+    {
+        $smsFwdOn = (select("setting", "smsForwardEnabled", null, null, "select")['smsForwardEnabled'] ?? '0') === '1';
+        $kb = ['inline_keyboard' => [
+            [[
+                // the one deliberate exception to "every button here is blue" -
+                // this is a real on/off switch, not a "did the admin customise
+                // something" indicator, so its color IS the state: blue means
+                // active, red means off (matches the admin's explicit request).
+                'text' => ($smsFwdOn ? '✅ ' : '') . '📲 روشن کردن SMS Forward',
+                'callback_data' => "smsfwdtoggle:{$lang}",
+                'style' => $smsFwdOn ? 'primary' : 'danger',
+            ]],
+            [['text' => '📖 راهنمای نصب', 'callback_data' => "smsfwdguide:{$lang}", 'style' => 'primary']],
+        ]];
+        if ($smsFwdOn) {
+            $kb['inline_keyboard'][] = [[
+                'text' => '🔗 نمایش آدرس Webhook',
+                'callback_data' => "smsfwdshowurl:{$lang}",
+                'style' => 'primary',
+            ]];
+        }
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['GatewayLang']['backBtn'], 'callback_data' => "gwset:{$lang}:card", 'style' => 'danger']];
+        return json_encode($kb);
+    }
+}
+if (!function_exists('sms_forward_show_url_payload')) {
+    // Shared by both smsfwdshowurl: (first open) and smsfwdregensecret: (after
+    // regenerating) so the two dispatchers can never drift apart - the only
+    // difference between them is whether the success blockquote is appended.
+    function sms_forward_show_url_payload($lang, $justRegenerated = false)
+    {
+        $url = sms_forward_webhook_url();
+        $info = "<blockquote>🔗 آدرس Webhook</blockquote>\n\n";
+        $info .= "این آدرس رو داخل اپ فورواردر پیامک گوشیتون (به‌عنوان مقصد Webhook، متد POST) بچسبونید:\n\n<code>{$url}</code>\n\n";
+        $info .= "⚠️ این آدرس شامل رمز مخفیه - جای دیگه‌ای غیر از همون اپ روی گوشی وارد نکنید.";
+        if ($justRegenerated) {
+            $info .= "\n\n<blockquote>✅ رمز جدید با موفقیت ساخته شد - آدرس قبلی دیگه کار نمی‌کنه، حتماً همین آدرس تازه رو توی اپ گوشی جایگزین کنید.</blockquote>";
+        }
+        $kb = json_encode(['inline_keyboard' => [
+            [['text' => '🔁 ساخت رمز جدید (آدرس قبلی از کار می‌افته)', 'callback_data' => "smsfwdregensecret:{$lang}", 'style' => 'danger']],
+            [['text' => '🔙 بازگشت', 'callback_data' => "smsfwdset:{$lang}", 'style' => 'danger']],
+        ]]);
+        return [$info, $kb];
+    }
+}
+if (!function_exists('sms_forward_guide_payload')) {
+    // Shown once when an admin flips "📲 روشن کردن SMS Forward" on. This
+    // toggle forces the random-amount prerequisite on and generates the
+    // webhook secret; the admin then points a phone-side SMS-forwarder app
+    // directly at our own server (no Telegram bot, no polling involved) -
+    // an earlier design routed this through a second Telegram bot polled via
+    // getUpdates, but that only works for forwarders that receive messages
+    // (never for ones like SMS2Telegram that PUSH via the bot's own
+    // sendMessage call, which getUpdates can never see). A direct webhook
+    // has no such blind spot.
+    function sms_forward_guide_payload($lang)
+    {
+        // written from an actual admin's real setup session on "SMS Forwarder"
+        // by Frzin Apps (com.frzinapps.smsforward) - every screen name/label
+        // below (Filters, Add filter, Where to forward, Request Type, Enter
+        // URL, Body, Forwarding Conditions, Supported Message Types) is copied
+        // verbatim from that app's real UI, not guessed - keep this in sync if
+        // the app's UI changes.
+        $url = sms_forward_webhook_url();
+        $info = "📲 <b>راهنمای SMS Forward</b>\n➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= "این قابلیت کمک می‌کنه واریزی‌های کارت‌به‌کارت رو بر اساس پیامک بانکی که روی گوشی دریافت می‌کنید، خودکار و بدون نیاز به رسید تایید کنید.\n";
+        $info .= "➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= "🔹 <b>چرا مبلغ رندوم لازمه؟</b>\n";
+        $info .= "چون با روشن‌بودن این قابلیت، «🎲 مبلغ رندوم برای هر فاکتور» هم خودکار روشن و قفل شد - هر فاکتور باید مبلغ یکتا داشته باشه تا بشه با پیامک بانکی تطبیقش داد.\n";
+        $info .= "➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= "🔹 <b>۱. نصب اپ</b>\n";
+        $info .= "روی همون گوشی که سیم‌کارت حساب بانکی توشه، اپ «SMS Forwarder» (Frzin Apps) رو نصب کن:\n<code>https://play.google.com/store/apps/details?id=com.frzinapps.smsforward</code>\n";
+        $info .= "موقع باز کردن، دسترسی خواندن پیامک (SMS) رو حتماً Allow کن.\n";
+        $info .= "➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= "🔹 <b>۲. ساخت قانون جدید</b>\n";
+        $info .= "از نوار پایین برو تب <b>Filters</b> → دکمه‌ی آبی <b>+</b> رو بزن → از صفحه‌ی «Add filter» گزینه‌ی <b>Incoming SMS/RCS</b> رو انتخاب کن.\n";
+        $info .= "➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= "🔹 <b>۳. مقصد (Where to forward)</b>\n";
+        $info .= "روی <b>Add</b> بزن → از لیست گزینه‌ی <b>URL</b> رو انتخاب کن.\n";
+        $info .= "توی صفحه‌ی بعد این‌جوری پرش کن:\n";
+        $info .= "• <b>Request Type:</b> POST\n";
+        $info .= "• <b>Enter URL:</b> همین آدرس رو کامل پیست کن (این آدرس شامل رمز مخفیته، جای دیگه شیر نکن):\n<code>{$url}</code>\n";
+        $info .= "• <b>Header:</b> خالی بذار، چیزی اضافه نکن.\n";
+        $info .= "• <b>Body:</b> هر کدوم از دو تب (x-www-form-urlencoded یا JSON) که پیش‌فرض انتخابه رو نگه دار، فقط محتواش رو پاک کن و دقیقاً این رو بنویس:\n<code>{\"text\":\"{msg}\"}</code>\n";
+        $info .= "بعد آیکون 💾 بالا سمت راست رو بزن تا ذخیره بشه. برگرد (فلش کنار URL) و <b>Next</b> رو بزن.\n";
+        $info .= "➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= "🔹 <b>۴. شرایط فوروارد (۱ از ۲)</b>\n";
+        $info .= "گزینه‌ی <b>Forward All</b> رو انتخاب‌شده نگه دار (پیش‌فرضشه) و <b>Next</b> بزن.\n";
+        $info .= "➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= "🔹 <b>۵. نوع پیام‌ها (Supported Message Types)</b>\n";
+        $info .= "مطمئن شو تیک <b>SMS</b> فعاله (پیامک بانکی معمولی از این نوعه، نه RCS). اگه فقط RCS تیک داره، روی SMS هم بزن. <b>Next</b>.\n";
+        $info .= "➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= "🔹 <b>۶. شرایط فوروارد (۲ از ۲) — این قدم رو جا نندازی</b>\n";
+        $info .= "گزینه‌ی <b>Allow forwarding OTP &amp; security messages (OTP, Pin, Password, Bank)</b> رو <b>روشن</b> کن ✅ — اگه خاموش بمونه، اپ خودش پیامک بانکی رو قبل از رسیدن به ما مسدود می‌کنه.\n";
+        $info .= "قسمت Dual SIM → SIM In رو روی <b>All numbers</b> نگه دار.\n";
+        $info .= "در آخر <b>Next</b>/<b>Save</b> رو بزن تا کل قانون ذخیره بشه.\n";
+        $info .= "➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= "🔹 <b>۷. بررسی نهایی</b>\n";
+        $info .= "توی تب <b>Filters</b>، مطمئن شو تاگل کنار قانونی که ساختی روشنه. برای تست، از تب <b>History</b> می‌تونی ببینی درخواست‌های ارسالی وضعیت <b>Success</b> دارن یا نه.\n";
+        $info .= "➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= "⚠️ اگه آدرس بالا لو رفت، از دکمه «ساخت رمز جدید» زیر همین صفحه یه آدرس تازه بساز (باید دوباره توی اپ جایگزینش کنی).\n";
+        $info .= "➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= "ℹ️ بعد از این تنظیمات، یه پیامک بانکی واقعی (با مبلغ دقیق فاکتور) کافیه تا پرداخت خودکار و بدون نیاز به رسید تایید بشه - نه به باتی وابسته‌ست، نه کرون جدایی لازم داره.";
+        $kb = ['inline_keyboard' => [
+            [['text' => '🔙 بازگشت', 'callback_data' => "smsfwdset:{$lang}", 'style' => 'danger']],
+        ]];
+        return [$info, json_encode($kb)];
+    }
+}
+if (!function_exists('card_legacy_settings_payload')) {
+    // Replaces the old "🔑 تنظیمات فنی درگاه (مشترک بین همه زبان‌ها)" entry
+    // (the $CartManage ReplyKeyboardMarkup in keyboard.php - still intact,
+    // still reachable from admin.php:13673 and used as the "return here"
+    // keyboard by ~15 unrelated flows, just no longer duplicated here) with a
+    // styled inline screen split into per-language overrides (group 1, via
+    // the same pay_value()/gw_pay_override_set() every other per-language
+    // gateway field already uses) and true bot-wide switches (group 2,
+    // unchanged in meaning - just one button instead of two, or reachable by
+    // tap instead of exact reply-keyboard text match).
+    function card_legacy_settings_payload($lang, $textbotlang)
+    {
+        $kb = ['inline_keyboard' => []];
+        $kb['inline_keyboard'][] = [['text' => bt_section_meta('card_legacy_perlang')['label'], 'callback_data' => 'bt_sep|card_legacy_perlang']];
+        // no green-for-customised anywhere on this screen (see
+        // card_legacy_settings_caption() for the blockquote report instead) -
+        // every actionable row here is plain blue; ✅/count in the text is
+        // what carries state now.
+        foreach (card_legacy_toggle_fields() as $field => $def) {
+            $on = pay_value($field, $lang, $def['off']) === $def['on'];
+            $kb['inline_keyboard'][] = [[
+                'text' => ($on ? '✅ ' : '') . $def['label'],
+                'callback_data' => "cardlegacytoggle:{$lang}:{$field}",
+                'style' => 'primary',
+            ]];
+        }
+        $timeVal = pay_value('timeauto_not_verify', $lang, '4');
+        $kb['inline_keyboard'][] = [[
+            'text' => "⏳ زمان تایید خودکار — {$timeVal} دقیقه",
+            'callback_data' => "cardlegacytime:{$lang}",
+            'style' => 'primary',
+        ]];
+        $helpOwn = gw_pay_override_has('helpcart', $lang);
+        $helpVal = pay_value('helpcart', $lang, '2');
+        $helpShown = ($helpVal == '2') ? 'تنظیم نشده' : 'تنظیم شده';
+        $kb['inline_keyboard'][] = [[
+            'text' => "📚 آموزش کارت‌به‌کارت — {$helpShown}",
+            'callback_data' => "cardlegacyhelp:{$lang}",
+            'style' => 'primary',
+        ]];
+        if ($helpOwn) {
+            $kb['inline_keyboard'][] = [[
+                'text' => '↩️ برگشت به آموزش سراسری',
+                'callback_data' => "cardlegacyhelpclear:{$lang}",
+                'style' => 'danger',
+            ]];
+        }
+        $kb['inline_keyboard'][] = [['text' => bt_section_meta('card_legacy_global')['label'], 'callback_data' => 'bt_sep|card_legacy_global']];
+        $showcardOn = (select("setting", "showcard", null, null, "select")['showcard'] ?? '1') === '1';
+        $kb['inline_keyboard'][] = [[
+            'text' => ($showcardOn ? '✅ ' : '') . '💰 نمایش شماره کارت به کاربران',
+            'callback_data' => "cardlegacyshowcard:{$lang}",
+            'style' => 'primary',
+        ]];
+        $excList = json_decode((string) (select("PaySetting", "ValuePay", "NamePay", "Exception_auto_cart", "select")['ValuePay'] ?? '{}'), true);
+        $excCount = is_array($excList) ? count($excList) : 0;
+        $kb['inline_keyboard'][] = [[
+            'text' => "🚫 استثناء کاربران از تایید خودکار ({$excCount} نفر)",
+            'callback_data' => "cardlegacyexc:{$lang}",
+            'style' => 'primary',
+        ]];
+        $kb['inline_keyboard'][] = [['text' => '♻️ نمایش گروهی شماره کارت', 'callback_data' => "cardlegacygroup:{$lang}", 'style' => 'primary']];
+        $kb['inline_keyboard'][] = [['text' => '📄 خروجی افراد شماره کارت فعال', 'callback_data' => "cardlegacyexport:{$lang}", 'style' => 'primary']];
+        if (card_legacy_has_any_override($lang) || !$showcardOn || $excCount > 0) {
+            $kb['inline_keyboard'][] = [['text' => '🔁 ریست به پیش‌فرض', 'callback_data' => "cardlegacyreset:{$lang}", 'style' => 'danger']];
+        }
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "gwset:{$lang}:card", 'style' => 'danger']];
+        return json_encode($kb);
+    }
+}
+if (!function_exists('card_legacy_settings_caption')) {
+    // Replaces the green buttons this screen used to have: whatever differs
+    // from default is listed here as a blockquote report instead.
+    function card_legacy_settings_caption($lang)
+    {
+        $report = [];
+        foreach (card_legacy_toggle_fields() as $field => $def) {
+            if (gw_pay_override_has($field, $lang)) {
+                $on = pay_value($field, $lang, $def['off']) === $def['on'];
+                $report[] = "• {$def['label']}: " . ($on ? 'روشن' : 'خاموش') . ' (اختصاصی این زبان)';
+            }
+        }
+        if (gw_pay_override_has('timeauto_not_verify', $lang)) {
+            $report[] = '• ⏳ زمان تایید خودکار: ' . pay_value('timeauto_not_verify', $lang, '4') . ' دقیقه (اختصاصی این زبان)';
+        }
+        if (gw_pay_override_has('helpcart', $lang)) {
+            $report[] = '• 📚 آموزش کارت‌به‌کارت: اختصاصی این زبان';
+        }
+        $showcardOn = (select("setting", "showcard", null, null, "select")['showcard'] ?? '1') === '1';
+        if (!$showcardOn) {
+            $report[] = '• 💰 نمایش شماره کارت: خاموش (سراسری)';
+        }
+        $excList = json_decode((string) (select("PaySetting", "ValuePay", "NamePay", "Exception_auto_cart", "select")['ValuePay'] ?? '{}'), true);
+        $excCount = is_array($excList) ? count($excList) : 0;
+        if ($excCount > 0) {
+            $report[] = "• 🚫 استثناء کاربران از تایید خودکار: {$excCount} نفر (سراسری)";
+        }
+        $cap = '🔧 <b>تنظیمات فنی درگاه</b>';
+        if (!empty($report)) {
+            $cap .= "\n\n<blockquote>📝 گزارش موارد تغییریافته:\n" . implode("\n", $report) . '</blockquote>';
+        }
+        return $cap;
     }
 }
 if (!function_exists('card_invoice_btnstyle_items')) {
@@ -1818,6 +2158,17 @@ if (!function_exists('gateway_settings_caption')) {
             '{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang,
             '{currency}' => currency_get($cur)['title'] ?? $cur,
         ]);
+        if ($key === 'card') {
+            // the shared template's middle sentence describes the green/
+            // colorless convention every OTHER gateway still uses - wrong for
+            // card, where every button is blue and customisation is reported
+            // as a blockquote below instead (see the $key==='card' block).
+            $cap = str_replace(
+                'دکمه‌های رنگی یعنی این زبون مقدار اختصاصی خودشو داره، بدون‌رنگ یعنی از تنظیمات کلی 💎 مالی میاد.',
+                'موارد اختصاصی این زبون پایین همین پیام، به صورت گزارش نشون داده می‌شن.',
+                $cap
+            );
+        }
         $hasGlobal = false;
         foreach (gw_field_registry()[$key] ?? [] as $f) {
             if (gw_field_scope($f) === 'global') {
@@ -1829,6 +2180,28 @@ if (!function_exists('gateway_settings_caption')) {
         }
         if (!gateway_globally_on($key)) {
             $cap .= "\n\n" . $t['globallyOffWarn'];
+        }
+        if ($key === 'card') {
+            // every field on this screen is blue no matter what (no more
+            // green-for-customised buttons) - what's actually been changed
+            // from default is reported here instead, as a blockquote.
+            $report = [];
+            foreach (gw_field_registry()['card'] as $f) {
+                if ($f['type'] === 'cards') {
+                    if (gw_cards_has_override($lang)) {
+                        $report[] = "• {$t[$f['label']]}: اختصاصی این زبان";
+                    }
+                } elseif (gw_field_scope($f) === 'global') {
+                    if ((string) getPaySettingValue($f['field']) !== '') {
+                        $report[] = "• {$t[$f['label']]}: تنظیم شده";
+                    }
+                } elseif (gw_pay_override_has($f['field'], $lang)) {
+                    $report[] = "• {$t[$f['label']]}: اختصاصی این زبان";
+                }
+            }
+            if (!empty($report)) {
+                $cap .= "\n\n<blockquote>📝 گزارش موارد تغییریافته:\n" . implode("\n", $report) . '</blockquote>';
+            }
         }
         return $cap;
     }
@@ -2927,6 +3300,48 @@ if (preg_match('/^cfgcoldemo-([a-z]{2})$/', $datain, $cc_m) && $adminrulecheck['
     ]);
     return;
 }
+//----------------[  config column-order manager - BUY variant (independent
+//                   clone of the block above, lives inside the 🛍 پیام‌های
+//                   سرویس‌های من bottext group; separate storage keys via
+//                   the $kind='buy' argument, see function.php ]----------------
+if (preg_match('/^btact\|cfgcolbuy\|([a-z]{2})\|(.+)$/', $datain, $btm) && $adminrulecheck['rule'] == "administrator") {
+    list($cc_info, $cc_kb) = config_col_order_payload($textbotlang, $btm[1], $btm[2], null, 'users.status.getConfigHintBuy', 'buy');
+    Editmessagetext($from_id, $message_id, $cc_info, $cc_kb, 'HTML');
+    return;
+}
+if (preg_match('/^cfgcolelbuy-([0123])-([a-z]{2})$/', $datain, $cc_m) && $adminrulecheck['rule'] == "administrator") {
+    list($cc_info, $cc_kb) = configdisplay_element_payload($cc_m[2], (int) $cc_m[1], $textbotlang, 'buy');
+    Editmessagetext($from_id, $message_id, $cc_info, $cc_kb, 'HTML');
+    return;
+}
+if (preg_match('/^cfgcoltextbuy-([0123])-([a-z]{2})$/', $datain, $cc_m) && $adminrulecheck['rule'] == "administrator") {
+    savedata("clear", "bt_msgid", $message_id);
+    step("cfgcoltxtbuy-{$cc_m[2]}-{$cc_m[1]}", $from_id);
+    $cc_cancel_kb = json_encode(['inline_keyboard' => [
+        [['text' => '❌ انصراف', 'callback_data' => "cfgcolelbuy-{$cc_m[1]}-{$cc_m[2]}"]],
+    ]]);
+    Editmessagetext($from_id, $message_id, "✏️ متن جدید رو بفرست ✍️", $cc_cancel_kb, 'HTML');
+    return;
+}
+if (preg_match('/^cfgcolelstylebuy-([0123])-(primary|success|danger)-([a-z]{2})$/', $datain, $cc_m) && $adminrulecheck['rule'] == "administrator") {
+    configdisplay_element_set_style($cc_m[3], (int) $cc_m[1], $cc_m[2], 'buy');
+    list($cc_info, $cc_kb) = configdisplay_element_payload($cc_m[3], (int) $cc_m[1], $textbotlang, 'buy');
+    Editmessagetext($from_id, $message_id, $cc_info, $cc_kb, 'HTML');
+    return;
+}
+if (preg_match('/^cfgcolelrstbuy-([0123])-([a-z]{2})$/', $datain, $cc_m) && $adminrulecheck['rule'] == "administrator") {
+    configdisplay_element_reset($cc_m[2], (int) $cc_m[1], 'buy');
+    list($cc_info, $cc_kb) = configdisplay_element_payload($cc_m[2], (int) $cc_m[1], $textbotlang, 'buy');
+    Editmessagetext($from_id, $message_id, "🔁 این المان به پیش‌فرض برگشت.\n\n" . $cc_info, $cc_kb, 'HTML');
+    return;
+}
+if (preg_match('/^cfgcolbtbuy-(getfirst|namefirst)-([a-z]{2})$/', $datain, $cc_m) && $adminrulecheck['rule'] == "administrator") {
+    $cc_value = ($cc_m[1] === 'namefirst') ? 'name_first' : 'config_first';
+    update("setting", "configColOrderBuy", $cc_value, null, null);
+    list($cc_info, $cc_kb) = config_col_order_payload($textbotlang, $cc_m[2], 'users.status.getConfigHintBuy', null, 'users.status.getConfigHintBuy', 'buy');
+    Editmessagetext($from_id, $message_id, $cc_info, $cc_kb, 'HTML');
+    return;
+}
 if (preg_match('/^cfgdeliv\|msg\|([a-z]{2})\|([^|]+)\|([bu])\|(ap|at|cb|ct)$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
     $cd_keyMap = ['ap' => 'textbot.afterPay', 'at' => 'textbot.afterText', 'cb' => 'textbot.getConfigHintBuy', 'ct' => 'textbot.getConfigHintTest'];
     $cd_back = "cfgdeliv|p|{$cd_m[1]}|{$cd_m[2]}|{$cd_m[3]}";
@@ -3824,11 +4239,15 @@ if (preg_match('/^btact\|text\|([a-z]{2})\|(.+)$/', $datain, $btm) && $adminrule
             . "• حجم اکانت تست: <code>{testvolume}</code>",
         'users.status.getConfigHint' => "• مدت زمان این سرویس: <code>{testtime}</code>\n"
             . "• حجم این سرویس: <code>{testvolume}</code>",
+        'users.status.getConfigHintBuy' => "• مدت زمان این سرویس: <code>{time}</code>\n"
+            . "• حجم این سرویس: <code>{volume}</code>",
+        'users.status.linksubCaption' => "• لینک اشتراک: <code>{link}</code>",
         'users.Balance.chargeSuccess' => "• مبلغ واریزی: <code>{amount}</code>\n"
             . "• موجودی فعلی کاربر: <code>{balance}</code>\n"
             . "• بلوک تخفیف (وقتی تخفیف اعمال بشه، وگرنه خالیه): <code>{discount_block}</code>",
         'users.Balance.chargeSuccessDiscount' => "• مبلغ تخفیف: <code>{bonus}</code>\n"
             . "• موجودی فعلی کاربر: <code>{balance}</code>",
+        'textbot.cardRandomAmountNotice' => "• مبلغ نهایی فاکتور، به ریال: <code>{price_rial}</code>",
     ];
     if (isset($bt_serviceGuides[$btm[2]])) {
         $bt_prompt .= "\n\n🔹 اطلاعات سرویس\n" . $bt_serviceGuides[$btm[2]];
@@ -4053,17 +4472,17 @@ if (preg_match('/^btact\|bbtnpos\|([a-z]{2})\|(left|right)$/', $datain, $btm) &&
     Editmessagetext($from_id, $message_id, $bb_text, $bb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|list\|([a-z]{2})\|(su|cf|ns|te|sc|bc)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|list\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     list($gb_text, $gb_kb) = genbtn_list_payload($gb_m[2], $gb_m[1], $textbotlang, $gb_m[3] ?? '');
     Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|open\|([a-z]{2})\|(su|cf|ns|te|sc|bc)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|open\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], (int) $gb_m[3], $textbotlang, $gb_m[4] ?? '');
     Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|text\|([a-z]{2})\|(su|cf|ns|te|sc|bc)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|text\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     savedata("clear", "bt_msgid", $message_id);
     $gb_o = $gb_m[4] ?? '';
     $gb_sfx = ($gb_o !== '') ? "|{$gb_o}" : '';
@@ -4074,14 +4493,14 @@ if (preg_match('/^gbtn\|text\|([a-z]{2})\|(su|cf|ns|te|sc|bc)\|([01])(?:\|(u))?$
     Editmessagetext($from_id, $message_id, "✏️ متن جدید دکمه رو بفرست ✍️", $gb_cancel_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|style\|([a-z]{2})\|(su|cf|ns|te|sc|bc)\|([01])\|(primary|success|danger)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|style\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl)\|([01])\|(primary|success|danger)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     genbtn_set_style($gb_m[1], $gb_key, (int) $gb_m[3], $gb_m[4]);
     list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], (int) $gb_m[3], $textbotlang, $gb_m[5] ?? '');
     Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|emoji\|([a-z]{2})\|(su|cf|ns|te|sc|bc)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|emoji\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     $gb_o = $gb_m[4] ?? '';
     $gb_sfx = ($gb_o !== '') ? "|{$gb_o}" : '';
     step("gbtnemo-{$gb_m[1]}-{$gb_m[2]}-{$gb_m[3]}" . (($gb_o !== '') ? "-{$gb_o}" : ''), $from_id);
@@ -4094,7 +4513,7 @@ if (preg_match('/^gbtn\|emoji\|([a-z]{2})\|(su|cf|ns|te|sc|bc)\|([01])(?:\|(u))?
     Editmessagetext($from_id, $message_id, $gb_prompt, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|simple\|([a-z]{2})\|(su|cf|ns|te|sc|bc)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|simple\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     $gb_ov = genbtn_override($gb_m[1], $gb_key, (int) $gb_m[3]);
     genbtn_set_style($gb_m[1], $gb_key, (int) $gb_m[3], null, null, null, null, empty($gb_ov['simple']));
@@ -4102,28 +4521,28 @@ if (preg_match('/^gbtn\|simple\|([a-z]{2})\|(su|cf|ns|te|sc|bc)\|([01])(?:\|(u))
     Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|pos\|([a-z]{2})\|(su|cf|ns|te|sc|bc)\|([01])\|(left|right)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|pos\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl)\|([01])\|(left|right)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     genbtn_set_style($gb_m[1], $gb_key, (int) $gb_m[3], null, null, null, $gb_m[4], null);
     list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], (int) $gb_m[3], $textbotlang, $gb_m[5] ?? '');
     Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|rst\|([a-z]{2})\|(su|cf|ns|te|sc|bc)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|rst\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     genbtn_reset($gb_m[1], $gb_key, (int) $gb_m[3]);
     list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], (int) $gb_m[3], $textbotlang, $gb_m[4] ?? '');
     Editmessagetext($from_id, $message_id, "🔁 این دکمه به پیش‌فرض برگشت.\n\n" . $gb_text, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|rstall\|([a-z]{2})\|(su|cf|ns|te|sc|bc)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|rstall\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     genbtn_reset_all($gb_m[1], $gb_key);
     list($gb_text, $gb_kb) = genbtn_list_payload($gb_m[2], $gb_m[1], $textbotlang, $gb_m[3] ?? '');
     Editmessagetext($from_id, $message_id, "🔁 همه دکمه‌ها به پیش‌فرض برگشتن.\n\n" . $gb_text, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtntxt-([a-z]{2})-(su|cf|ns|te|sc|bc)-([01])(?:-(u))?$/', (string) $user['step'], $gb_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtntxt-([a-z]{2})-(su|cf|ns|te|sc|bc|rn|cl)-([01])(?:-(u))?$/', (string) $user['step'], $gb_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     $gb_newtext = trim((string) $text);
     if ($gb_newtext === '' || mb_strlen($gb_newtext) > 64) {
@@ -4143,7 +4562,7 @@ if (preg_match('/^gbtntxt-([a-z]{2})-(su|cf|ns|te|sc|bc)-([01])(?:-(u))?$/', (st
     }
     return;
 }
-if (preg_match('/^gbtnemo-([a-z]{2})-(su|cf|ns|te|sc|bc)-([01])(?:-(u))?$/', (string) $user['step'], $gb_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtnemo-([a-z]{2})-(su|cf|ns|te|sc|bc|rn|cl)-([01])(?:-(u))?$/', (string) $user['step'], $gb_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     $gb_idx = (int) $gb_m[3];
     $gb_icon_id = '';
@@ -4982,6 +5401,27 @@ if (preg_match('/^cfgcoltxt-([a-z]{2})-([0123])$/', (string) $user['step'], $cc_
     configdisplay_element_set_text($cc_lang, $cc_idx, $cc_newtext);
     step('home', $from_id);
     list($cc_info, $cc_kb) = configdisplay_element_payload($cc_lang, $cc_idx, $textbotlang);
+    $cc_msgid = intval(json_decode((string) ($user['Processing_value'] ?? ''), true)['bt_msgid'] ?? 0);
+    $cc_done_msg = "✅ متن ذخیره شد!\n\n" . $cc_info;
+    deletemessage($from_id, $message_id);
+    if ($cc_msgid > 0) {
+        Editmessagetext($from_id, $cc_msgid, $cc_done_msg, $cc_kb, 'HTML');
+    } else {
+        sendmessage($from_id, $cc_done_msg, $cc_kb, 'HTML');
+    }
+    return;
+}
+if (preg_match('/^cfgcoltxtbuy-([a-z]{2})-([0123])$/', (string) $user['step'], $cc_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+    $cc_lang = $cc_m[1];
+    $cc_idx = (int) $cc_m[2];
+    $cc_newtext = trim((string) $text);
+    if ($cc_newtext === '') {
+        sendmessage($from_id, "⚠️ لطفاً یه متن بفرست 😅", $backadmin, 'HTML');
+        return;
+    }
+    configdisplay_element_set_text($cc_lang, $cc_idx, $cc_newtext, 'buy');
+    step('home', $from_id);
+    list($cc_info, $cc_kb) = configdisplay_element_payload($cc_lang, $cc_idx, $textbotlang, 'buy');
     $cc_msgid = intval(json_decode((string) ($user['Processing_value'] ?? ''), true)['bt_msgid'] ?? 0);
     $cc_done_msg = "✅ متن ذخیره شد!\n\n" . $cc_info;
     deletemessage($from_id, $message_id);
@@ -7729,6 +8169,249 @@ elseif ($datain == "systemsms") {
     }
     gw_lang_settings_map(true);
     Editmessagetext($from_id, $message_id, gateway_settings_caption($gw_m[1], $gw_m[2], $textbotlang), gateway_settings_payload($gw_m[1], $gw_m[2], $textbotlang), 'HTML');
+} elseif (preg_match('/^cardrandtoggle:([a-z]{2})$/', $datain, $gw_m) && $adminrulecheck['rule'] == "administrator") {
+    // global switch (not per-language) - see the comment on this button's
+    // row in gateway_settings_payload()
+    $crt_setting = select("setting", "cardRandomAmount, smsForwardEnabled", null, null, "select");
+    if (($crt_setting['smsForwardEnabled'] ?? '0') === '1') {
+        // defensive: the keyboard already hides this behind cardrandlocked:
+        // while SMS Forward is on, but a stale/older render of this screen
+        // could still send this callback - never silently toggle in that case
+        telegram('answerCallbackQuery', [
+            'callback_query_id' => $callback_query_id,
+            'text' => '🔒 چون SMS Forward روشنه، این قابلیت قفله. اول SMS Forward رو خاموش کنید.',
+            'show_alert' => true,
+        ]);
+        Editmessagetext($from_id, $message_id, gateway_settings_caption($gw_m[1], 'card', $textbotlang), gateway_settings_payload($gw_m[1], 'card', $textbotlang), 'HTML');
+        return;
+    }
+    $crt_on = (($crt_setting['cardRandomAmount'] ?? '0') === '1');
+    update("setting", "cardRandomAmount", $crt_on ? '0' : '1', null, null);
+    Editmessagetext($from_id, $message_id, gateway_settings_caption($gw_m[1], 'card', $textbotlang), gateway_settings_payload($gw_m[1], 'card', $textbotlang), 'HTML');
+} elseif (preg_match('/^cardrandlocked:([a-z]{2})$/', $datain, $gw_m) && $adminrulecheck['rule'] == "administrator") {
+    telegram('answerCallbackQuery', [
+        'callback_query_id' => $callback_query_id,
+        'text' => '🔒 چون SMS Forward روشنه، مبلغ رندوم قابل خاموش کردن نیست. اول SMS Forward رو خاموش کنید.',
+        'show_alert' => true,
+    ]);
+} elseif (preg_match('/^smsfwdset:([a-z]{2})$/', $datain, $gw_m) && $adminrulecheck['rule'] == "administrator") {
+    Editmessagetext($from_id, $message_id, "📲 <b>تنظیمات SMS Forward</b>", sms_forward_settings_payload($gw_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^smsfwdguide:([a-z]{2})$/', $datain, $gw_m) && $adminrulecheck['rule'] == "administrator") {
+    list($sfw_info, $sfw_kb) = sms_forward_guide_payload($gw_m[1]);
+    Editmessagetext($from_id, $message_id, $sfw_info, $sfw_kb, 'HTML');
+} elseif (preg_match('/^smsfwdtoggle:([a-z]{2})$/', $datain, $gw_m) && $adminrulecheck['rule'] == "administrator") {
+    // always lands back on this same settings screen now, whichever direction
+    // it flipped - the setup guide has its own always-available "📖 راهنمای
+    // نصب" button, so auto-jumping there on every re-enable (e.g. pausing and
+    // resuming SMS Forward) was just an unwanted extra hop, not a help.
+    sms_forward_toggle();
+    Editmessagetext($from_id, $message_id, "📲 <b>تنظیمات SMS Forward</b>", sms_forward_settings_payload($gw_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^smsfwdshowurl:([a-z]{2})$/', $datain, $gw_m) && $adminrulecheck['rule'] == "administrator") {
+    list($sfw_info, $sfw_kb) = sms_forward_show_url_payload($gw_m[1], false);
+    Editmessagetext($from_id, $message_id, $sfw_info, $sfw_kb, 'HTML');
+} elseif (preg_match('/^smsfwdregensecret:([a-z]{2})$/', $datain, $gw_m) && $adminrulecheck['rule'] == "administrator") {
+    sms_forward_regenerate_secret();
+    // stays on this same "نمایش آدرس Webhook" screen with the fresh URL
+    // already substituted in, plus a success blockquote - not a transient
+    // alert that then jumps back out to the settings screen.
+    list($sfw_info, $sfw_kb) = sms_forward_show_url_payload($gw_m[1], true);
+    Editmessagetext($from_id, $message_id, $sfw_info, $sfw_kb, 'HTML');
+} elseif (preg_match('/^cardlegacy:([a-z]{2})$/', $datain, $cl_m) && $adminrulecheck['rule'] == "administrator") {
+    Editmessagetext($from_id, $message_id, card_legacy_settings_caption($cl_m[1]), card_legacy_settings_payload($cl_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^cardlegacytoggle:([a-z]{2}):(\w+)$/', $datain, $cl_m) && $adminrulecheck['rule'] == "administrator") {
+    $cl_fields = card_legacy_toggle_fields();
+    if (!isset($cl_fields[$cl_m[2]])) {
+        return;
+    }
+    $cl_def = $cl_fields[$cl_m[2]];
+    $cl_on = pay_value($cl_m[2], $cl_m[1], $cl_def['off']) === $cl_def['on'];
+    gw_pay_override_set($cl_m[2], $cl_m[1], $cl_on ? $cl_def['off'] : $cl_def['on']);
+    Editmessagetext($from_id, $message_id, card_legacy_settings_caption($cl_m[1]), card_legacy_settings_payload($cl_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^cardlegacytime:([a-z]{2})$/', $datain, $cl_m) && $adminrulecheck['rule'] == "administrator") {
+    $cl_prompt = sendmessage($from_id, sprintf($textbotlang['Admin']['Payment']['askAutoConfirmMinutes'], pay_value('timeauto_not_verify', $cl_m[1], '4')), null, 'HTML');
+    $cl_promptId = (int) ($cl_prompt['result']['message_id'] ?? 0);
+    step("cardlegacytime:{$cl_m[1]}:{$message_id}:{$cl_promptId}", $from_id);
+} elseif (preg_match('/^cardlegacytime:([a-z]{2}):([0-9]+):([0-9]+)$/', (string) $user['step'], $cl_m) && $datain == '') {
+    if (!ctype_digit(trim((string) $text)) || (int) trim((string) $text) < 1) {
+        sendmessage($from_id, $textbotlang['common']['invalidInput'], null, 'HTML');
+        return;
+    }
+    gw_pay_override_set('timeauto_not_verify', $cl_m[1], trim((string) $text));
+    step('home', $from_id);
+    deletemessage($from_id, $message_id);
+    deletemessage($from_id, (int) $cl_m[3]);
+    Editmessagetext($from_id, (int) $cl_m[2], card_legacy_settings_caption($cl_m[1]), card_legacy_settings_payload($cl_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^cardlegacyhelp:([a-z]{2})$/', $datain, $cl_m) && $adminrulecheck['rule'] == "administrator") {
+    $cl_prompt = sendmessage($from_id, $textbotlang['Admin']['Help']['askTutorialMedia'], null, 'HTML');
+    $cl_promptId = (int) ($cl_prompt['result']['message_id'] ?? 0);
+    step("cardlegacyhelp:{$cl_m[1]}:{$message_id}:{$cl_promptId}", $from_id);
+} elseif (preg_match('/^cardlegacyhelp:([a-z]{2}):([0-9]+):([0-9]+)$/', (string) $user['step'], $cl_m) && $datain == '') {
+    if ($text) {
+        $cl_data = json_encode(['type' => 'text', 'text' => $text]);
+    } elseif ($photo) {
+        $cl_data = json_encode(['type' => 'photo', 'text' => $caption, 'photoid' => $photoid]);
+    } elseif ($video) {
+        $cl_data = json_encode(['type' => 'video', 'text' => $caption, 'videoid' => $videoid]);
+    } else {
+        sendmessage($from_id, $textbotlang['Admin']['Help']['invalidContent'], null, 'HTML');
+        return;
+    }
+    gw_pay_override_set('helpcart', $cl_m[1], $cl_data);
+    step('home', $from_id);
+    deletemessage($from_id, $message_id);
+    deletemessage($from_id, (int) $cl_m[3]);
+    Editmessagetext($from_id, (int) $cl_m[2], card_legacy_settings_caption($cl_m[1]), card_legacy_settings_payload($cl_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^cardlegacyhelpclear:([a-z]{2})$/', $datain, $cl_m) && $adminrulecheck['rule'] == "administrator") {
+    gw_pay_override_set('helpcart', $cl_m[1], '');
+    Editmessagetext($from_id, $message_id, card_legacy_settings_caption($cl_m[1]), card_legacy_settings_payload($cl_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^cardlegacyshowcard:([a-z]{2})$/', $datain, $cl_m) && $adminrulecheck['rule'] == "administrator") {
+    $cl_showcardOn = (select("setting", "showcard", null, null, "select")['showcard'] ?? '1') === '1';
+    if ($cl_showcardOn) {
+        // turning off needs a scope choice (all users / non-agent only /
+        // just the setting) - same prompt+logic as the old disableShowCard
+        // handler, just carrying this screen's message_id through so it can
+        // be restored afterwards instead of landing in $CartManage.
+        $cl_prompt = sendmessage($from_id, $textbotlang['Admin']['Status']['applyScope'], null, 'HTML');
+        $cl_promptId = (int) ($cl_prompt['result']['message_id'] ?? 0);
+        step("cardlegacyshowcardoff:{$cl_m[1]}:{$message_id}:{$cl_promptId}", $from_id);
+    } else {
+        update("user", "cardpayment", "1");
+        update("setting", "showcard", "1");
+        Editmessagetext($from_id, $message_id, card_legacy_settings_caption($cl_m[1]), card_legacy_settings_payload($cl_m[1], $textbotlang), 'HTML');
+    }
+} elseif (preg_match('/^cardlegacyshowcardoff:([a-z]{2}):([0-9]+):([0-9]+)$/', (string) $user['step'], $cl_m) && $datain == '') {
+    if (!ctype_digit(trim((string) $text))) {
+        sendmessage($from_id, $textbotlang['common']['invalidInput'], null, 'HTML');
+        return;
+    }
+    if (intval($text) == 1) {
+        update("user", "cardpayment", "0");
+        update("setting", "showcard", "0");
+    } elseif (intval($text) == 2) {
+        update("user", "cardpayment", "0", "agent", "f");
+        update("setting", "showcard", "0");
+    } else {
+        update("setting", "showcard", "0");
+    }
+    step('home', $from_id);
+    deletemessage($from_id, $message_id);
+    deletemessage($from_id, (int) $cl_m[3]);
+    Editmessagetext($from_id, (int) $cl_m[2], card_legacy_settings_caption($cl_m[1]), card_legacy_settings_payload($cl_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^cardlegacyexc:([a-z]{2})$/', $datain, $cl_m) && $adminrulecheck['rule'] == "administrator") {
+    $cl_excKb = json_encode(['inline_keyboard' => [
+        [['text' => '➕ افزودن کاربر', 'callback_data' => "cardlegacyexcadd:{$cl_m[1]}", 'style' => 'primary']],
+        [['text' => '➖ حذف کاربر', 'callback_data' => "cardlegacyexcrm:{$cl_m[1]}", 'style' => 'primary']],
+        [['text' => '📋 نمایش لیست', 'callback_data' => "cardlegacyexclist:{$cl_m[1]}", 'style' => 'primary']],
+        [['text' => '🔙 بازگشت', 'callback_data' => "cardlegacy:{$cl_m[1]}", 'style' => 'danger']],
+    ]]);
+    Editmessagetext($from_id, $message_id, '🚫 <b>استثناء کاربران از تایید خودکار</b>', $cl_excKb, 'HTML');
+} elseif (preg_match('/^cardlegacyexcadd:([a-z]{2})$/', $datain, $cl_m) && $adminrulecheck['rule'] == "administrator") {
+    $cl_prompt = sendmessage($from_id, $textbotlang['Admin']['Payment']['askExcludeUserId'], null, 'HTML');
+    $cl_promptId = (int) ($cl_prompt['result']['message_id'] ?? 0);
+    step("cardlegacyexcadd:{$cl_m[1]}:{$message_id}:{$cl_promptId}", $from_id);
+} elseif (preg_match('/^cardlegacyexcadd:([a-z]{2}):([0-9]+):([0-9]+)$/', (string) $user['step'], $cl_m) && $datain == '') {
+    $cl_uid = trim((string) $text);
+    if (!in_array($cl_uid, $users_ids)) {
+        sendmessage($from_id, $textbotlang['Admin']['Payment']['userNotFound'], null, 'HTML');
+        return;
+    }
+    $cl_list = select("PaySetting", "ValuePay", "NamePay", "Exception_auto_cart", "select")['ValuePay'];
+    $cl_list = is_string($cl_list) ? json_decode($cl_list, true) : [];
+    if (!is_array($cl_list)) {
+        $cl_list = [];
+    }
+    if (in_array($cl_uid, $cl_list)) {
+        sendmessage($from_id, $textbotlang['Admin']['Payment']['userAlreadyExcluded'], null, 'HTML');
+        return;
+    }
+    $cl_list[] = $cl_uid;
+    update("PaySetting", "ValuePay", json_encode(array_values($cl_list)), "NamePay", "Exception_auto_cart");
+    step('home', $from_id);
+    deletemessage($from_id, $message_id);
+    deletemessage($from_id, (int) $cl_m[3]);
+    Editmessagetext($from_id, (int) $cl_m[2], card_legacy_settings_caption($cl_m[1]), card_legacy_settings_payload($cl_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^cardlegacyexcrm:([a-z]{2})$/', $datain, $cl_m) && $adminrulecheck['rule'] == "administrator") {
+    $cl_prompt = sendmessage($from_id, $textbotlang['Admin']['Payment']['askRemoveExcludeId'], null, 'HTML');
+    $cl_promptId = (int) ($cl_prompt['result']['message_id'] ?? 0);
+    step("cardlegacyexcrm:{$cl_m[1]}:{$message_id}:{$cl_promptId}", $from_id);
+} elseif (preg_match('/^cardlegacyexcrm:([a-z]{2}):([0-9]+):([0-9]+)$/', (string) $user['step'], $cl_m) && $datain == '') {
+    $cl_uid = trim((string) $text);
+    if (!in_array($cl_uid, $users_ids)) {
+        sendmessage($from_id, $textbotlang['Admin']['Payment']['userNotFound'], null, 'HTML');
+        return;
+    }
+    $cl_list = select("PaySetting", "ValuePay", "NamePay", "Exception_auto_cart", "select")['ValuePay'];
+    $cl_list = is_string($cl_list) ? json_decode($cl_list, true) : [];
+    if (!is_array($cl_list) || !in_array($cl_uid, $cl_list)) {
+        sendmessage($from_id, $textbotlang['Admin']['Payment']['userNotExcluded'], null, 'HTML');
+        return;
+    }
+    $cl_list = array_values(array_diff($cl_list, [$cl_uid]));
+    update("PaySetting", "ValuePay", json_encode($cl_list), "NamePay", "Exception_auto_cart");
+    step('home', $from_id);
+    deletemessage($from_id, $message_id);
+    deletemessage($from_id, (int) $cl_m[3]);
+    Editmessagetext($from_id, (int) $cl_m[2], card_legacy_settings_caption($cl_m[1]), card_legacy_settings_payload($cl_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^cardlegacyexclist:([a-z]{2})$/', $datain, $cl_m) && $adminrulecheck['rule'] == "administrator") {
+    $cl_list = select("PaySetting", "ValuePay", "NamePay", "Exception_auto_cart", "select")['ValuePay'];
+    $cl_list = is_string($cl_list) ? json_decode($cl_list, true) : [];
+    $cl_text = (is_array($cl_list) && count($cl_list) > 0) ? implode("\n", $cl_list) : $textbotlang['Admin']['Payment']['excludeListEmpty'];
+    telegram('answerCallbackQuery', [
+        'callback_query_id' => $callback_query_id,
+        'text' => mb_substr($cl_text, 0, 200),
+        'show_alert' => true,
+    ]);
+} elseif (preg_match('/^cardlegacygroup:([a-z]{2})$/', $datain, $cl_m) && $adminrulecheck['rule'] == "administrator") {
+    $cl_prompt = sendmessage($from_id, $textbotlang['Admin']['card']['askUserIds'], null, 'HTML');
+    $cl_promptId = (int) ($cl_prompt['result']['message_id'] ?? 0);
+    step("cardlegacygroup:{$cl_m[1]}:{$message_id}:{$cl_promptId}", $from_id);
+} elseif (preg_match('/^cardlegacygroup:([a-z]{2}):([0-9]+):([0-9]+)$/', (string) $user['step'], $cl_m) && $datain == '') {
+    $cl_list = explode("\n", (string) $text);
+    foreach ($cl_list as $cl_uid) {
+        $cl_uid = trim($cl_uid);
+        if (!in_array($cl_uid, $users_ids)) {
+            continue;
+        }
+        update("user", "cardpayment", "1", "id", $cl_uid);
+    }
+    step('home', $from_id);
+    deletemessage($from_id, $message_id);
+    deletemessage($from_id, (int) $cl_m[3]);
+    Editmessagetext($from_id, (int) $cl_m[2], card_legacy_settings_caption($cl_m[1]), card_legacy_settings_payload($cl_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^cardlegacyexport:([a-z]{2})$/', $datain, $cl_m) && $adminrulecheck['rule'] == "administrator") {
+    $cl_listusers = select("user", "id", "cardpayment", "1", "fetchAll");
+    if (!$cl_listusers) {
+        telegram('answerCallbackQuery', [
+            'callback_query_id' => $callback_query_id,
+            'text' => $textbotlang['Admin']['card']['noUsersEnabled'],
+            'show_alert' => true,
+        ]);
+    } else {
+        $cl_filename = 'cartlist.txt';
+        if (file_exists($cl_filename)) {
+            unlink($cl_filename);
+        }
+        foreach ($cl_listusers as $cl_u) {
+            file_put_contents($cl_filename, $cl_u['id'] . "\n", FILE_APPEND);
+        }
+        sendDocument($from_id, $cl_filename, $textbotlang['Admin']['card']['enabledUserList']);
+        unlink($cl_filename);
+    }
+} elseif (preg_match('/^cardlegacyreset:([a-z]{2})$/', $datain, $cl_m) && $adminrulecheck['rule'] == "administrator") {
+    // never touches card numbers - this screen has no notion of them at all
+    foreach (array_keys(card_legacy_toggle_fields()) as $cl_f) {
+        gw_pay_override_set($cl_f, $cl_m[1], '');
+    }
+    gw_pay_override_set('timeauto_not_verify', $cl_m[1], '');
+    gw_pay_override_set('helpcart', $cl_m[1], '');
+    update("setting", "showcard", "1");
+    update("PaySetting", "ValuePay", "{}", "NamePay", "Exception_auto_cart");
+    telegram('answerCallbackQuery', [
+        'callback_query_id' => $callback_query_id,
+        'text' => '✅ به پیش‌فرض برگشت (شماره کارت‌ها دست‌نخورده موندن).',
+        'show_alert' => true,
+    ]);
+    Editmessagetext($from_id, $message_id, card_legacy_settings_caption($cl_m[1]), card_legacy_settings_payload($cl_m[1], $textbotlang), 'HTML');
 } elseif (preg_match('/^gwrst:([a-z]{2}):([a-z0-9]+)$/', $datain, $gw_m) && $adminrulecheck['rule'] == "administrator") {
     if (!in_array($gw_m[2], gateway_all_keys(), true)) {
         return;
@@ -9024,6 +9707,16 @@ elseif ($datain == "systemsms") {
         return;
     }
     DirectPayment($order_id);
+    // drop the now-stale invoice from the PAYER's chat (not $from_id/$message_id
+    // here - those are the admin and the receipt-review message being acted on).
+    // Usually already gone: tapping "رسید را بفرستید" deletes it in index.php.
+    // This covers the case where the admin confirms straight from the payments
+    // list without the user ever having tapped that button, leaving a live
+    // invoice with card numbers and a countdown standing in their chat.
+    // A delete of an already-deleted message is silently ignored by Telegram.
+    if (!empty($Payment_report['message_id'])) {
+        deletemessage($Payment_report['id_user'], $Payment_report['message_id']);
+    }
     $pricecashback = select("PaySetting", "ValuePay", "NamePay", "chashbackcart", "select")['ValuePay'];
     $Balance_id = select("user", "*", "id", $Payment_report['id_user'], "select");
     if ($pricecashback != "0") {
@@ -15964,6 +16657,10 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     topup_disc_auto_set($td_m[1], $td_m[2], $td_a);
     list($td_text, $td_kb) = topup_disc_auto_payload($td_m[1], $td_m[2], $textbotlang);
     Editmessagetext($from_id, $message_id, $td_text, $td_kb, 'HTML');
+} elseif (preg_match('/^tpdautoresetusage:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
+    topup_disc_auto_reset_usage($td_m[1], $td_m[2]);
+    list($td_text, $td_kb) = topup_disc_auto_payload($td_m[1], $td_m[2], $textbotlang);
+    Editmessagetext($from_id, $message_id, "🔁 سهمیه‌ی استفاده‌شده‌ی همه‌ی کاربرها صفر شد - تنظیمات تخفیف دست‌نخورده موند.\n\n" . $td_text, $td_kb, 'HTML');
 } elseif (preg_match('/^tpdautoreset:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
     topup_disc_auto_set($td_m[1], $td_m[2], []);
     list($td_text, $td_kb) = topup_disc_auto_payload($td_m[1], $td_m[2], $textbotlang);
@@ -17076,14 +17773,18 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
 } elseif ($datain == "nowpaymentsetting") {
     sendmessage($from_id, $textbotlang['users']['selectoption'], $nowpayment_setting_keyboard, 'HTML');
 } elseif ($text == $textbotlang['keyboard']['autoConfirmNoCheckTime']) {
-    sendmessage($from_id, sprintf($textbotlang['Admin']['Payment']['askAutoConfirmMinutes'], $setting['timeauto_not_verify']), $backadmin, 'HTML');
+    // timeauto_not_verify moved from a flat setting.* column to a PaySetting
+    // row (see card_legacy_settings_payload()) so it can carry per-language
+    // overrides through pay_value()/gw_pay_override_set() like the other 4
+    // legacy fields - this screen edits the GLOBAL fallback value.
+    sendmessage($from_id, sprintf($textbotlang['Admin']['Payment']['askAutoConfirmMinutes'], pay_value('timeauto_not_verify', null, $setting['timeauto_not_verify'])), $backadmin, 'HTML');
     step("gettimeauto", $from_id);
 } elseif ($user['step'] == "gettimeauto") {
     if (!is_numeric($text)) {
         sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
         return;
     }
-    update("setting", "timeauto_not_verify", $text);
+    pay_global_set('timeauto_not_verify', $text);
     sendmessage($from_id, $textbotlang['Admin']['cronjob']['timeSaved'], $CartManage, 'HTML');
     step("home", $from_id);
 } elseif ($text == $textbotlang['keyboard']['showFirstPurchase'] || $datain == "prodedit_showfirstpurchase") {
