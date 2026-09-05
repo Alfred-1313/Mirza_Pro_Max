@@ -495,6 +495,16 @@ if (intval($paymentsstartelegram) == 1) {
         ['text' => $textbotlang['textbot']['starTelegram'], 'callback_data' => "startelegrams"]
     ];
 }
+if (intval(getPaySettingValue('statuston')) == 1) {
+    $step_payment['inline_keyboard'][] = [
+        ['text' => $textbotlang['textbot']['tonPayment'], 'callback_data' => "ton"]
+    ];
+}
+if (intval(getPaySettingValue('statustrx')) == 1) {
+    $step_payment['inline_keyboard'][] = [
+        ['text' => $textbotlang['textbot']['trxPayment'], 'callback_data' => "trx"]
+    ];
+}
 // keep only the gateways this user's language is allowed to see (set in
 // 💎 Financial -> gateways per language); an unrestricted language keeps all
 $step_payment['inline_keyboard'] = gateway_filter_rows(
@@ -1046,32 +1056,14 @@ if ($table_exists) {
     $json_list_Inbound_list_admin = json_encode($list_Inbound);
 }
 //--------------------------------------------------
-$stmt = $pdo->prepare("SHOW TABLES LIKE 'DiscountSell'");
-$stmt->execute();
-$result = $stmt->fetchAll();
-$table_exists = count($result) > 0;
-if ($table_exists) {
-    $DiscountSell = [];
-    $stmt = $pdo->prepare("SELECT * FROM DiscountSell");
-    $stmt->execute();
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $DiscountSell[] = [$row['codeDiscount']];
-    }
-    $list_Discountsell = [
-        'keyboard' => [],
-        'resize_keyboard' => true,
-    ];
-    $list_Discountsell['keyboard'][] = [
-        ['text' => $textbotlang['Admin']['backAdminBtn']],
-    ];
-    foreach ($DiscountSell as $button) {
-        $list_Discountsell['keyboard'][] = [
-            ['text' => $button[0]]
-        ];
-    }
-    $json_list_Discount_list_admin_sell = json_encode($list_Discountsell);
-}
-$payment = sell_confirm_kb($user['lang'] ?? 'fa', $textbotlang, "confirmandgetservice");
+// 🌐 تأیید خرید goes BACK into the purchase flow rather than out to the main
+// menu. 'buybacktow' is the flow's own re-entry callback (the category and
+// duration screens already use it): it re-runs the panel step, which shows the
+// panel picker when there is one, and falls through to the category screen when
+// 🖥 نمایش انتخاب پنل is off and a single panel is auto-picked. It is also the
+// one buy-callback that deliberately skips the نام دلخواه note step, so going
+// back never re-asks a question the user already answered.
+$payment = sell_confirm_kb($user['lang'] ?? 'fa', $textbotlang, "confirmandgetservice", "buybacktow");
 $paymentom = sell_confirm_kb($user['lang'] ?? 'fa', $textbotlang, "confirmandgetservice");
 $change_product = json_encode([
     'keyboard' => [
@@ -2246,11 +2238,8 @@ function keyboard_list_text($lang, $groupFilter = null)
             return !empty($be[$lang]['configDisplay'])
                 || (string) ($setting['configColOrder'] ?? '') !== '';
         },
-        // the confirm/cancel row is shared by all three "تأیید خرید" screens -
-        // whichever one is customized, the other two should show it too
-        'users.sell.preInvoice' => function ($lang, $be, $setting) {
-            return !empty($be[$lang]['users.sell.confirmButtons']);
-        },
+        // the confirm/cancel row is shared by both "تأیید خرید" screens -
+        // whichever one is customized, the other should show it too
         'users.sell.preInvoice2' => function ($lang, $be, $setting) {
             return !empty($be[$lang]['users.sell.confirmButtons']);
         },
@@ -2302,6 +2291,23 @@ function keyboard_list_text($lang, $groupFilter = null)
     if ($groupFilter !== null) {
         $bt_cur_section = null;
         foreach (($bt_grouped[$groupFilter] ?? []) as $data) {
+            // Items a group screen no longer lists because they moved onto a
+            // sub-screen of their own. Declared here, in one place, so the
+            // renderer and the reachability audit read the same list instead of
+            // disagreeing about whether an item is still reachable.
+            $bt_group_moved_keys = ['topup' => [
+                'textbot.cardRandomAmountNotice',
+                // the card-to-card receipt exchange, now grouped on that
+                // gateway's own screen under its own heading
+                'users.Balance.askReceiptImage',
+                'users.Balance.receiptNeedsPhotoOrText',
+                'users.Balance.sendReceipt',
+                // now worded per gateway, on each gateway's own screen
+                'users.Balance.linkpayments',
+            ]];
+            if (in_array($data['key'], $bt_group_moved_keys[$groupFilter] ?? [], true)) {
+                continue;
+            }
             $bt_section = $data['section'] ?? null;
             if ($bt_section !== null && $bt_section !== $bt_cur_section) {
                 // white/default style - a non-navigating label, not an action
@@ -2340,12 +2346,35 @@ function keyboard_list_text($lang, $groupFilter = null)
             $keyboard_text['inline_keyboard'][] = [['text' => bt_section_meta('cfgdeliv_link')['label'], 'callback_data' => 'bt_sep|cfgdeliv_link']];
             $keyboard_text['inline_keyboard'][] = [['text' => '📌 نحوه‌ی نمایش کانفیگ', 'callback_data' => "cfgdeliv|list|{$lang}|b", 'style' => 'primary']];
         }
+        if ($groupFilter === 'topup') {
+            // The card-to-card caption/button rows, moved here from
+            // 🏬 تنظیمات فروشگاه → 🏦 بسته‌های شارژ → کارت به کارت. They keep
+            // their original callbacks (nothing new to dispatch); only where
+            // those flows return to changed - see topup_after_edit_screen().
+            // Every gateway's caption/button rows - card-to-card included - now
+            // live on their own screens behind this one button, together with
+            // the caption previews that belong to them. This screen stays a
+            // short index instead of one long mixed list.
+            $keyboard_text['inline_keyboard'][] = [[
+                'text' => $textbotlang['Admin']['TopupPkg']['gwListBtn'],
+                'callback_data' => "topupgwlist:{$lang}",
+                'style' => 'primary',
+            ]];
+            // 🎨 ظاهر نمایش درگاه ها - the styling of the payment-method buttons
+            // the customer picks from, moved off the 🏦 بسته‌های شارژ hub
+            $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['gatewaysBtn'], 'callback_data' => "btnstyle_kindhub:gateway:{$lang}", 'style' => 'primary']];
+        }
         $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['resetAllLabel'], 'callback_data' => "bt_group_resetall|$lang|$groupFilter", 'style' => 'danger']];
         $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['backToListLabel'], 'callback_data' => "btact|back|$lang", 'style' => 'danger']];
         $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']];
-        $bt_captionKey = ($groupFilter === 'myservices') ? 'groupServicesCaption' : 'groupBuyflowCaption';
+        $bt_captionKey = [
+            'myservices' => 'groupServicesCaption',
+            'topup' => 'groupTopupCaption',
+        ][$groupFilter] ?? 'groupBuyflowCaption';
         $bt_caption_tpl = $bt_tab_texts['bottext'][$bt_captionKey] ?? $textbotlang['bottext'][$bt_captionKey];
         $bt_caption = strtr($bt_caption_tpl, ['{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang]);
+        // the card-to-card previews moved onto that gateway's own screen, next
+        // to the buttons that actually edit them
         return [$bt_caption, json_encode($keyboard_text)];
     }
     // items with a genuinely separate purpose get grouped under a white,
@@ -2354,7 +2383,9 @@ function keyboard_list_text($lang, $groupFilter = null)
     // here (not as a bottext.items 'section' tag) so this stays self-contained
     // and independent of the underlying array's storage order.
     $bt_home_sections = [
-        'home_general' => ['users.text_start', 'textbot.faqDesc', 'textbot.tariffListDesc', 'textbot.rules'],
+        // users.back sits next to the welcome text on purpose: they are the two
+        // messages the main-menu keyboard arrives with
+        'home_general' => ['users.text_start', 'users.back', 'textbot.faqDesc', 'textbot.tariffListDesc', 'textbot.rules'],
         // preInvoice/afterPay used to be listed directly here; they now live
         // inside the 🛒 پیام‌های مراحل خرید group itself (section
         // 'preinvoice_afterpay') - this divider now only leads into the two
@@ -2408,6 +2439,14 @@ function keyboard_list_text($lang, $groupFilter = null)
                     }
                 }
                 $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['groupServicesLabel'], 'callback_data' => "bt_group|$lang|myservices", 'style' => 'primary']];
+            }
+            // 💰 افزایش موجودی gets its own divider + entry directly under the
+            // services row: its messages used to sit inside 🛒 مراحل خرید even
+            // though topping the wallet up is a separate journey from buying a
+            // service, which made that group a mixed bag.
+            if (!empty($bt_grouped['topup'])) {
+                $keyboard_text['inline_keyboard'][] = [['text' => bt_section_meta('home_topup')['label'], 'callback_data' => 'bt_sep|home_topup']];
+                $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['groupTopupLabel'], 'callback_data' => "bt_group|$lang|topup", 'style' => 'primary']];
             }
         }
     }

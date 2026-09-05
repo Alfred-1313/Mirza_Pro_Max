@@ -27,7 +27,14 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
     $autoconfirm = pay_value("autoconfirmcart", $payer_lang, 'offauto');
     if ($autoconfirm != "onauto")
         continue;
-    $timecheck = pay_value("timeauto_not_verify", $payer_lang, $setting['timeauto_not_verify']) * 60;
+    // 0 minutes is the explicit "off" sentinel set by the admin screen's
+    // ⏳ زمان تایید خودکار switch. Without this guard a 0 would mean
+    // "$since_start > 0", i.e. confirm absolutely everything on the next run -
+    // the exact opposite of off.
+    $timeauto = intval(pay_value("timeauto_not_verify", $payer_lang, '0'));
+    if ($timeauto <= 0)
+        continue;
+    $timecheck = $timeauto * 60;
     $since_start = time() - strtotime($row['at_updated']);
     if ($since_start >= 3600)
         continue;
@@ -53,6 +60,10 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
     if (!empty($Payment_report['message_id'])) {
         deletemessage($Payment_report['id_user'], $Payment_report['message_id']);
     }
+    // same as the SMS webhook: the receipt the user already sent is still
+    // sitting in the admin's chat with live تایید/رد buttons, on an invoice
+    // this cron just credited - tell them so nobody acts on it.
+    payment_notify_admins_auto_confirmed($Payment_report, $textbotlang['hardcoded']['autoConfirmedByBot']);
     $pricecashback = select("PaySetting", "ValuePay", "NamePay", "chashbackcart", "select")['ValuePay'];
     $Balance_id = select("user", "*", "id", $Payment_report['id_user'], "select");
     if ($pricecashback != "0") {

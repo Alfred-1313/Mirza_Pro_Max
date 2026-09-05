@@ -1186,6 +1186,10 @@ if (!function_exists('gateway_globally_on')) {
                 return getPaySettingValue('paymentstatussnotverify') === 'onverifypay';
             case 'startelegrams':
                 return (string) getPaySettingValue('statusstar') === '1';
+            case 'ton':
+                return (string) getPaySettingValue('statuston') === '1';
+            case 'trx':
+                return (string) getPaySettingValue('statustrx') === '1';
         }
         return false;
     }
@@ -1207,6 +1211,8 @@ if (!function_exists('gateway_globally_set')) {
             'zarinpal' => ['zarinpalstatus', 'onzarinpal', 'offzarinpal'],
             'paymentnotverify' => ['paymentstatussnotverify', 'onverifypay', 'offverifypay'],
             'startelegrams' => ['statusstar', '1', '0'],
+            'ton' => ['statuston', '1', '0'],
+            'trx' => ['statustrx', '1', '0'],
         ];
         if (!isset($map[$key])) {
             return;
@@ -1276,12 +1282,34 @@ if (!function_exists('gateway_hub_payload')) {
         // column headers - order matches the row layout below: عملیات on the
         // visual left, وضعیت in the middle, عنوان on the visual right
         $kb['inline_keyboard'][] = [
-            ['text' => $t['colAction'], 'callback_data' => 'none'],
-            ['text' => $t['colStatus'], 'callback_data' => 'none'],
-            ['text' => $t['colTitle'], 'callback_data' => 'none'],
+            ['text' => $t['colAction'], 'callback_data' => "gwname:{$lang}:_col", 'style' => 'danger'],
+            ['text' => $t['colStatus'], 'callback_data' => "gwname:{$lang}:_col", 'style' => 'danger'],
+            ['text' => $t['colTitle'], 'callback_data' => "gwname:{$lang}:_col", 'style' => 'danger'],
         ];
+        $shownGroups = [];
         foreach (gateway_registry($textbotlang) as $key => $label) {
             if (!gateway_applicable_for_lang($key, $lang)) {
+                continue;
+            }
+            // a grouped gateway is represented by its group's single row, drawn
+            // once at the position of its first visible member
+            $group = gateway_group_of($key);
+            if ($group !== null) {
+                if (isset($shownGroups[$group])) {
+                    continue;
+                }
+                $shownGroups[$group] = true;
+                $state = gateway_group_state($group, $lang);
+                $mark = ['all' => '✅', 'some' => '🔘', 'none' => '❌'][$state];
+                $kb['inline_keyboard'][] = [
+                    ['text' => $t['openGroupBtn'], 'callback_data' => "gwgroup:{$lang}:{$group}"],
+                    [
+                        'text' => $mark,
+                        'callback_data' => "gwgrouptoggle:{$lang}:{$group}",
+                        'style' => $state === 'all' ? 'success' : ($state === 'some' ? 'primary' : 'danger'),
+                    ],
+                    ['text' => gateway_group_label($group, $textbotlang), 'callback_data' => "gwgroup:{$lang}:{$group}", 'style' => 'primary'],
+                ];
                 continue;
             }
             $on = gateway_allowed_for_lang($key, $lang);
@@ -1300,13 +1328,104 @@ if (!function_exists('gateway_hub_payload')) {
                     'callback_data' => "gwtoggle:{$lang}:{$key}",
                     'style' => $effectivelyOn ? 'success' : 'danger',
                 ],
-                ['text' => $label, 'callback_data' => "gwset:{$lang}:{$key}"],
+                // the name is a label, not a second way into تنظیمات - tapping
+                // it explains what the row is instead of navigating
+                ['text' => $label, 'callback_data' => "gwname:{$lang}:{$key}", 'style' => 'primary'],
             ];
         }
-        $kb['inline_keyboard'][] = [['text' => $t['disableAll'], 'callback_data' => "gwall:{$lang}:0"]];
-        $kb['inline_keyboard'][] = [['text' => $t['enableAll'], 'callback_data' => "gwall:{$lang}:1"]];
+        $kb['inline_keyboard'][] = [['text' => $t['disableAll'], 'callback_data' => "gwall:{$lang}:0", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => $t['enableAll'], 'callback_data' => "gwall:{$lang}:1", 'style' => 'success']];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'gwlang_close', 'style' => 'danger']];
         return json_encode($kb);
+    }
+}
+if (!function_exists('gateway_group_state')) {
+    // 'all' | 'some' | 'none' - how many of the group's gateways a real user
+    // would actually see (per-language flag AND the global switch, the same
+    // pair the per-gateway ✅ already reflects). Lives here rather than beside
+    // the other gateway_group_* helpers in function.php because
+    // gateway_globally_on() is an admin-only function - function.php is loaded
+    // for every customer request too, where that call would be undefined.
+    function gateway_group_state($group, $lang)
+    {
+        $members = gateway_group_members($group, $lang);
+        if (empty($members)) {
+            return 'none';
+        }
+        $on = 0;
+        foreach ($members as $key) {
+            if (gateway_allowed_for_lang($key, $lang) && gateway_globally_on($key)) {
+                $on++;
+            }
+        }
+        return $on === 0 ? 'none' : ($on === count($members) ? 'all' : 'some');
+    }
+}
+if (!function_exists('gateway_group_payload')) {
+    // One group's own screen: the same [تنظیمات] [✅/❌] [name] rows the hub used
+    // to show inline, plus a way back. Same column order and same callbacks, so
+    // nothing about configuring a gateway changes - only where it lives.
+    function gateway_group_payload($lang, $group, $textbotlang)
+    {
+        $t = $textbotlang['Admin']['GatewayLang'];
+        $kb = ['inline_keyboard' => []];
+        $kb['inline_keyboard'][] = [
+            ['text' => $t['colAction'], 'callback_data' => "gwname:{$lang}:_col", 'style' => 'danger'],
+            ['text' => $t['colStatus'], 'callback_data' => "gwname:{$lang}:_col", 'style' => 'danger'],
+            ['text' => $t['colTitle'], 'callback_data' => "gwname:{$lang}:_col", 'style' => 'danger'],
+        ];
+        $registry = gateway_registry($textbotlang);
+        foreach (gateway_group_members($group, $lang) as $key) {
+            $effectivelyOn = gateway_allowed_for_lang($key, $lang) && gateway_globally_on($key);
+            $kb['inline_keyboard'][] = [
+                ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "gwset:{$lang}:{$key}"],
+                [
+                    'text' => $effectivelyOn ? '✅' : '❌',
+                    'callback_data' => "gwtoggle:{$lang}:{$key}",
+                    'style' => $effectivelyOn ? 'success' : 'danger',
+                ],
+                ['text' => $registry[$key] ?? $key, 'callback_data' => "gwname:{$lang}:{$key}", 'style' => 'primary'],
+            ];
+        }
+        $kb['inline_keyboard'][] = [['text' => $t['backBtn'], 'callback_data' => "gwlang:{$lang}", 'style' => 'danger']];
+        return json_encode($kb);
+    }
+}
+if (!function_exists('gateway_group_caption')) {
+    function gateway_group_caption($lang, $group, $textbotlang)
+    {
+        $t = $textbotlang['Admin']['GatewayLang'];
+        $cap = strtr($t['groupCaption'], [
+            '{group}' => gateway_group_label($group, $textbotlang),
+            '{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang,
+        ]);
+        // some families need a word of explanation (the offline ones settle
+        // straight to the bot's wallet and need manual confirmation)
+        $note = $t['groupNotes'][$group] ?? '';
+        return trim($note) !== '' ? ($cap . "\n\n" . $note) : $cap;
+    }
+}
+if (!function_exists('gateway_name_alert')) {
+    // What a display-only name button says when tapped. Short on purpose:
+    // answerCallbackQuery silently drops the whole call over 200 characters.
+    function gateway_name_alert($lang, $key, $textbotlang)
+    {
+        $t = $textbotlang['Admin']['GatewayLang'];
+        if ($key === '_col') {
+            return $t['colAlert'];
+        }
+        $registry = gateway_registry($textbotlang);
+        $label = $registry[$key] ?? $key;
+        $langOn = gateway_allowed_for_lang($key, $lang);
+        $globalOn = gateway_globally_on($key);
+        if ($langOn && $globalOn) {
+            $state = $t['nameAlertOn'];
+        } elseif (!$globalOn) {
+            $state = $t['nameAlertGlobalOff'];
+        } else {
+            $state = $t['nameAlertLangOff'];
+        }
+        return strtr($t['nameAlert'], ['{name}' => $label, '{state}' => $state]);
     }
 }
 if (!function_exists('gateway_hub_caption')) {
@@ -1335,6 +1454,36 @@ if (!function_exists('topup_hub_payload')) {
     // its package count. Every applicable gateway is listed regardless of its
     // current on/off state, so packages can be prepared before a gateway goes
     // live - on/off itself is controlled from 💳 درگاه‌های پرداخت, not here.
+    // members of a family that a customer of this language would actually see at
+    // checkout - the same effective-status rule the hub itself uses
+    function topup_hub_live_members($group, $lang)
+    {
+        $out = [];
+        foreach (gateway_group_members($group, $lang) as $k) {
+            if (gateway_allowed_for_lang($k, $lang) && gateway_globally_on($k)) {
+                $out[] = $k;
+            }
+        }
+        return $out;
+    }
+    function topup_hub_group_payload($lang, $group, $textbotlang)
+    {
+        $registry = gateway_registry($textbotlang);
+        $rows = [];
+        foreach (topup_hub_live_members($group, $lang) as $key) {
+            $btn = ['text' => $registry[$key] ?? $key, 'callback_data' => "topupset:{$lang}:{$key}"];
+            if (count(topup_packages_for($lang, $key)) > 0) {
+                $btn['style'] = 'success';
+            }
+            $rows[] = [$btn];
+        }
+        $rows[] = [['text' => $textbotlang['Admin']['TopupPkg']['backToPrevBtn'], 'callback_data' => "topuplang:{$lang}", 'style' => 'danger']];
+        $cap = strtr($textbotlang['Admin']['TopupPkg']['hubGroupCaption'], [
+            '{group}' => gateway_group_label($group, $textbotlang),
+            '{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang,
+        ]);
+        return [$cap, json_encode(['inline_keyboard' => $rows])];
+    }
     function topup_hub_payload($lang, $textbotlang)
     {
         $t = $textbotlang['Admin']['TopupPkg'];
@@ -1350,11 +1499,37 @@ if (!function_exists('topup_hub_payload')) {
         // only gateways a real user of this language would actually see at
         // checkout right now - matches 💎 مالی's own effective-status logic
         // (per-language allow-list AND the separate global switch both on)
+        // grouped into the same families as 💎 مالی and 🎨 → 💳 درگاه‌ها, drawn at
+        // the position of each family's first live member. A family with only
+        // one live gateway is NOT collapsed: hiding a single row behind a tap
+        // would cost a step and show nothing extra.
+        $shownGroups = [];
         foreach (gateway_registry($textbotlang) as $key => $label) {
             if (!gateway_applicable_for_lang($key, $lang)) {
                 continue;
             }
             if (!gateway_allowed_for_lang($key, $lang) || !gateway_globally_on($key)) {
+                continue;
+            }
+            $group = gateway_group_of($key);
+            $liveInGroup = $group === null ? [] : topup_hub_live_members($group, $lang);
+            if ($group !== null && count($liveInGroup) > 1) {
+                if (isset($shownGroups[$group])) {
+                    continue;
+                }
+                $shownGroups[$group] = true;
+                $anyPkg = false;
+                foreach ($liveInGroup as $gk) {
+                    if (count(topup_packages_for($lang, $gk)) > 0) {
+                        $anyPkg = true;
+                        break;
+                    }
+                }
+                $kb['inline_keyboard'][] = [[
+                    'text' => gateway_group_label($group, $textbotlang),
+                    'callback_data' => "topupgrp:{$lang}:{$group}",
+                    'style' => $anyPkg ? 'success' : 'primary',
+                ]];
                 continue;
             }
             $btn = ['text' => $label, 'callback_data' => "topupset:{$lang}:{$key}"];
@@ -1363,7 +1538,9 @@ if (!function_exists('topup_hub_payload')) {
             }
             $kb['inline_keyboard'][] = [$btn];
         }
-        $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['gatewaysBtn'], 'callback_data' => "btnstyle_kindhub:gateway:{$lang}"]];
+        // 🎨 ظاهر نمایش درگاه ها moved to 🎨 شخصی‌سازی پیام‌های ربات →
+        // 💰 پیام‌های افزایش موجودی, alongside the other top-up appearance and
+        // message settings - this hub keeps only the packages and the discount
         $tp_dsAny = false;
         foreach (topup_disc_enabled_gateways($lang, $textbotlang) as $tp_dsK => $tp_dsL) {
             if (topup_disc_gw_summary($lang, $tp_dsK) !== '') {
@@ -1405,76 +1582,38 @@ if (!function_exists('topup_packages_payload')) {
         $kb = ['inline_keyboard' => array_chunk($slots, topup_columns_for($lang, $key))];
         $tp_customStyle = topup_btnstyle_for($lang, $key, 'custom', true);
         $tp_backStyle = topup_btnstyle_for($lang, $key, 'back', true);
+        // مبلغ دلخواه opens its amount limits; بازگشت به روش پرداخت is a preview
+        // only - its colour/name/position are set in 🎨 → 💳 درگاه‌ها, and tapping
+        // it here says so rather than opening a second, competing editor
         $kb['inline_keyboard'][] = [
             topup_styled_button($textbotlang['users']['Balance']['customAmountBtn'], $tp_customStyle, "topupminmax:{$lang}:{$key}", 'primary'),
-            topup_styled_button($textbotlang['users']['Balance']['backToMethodBtn'], $tp_backStyle, "topuphelphub:{$lang}:{$key}", 'danger'),
+            topup_styled_button($textbotlang['users']['Balance']['backToMethodBtn'], $tp_backStyle, "tpbackinfo:{$lang}:{$key}", 'danger'),
         ];
+        // This screen's OWN caption is edited here - it is the text shown on
+        // this very step, so it belongs next to the packages it describes.
         $kb['inline_keyboard'][] = [
             ['text' => $t['defaultCaptionBtn'], 'callback_data' => "topupcapdefault:{$lang}:{$key}"],
             ['text' => $t['editCaptionBtn'], 'callback_data' => "topupcap:{$lang}:{$key}"],
         ];
-        $kb['inline_keyboard'][] = [
-            ['text' => $t['defaultCustomCaptionBtn'], 'callback_data' => "topupcustomcapdefault:{$lang}:{$key}"],
-            ['text' => $t['editCustomCaptionBtn'], 'callback_data' => "topupcustomcap:{$lang}:{$key}"],
-        ];
-        if ($key === 'card') {
-            // invoice caption/button-style + the expired-invoice caption
-            // are card-specific concepts (only card-to-card ever generates
-            // an invoice or an expiry notice), relocated here 2026-08-10
-            // from 💎 مالی → کارت‌به‌کارت per explicit request so every
-            // card-related caption/button lives on this one screen
-            $gwT = $textbotlang['Admin']['GatewayLang'];
-            $capBtn = ['text' => $gwT['cardCapBtn'], 'callback_data' => "cardcap:{$lang}"];
-            if (trim((string) (card_invoice_caption_get()[$lang] ?? '')) !== '') {
-                $capBtn['style'] = 'success';
-            }
-            $kb['inline_keyboard'][] = [
-                ['text' => $gwT['cardCapDefaultBtn'], 'callback_data' => "cardcapdefault:{$lang}"],
-                $capBtn,
-            ];
-            $btnStyleBtn = ['text' => $gwT['cardBtnStyleBtn'], 'callback_data' => "cardbtn:{$lang}"];
-            if (!empty(card_invoice_btnstyle_map()[$lang])) {
-                $btnStyleBtn['style'] = 'success';
-            }
-            $kb['inline_keyboard'][] = [$btnStyleBtn];
-            $expCapBtn = ['text' => $gwT['cardExpCapBtn'], 'callback_data' => "cardexpcap:{$lang}"];
-            if (trim((string) (card_invoice_expired_caption_get()[$lang] ?? '')) !== '') {
-                $expCapBtn['style'] = 'success';
-            }
-            $kb['inline_keyboard'][] = [
-                ['text' => $gwT['cardExpCapDefaultBtn'], 'callback_data' => "cardexpcapdefault:{$lang}"],
-                $expCapBtn,
-            ];
-        }
-        if ($key === 'plisio') {
-            // same 3-row family as card (caption/button-style/expired-
-            // caption), plisio's own storage - synced here 2026-08-10 per
-            // explicit request to bring پلیسیو up to parity with کارت‌به‌کارت
-            $gwT = $textbotlang['Admin']['GatewayLang'];
-            $pCapBtn = ['text' => $gwT['plisioCapBtn'], 'callback_data' => "plisiocap:{$lang}"];
-            if (trim((string) (plisio_invoice_caption_get()[$lang] ?? '')) !== '') {
-                $pCapBtn['style'] = 'success';
-            }
-            $kb['inline_keyboard'][] = [
-                ['text' => $gwT['plisioCapDefaultBtn'], 'callback_data' => "plisiocapdefault:{$lang}"],
-                $pCapBtn,
-            ];
-            $pBtnStyleBtn = ['text' => $gwT['plisioBtnStyleBtn'], 'callback_data' => "plisiobtn:{$lang}"];
-            if (!empty(plisio_invoice_btnstyle_map()[$lang])) {
-                $pBtnStyleBtn['style'] = 'success';
-            }
-            $kb['inline_keyboard'][] = [$pBtnStyleBtn];
-            $pExpCapBtn = ['text' => $gwT['plisioExpCapBtn'], 'callback_data' => "plisioexpcap:{$lang}"];
-            if (trim((string) (plisio_invoice_expired_caption_get()[$lang] ?? '')) !== '') {
-                $pExpCapBtn['style'] = 'success';
-            }
-            $kb['inline_keyboard'][] = [
-                ['text' => $gwT['plisioExpCapDefaultBtn'], 'callback_data' => "plisioexpcapdefault:{$lang}"],
-                $pExpCapBtn,
-            ];
-        }
+        // Every gateway's message rows - custom-amount caption, invoice caption,
+        // invoice button styling, expired-invoice caption, the link message -
+        // live in 🎨 شخصی‌سازی پیام‌های ربات → 💰 پیام‌های افزایش موجودی → 💳
+        // کپشن و دکمه‌های درگاه‌ها, one screen per gateway. This screen keeps only
+        // what belongs to the packages themselves: the amounts, the custom-amount
+        // limits, this step's own caption and the package appearance. A gateway
+        // added later therefore gets the same shape with no work here.
 
         $kb['inline_keyboard'][] = [['text' => $t['displayBtn'], 'callback_data' => "topupdisp:{$lang}:{$key}"]];
+        // the admin's own way out - the "🔙 بازگشت به روش پرداخت" row above is a
+        // preview of the CUSTOMER's button (it opens that button's styling), so
+        // this screen had no actual back button of its own
+        // back to the family this gateway was opened through, when it has one
+        // with more than a single live member - otherwise straight to the hub
+        $tpHubGroup = gateway_group_of($key);
+        $tpHubBack = ($tpHubGroup !== null && count(topup_hub_live_members($tpHubGroup, $lang)) > 1)
+            ? "topupgrp:{$lang}:{$tpHubGroup}"
+            : "topuplang:{$lang}";
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبلی', 'callback_data' => $tpHubBack, 'style' => 'danger']];
         return json_encode($kb);
     }
 }
@@ -1502,14 +1641,31 @@ if (!function_exists('topup_packages_caption')) {
     {
         $t = $textbotlang['Admin']['TopupPkg'];
         $out = $t['captionPreviewPackagesLabel'] . "\n" . topup_packages_caption_preview_quote(topup_packages_caption($lang, $key, $textbotlang));
-        if ($key === 'card') {
-            $out .= "\n\n" . $t['captionPreviewInvoiceLabel'] . "\n" . topup_packages_caption_preview_quote(card_invoice_caption_for($lang, $textbotlang['textbot']['cart']));
-            $out .= "\n\n" . $t['captionPreviewExpiredLabel'] . "\n" . topup_packages_caption_preview_quote(card_invoice_expired_caption_for($lang, $textbotlang['users']['Balance']['cardInvoiceExpiredCaption']));
-        }
+        // card's invoice/expired previews are NOT shown here any more - their
+        // edit buttons moved to 🎨 → 💰 پیام‌های افزایش موجودی, and a preview
+        // with no way to act on it just made this screen longer. See
+        // topup_card_caption_previews(), which renders them next to the buttons.
         if ($key === 'plisio') {
             $out .= "\n\n" . $t['captionPreviewInvoiceLabel'] . "\n" . topup_packages_caption_preview_quote(plisio_invoice_caption_for($lang, $textbotlang['users']['Balance']['cryptoInstruction']));
             $out .= "\n\n" . $t['captionPreviewExpiredLabel'] . "\n" . topup_packages_caption_preview_quote(plisio_invoice_expired_caption_for($lang, $textbotlang['users']['Balance']['plisioInvoiceExpiredCaption']));
         }
+        return $out;
+    }
+}
+if (!function_exists('topup_card_caption_previews')) {
+    // Live previews of the four card-to-card captions, quoted, for the
+    // 💰 پیام‌های افزایش موجودی screen that now owns their edit buttons. Each
+    // preview reads through the same *_for() resolver the customer-facing code
+    // uses, so tapping "بازگشت به پیش‌فرض" immediately shows the default text
+    // here rather than a stale copy of what was just cleared.
+    function topup_card_caption_previews($lang, $textbotlang)
+    {
+        $t = $textbotlang['Admin']['TopupPkg'];
+        // the packages-screen caption is previewed on that screen, not here -
+        // its edit button lives there too
+        $out = $t['captionPreviewCustomLabel'] . "\n" . topup_packages_caption_preview_quote(topup_custom_caption_for($lang, 'card', $textbotlang['users']['Balance']['customAmountPromptTitle']));
+        $out .= "\n\n" . $t['captionPreviewInvoiceLabel'] . "\n" . topup_packages_caption_preview_quote(card_invoice_caption_for($lang, $textbotlang['textbot']['cart']));
+        $out .= "\n\n" . $t['captionPreviewExpiredLabel'] . "\n" . topup_packages_caption_preview_quote(card_invoice_expired_caption_for($lang, $textbotlang['users']['Balance']['cardInvoiceExpiredCaption']));
         return $out;
     }
 }
@@ -1524,7 +1680,7 @@ if (!function_exists('topup_help_hub_payload')) {
             [['text' => $textbotlang['Admin']['Help']['colorBtn'], 'callback_data' => "topuphelpcol:{$lang}:{$key}"]],
             [['text' => $textbotlang['Admin']['Help']['emojiBtn'], 'callback_data' => "topuphelpemo:{$lang}:{$key}"]],
             [['text' => $textbotlang['Admin']['BtnStyle']['renameBtn'], 'callback_data' => "topuphelpren:{$lang}:{$key}"]],
-            [['text' => $t['backBtn'], 'callback_data' => "topupset:{$lang}:{$key}"]],
+            [['text' => $t['backBtn'], 'callback_data' => topup_owner_screen_cb($lang, $key)]],
         ]];
         return json_encode($kb);
     }
@@ -1700,14 +1856,32 @@ if (!function_exists('topup_minmax_payload')) {
         $t = $textbotlang['Admin']['TopupPkg'];
         [$min, $max] = topup_minmax_for($lang, $key);
         $cur = currency_for_lang($lang);
-        $minText = $min !== null ? money($min, $cur) : $t['noLimit'];
-        $maxText = $max !== null ? money($max, $cur) : $t['noLimit'];
-        $cap = strtr($t['minmaxCaption'], ['{min}' => $minText, '{max}' => $maxText]);
+        // a gateway with a dollar floor shows that floor as its minimum, not
+        // whatever smaller number happens to be stored - that is what the
+        // customer is actually held to
+        $floor = topup_usd_floor_toman($lang, $key);
+        $curTitle = currency_get($cur)['title'] ?? $cur;
+        if ($floor !== null && ($min === null || (float) $min <= $floor)) {
+            $minText = strtr($t['minUsdFloorText'], ['{price}' => number_format($floor), '{currency}' => $curTitle]);
+        } else {
+            // same as the ceiling below: a gateway has a floor whether or not
+            // this screen was ever used, so "no limit" would be a lie
+            $effMin = $min !== null ? $min : topup_gateway_min($lang, $key);
+            $minText = $effMin !== null ? money($effMin, $cur) : $t['noLimit'];
+        }
+        // same for the ceiling: an online gateway has one whether or not this
+        // screen was ever used, so saying "unlimited" here would be a lie
+        $effMax = $max !== null ? $max : topup_gateway_max($lang, $key);
+        $maxText = $effMax !== null ? money($effMax, $cur) : $t['noLimit'];
+        $cap = strtr($floor !== null ? $t['minmaxCaptionOnline'] : $t['minmaxCaption'], ['{min}' => $minText, '{max}' => $maxText]);
+        // this screen sets limits and nothing else - styling the buttons of the
+        // amount flow lives in 🎨 → 💳 درگاه‌ها, one place instead of two
         $kb = json_encode(['inline_keyboard' => [
-            [['text' => $t['setMinBtn'], 'callback_data' => "topupminset:{$lang}:{$key}"]],
-            [['text' => $t['setMaxBtn'], 'callback_data' => "topupmaxset:{$lang}:{$key}"]],
-            [['text' => '🔙 دکمه بازگشت این صفحه', 'callback_data' => "tpbp:{$lang}:{$key}"]],
-            [['text' => $t['backBtn'], 'callback_data' => "topupset:{$lang}:{$key}"]],
+            [['text' => $t['setMinBtn'], 'callback_data' => "topupminset:{$lang}:{$key}", 'style' => 'primary']],
+            [['text' => $t['setMaxBtn'], 'callback_data' => "topupmaxset:{$lang}:{$key}", 'style' => 'primary']],
+            // reachable from 🏦 بسته‌های شارژ and from 🎨 → 💳 درگاه‌ها, so it
+            // returns to whichever of the two actually opened this gateway
+            [['text' => $t['backToPrevBtn'], 'callback_data' => topup_owner_screen_cb($lang, $key), 'style' => 'danger']],
         ]]);
         return [$cap, $kb];
     }
@@ -1821,7 +1995,15 @@ if (!function_exists('gateway_settings_payload')) {
         if (gw_has_any_override($key, $lang)) {
             $kb['inline_keyboard'][] = [['text' => $t['resetBtn'], 'callback_data' => "gwrst:{$lang}:{$key}"]];
         }
-        $kb['inline_keyboard'][] = [['text' => $t['backBtn'], 'callback_data' => "gwlang:{$lang}", 'style' => 'danger']];
+        // back goes to the screen this gateway was actually opened from: a
+        // grouped gateway is only reachable through its group, so returning to
+        // the hub would skip a level and lose the admin's place
+        $gwGroup = gateway_group_of($key);
+        $kb['inline_keyboard'][] = [[
+            'text' => $t['backBtn'],
+            'callback_data' => $gwGroup !== null ? "gwgroup:{$lang}:{$gwGroup}" : "gwlang:{$lang}",
+            'style' => 'danger',
+        ]];
         return json_encode($kb);
     }
 }
@@ -1888,52 +2070,67 @@ if (!function_exists('sms_forward_guide_payload')) {
     // has no such blind spot.
     function sms_forward_guide_payload($lang)
     {
-        // written from an actual admin's real setup session on "SMS Forwarder"
-        // by Frzin Apps (com.frzinapps.smsforward) - every screen name/label
-        // below (Filters, Add filter, Where to forward, Request Type, Enter
-        // URL, Body, Forwarding Conditions, Supported Message Types) is copied
-        // verbatim from that app's real UI, not guessed - keep this in sync if
-        // the app's UI changes.
+        // text supplied verbatim by the admin (2026-09-02), based on a real
+        // setup session on "SMS Forwarder" by Frzin Apps (com.frzinapps.
+        // smsforward) - keep this in sync if the app's UI/monetization changes.
         $url = sms_forward_webhook_url();
-        $info = "📲 <b>راهنمای SMS Forward</b>\n➖➖➖➖➖➖➖➖➖➖\n";
-        $info .= "این قابلیت کمک می‌کنه واریزی‌های کارت‌به‌کارت رو بر اساس پیامک بانکی که روی گوشی دریافت می‌کنید، خودکار و بدون نیاز به رسید تایید کنید.\n";
-        $info .= "➖➖➖➖➖➖➖➖➖➖\n";
-        $info .= "🔹 <b>چرا مبلغ رندوم لازمه؟</b>\n";
-        $info .= "چون با روشن‌بودن این قابلیت، «🎲 مبلغ رندوم برای هر فاکتور» هم خودکار روشن و قفل شد - هر فاکتور باید مبلغ یکتا داشته باشه تا بشه با پیامک بانکی تطبیقش داد.\n";
-        $info .= "➖➖➖➖➖➖➖➖➖➖\n";
-        $info .= "🔹 <b>۱. نصب اپ</b>\n";
-        $info .= "روی همون گوشی که سیم‌کارت حساب بانکی توشه، اپ «SMS Forwarder» (Frzin Apps) رو نصب کن:\n<code>https://play.google.com/store/apps/details?id=com.frzinapps.smsforward</code>\n";
-        $info .= "موقع باز کردن، دسترسی خواندن پیامک (SMS) رو حتماً Allow کن.\n";
-        $info .= "➖➖➖➖➖➖➖➖➖➖\n";
-        $info .= "🔹 <b>۲. ساخت قانون جدید</b>\n";
-        $info .= "از نوار پایین برو تب <b>Filters</b> → دکمه‌ی آبی <b>+</b> رو بزن → از صفحه‌ی «Add filter» گزینه‌ی <b>Incoming SMS/RCS</b> رو انتخاب کن.\n";
-        $info .= "➖➖➖➖➖➖➖➖➖➖\n";
-        $info .= "🔹 <b>۳. مقصد (Where to forward)</b>\n";
-        $info .= "روی <b>Add</b> بزن → از لیست گزینه‌ی <b>URL</b> رو انتخاب کن.\n";
-        $info .= "توی صفحه‌ی بعد این‌جوری پرش کن:\n";
-        $info .= "• <b>Request Type:</b> POST\n";
-        $info .= "• <b>Enter URL:</b> همین آدرس رو کامل پیست کن (این آدرس شامل رمز مخفیته، جای دیگه شیر نکن):\n<code>{$url}</code>\n";
-        $info .= "• <b>Header:</b> خالی بذار، چیزی اضافه نکن.\n";
-        $info .= "• <b>Body:</b> هر کدوم از دو تب (x-www-form-urlencoded یا JSON) که پیش‌فرض انتخابه رو نگه دار، فقط محتواش رو پاک کن و دقیقاً این رو بنویس:\n<code>{\"text\":\"{msg}\"}</code>\n";
-        $info .= "بعد آیکون 💾 بالا سمت راست رو بزن تا ذخیره بشه. برگرد (فلش کنار URL) و <b>Next</b> رو بزن.\n";
-        $info .= "➖➖➖➖➖➖➖➖➖➖\n";
-        $info .= "🔹 <b>۴. شرایط فوروارد (۱ از ۲)</b>\n";
-        $info .= "گزینه‌ی <b>Forward All</b> رو انتخاب‌شده نگه دار (پیش‌فرضشه) و <b>Next</b> بزن.\n";
-        $info .= "➖➖➖➖➖➖➖➖➖➖\n";
-        $info .= "🔹 <b>۵. نوع پیام‌ها (Supported Message Types)</b>\n";
-        $info .= "مطمئن شو تیک <b>SMS</b> فعاله (پیامک بانکی معمولی از این نوعه، نه RCS). اگه فقط RCS تیک داره، روی SMS هم بزن. <b>Next</b>.\n";
-        $info .= "➖➖➖➖➖➖➖➖➖➖\n";
-        $info .= "🔹 <b>۶. شرایط فوروارد (۲ از ۲) — این قدم رو جا نندازی</b>\n";
-        $info .= "گزینه‌ی <b>Allow forwarding OTP &amp; security messages (OTP, Pin, Password, Bank)</b> رو <b>روشن</b> کن ✅ — اگه خاموش بمونه، اپ خودش پیامک بانکی رو قبل از رسیدن به ما مسدود می‌کنه.\n";
-        $info .= "قسمت Dual SIM → SIM In رو روی <b>All numbers</b> نگه دار.\n";
-        $info .= "در آخر <b>Next</b>/<b>Save</b> رو بزن تا کل قانون ذخیره بشه.\n";
-        $info .= "➖➖➖➖➖➖➖➖➖➖\n";
-        $info .= "🔹 <b>۷. بررسی نهایی</b>\n";
-        $info .= "توی تب <b>Filters</b>، مطمئن شو تاگل کنار قانونی که ساختی روشنه. برای تست، از تب <b>History</b> می‌تونی ببینی درخواست‌های ارسالی وضعیت <b>Success</b> دارن یا نه.\n";
-        $info .= "➖➖➖➖➖➖➖➖➖➖\n";
-        $info .= "⚠️ اگه آدرس بالا لو رفت، از دکمه «ساخت رمز جدید» زیر همین صفحه یه آدرس تازه بساز (باید دوباره توی اپ جایگزینش کنی).\n";
-        $info .= "➖➖➖➖➖➖➖➖➖➖\n";
-        $info .= "ℹ️ بعد از این تنظیمات، یه پیامک بانکی واقعی (با مبلغ دقیق فاکتور) کافیه تا پرداخت خودکار و بدون نیاز به رسید تایید بشه - نه به باتی وابسته‌ست، نه کرون جدایی لازم داره.";
+        $divider = "━━━━━━━━━━━━━━━━━━\n";
+        $info = "<blockquote><b>📲 راهنمای راه‌اندازی SMS Forward</b></blockquote>\n\n";
+        $info .= "با فعال کردن SMS Forward، پرداخت‌های کارت‌به‌کارت از روی پیامک بانکی به‌صورت خودکار شناسایی و تأیید می‌شوند؛ بنابراین نیازی به ارسال رسید پرداخت ندارید. ✅\n\n";
+        $info .= "<b>⚠️ قبل از شروع:</b> این آموزش را روی همان گوشی انجام دهید که سیم‌کارت متصل به حساب بانکی روی آن قرار دارد.\n";
+        $info .= $divider;
+        $info .= "<blockquote><b>نصب برنامه</b></blockquote>\n";
+        $info .= "اپ SMS Forwarder را روی گوشی نصب کنید.\n";
+        $info .= "<b><a href=\"https://play.google.com/store/apps/details?id=com.frzinapps.smsforward\">نصب SMS Forwarder</a></b>\n\n";
+        $info .= "بعد از اولین اجرا، هر دسترسی مربوط به SMS / پیامک را که برنامه درخواست می‌کند، تأیید کنید.\n";
+        $info .= "<b>📌 اگر دسترسی پیامک فعال نباشد، برنامه نمی‌تواند پیامک بانکی را دریافت و ارسال کند.</b>\n\n";
+        $info .= "<blockquote><b>⚠️ نکته مهم درباره نسخه رایگان برنامه</b></blockquote>\n";
+        $info .= "این برنامه کاملاً رایگان نیست و برای استفاده از امکانات موردنیاز ما باید نسخه Premium Demo آن را فعال کنید.\n\n";
+        $info .= "<b>بعد از نصب و باز کردن برنامه:</b>\n";
+        $info .= "📱 مجوزهای درخواستی برنامه، مخصوصاً دسترسی به SMS را تأیید کنید.\n";
+        $info .= "🔐 با حساب Google خود وارد برنامه شوید (Sign in with Google).\n";
+        $info .= "📺 حدود ۱ تا ۲ تبلیغ مشاهده کنید تا نسخه Premium Demo برای شما فعال شود.\n\n";
+        $info .= "<b>⏰ توجه:</b> فعال‌سازی نسخه دمو دائمی نیست. برای ادامه استفاده، تقریباً هر ۱ روز یک‌بار باید تبلیغ مربوط به فعال‌سازی Premium Demo را مشاهده کنید.\n\n";
+        $info .= "بعد از فعال شدن Premium Demo، می‌توانید مراحل این آموزش را ادامه دهید و Filter مربوط به SMS Forward را بسازید.\n";
+        $info .= $divider;
+        $info .= "<blockquote><b>💡 اگر نسخه مود شده پیدا کردید</b></blockquote>\n";
+        $info .= "اگر نسخه Mod / Premium این برنامه را پیدا کردید، برای من ارسال کنید تا بررسی کنم و در صورت مناسب بودن، در آموزش قرار بدهم تا بقیه هم بتوانند از آن استفاده کنند. ❤️\n";
+        $info .= "📩 ارسال نسخه مود شده:\n@Alfred_13\n";
+        $info .= $divider;
+        $info .= "<blockquote><b>ساخت Filter</b></blockquote>\n";
+        $info .= "<b>برنامه را باز کنید، مراحل زیر را طی کنید:</b>\n";
+        $info .= "🔹 <b>Filters</b> ← از نوار پایین\n";
+        $info .= "🔹 روی دکمه‌ی آبی ➕ بزنید.\n";
+        $info .= "🔹 در صفحه‌ی <b>Add filter</b> گزینه‌ی <b>Incoming SMS/RCS</b> را انتخاب کنید.\n";
+        $info .= "🔹 سپس <b>Add</b> را بزنید و گزینه‌ی <b>URL</b> را انتخاب کنید.\n";
+        $info .= $divider;
+        $info .= "<blockquote><b>تنظیم مقصد ارسال</b></blockquote>\n";
+        $info .= "حالا تنظیمات را دقیقاً به شکل زیر وارد کنید:\n\n";
+        $info .= "از تب <b>Request Type</b> متد <b>POST</b> را انتخاب می‌کنیم.\n\n";
+        $info .= "کادر <b>Enter URL</b> باید آدرس <b>Webhook</b>ی باشه که ربات بهتون داده - وبهوک فعلی و فعال شما:\n\n";
+        $info .= "<blockquote><b><code>{$url}</code></b></blockquote>\n\n";
+        $info .= "<b>🔐 نکته امنیتی: این آدرس شامل Secret اختصاصی شماست. آن را برای شخص دیگری ارسال نکنید.</b>\n\n";
+        $info .= "کادر <b>Header</b> را خالی می‌گذاریم.\n\n";
+        $info .= "کادر <b>Body</b> مقدار زیر را قرار می‌دهیم:\n<code>{\"text\":\"{msg}\"}</code>\n";
+        $info .= "⚠️ متن بالا را بدون تغییر کپی کنید.\n\n";
+        $info .= "بعد از وارد کردن اطلاعات، روی آیکون 💾 ذخیره در بالای صفحه بزنید.\n";
+        $info .= "وقتی به صفحه‌ی قبل برگشتید، <b>Next</b> را بزنید. توی صفحه‌ی <b>Supported Message Types</b> و <b>Forwarding Conditions</b> هم <b>Next</b> را بزنید، تیک گزینه‌ی <b>Allow forwarding OTP &amp; security messages</b> را فعال کنید و <b>Next</b> را بزنید تا آخرین مرحله.\n";
+        $info .= $divider;
+        $info .= "<blockquote><b>سوالات متداول</b></blockquote>\n";
+        $info .= "<b>💳 حالا پرداخت چگونه انجام می‌شود؟</b>\n";
+        $info .= "از این به بعد، وقتی مشتری یک فاکتور با مبلغ دقیقی که در فاکتور قرار گرفته را پرداخت کند:\n";
+        $info .= "<b>💳 پرداخت مشتری ➜ 📩 دریافت پیامک بانکی ➜ 📲 ارسال خودکار پیامک ➜ 🔍 تطبیق با فاکتور ➜ ✅ تأیید خودکار پرداخت ➜ 🚫 بدون نیاز به ارسال رسید از طرف مشتری و بدون نیاز به تایید ادمین</b>\n\n";
+        $info .= "<b>🎲 چرا مبلغ رندوم است؟</b>\n";
+        $info .= "برای اینکه سیستم بتواند پرداخت را با فاکتور درست تطبیق دهد، هر فاکتور باید مبلغ مخصوص خودش را داشته باشد.\n";
+        $info .= "به همین دلیل، با فعال بودن SMS Forward:\n";
+        $info .= "🎲 مبلغ رندوم برای هر فاکتور به‌صورت خودکار فعال و قفل می‌شود.\n";
+        $info .= "پس نیازی نیست خودتان مبلغ رندوم را تنظیم کنید.\n\n";
+        $info .= "<b>🔐 نکته مهم امنیتی</b>\n";
+        $info .= "آدرس Webhook شما شامل یک Secret اختصاصی است.\n";
+        $info .= "این آدرس را در اختیار دیگران قرار ندهید.\n";
+        $info .= "اگر احتمال می‌دهید Secret شما لو رفته است:\n";
+        $info .= "<b>پنل → ساخت رمز جدید</b> را بزنید و Secret جدید را داخل SMS Forwarder جایگزین کنید.\n\n";
+        $info .= "<b>⚠️ بعد از ساخت Secret جدید، حتماً URL داخل برنامه را نیز با آدرس جدید جایگزین کنید؛ در غیر این صورت Forward کردن پیامک‌ها متوقف می‌شود.</b>";
         $kb = ['inline_keyboard' => [
             [['text' => '🔙 بازگشت', 'callback_data' => "smsfwdset:{$lang}", 'style' => 'danger']],
         ]];
@@ -1954,24 +2151,41 @@ if (!function_exists('card_legacy_settings_payload')) {
     {
         $kb = ['inline_keyboard' => []];
         $kb['inline_keyboard'][] = [['text' => bt_section_meta('card_legacy_perlang')['label'], 'callback_data' => 'bt_sep|card_legacy_perlang']];
+        // Both blind auto-confirms are locked while SMS Forward is on - that
+        // feature confirms from a real bank SMS, these confirm on a timer
+        // regardless of whether money arrived. Locked rows keep a 🔒 and route
+        // to a no-op callback that explains why, same pattern as the
+        // random-amount switch on the gateway screen.
+        $smsFwdOn = (select("setting", "smsForwardEnabled", null, null, "select")['smsForwardEnabled'] ?? '0') === '1';
         // no green-for-customised anywhere on this screen (see
         // card_legacy_settings_caption() for the blockquote report instead) -
         // every actionable row here is plain blue; ✅/count in the text is
         // what carries state now.
         foreach (card_legacy_toggle_fields() as $field => $def) {
             $on = pay_value($field, $lang, $def['off']) === $def['on'];
+            $locked = ($field === 'autoconfirmcart' && $smsFwdOn);
             $kb['inline_keyboard'][] = [[
-                'text' => ($on ? '✅ ' : '') . $def['label'],
-                'callback_data' => "cardlegacytoggle:{$lang}:{$field}",
+                'text' => ($on ? '✅ ' : '') . $def['label'] . ($locked ? ' 🔒' : ''),
+                'callback_data' => $locked ? "cardlegacylocked:{$lang}" : "cardlegacytoggle:{$lang}:{$field}",
                 'style' => 'primary',
             ]];
         }
-        $timeVal = pay_value('timeauto_not_verify', $lang, '4');
+        // 0 minutes means "off" - the value prompt itself only accepts 1+, so
+        // this sentinel can only ever be set by the toggle below.
+        $timeVal = intval(pay_value('timeauto_not_verify', $lang, '0'));
+        $timeOn = ($timeVal > 0);
         $kb['inline_keyboard'][] = [[
-            'text' => "⏳ زمان تایید خودکار — {$timeVal} دقیقه",
-            'callback_data' => "cardlegacytime:{$lang}",
+            'text' => ($timeOn ? '✅ ' : '') . '⏳ زمان تایید خودکار' . ($timeOn ? " — {$timeVal} دقیقه" : '') . ($smsFwdOn ? ' 🔒' : ''),
+            'callback_data' => $smsFwdOn ? "cardlegacylocked:{$lang}" : "cardlegacytimetoggle:{$lang}",
             'style' => 'primary',
         ]];
+        if ($timeOn && !$smsFwdOn) {
+            $kb['inline_keyboard'][] = [[
+                'text' => "✏️ تغییر زمان تایید خودکار",
+                'callback_data' => "cardlegacytime:{$lang}",
+                'style' => 'primary',
+            ]];
+        }
         $helpOwn = gw_pay_override_has('helpcart', $lang);
         $helpVal = pay_value('helpcart', $lang, '2');
         $helpShown = ($helpVal == '2') ? 'تنظیم نشده' : 'تنظیم شده';
@@ -2007,26 +2221,29 @@ if (!function_exists('card_legacy_settings_payload')) {
             $kb['inline_keyboard'][] = [['text' => '🔁 ریست به پیش‌فرض', 'callback_data' => "cardlegacyreset:{$lang}", 'style' => 'danger']];
         }
         $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "gwset:{$lang}:card", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => "cardlegacyclose:{$lang}", 'style' => 'danger']];
         return json_encode($kb);
     }
 }
 if (!function_exists('card_legacy_settings_caption')) {
-    // Replaces the green buttons this screen used to have: whatever differs
-    // from default is listed here as a blockquote report instead.
+    // Replaces the green buttons this screen used to have: every switch that is
+    // currently ON (plus anything else set away from its default) is listed
+    // here as a blockquote report instead, so state is readable without
+    // colour-coding the buttons.
     function card_legacy_settings_caption($lang)
     {
         $report = [];
         foreach (card_legacy_toggle_fields() as $field => $def) {
-            if (gw_pay_override_has($field, $lang)) {
-                $on = pay_value($field, $lang, $def['off']) === $def['on'];
-                $report[] = "• {$def['label']}: " . ($on ? 'روشن' : 'خاموش') . ' (اختصاصی این زبان)';
+            if (pay_value($field, $lang, $def['off']) === $def['on']) {
+                $report[] = "• {$def['label']}: روشن" . (gw_pay_override_has($field, $lang) ? ' (اختصاصی این زبان)' : '');
             }
         }
-        if (gw_pay_override_has('timeauto_not_verify', $lang)) {
-            $report[] = '• ⏳ زمان تایید خودکار: ' . pay_value('timeauto_not_verify', $lang, '4') . ' دقیقه (اختصاصی این زبان)';
+        $timeVal = intval(pay_value('timeauto_not_verify', $lang, '0'));
+        if ($timeVal > 0) {
+            $report[] = "• ⏳ زمان تایید خودکار: روشن - {$timeVal} دقیقه" . (gw_pay_override_has('timeauto_not_verify', $lang) ? ' (اختصاصی این زبان)' : '');
         }
-        if (gw_pay_override_has('helpcart', $lang)) {
-            $report[] = '• 📚 آموزش کارت‌به‌کارت: اختصاصی این زبان';
+        if (pay_value('helpcart', $lang, '2') != '2') {
+            $report[] = '• 📚 آموزش کارت‌به‌کارت: تنظیم شده' . (gw_pay_override_has('helpcart', $lang) ? ' (اختصاصی این زبان)' : '');
         }
         $showcardOn = (select("setting", "showcard", null, null, "select")['showcard'] ?? '1') === '1';
         if (!$showcardOn) {
@@ -2048,13 +2265,30 @@ if (!function_exists('card_invoice_btnstyle_items')) {
     // the 3 fixed buttons that can appear on a card invoice or its expired-
     // notice replacement - shared by the color and rename screens below so
     // both stay in sync automatically (reissue added 2026-08-10)
-    function card_invoice_btnstyle_items($textbotlang)
+    // One row per configured card, so adding a third card makes its row appear
+    // here on its own - the screens below just iterate whatever this returns.
+    // $lang is optional so the pre-existing 3-item callers keep working.
+    function card_invoice_btnstyle_items($textbotlang, $lang = null)
     {
-        return [
-            'copyCard' => $textbotlang['keyboard']['copyCardNumber'],
-            'paidReceipt' => $textbotlang['keyboard']['paidSendReceipt'],
-            'reissue' => $textbotlang['users']['Balance']['reissueInvoiceBtn'],
-        ];
+        $items = [];
+        $cards = ($lang !== null && function_exists('gw_cards_for_lang')) ? gw_cards_for_lang($lang) : [];
+        $total = count($cards);
+        if ($total < 1) {
+            $items['copyCard'] = $textbotlang['keyboard']['copyCardNumber'];
+        } else {
+            foreach (array_values($cards) as $i => $c) {
+                $label = card_invoice_copy_label($i + 1, $total, $textbotlang);
+                $name = trim((string) ($c['name'] ?? ''));
+                // the card's own name is the thing the admin recognises it by,
+                // so show it here even though the customer's button uses the
+                // ordinal - this list is the only place both are visible
+                $items[card_invoice_copy_key($i + 1)] = $name !== '' ? ($label . ' (' . $name . ')') : $label;
+            }
+        }
+        $items['paidReceipt'] = $textbotlang['keyboard']['paidSendReceipt'];
+        $items['reissue'] = $textbotlang['users']['Balance']['reissueInvoiceBtn'];
+        $items['paid'] = $textbotlang['users']['Balance']['paidInvoiceBtn'];
+        return $items;
     }
 }
 if (!function_exists('card_invoice_btnstyle_hub_payload')) {
@@ -2066,9 +2300,719 @@ if (!function_exists('card_invoice_btnstyle_hub_payload')) {
         $kb = ['inline_keyboard' => [
             [['text' => $textbotlang['Admin']['Help']['colorBtn'], 'callback_data' => "cardbtncol:{$lang}"]],
             [['text' => $textbotlang['Admin']['BtnStyle']['renameBtn'], 'callback_data' => "cardbtnren:{$lang}"]],
-            [['text' => $textbotlang['Admin']['GatewayLang']['backBtn'], 'callback_data' => "topupset:{$lang}:card"]],
+            // the emoji tool is the shared one - card's buttons reach it the
+            // same way every other gateway's do
+            [['text' => $textbotlang['Admin']['Help']['emojiBtn'], 'callback_data' => "gwinvbtnemo:{$lang}:card"]],
         ]];
+        // چیدمان only means something once there are two copy buttons to
+        // arrange - with one card there is nothing to lay out
+        if (count(gw_cards_for_lang($lang)) > 1) {
+            $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['layoutBtn'], 'callback_data' => "cardbtnlay:{$lang}"]];
+        }
+        // reached from card's own gateway screen (🎨) or from 🏦 بسته‌های شارژ -
+        // back returns to whichever opened it, never one level past it
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['GatewayLang']['backBtn'], 'callback_data' => topup_owner_screen_cb($lang, 'card'), 'style' => 'danger']];
         return json_encode($kb);
+    }
+}
+if (!function_exists('topup_after_edit_screen')) {
+    // Where a caption/button edit hands control back to. The card-to-card
+    // caption + invoice + button-style rows were moved out of 🏦 بسته‌های شارژ
+    // into 🎨 → 💰 پیام‌های افزایش موجودی, so an edit started from there has to
+    // land back there; every other gateway still edits from its own packages
+    // screen and is unaffected. Returns [caption, keyboard] either way.
+    function topup_after_edit_screen($lang, $key, $textbotlang)
+    {
+        // The same caption/button flows are reachable from two places now:
+        // 🏦 بسته‌های شارژ (where they have always lived) and the per-gateway
+        // screens under 🎨 → 💰. Which one to return to is remembered when the
+        // screen is opened, so an edit never lands the admin in the other
+        // section - see the tpgworigin writes on topupgw:/topupset:.
+        global $from_id;
+        $origin = (string) (select("user", "*", "id", $from_id, "select")['tp_edit_origin'] ?? '');
+        if ($origin === 'topup') {
+            return topup_gw_edit_payload($lang, $key, $textbotlang);
+        }
+        // card used to be special-cased back to the 💰 list, because its rows
+        // were listed there. They live on its own gateway screen now, so it
+        // falls through to the same packages screen as every other gateway.
+        return [
+            topup_packages_caption_with_preview($lang, $key, $textbotlang),
+            topup_packages_payload($lang, $key, $textbotlang),
+        ];
+    }
+}
+if (!function_exists('topup_owner_screen_cb')) {
+    // Where a gateway's sub-screens should send the admin "back" to. The same
+    // caption/styling tools are reachable from 🏦 بسته‌های شارژ and from
+    // 🎨 → 💰 → 💳 درگاه‌ها; whichever opened this gateway is remembered in
+    // tp_edit_origin, so neither entry point can strand the admin in the other.
+    function topup_owner_screen_cb($lang, $key)
+    {
+        global $from_id;
+        $origin = (string) (select("user", "*", "id", $from_id, "select")['tp_edit_origin'] ?? '');
+        return $origin === 'topup' ? "topupgw:{$lang}:{$key}" : "topupset:{$lang}:{$key}";
+    }
+}
+if (!function_exists('topup_slot_payload')) {
+    // One button, its own screen: colour, name and - because these buttons sit
+    // in pairs - the order of the pair. Deliberately NOT the old
+    // topuphelphub screen, which styled every package button at once and so
+    // could not answer "what does THIS button look like".
+    function topup_slot_payload($lang, $key, $slot, $textbotlang)
+    {
+        $defs = topup_slot_defs($textbotlang);
+        if (!isset($defs[$slot])) {
+            return null;
+        }
+        $def = $defs[$slot];
+        $pair = $def['pair'];
+        $label = topup_slot_label($lang, $key, $slot, $textbotlang);
+        $color = topup_slot_color($lang, $key, $slot, $textbotlang);
+        $style = topup_btnstyle_for($lang, $key, $slot);
+        $custom = (trim((string) ($style['label'] ?? '')) !== '' || trim((string) ($style['color'] ?? '')) !== '');
+        $t = $textbotlang['Admin']['TopupPkg'];
+
+        $screenName = $def['screen'] === 'custom' ? $t['slotScreenCustom'] : $t['slotScreenAmount'];
+        $info = strtr($t['slotCaption'], [
+            '{button}' => $label,
+            '{screen}' => $screenName,
+            '{state}' => $custom ? $t['slotStateCustom'] : $t['slotStateDefault'],
+        ]);
+
+        // the pair, drawn in the order the customer will actually see it
+        $mk = function ($s) use ($lang, $key, $textbotlang) {
+            $b = ['text' => topup_slot_label($lang, $key, $s, $textbotlang), 'callback_data' => 'none'];
+            $c = topup_slot_color($lang, $key, $s, $textbotlang);
+            if ($c !== '') {
+                $b['style'] = $c;
+            }
+            return $b;
+        };
+        $row = [$mk($slot), $mk($pair)];
+        if (topup_slot_swapped($lang, $key, $slot, $textbotlang)) {
+            $row = array_reverse($row);
+        }
+        $kb = ['inline_keyboard' => []];
+        $kb['inline_keyboard'][] = $row;
+        $kb['inline_keyboard'][] = [['text' => $t['slotPreviewNote'], 'callback_data' => "tpslnote:{$lang}:{$key}:{$slot}"]];
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['BtnStyle']['renameBtn'], 'callback_data' => "tpsln:{$lang}:{$key}:{$slot}", 'style' => 'primary']];
+        $kb['inline_keyboard'][] = [
+            ['text' => ($color === 'primary' ? '✅ ' : '') . '🔵 آبی', 'callback_data' => "tpslc:{$lang}:{$key}:{$slot}:primary", 'style' => 'primary'],
+            ['text' => ($color === 'success' ? '✅ ' : '') . '🟢 سبز', 'callback_data' => "tpslc:{$lang}:{$key}:{$slot}:success", 'style' => 'success'],
+            ['text' => ($color === 'danger' ? '✅ ' : '') . '🔴 قرمز', 'callback_data' => "tpslc:{$lang}:{$key}:{$slot}:danger", 'style' => 'danger'],
+        ];
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['layoutBtn'] . ' — ' . $t['slotLayoutSuffix'], 'callback_data' => "tpsllay:{$lang}:{$key}:{$slot}", 'style' => 'primary']];
+        $kb['inline_keyboard'][] = [['text' => $t['slotResetBtn'], 'callback_data' => "tpslr:{$lang}:{$key}:{$slot}", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['GatewayLang']['backBtn'], 'callback_data' => topup_owner_screen_cb($lang, $key), 'style' => 'danger']];
+        return [$info, json_encode($kb)];
+    }
+}
+if (!function_exists('topup_card_receipt_items')) {
+    // the three messages of the card-to-card receipt exchange, in the order the
+    // customer meets them. Declared once so the card screen and the group-screen
+    // skip list cannot disagree about which rows moved here.
+    function topup_card_receipt_items($textbotlang)
+    {
+        $items = $textbotlang['bottext']['items'] ?? [];
+        $label = function ($key, $fallback) use ($items) {
+            foreach ($items as $it) {
+                if (($it['key'] ?? '') === $key) {
+                    return $it['label'];
+                }
+            }
+            return $fallback;
+        };
+        return [
+            'users.Balance.askReceiptImage' => $label('users.Balance.askReceiptImage', '🧾 پیام «رسید خود را بفرستید»'),
+            'users.Balance.receiptNeedsPhotoOrText' => $label('users.Balance.receiptNeedsPhotoOrText', '❌ خطای رسید نامعتبر'),
+            'users.Balance.sendReceipt' => $label('users.Balance.sendReceipt', '🚀 پیام «رسید ارسال شد»'),
+        ];
+    }
+}
+if (!function_exists('topup_gw_customizables')) {
+    // What a gateway actually has to customize under 🎨 → 💰. Every gateway has
+    // the custom-amount prompt; only the two that render their OWN invoice
+    // inside the bot (card-to-card and Plisio) have an invoice caption, an
+    // expired-invoice caption and invoice buttons. The rest hand the customer
+    // off to an external page, so there is nothing else of theirs to word.
+    function topup_gw_customizables($key)
+    {
+        if ($key === 'card') {
+            // card-to-card builds its invoice in the chat, so it never shows the
+            // "creating your payment link" message the redirect gateways do
+            return ['custom', 'range', 'notnumber', 'paidalert', 'invoice', 'expired', 'btnstyle', 'randomNotice', 'receipt'];
+        }
+        // every online gateway is edited the same way, deliberately: they all
+        // send the customer to an external page and all render an invoice, so
+        // there is nothing to tell them apart here. A gateway added to that
+        // family later inherits the whole set with no extra work.
+        if (gateway_group_of($key) === 'online') {
+            $has = ['custom', 'linkmsg', 'range', 'notnumber', 'paidalert', 'invoice', 'expired', 'btnstyle'];
+            // the two gateways paid into the shop's own wallet: their customer
+            // can ask "has it arrived yet", and they are the only ones that
+            // need a wallet configured behind them
+            if ($key === 'ton' || $key === 'trx') {
+                $has[] = 'notseen';
+                $has[] = 'noaddress';
+            }
+            if ($key === 'trx') {
+                // and only TRX ever asks for a transaction hash, or has to
+                // say that one was wrong
+                $has[] = 'askhash';
+                $has[] = 'hashbad';
+            }
+            return $has;
+        }
+        return ['custom', 'linkmsg', 'range', 'notnumber', 'paidalert'];
+    }
+}
+if (!function_exists('topup_gwcap_kinds')) {
+    // ---- the per-gateway captions an admin can reword ----
+    // Three kinds, one list: the rows on the gateway screen, the previews under
+    // its caption and the four dispatcher handlers all read this, so a gateway
+    // cannot end up with a row that has no handler or a handler with no row.
+    //   range - "❌ حداقل مبلغ واریزی ..." shown when the amount is out of range
+    //   inv   - the invoice itself
+    //   exp   - what the invoice turns into once it expires
+    function topup_gwcap_kinds()
+    {
+        return ['range', 'notnumber', 'inv', 'exp', 'paidalert', 'notseen', 'noaddress', 'askhash', 'hashbad'];
+    }
+    // What this gateway shows before an admin has reworded anything.
+    function topup_gwcap_default($kind, $key, $textbotlang)
+    {
+        $b = $textbotlang['users']['Balance'];
+        if ($kind === 'range') {
+            return topup_range_default($key, $textbotlang);
+        }
+        if ($kind === 'notnumber') {
+            return $b['errorprice'];
+        }
+        if ($kind === 'notseen') {
+            return $key === 'trx' ? $b['trxNotSeenYet'] : $b['tonNotSeenYet'];
+        }
+        if ($kind === 'noaddress') {
+            return $key === 'trx' ? $b['trxNoAddress'] : $b['tonNoAddress'];
+        }
+        if ($kind === 'askhash') {
+            return $b['trxAskHash'];
+        }
+        if ($kind === 'hashbad') {
+            return $b['trxHashInvalid'];
+        }
+        if ($kind === 'paidalert') {
+            return $b['topupPaidAlert'];
+        }
+        if ($kind === 'inv') {
+            // a lookup, not a chain of ifs ending in a fall-through: the last
+            // arm used to catch every gateway added after it, so TON previewed
+            // Star Telegram's caption and would have reset to it
+            return [
+                'card' => $textbotlang['textbot']['cart'],
+                'plisio' => $b['cryptoInstruction'],
+                'nowpayment' => $b['nowpaymentInvoiceCaption'],
+                'startelegrams' => $b['starInvoiceCaption'],
+                'ton' => $b['tonInvoiceCaption'],
+            ][$key] ?? '';
+        }
+        return [
+            'card' => $b['cardInvoiceExpiredCaption'],
+            'plisio' => $b['plisioInvoiceExpiredCaption'],
+        ][$key] ?? $b['topupInvoiceExpiredCaption'];
+    }
+    function topup_gwcap_for($kind, $lang, $key, $textbotlang)
+    {
+        $d = topup_gwcap_default($kind, $key, $textbotlang);
+        if ($kind === 'range') {
+            return topup_range_caption_for($lang, $key, $d);
+        }
+        if ($kind === 'notnumber') {
+            return topup_notnumber_caption_for($lang, $key, $d);
+        }
+        if ($kind === 'notseen') {
+            return topup_notseen_caption_for($lang, $key, $d);
+        }
+        if ($kind === 'noaddress') {
+            return topup_noaddress_caption_for($lang, $key, $d);
+        }
+        if ($kind === 'askhash') {
+            return topup_askhash_caption_for($lang, $key, $d);
+        }
+        if ($kind === 'hashbad') {
+            return topup_hashbad_caption_for($lang, $key, $d);
+        }
+        if ($kind === 'paidalert') {
+            return topup_paid_alert_for($lang, $key, $d);
+        }
+        if ($kind === 'inv') {
+            return topup_invoice_caption_for($lang, $key, $d);
+        }
+        return topup_invoice_expired_caption_for($lang, $key, $d);
+    }
+    function topup_gwcap_has_override($kind, $lang, $key)
+    {
+        if ($kind === 'range') {
+            return topup_range_caption_has_override($lang, $key);
+        }
+        if ($kind === 'notnumber') {
+            return topup_notnumber_caption_has_override($lang, $key);
+        }
+        if ($kind === 'notseen') {
+            return topup_notseen_caption_has_override($lang, $key);
+        }
+        if ($kind === 'noaddress') {
+            return topup_noaddress_caption_has_override($lang, $key);
+        }
+        if ($kind === 'askhash') {
+            return topup_askhash_caption_has_override($lang, $key);
+        }
+        if ($kind === 'hashbad') {
+            return topup_hashbad_caption_has_override($lang, $key);
+        }
+        if ($kind === 'paidalert') {
+            return topup_paid_alert_has_override($lang, $key);
+        }
+        if ($kind === 'inv') {
+            return topup_invoice_caption_has_override($lang, $key);
+        }
+        return topup_invoice_expired_caption_has_override($lang, $key);
+    }
+    function topup_gwcap_set($kind, $lang, $key, $text)
+    {
+        if ($kind === 'range') {
+            topup_range_caption_set($lang, $key, $text);
+            return;
+        }
+        if ($kind === 'notnumber') {
+            topup_notnumber_caption_set($lang, $key, $text);
+            return;
+        }
+        if ($kind === 'notseen') {
+            topup_notseen_caption_set($lang, $key, $text);
+            return;
+        }
+        if ($kind === 'noaddress') {
+            topup_noaddress_caption_set($lang, $key, $text);
+            return;
+        }
+        if ($kind === 'askhash') {
+            topup_askhash_caption_set($lang, $key, $text);
+            return;
+        }
+        if ($kind === 'hashbad') {
+            topup_hashbad_caption_set($lang, $key, $text);
+            return;
+        }
+        if ($kind === 'paidalert') {
+            topup_paid_alert_set($lang, $key, $text);
+            return;
+        }
+        if ($kind === 'inv') {
+            topup_invoice_caption_set($lang, $key, $text);
+            return;
+        }
+        topup_invoice_expired_caption_set($lang, $key, $text);
+    }
+    // the prompt each kind shows when the admin is asked for the new wording,
+    // and the label its preview carries
+    function topup_gwcap_prompt($kind, $textbotlang)
+    {
+        $t = $textbotlang['Admin']['TopupPkg'];
+        return [
+            'range' => $t['askRangeCaption'],
+            'notnumber' => $t['askNotNumber'],
+            'notseen' => $t['askNotSeen'],
+            'noaddress' => $t['askNoAddress'],
+            'askhash' => $t['askAskHash'],
+            'hashbad' => $t['askHashBad'],
+            'paidalert' => $t['askPaidAlert'],
+            'inv' => $t['askInvoiceCaption'],
+            'exp' => $t['askExpCaption'],
+        ][$kind] ?? $t['askCaption'];
+    }
+}
+if (!function_exists('topup_invoice_grid_rows')) {
+    // ---- the four tools that style an invoice's buttons ----
+    // One row per button, rendered exactly as the customer sees it: its own
+    // label, its own emoji, its own colour - including the colour it has by
+    // default. An admin picking a button should be looking at the real thing,
+    // not a bare name on a white row, and nothing here may flatten a colour
+    // that is already set.
+    function topup_invoice_grid_rows($lang, $key, $textbotlang, $pickPrefix, $mark = null)
+    {
+        $rows = [];
+        foreach (topup_invoice_btnstyle_items($key, $textbotlang, $lang) as $which => $defaultLabel) {
+            $style = topup_invoice_btnstyle_for($lang, $key, $which);
+            $btn = topup_styled_button(
+                $defaultLabel,
+                $style,
+                "{$pickPrefix}:{$lang}:{$key}:{$which}",
+                topup_invoice_btnstyle_default_color($which, $key)
+            );
+            if ($mark !== null) {
+                $btn = $mark($btn, $style, $which);
+            }
+            $rows[] = [$btn];
+        }
+        return $rows;
+    }
+    function topup_invoice_btnstyle_hub_payload($lang, $key, $textbotlang)
+    {
+        $h = $textbotlang['Admin']['Help'];
+        $rows = [
+            [['text' => $h['colorBtn'], 'callback_data' => "gwinvbtncol:{$lang}:{$key}"]],
+        ];
+        // چیدمان only means something with more than one button to arrange;
+        // offering it for a one-button invoice would be a dead screen
+        if (count(topup_invoice_layout_keys($key)) > 1) {
+            $rows[] = [['text' => $h['layoutBtn'], 'callback_data' => "gwinvbtnlay:{$lang}:{$key}"]];
+        }
+        $rows = array_merge($rows, [
+            [['text' => $textbotlang['Admin']['BtnStyle']['renameBtn'], 'callback_data' => "gwinvbtnren:{$lang}:{$key}"]],
+            [['text' => $h['emojiBtn'], 'callback_data' => "gwinvbtnemo:{$lang}:{$key}"]],
+            [['text' => $textbotlang['Admin']['GatewayLang']['backBtn'], 'callback_data' => topup_owner_screen_cb($lang, $key), 'style' => 'danger']],
+        ]);
+        return json_encode(['inline_keyboard' => $rows]);
+    }
+    function topup_invoice_btncolor_payload($lang, $key, $textbotlang)
+    {
+        $dot = ['' => '⚪', 'primary' => '🔵', 'success' => '🟢', 'danger' => '🔴'];
+        $rows = topup_invoice_grid_rows($lang, $key, $textbotlang, 'gwinvbtncolpick', function ($btn, $style, $which) use ($dot, $key) {
+            $c = (string) ($style['color'] ?? '');
+            $btn['text'] .= ' ' . ($dot[$c !== '' ? $c : topup_invoice_btnstyle_default_color($which, $key)] ?? '⚪');
+            return $btn;
+        });
+        $rows[] = [['text' => $textbotlang['Admin']['GatewayLang']['backBtn'], 'callback_data' => "gwinvbtn:{$lang}:{$key}", 'style' => 'danger']];
+        return json_encode(['inline_keyboard' => $rows]);
+    }
+    function topup_invoice_btnrename_payload($lang, $key, $textbotlang)
+    {
+        $rows = topup_invoice_grid_rows($lang, $key, $textbotlang, 'gwinvbtnrenpick', function ($btn, $style) {
+            if (trim((string) ($style['label'] ?? '')) !== '') {
+                $btn['text'] .= ' ✏️';
+            }
+            return $btn;
+        });
+        $rows[] = [['text' => $textbotlang['Admin']['BtnStyle']['resetRenameBtn'], 'callback_data' => "gwinvbtnrenreset:{$lang}:{$key}"]];
+        $rows[] = [['text' => $textbotlang['Admin']['GatewayLang']['backBtn'], 'callback_data' => "gwinvbtn:{$lang}:{$key}", 'style' => 'danger']];
+        return json_encode(['inline_keyboard' => $rows]);
+    }
+    function topup_invoice_btnemoji_payload($lang, $key, $textbotlang)
+    {
+        $t = $textbotlang['Admin']['TopupPkg'];
+        $rows = topup_invoice_grid_rows($lang, $key, $textbotlang, 'gwinvbtnemopick');
+        $rows[] = [
+            ['text' => $t['emojiPosLeftBtn'], 'callback_data' => "gwinvbtnemopos:{$lang}:{$key}:left"],
+            ['text' => $t['emojiPosRightBtn'], 'callback_data' => "gwinvbtnemopos:{$lang}:{$key}:right"],
+        ];
+        $rows[] = [['text' => $textbotlang['Admin']['Help']['resetEmojiBtn'], 'callback_data' => "gwinvbtnemoreset:{$lang}:{$key}"]];
+        $rows[] = [['text' => $textbotlang['Admin']['GatewayLang']['backBtn'], 'callback_data' => "gwinvbtn:{$lang}:{$key}", 'style' => 'danger']];
+        return json_encode(['inline_keyboard' => $rows]);
+    }
+    // Tap one button, then tap another to swap them; or set how many share a
+    // row. Same gesture as every other چیدمان screen in the bot.
+    function topup_invoice_btnlayout_payload($lang, $key, $textbotlang, $selected = null)
+    {
+        $t = $textbotlang['Admin']['TopupPkg'];
+        $order = topup_invoice_ordered_keys($lang, $key);
+        $items = topup_invoice_btnstyle_items($key, $textbotlang, $lang);
+        $sel = ($selected !== null && in_array($selected, $order, true)) ? $selected : null;
+        $btns = [];
+        foreach ($order as $which) {
+            $style = topup_invoice_btnstyle_for($lang, $key, $which);
+            $btn = topup_styled_button($items[$which] ?? $which, $style, '', topup_invoice_btnstyle_default_color($which, $key));
+            if ($sel !== null && $which === $sel) {
+                $btn['text'] = '🔵 ' . $btn['text'];
+                $btn['callback_data'] = "gwinvbtnlaycancel:{$lang}:{$key}";
+            } elseif ($sel !== null) {
+                $btn['callback_data'] = "gwinvbtnlayswap:{$lang}:{$key}:{$sel}:{$which}";
+            } else {
+                $btn['callback_data'] = "gwinvbtnlaypick:{$lang}:{$key}:{$which}";
+            }
+            $btns[] = $btn;
+        }
+        $perRow = topup_invoice_layout_perrow($lang, $key);
+        $rows = [];
+        foreach (array_chunk($btns, max(1, $perRow)) as $chunk) {
+            $rows[] = $chunk;
+        }
+        // the same wording and the same green-when-full-width signal card's own
+        // چیدمان screen has used all along
+        $wide = ['text' => $textbotlang['Admin']['Help']['toggleWidthBtn'], 'callback_data' => "gwinvbtnlayperrow:{$lang}:{$key}"];
+        if ($perRow === 1) {
+            $wide['style'] = 'success';
+        }
+        $rows[] = [$wide];
+        $rows[] = [['text' => $textbotlang['Admin']['Help']['resetLayoutBtn'], 'callback_data' => "gwinvbtnlayreset:{$lang}:{$key}"]];
+        $rows[] = [['text' => $textbotlang['Admin']['GatewayLang']['backBtn'], 'callback_data' => "gwinvbtn:{$lang}:{$key}", 'style' => 'danger']];
+        return json_encode(['inline_keyboard' => $rows]);
+    }
+}
+if (!function_exists('topup_gw_edit_payload')) {
+    // One gateway's caption/button screen. Every row keeps the callback it
+    // already had on 🏦 بسته‌های شارژ - nothing new to dispatch, only a second
+    // way in and a return path that comes back here.
+    function topup_gw_edit_payload($lang, $key, $textbotlang)
+    {
+        $gwT = $textbotlang['Admin']['GatewayLang'];
+        $tpT = $textbotlang['Admin']['TopupPkg'];
+        $has = topup_gw_customizables($key);
+        $rows = [];
+        $pair = function ($label, $cb, $defaultLabel, $defaultCb, $isSet) use (&$rows) {
+            $btn = ['text' => $label, 'callback_data' => $cb, 'style' => $isSet ? 'success' : 'primary'];
+            $rows[] = $defaultCb === null ? [$btn] : [['text' => $defaultLabel, 'callback_data' => $defaultCb], $btn];
+        };
+        // the "#️⃣ مبلغ واریز" caption and the buttons on that same screen: the
+        // very tools 🏦 بسته‌های شارژ offers, reachable from here too because
+        // both screens configure the same gateway
+        $pair($tpT['editCaptionBtn'], "topupcap:{$lang}:{$key}", $tpT['defaultCaptionBtn'], "topupcapdefault:{$lang}:{$key}", topup_caption_has_override($lang, $key));
+        if (in_array('custom', $has, true)) {
+            $pair($tpT['editCustomCaptionBtn'], "topupcustomcap:{$lang}:{$key}", $tpT['defaultCustomCaptionBtn'], "topupcustomcapdefault:{$lang}:{$key}", topup_custom_caption_has_override($lang, $key));
+        }
+        // "❌ حداقل مبلغ واریزی ..." - shown whenever the amount misses this
+        // gateway's own range, so every gateway can word it for itself
+        if (in_array('range', $has, true)) {
+            $pair($tpT['editRangeCaptionBtn'], "gwcap:range:{$lang}:{$key}", $tpT['defaultRangeCaptionBtn'], "gwcapdefault:range:{$lang}:{$key}", topup_gwcap_has_override('range', $lang, $key));
+        }
+        // the crypto gateways refuse anything under a dollar, and every gateway
+        // answers an already-paid invoice with an alert of its own
+        if (in_array('notnumber', $has, true)) {
+            $pair($tpT['editNotNumberBtn'], "gwcap:notnumber:{$lang}:{$key}", $tpT['defaultNotNumberBtn'], "gwcapdefault:notnumber:{$lang}:{$key}", topup_gwcap_has_override('notnumber', $lang, $key));
+        }
+        if (in_array('notseen', $has, true)) {
+            $pair($tpT['editNotSeenBtn'], "gwcap:notseen:{$lang}:{$key}", $tpT['defaultNotSeenBtn'], "gwcapdefault:notseen:{$lang}:{$key}", topup_gwcap_has_override('notseen', $lang, $key));
+        }
+        if (in_array('noaddress', $has, true)) {
+            $pair($tpT['editNoAddressBtn'], "gwcap:noaddress:{$lang}:{$key}", $tpT['defaultNoAddressBtn'], "gwcapdefault:noaddress:{$lang}:{$key}", topup_gwcap_has_override('noaddress', $lang, $key));
+        }
+        if (in_array('askhash', $has, true)) {
+            $pair($tpT['editAskHashBtn'], "gwcap:askhash:{$lang}:{$key}", $tpT['defaultAskHashBtn'], "gwcapdefault:askhash:{$lang}:{$key}", topup_gwcap_has_override('askhash', $lang, $key));
+        }
+        if (in_array('hashbad', $has, true)) {
+            $pair($tpT['editHashBadBtn'], "gwcap:hashbad:{$lang}:{$key}", $tpT['defaultHashBadBtn'], "gwcapdefault:hashbad:{$lang}:{$key}", topup_gwcap_has_override('hashbad', $lang, $key));
+        }
+        if (in_array('paidalert', $has, true)) {
+            $pair($tpT['editPaidAlertBtn'], "gwcap:paidalert:{$lang}:{$key}", $tpT['defaultPaidAlertBtn'], "gwcapdefault:paidalert:{$lang}:{$key}", topup_gwcap_has_override('paidalert', $lang, $key));
+        }
+        // "درحال ساخت لینک پرداخت..." - only the gateways that actually send the
+        // customer off to an external page show it, and each now words it itself
+        if (in_array('linkmsg', $has, true)) {
+            $pair($tpT['editLinkMsgBtn'], "topuplinkmsg:{$lang}:{$key}", $tpT['defaultLinkMsgBtn'], "topuplinkmsgdefault:{$lang}:{$key}", topup_linkmsg_has_override($lang, $key));
+        }
+        // Each button of the amount flow gets its own row, opening a screen that
+        // styles THAT button only. A white, non-navigating label separates them
+        // from the caption rows above, so it is obvious the rows below are
+        // buttons rather than more texts.
+        $slotBtn = function ($slot) use ($lang, $key, $textbotlang) {
+            $b = ['text' => topup_slot_label($lang, $key, $slot, $textbotlang), 'callback_data' => "tpsl:{$lang}:{$key}:{$slot}"];
+            $c = topup_slot_color($lang, $key, $slot, $textbotlang);
+            if ($c !== '') {
+                $b['style'] = $c;
+            }
+            return $b;
+        };
+        // grouped by the screen each button lives on, in the order the customer
+        // meets them: the amount screen first, then the custom-amount screen it
+        // opens. Each group gets its own white label so it is obvious which
+        // screen the rows under it belong to - the two "بازگشت به روش پرداخت"
+        // buttons are otherwise indistinguishable in a flat list.
+        $slotGroups = ['amount' => [], 'custom' => []];
+        foreach (topup_slot_defs($textbotlang) as $slot => $def) {
+            $slotGroups[$def['screen']][] = $slot;
+        }
+        foreach ($slotGroups as $screen => $slots) {
+            if (empty($slots)) {
+                continue;
+            }
+            $rows[] = [['text' => $tpT['slotSectionLabel'][$screen], 'callback_data' => "tpslsep:{$lang}:{$key}:{$screen}"]];
+            foreach ($slots as $slot) {
+                $rows[] = [$slotBtn($slot)];
+            }
+        }
+        // everything below belongs to the invoice this gateway renders, not to
+        // the amount steps above - only shown for the gateways that have one
+        if (in_array('invoice', $has, true)) {
+            $rows[] = [['text' => $tpT['slotSectionLabel']['invoice'], 'callback_data' => "tpslsep:{$lang}:{$key}:invoice"]];
+            $pair($tpT['editInvoiceCaptionBtn'], "gwcap:inv:{$lang}:{$key}", $tpT['defaultInvoiceCaptionBtn'], "gwcapdefault:inv:{$lang}:{$key}", topup_gwcap_has_override('inv', $lang, $key));
+            if (in_array('expired', $has, true)) {
+                $pair($tpT['editExpCaptionBtn'], "gwcap:exp:{$lang}:{$key}", $tpT['defaultExpCaptionBtn'], "gwcapdefault:exp:{$lang}:{$key}", topup_gwcap_has_override('exp', $lang, $key));
+            }
+            if (in_array('btnstyle', $has, true)) {
+                // card-to-card's invoice carries copy-card and receipt buttons no
+                // other gateway has, so it keeps a button screen of its own; the
+                // online gateways all show the same two and share one
+                $pair(
+                    $tpT['invoiceBtnStyleBtn'],
+                    $key === 'card' ? "cardbtn:{$lang}" : "gwinvbtn:{$lang}:{$key}",
+                    null,
+                    null,
+                    $key === 'card' ? !empty(card_invoice_btnstyle_map()[$lang]) : !empty(topup_invoice_btnstyle_map_of($lang, $key))
+                );
+            }
+        }
+        if ($key === 'card') {
+            // the exact-amount warning belongs to card-to-card's own invoice,
+            // so it lives here rather than loose in the 💰 list
+            $rn_key = 'textbot.cardRandomAmountNotice';
+            $rn_label = '⚠️ هشدار مبلغ دقیق (کارت به کارت رندوم)';
+            // green + ✏️ once the admin has reworded it, the same signal the
+            // message list uses - read straight from the override store
+            $rn_edits = json_decode((string) (select("setting", "*", null, null, "select")['text_edit'] ?? ''), true);
+            $btRow = function ($k, $label) use (&$rows, $lang, $rn_edits) {
+                $isCustom = is_array($rn_edits) && bottext_dotted_isset($rn_edits[$lang] ?? null, $k);
+                $rows[] = [[
+                    'text' => $label . ($isCustom ? ' ✏️' : ''),
+                    'callback_data' => "bt_edit|{$lang}|{$k}",
+                    'style' => $isCustom ? 'success' : 'primary',
+                ]];
+            };
+            $btRow($rn_key, $rn_label);
+            // The receipt exchange is the tail of the card-to-card flow: the
+            // customer is asked for a receipt, told off if it is neither a photo
+            // nor a bank SMS, then told it is awaiting approval. Two of these
+            // three had no editor anywhere until now.
+            $rows[] = [['text' => $tpT['slotSectionLabel']['receipt'], 'callback_data' => "tpslsep:{$lang}:{$key}:receipt"]];
+            foreach (topup_card_receipt_items($textbotlang) as $rk => $rlabel) {
+                $btRow($rk, $rlabel);
+            }
+        }
+        // back follows the way in, which the key alone already tells us: a
+        // grouped gateway is only reachable through its group's list, an
+        // ungrouped one straight off the picker
+        $tpGroup = gateway_group_of($key);
+        $rows[] = [[
+            'text' => $textbotlang['Admin']['GatewayLang']['backBtn'],
+            'callback_data' => $tpGroup !== null ? "topupgwgrp:{$lang}:{$tpGroup}" : "topupgwlist:{$lang}",
+            'style' => 'danger',
+        ]];
+        $rows[] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']];
+
+        $label = gateway_registry($textbotlang)[$key] ?? $key;
+        $cap = strtr($textbotlang['Admin']['TopupPkg']['gwEditCaption'], [
+            '{gateway}' => $label,
+            '{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang,
+        ]);
+        $cap .= "\n\n" . topup_gw_caption_previews($lang, $key, $textbotlang);
+        return [$cap, json_encode(['inline_keyboard' => $rows])];
+    }
+}
+if (!function_exists('topup_gw_caption_previews')) {
+    // live preview of every caption this gateway owns, so "بازگشت به پیش‌فرض"
+    // visibly shows what lands instead of leaving the admin guessing
+    function topup_gw_caption_previews($lang, $key, $textbotlang)
+    {
+        $t = $textbotlang['Admin']['TopupPkg'];
+        $out = $t['captionPreviewLabel'] . "\n"
+            . topup_packages_caption_preview_quote(topup_caption_for($lang, $key, $textbotlang['users']['Balance']['pkgPromptTitle']));
+        $out .= "\n\n" . $t['captionPreviewCustomLabel'] . "\n"
+            . topup_packages_caption_preview_quote(topup_custom_caption_for($lang, $key, $textbotlang['users']['Balance']['customAmountPromptTitle']));
+        if (in_array('linkmsg', topup_gw_customizables($key), true)) {
+            $out .= "\n\n" . $t['captionPreviewLinkMsgLabel'] . "\n"
+                . topup_packages_caption_preview_quote(topup_linkmsg_for($lang, $key, $textbotlang['users']['Balance']['linkpayments']));
+        }
+        $has = topup_gw_customizables($key);
+        if (in_array('range', $has, true)) {
+            $out .= "\n\n" . $t['captionPreviewRangeLabel'] . "\n"
+                . topup_packages_caption_preview_quote(topup_gwcap_for('range', $lang, $key, $textbotlang));
+        }
+        if (in_array('notnumber', $has, true)) {
+            $out .= "\n\n" . $t['captionPreviewNotNumberLabel'] . "\n"
+                . topup_packages_caption_preview_quote(topup_gwcap_for('notnumber', $lang, $key, $textbotlang));
+        }
+        if (in_array('notseen', $has, true)) {
+            $out .= "\n\n" . $t['captionPreviewNotSeenLabel'] . "\n"
+                . topup_packages_caption_preview_quote(topup_gwcap_for('notseen', $lang, $key, $textbotlang));
+        }
+        if (in_array('noaddress', $has, true)) {
+            $out .= "\n\n" . $t['captionPreviewNoAddressLabel'] . "\n"
+                . topup_packages_caption_preview_quote(topup_gwcap_for('noaddress', $lang, $key, $textbotlang));
+        }
+        if (in_array('askhash', $has, true)) {
+            $out .= "\n\n" . $t['captionPreviewAskHashLabel'] . "\n"
+                . topup_packages_caption_preview_quote(topup_gwcap_for('askhash', $lang, $key, $textbotlang));
+        }
+        if (in_array('hashbad', $has, true)) {
+            $out .= "\n\n" . $t['captionPreviewHashBadLabel'] . "\n"
+                . topup_packages_caption_preview_quote(topup_gwcap_for('hashbad', $lang, $key, $textbotlang));
+        }
+        if (in_array('paidalert', $has, true)) {
+            $out .= "\n\n" . $t['captionPreviewPaidAlertLabel'] . "\n"
+                . topup_packages_caption_preview_quote(topup_gwcap_for('paidalert', $lang, $key, $textbotlang));
+        }
+        if (in_array('invoice', $has, true)) {
+            $out .= "\n\n" . $t['captionPreviewInvoiceLabel'] . "\n"
+                . topup_packages_caption_preview_quote(topup_gwcap_for('inv', $lang, $key, $textbotlang));
+        }
+        if (in_array('expired', $has, true)) {
+            $out .= "\n\n" . $t['captionPreviewExpiredLabel'] . "\n"
+                . topup_packages_caption_preview_quote(topup_gwcap_for('exp', $lang, $key, $textbotlang));
+        }
+        return $out;
+    }
+}
+if (!function_exists('topup_gw_group_payload')) {
+    // one family's gateways, mirroring the group screens in 💎 مالی so the two
+    // sections read the same way
+    function topup_gw_group_payload($lang, $group, $textbotlang)
+    {
+        $registry = gateway_registry($textbotlang);
+        $rows = [];
+        foreach (gateway_group_members($group, $lang) as $key) {
+            $rows[] = [[
+                'text' => $registry[$key] ?? $key,
+                'callback_data' => "topupgw:{$lang}:{$key}",
+                'style' => 'primary',
+            ]];
+        }
+        $rows[] = [['text' => $textbotlang['Admin']['GatewayLang']['backBtn'], 'callback_data' => "topupgwlist:{$lang}", 'style' => 'danger']];
+        $rows[] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']];
+        $cap = strtr($textbotlang['Admin']['TopupPkg']['gwGroupCaption'], [
+            '{group}' => gateway_group_label($group, $textbotlang),
+            '{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang,
+        ]);
+        return [$cap, json_encode(['inline_keyboard' => $rows])];
+    }
+}
+if (!function_exists('topup_gw_list_payload')) {
+    // every gateway, card-to-card included: it also has its own shortcut button
+    // on the 💰 screen, but listing it here too keeps this one place where the
+    // whole set can be walked through
+    function topup_gw_list_payload($lang, $textbotlang)
+    {
+        $rows = [];
+        $shown = [];
+        foreach (gateway_registry($textbotlang) as $key => $label) {
+            if (!gateway_applicable_for_lang($key, $lang)) {
+                continue;
+            }
+            // same families as 💎 مالی → 💳 درگاه‌های پرداخت, drawn at the
+            // position of their first visible member so the order matches
+            $group = gateway_group_of($key);
+            if ($group !== null) {
+                if (isset($shown[$group])) {
+                    continue;
+                }
+                $shown[$group] = true;
+                $rows[] = [[
+                    'text' => gateway_group_label($group, $textbotlang),
+                    'callback_data' => "topupgwgrp:{$lang}:{$group}",
+                    'style' => 'primary',
+                ]];
+                continue;
+            }
+            $rows[] = [[
+                'text' => $label,
+                'callback_data' => "topupgw:{$lang}:{$key}",
+                'style' => 'primary',
+            ]];
+        }
+        $rows[] = [['text' => $textbotlang['Admin']['GatewayLang']['backBtn'], 'callback_data' => "bt_group|{$lang}|topup", 'style' => 'danger']];
+        $rows[] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']];
+        $cap = strtr($textbotlang['Admin']['TopupPkg']['gwListCaption'], [
+            '{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang,
+        ]);
+        return [$cap, json_encode(['inline_keyboard' => $rows])];
     }
 }
 if (!function_exists('card_invoice_btncolor_payload')) {
@@ -2076,10 +3020,13 @@ if (!function_exists('card_invoice_btncolor_payload')) {
     {
         $styleEmoji = ['' => '⚪', 'primary' => '🔵', 'success' => '🟢', 'danger' => '🔴'];
         $rows = [];
-        foreach (card_invoice_btnstyle_items($textbotlang) as $which => $defaultLabel) {
+        foreach (card_invoice_btnstyle_items($textbotlang, $lang) as $which => $defaultLabel) {
             $style = card_invoice_btnstyle_for($lang, $which);
-            $btn = topup_styled_button($defaultLabel, $style, "cardbtncolpick:{$lang}:{$which}");
-            $color = (string) ($style['color'] ?? '');
+            // preview with the same effective colour the customer will see, so
+            // "not picked yet" shows this button's built-in default rather than
+            // a white swatch that never actually appears on the invoice
+            $color = card_invoice_btnstyle_color($lang, $which);
+            $btn = topup_styled_button($defaultLabel, $style, "cardbtncolpick:{$lang}:{$which}", $color);
             $btn['text'] .= ' ' . ($styleEmoji[$color] ?? '⚪');
             $rows[] = [$btn];
         }
@@ -2090,13 +3037,17 @@ if (!function_exists('card_invoice_btncolor_payload')) {
 if (!function_exists('card_invoice_btnrename_payload')) {
     function card_invoice_btnrename_payload($lang, $textbotlang)
     {
+        $styleEmoji = ['' => '⚪', 'primary' => '🔵', 'success' => '🟢', 'danger' => '🔴'];
         $rows = [];
-        foreach (card_invoice_btnstyle_items($textbotlang) as $which => $defaultLabel) {
+        foreach (card_invoice_btnstyle_items($textbotlang, $lang) as $which => $defaultLabel) {
             $style = card_invoice_btnstyle_for($lang, $which);
             $btn = topup_styled_button($defaultLabel, $style, "cardbtnrenpick:{$lang}:{$which}");
             if (trim((string) ($style['label'] ?? '')) !== '') {
                 $btn['text'] .= ' ✏️';
             }
+            // the colour this button actually renders with - the rename screen
+            // showed no hint of it, so an admin had to leave and open 🎨 to know
+            $btn['text'] .= ' ' . ($styleEmoji[card_invoice_btnstyle_color($lang, $which)] ?? '⚪');
             $rows[] = [$btn];
         }
         $rows[] = [['text' => $textbotlang['Admin']['BtnStyle']['resetRenameBtn'], 'callback_data' => "cardbtnrenreset:{$lang}"]];
@@ -2104,47 +3055,51 @@ if (!function_exists('card_invoice_btnrename_payload')) {
         return json_encode(['inline_keyboard' => $rows]);
     }
 }
-if (!function_exists('plisio_invoice_btnstyle_hub_payload')) {
-    function plisio_invoice_btnstyle_hub_payload($lang, $textbotlang)
+if (!function_exists('card_invoice_btnlayout_payload')) {
+    // 📐 چیدمان for the copy-card rows: how many of them share a keyboard row.
+    // Only reachable with 2+ cards, since one button has nothing to arrange.
+    // Same tap-to-select / tap-to-swap editor the 💳 package layout uses: the
+    // copy buttons are drawn in their REAL grid with their real colours and
+    // names, so what the admin arranges is what the customer will see.
+    function card_invoice_btnlayout_payload($lang, $textbotlang, $selectedIdx = null)
     {
-        $kb = ['inline_keyboard' => [
-            [['text' => $textbotlang['Admin']['Help']['colorBtn'], 'callback_data' => "plisiobtncol:{$lang}"]],
-            [['text' => $textbotlang['Admin']['BtnStyle']['renameBtn'], 'callback_data' => "plisiobtnren:{$lang}"]],
-            [['text' => $textbotlang['Admin']['GatewayLang']['backBtn'], 'callback_data' => "topupset:{$lang}:plisio"]],
-        ]];
-        return json_encode($kb);
-    }
-}
-if (!function_exists('plisio_invoice_btncolor_payload')) {
-    function plisio_invoice_btncolor_payload($lang, $textbotlang)
-    {
-        $styleEmoji = ['' => '⚪', 'primary' => '🔵', 'success' => '🟢', 'danger' => '🔴'];
-        $rows = [];
-        foreach (plisio_invoice_btnstyle_items($textbotlang) as $which => $defaultLabel) {
-            $style = plisio_invoice_btnstyle_for($lang, $which);
-            $btn = topup_styled_button($defaultLabel, $style, "plisiobtncolpick:{$lang}:{$which}");
-            $color = (string) ($style['color'] ?? '');
-            $btn['text'] .= ' ' . ($styleEmoji[$color] ?? '⚪');
-            $rows[] = [$btn];
+        $cards = card_invoice_ordered_cards($lang);
+        $total = count($cards);
+        $perRow = card_invoice_copy_perrow($lang);
+        $sel = (is_int($selectedIdx) || ctype_digit((string) $selectedIdx)) ? (int) $selectedIdx : null;
+        if ($sel !== null && ($sel < 0 || $sel >= $total)) {
+            $sel = null;
         }
-        $rows[] = [['text' => $textbotlang['Admin']['GatewayLang']['backBtn'], 'callback_data' => "plisiobtn:{$lang}"]];
-        return json_encode(['inline_keyboard' => $rows]);
-    }
-}
-if (!function_exists('plisio_invoice_btnrename_payload')) {
-    function plisio_invoice_btnrename_payload($lang, $textbotlang)
-    {
-        $rows = [];
-        foreach (plisio_invoice_btnstyle_items($textbotlang) as $which => $defaultLabel) {
-            $style = plisio_invoice_btnstyle_for($lang, $which);
-            $btn = topup_styled_button($defaultLabel, $style, "plisiobtnrenpick:{$lang}:{$which}");
-            if (trim((string) ($style['label'] ?? '')) !== '') {
-                $btn['text'] .= ' ✏️';
+        $btns = [];
+        foreach ($cards as $i => $c) {
+            $which = card_invoice_copy_key($i + 1);
+            $style = card_invoice_btnstyle_for($lang, $which);
+            $label = trim((string) ($style['label'] ?? '')) !== ''
+                ? $style['label']
+                : card_invoice_copy_label($i + 1, $total, $textbotlang);
+            $btn = ['text' => $label];
+            $color = card_invoice_btnstyle_color($lang, $which);
+            if ($color !== '') {
+                $btn['style'] = $color;
             }
-            $rows[] = [$btn];
+            if ($sel !== null && $i === $sel) {
+                $btn['text'] = '🔵 ' . $btn['text'];
+                $btn['callback_data'] = "cardbtnlaycancel:{$lang}";
+            } elseif ($sel !== null) {
+                $btn['callback_data'] = "cardbtnlayswap:{$lang}:{$sel}:{$i}";
+            } else {
+                $btn['callback_data'] = "cardbtnlaypick:{$lang}:{$i}";
+            }
+            $btns[] = $btn;
         }
-        $rows[] = [['text' => $textbotlang['Admin']['BtnStyle']['resetRenameBtn'], 'callback_data' => "plisiobtnrenreset:{$lang}"]];
-        $rows[] = [['text' => $textbotlang['Admin']['GatewayLang']['backBtn'], 'callback_data' => "plisiobtn:{$lang}"]];
+        $rows = array_chunk($btns, max(1, $perRow));
+        $fullBtn = ['text' => $textbotlang['Admin']['Help']['toggleWidthBtn'], 'callback_data' => "cardbtnlayfull:{$lang}"];
+        if ($perRow === 1) {
+            $fullBtn['style'] = 'success';
+        }
+        $rows[] = [$fullBtn];
+        $rows[] = [['text' => $textbotlang['Admin']['Help']['resetLayoutBtn'], 'callback_data' => "cardbtnlayreset:{$lang}"]];
+        $rows[] = [['text' => $textbotlang['Admin']['GatewayLang']['backBtn'], 'callback_data' => "cardbtn:{$lang}", 'style' => 'danger']];
         return json_encode(['inline_keyboard' => $rows]);
     }
 }
@@ -2923,8 +3878,90 @@ if (!function_exists('btnstyle_kindhub_payload')) {
         $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['colorBtn'], 'callback_data' => "help_col:{$kind}:{$lang}"]];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['emojiBtn'], 'callback_data' => "help_emo:{$kind}:{$lang}"]];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['BtnStyle']['renameBtn'], 'callback_data' => "help_ren:{$kind}:{$lang}"]];
-        $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['backToHubBtn'], 'callback_data' => $kind === 'gateway' ? "topuplang:{$lang}" : "bt_group|{$lang}|buyflow"]];
+        // grouping is a layout choice about these exact buttons, so it belongs
+        // here rather than in 💎 مالی - and only the payment methods have
+        // families to be grouped into
+        if ($kind === 'gateway') {
+            $kb['inline_keyboard'][] = [[
+                'text' => $textbotlang['Admin']['BtnStyle']['groupMethodsBtn'],
+                'callback_data' => "gwgrp:{$lang}",
+                'style' => topup_group_methods_on($lang) ? 'success' : 'primary',
+            ]];
+        }
+        // gateway styling is reached from 🎨 → 💰 پیام‌های افزایش موجودی now
+        // (moved off the 🏦 بسته‌های شارژ hub), so its back has to land there
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['backToHubBtn'], 'callback_data' => $kind === 'gateway' ? "bt_group|{$lang}|topup" : "bt_group|{$lang}|buyflow"]];
         return json_encode($kb);
+    }
+}
+if (!function_exists('topup_group_hub_payload')) {
+    // ---- 🗂 دسته‌بندی درگاه‌ها ----
+    // Sits with the other tools that decide how the payment-method buttons look,
+    // because that is what it is: a layout choice about those exact buttons.
+    // Everything it owns - the switch, the family screen's caption, and the
+    // family buttons' own colour and name - lives on this one screen.
+    function topup_group_hub_payload($lang, $textbotlang)
+    {
+        $t = $textbotlang['Admin']['BtnStyle'];
+        $on = topup_group_methods_on($lang);
+        $rows = [];
+        $rows[] = [[
+            'text' => $on ? $t['groupMethodsOnBtn'] : $t['groupMethodsOffBtn'],
+            'callback_data' => "gwgrptog:{$lang}",
+            'style' => $on ? 'success' : 'primary',
+        ]];
+        $rows[] = [
+            ['text' => $t['defaultGroupCaptionBtn'], 'callback_data' => "gwgrpcapdefault:{$lang}"],
+            [
+                'text' => $t['editGroupCaptionBtn'],
+                'callback_data' => "gwgrpcap:{$lang}",
+                'style' => topup_group_caption_has_override($lang) ? 'success' : 'primary',
+            ],
+        ];
+        // a white, non-navigating label: the rows under it are buttons, not texts
+        $rows[] = [['text' => $t['groupBtnsLabel'], 'callback_data' => "gwgrpsep:{$lang}"]];
+        $rows[] = [['text' => $textbotlang['Admin']['Help']['colorBtn'], 'callback_data' => "gwgrpcol:{$lang}"]];
+        $rows[] = [['text' => $t['renameBtn'], 'callback_data' => "gwgrpren:{$lang}"]];
+        $rows[] = [['text' => $textbotlang['Admin']['LangScope']['backToHubBtn'], 'callback_data' => "btnstyle_kindhub:gateway:{$lang}", 'style' => 'danger']];
+        $cap = strtr($t['groupMethodsCaption'], [
+            '{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang,
+            '{state}' => $on ? $t['groupMethodsStateOn'] : $t['groupMethodsStateOff'],
+        ]);
+        $cap .= "\n\n" . $t['groupCaptionPreviewLabel'] . "\n"
+            . topup_packages_caption_preview_quote(strtr(
+                topup_group_caption_for($lang, $textbotlang['users']['Balance']['groupMethodCaption']),
+                ['{group}' => gateway_group_label('online', $textbotlang)]
+            ));
+        return [$cap, json_encode(['inline_keyboard' => $rows])];
+    }
+    function topup_group_color_payload($lang, $textbotlang)
+    {
+        $styleEmoji = ['' => '⚪', 'primary' => '🔵', 'success' => '🟢', 'danger' => '🔴'];
+        $rows = [];
+        foreach (array_keys(gateway_groups()) as $group) {
+            $style = topup_group_btnstyle_for($lang, $group);
+            $btn = topup_styled_button(gateway_group_label($group, $textbotlang), $style, "gwgrpcolpick:{$lang}:{$group}", 'primary');
+            $color = (string) ($style['color'] ?? '');
+            $btn['text'] .= ' ' . ($styleEmoji[$color !== '' ? $color : 'primary'] ?? '⚪');
+            $rows[] = [$btn];
+        }
+        $rows[] = [['text' => $textbotlang['Admin']['GatewayLang']['backBtn'], 'callback_data' => "gwgrp:{$lang}", 'style' => 'danger']];
+        return json_encode(['inline_keyboard' => $rows]);
+    }
+    function topup_group_rename_payload($lang, $textbotlang)
+    {
+        $rows = [];
+        foreach (array_keys(gateway_groups()) as $group) {
+            $style = topup_group_btnstyle_for($lang, $group);
+            $btn = topup_styled_button(gateway_group_label($group, $textbotlang), $style, "gwgrprenpick:{$lang}:{$group}", 'primary');
+            if (trim((string) ($style['label'] ?? '')) !== '') {
+                $btn['text'] .= ' ✏️';
+            }
+            $rows[] = [$btn];
+        }
+        $rows[] = [['text' => $textbotlang['Admin']['BtnStyle']['resetRenameBtn'], 'callback_data' => "gwgrprenreset:{$lang}"]];
+        $rows[] = [['text' => $textbotlang['Admin']['GatewayLang']['backBtn'], 'callback_data' => "gwgrp:{$lang}", 'style' => 'danger']];
+        return json_encode(['inline_keyboard' => $rows]);
     }
 }
 if (!function_exists('btnstyle_kindhub_caption_key')) {
@@ -2959,14 +3996,14 @@ if (!function_exists('help_rename_editor_payload')) {
             $buttonsByKey = [];
             foreach ($orderedKeys as $idx => $key) {
                 $emo = help_layout_emoji_prefix($key, $section);
-                $color = $section['color'][$key] ?? '';
+                $color = help_layout_effective_color($section, $key, $kind);
                 $isRenamed = isset($section['rename'][$key]) && $section['rename'][$key] !== '';
                 $name = $emo['prefix'] . ($items[$key] ?? $key) . ($isRenamed ? ' ✏️' : '');
                 $btn = ['text' => $name, 'callback_data' => "help_ren_pick:{$kind}:{$lang}:{$idx}"];
                 if ($emo['icon'] !== '') {
                     $btn['icon_custom_emoji_id'] = $emo['icon'];
                 }
-                if ($color !== '' && in_array($color, ['primary', 'success', 'danger'], true)) {
+                if ($color !== '') {
                     $btn['style'] = $color;
                 }
                 $buttonsByKey[$key] = $btn;
@@ -3001,7 +4038,7 @@ if (!function_exists('help_layout_editor_payload')) {
             $buttonsByKey = [];
             foreach ($orderedKeys as $idx => $key) {
                 $emo = help_layout_emoji_prefix($key, $section);
-                $color = $section['color'][$key] ?? '';
+                $color = help_layout_effective_color($section, $key, $kind);
                 $name = $emo['prefix'] . ($items[$key] ?? $key);
                 $isSel = ($selectedIdx !== null && (string) $selectedIdx === (string) $idx);
                 if ($isSel) {
@@ -3014,7 +4051,7 @@ if (!function_exists('help_layout_editor_payload')) {
                 if ($emo['icon'] !== '') {
                     $btn['icon_custom_emoji_id'] = $emo['icon'];
                 }
-                if ($color !== '' && in_array($color, ['primary', 'success', 'danger'], true)) {
+                if ($color !== '') {
                     $btn['style'] = $color;
                 }
                 $buttonsByKey[$key] = $btn;
@@ -3033,6 +4070,20 @@ if (!function_exists('help_layout_editor_payload')) {
     }
 }
 
+if (!function_exists('help_layout_effective_color')) {
+    // The colour a button will ACTUALLY render with for the end user, so every
+    // preview screen here shows the same thing the customer sees. Payment-method
+    // buttons fall back to blue (gateway_apply_button_style does the same), the
+    // other kinds still fall back to Telegram's plain white.
+    function help_layout_effective_color(array $section, $key, $kind)
+    {
+        $color = $section['color'][$key] ?? '';
+        if (in_array($color, ['primary', 'success', 'danger'], true)) {
+            return $color;
+        }
+        return $kind === 'gateway' ? 'primary' : '';
+    }
+}
 if (!function_exists('help_color_editor_payload')) {
     // single-tap color cycler for the end-user-facing category /
     // tutorial-name buttons, mirroring color_editor_payload's UX exactly:
@@ -3051,14 +4102,14 @@ if (!function_exists('help_color_editor_payload')) {
             $buttonsByKey = [];
             foreach ($orderedKeys as $idx => $key) {
                 $emo = help_layout_emoji_prefix($key, $section);
-                $color = $section['color'][$key] ?? '';
-                $name = $emo['prefix'] . ($items[$key] ?? $key) . ' ' . $styleEmoji[$color];
+                $effective = help_layout_effective_color($section, $key, $kind);
+                $name = $emo['prefix'] . ($items[$key] ?? $key) . ' ' . $styleEmoji[$effective];
                 $btn = ['text' => $name, 'callback_data' => "help_col_pick:{$kind}:{$lang}:{$idx}"];
                 if ($emo['icon'] !== '') {
                     $btn['icon_custom_emoji_id'] = $emo['icon'];
                 }
-                if ($color !== '' && in_array($color, ['primary', 'success', 'danger'], true)) {
-                    $btn['style'] = $color;
+                if ($effective !== '') {
+                    $btn['style'] = $effective;
                 }
                 $buttonsByKey[$key] = $btn;
             }
@@ -3090,13 +4141,13 @@ if (!function_exists('help_emoji_editor_payload')) {
             $buttonsByKey = [];
             foreach ($orderedKeys as $idx => $key) {
                 $emo = help_layout_emoji_prefix($key, $section);
-                $color = $section['color'][$key] ?? '';
+                $color = help_layout_effective_color($section, $key, $kind);
                 $name = $emo['prefix'] . ($items[$key] ?? $key);
                 $btn = ['text' => $name, 'callback_data' => "help_emo_pick:{$kind}:{$lang}:{$idx}"];
                 if ($emo['icon'] !== '') {
                     $btn['icon_custom_emoji_id'] = $emo['icon'];
                 }
-                if ($color !== '' && in_array($color, ['primary', 'success', 'danger'], true)) {
+                if ($color !== '') {
                     $btn['style'] = $color;
                 }
                 $buttonsByKey[$key] = $btn;
@@ -5101,6 +6152,31 @@ if (preg_match('/^dsbulkv-([a-z]{2})-(percent|fixed)$/', (string) $user['step'],
         Editmessagetext($from_id, $ds_mid, $ds_done, $ds_kb, 'HTML');
     } else {
         sendmessage($from_id, $ds_done, $ds_kb, 'HTML');
+    }
+    return;
+}
+if (preg_match('/^tpslname-([a-z]{2})-([a-z0-9]+)-([a-z]+)$/', (string) $user['step'], $sl_m) && $datain == '' && $adminrulecheck['rule'] == "administrator" && !topup_disc_is_nav_text($text, $textbotlang)) {
+    $sl_new = trim((string) $text);
+    if ($sl_new === '' || !isset(topup_slot_defs($textbotlang)[$sl_m[3]])) {
+        sendmessage($from_id, "⚠️ لطفاً یه متن بفرست 😅", $backadmin, 'HTML');
+        return;
+    }
+    // "0" clears it, the same convention every other rename tool here uses
+    $sl_style = topup_btnstyle_for($sl_m[1], $sl_m[2], $sl_m[3]);
+    if ($sl_new === '0') {
+        unset($sl_style['label']);
+    } else {
+        $sl_style['label'] = $sl_new;
+    }
+    topup_btnstyle_set($sl_m[1], $sl_m[2], $sl_m[3], $sl_style);
+    step('home', $from_id);
+    $sl_p = topup_slot_payload($sl_m[1], $sl_m[2], $sl_m[3], $textbotlang);
+    $sl_mid = intval(json_decode((string) ($user['Processing_value'] ?? ''), true)['bt_msgid'] ?? 0);
+    deletemessage($from_id, $message_id);
+    if ($sl_mid > 0) {
+        Editmessagetext($from_id, $sl_mid, "✅ ذخیره شد!\n\n" . $sl_p[0], $sl_p[1], 'HTML');
+    } else {
+        sendmessage($from_id, "✅ ذخیره شد!\n\n" . $sl_p[0], $sl_p[1], 'HTML');
     }
     return;
 }
@@ -8127,7 +9203,15 @@ elseif ($datain == "systemsms") {
     if ($gw_fromSettings) {
         Editmessagetext($from_id, $message_id, gateway_settings_caption($gw_lang, $gw_key, $textbotlang), gateway_settings_payload($gw_lang, $gw_key, $textbotlang), 'HTML');
     } else {
-        Editmessagetext($from_id, $message_id, gateway_hub_caption($gw_lang, $textbotlang), gateway_hub_payload($gw_lang, $textbotlang), 'HTML');
+        // stay on the screen the row was tapped on: a grouped gateway is only
+        // listed inside its own group, so re-rendering the hub threw the admin
+        // out of the family they were working in after every single toggle
+        $gw_grp = gateway_group_of($gw_key);
+        if ($gw_grp !== null) {
+            Editmessagetext($from_id, $message_id, gateway_group_caption($gw_lang, $gw_grp, $textbotlang), gateway_group_payload($gw_lang, $gw_grp, $textbotlang), 'HTML');
+        } else {
+            Editmessagetext($from_id, $message_id, gateway_hub_caption($gw_lang, $textbotlang), gateway_hub_payload($gw_lang, $textbotlang), 'HTML');
+        }
     }
 } elseif (preg_match('/^gwall:([a-z]{2}):([01])$/', $datain, $gw_m) && $adminrulecheck['rule'] == "administrator") {
     if ($gw_m[2] === '1') {
@@ -8169,6 +9253,42 @@ elseif ($datain == "systemsms") {
     }
     gw_lang_settings_map(true);
     Editmessagetext($from_id, $message_id, gateway_settings_caption($gw_m[1], $gw_m[2], $textbotlang), gateway_settings_payload($gw_m[1], $gw_m[2], $textbotlang), 'HTML');
+} elseif (preg_match('/^gwname:([a-z]{2}):([a-z0-9_]+)$/', $datain, $gw_m) && $adminrulecheck['rule'] == "administrator") {
+    // display-only label - explains the row instead of navigating anywhere
+    telegram('answerCallbackQuery', [
+        'callback_query_id' => $callback_query_id,
+        'text' => gateway_name_alert($gw_m[1], $gw_m[2], $textbotlang),
+        'show_alert' => true,
+        'cache_time' => 1,
+    ]);
+    return;
+} elseif (preg_match('/^gwgroup:([a-z]{2}):([a-z0-9_]+)$/', $datain, $gw_m) && $adminrulecheck['rule'] == "administrator") {
+    if (!isset(gateway_groups()[$gw_m[2]])) {
+        return;
+    }
+    Editmessagetext($from_id, $message_id, gateway_group_caption($gw_m[1], $gw_m[2], $textbotlang), gateway_group_payload($gw_m[1], $gw_m[2], $textbotlang), 'HTML');
+} elseif (preg_match('/^gwgrouptoggle:([a-z]{2}):([a-z0-9_]+)$/', $datain, $gw_m) && $adminrulecheck['rule'] == "administrator") {
+    if (!isset(gateway_groups()[$gw_m[2]])) {
+        return;
+    }
+    // all off -> switch the whole family on; anything else -> switch it all off.
+    // Mirrors the single-gateway toggle above, including the rule that turning
+    // one ON must also flip its global switch or the row lies about being live.
+    $gw_turnOn = gateway_group_state($gw_m[2], $gw_m[1]) === 'none';
+    $gw_members = gateway_group_members($gw_m[2], $gw_m[1]);
+    $gw_keys = gateway_current_keys($gw_m[1]);
+    if ($gw_turnOn) {
+        foreach ($gw_members as $gw_key) {
+            if (!in_array($gw_key, $gw_keys, true)) {
+                $gw_keys[] = $gw_key;
+            }
+            gateway_globally_set($gw_key, true);
+        }
+    } else {
+        $gw_keys = array_values(array_diff($gw_keys, $gw_members));
+    }
+    gateway_set_for_lang($gw_m[1], $gw_keys);
+    Editmessagetext($from_id, $message_id, gateway_hub_caption($gw_m[1], $textbotlang), gateway_hub_payload($gw_m[1], $textbotlang), 'HTML');
 } elseif (preg_match('/^cardrandtoggle:([a-z]{2})$/', $datain, $gw_m) && $adminrulecheck['rule'] == "administrator") {
     // global switch (not per-language) - see the comment on this button's
     // row in gateway_settings_payload()
@@ -8225,10 +9345,52 @@ elseif ($datain == "systemsms") {
     }
     $cl_def = $cl_fields[$cl_m[2]];
     $cl_on = pay_value($cl_m[2], $cl_m[1], $cl_def['off']) === $cl_def['on'];
+    // defensive: the keyboard already routes this to cardlegacylocked: while
+    // SMS Forward is on, but a stale render of the screen could still send it
+    if (!$cl_on && $cl_m[2] === 'autoconfirmcart' && (select("setting", "smsForwardEnabled", null, null, "select")['smsForwardEnabled'] ?? '0') === '1') {
+        telegram('answerCallbackQuery', [
+            'callback_query_id' => $callback_query_id,
+            'text' => '🔒 چون SMS Forward روشنه، تایید رسید بدون بررسی قابل روشن کردن نیست. اول SMS Forward رو خاموش کنید.',
+            'show_alert' => true,
+        ]);
+        Editmessagetext($from_id, $message_id, card_legacy_settings_caption($cl_m[1]), card_legacy_settings_payload($cl_m[1], $textbotlang), 'HTML');
+        return;
+    }
     gw_pay_override_set($cl_m[2], $cl_m[1], $cl_on ? $cl_def['off'] : $cl_def['on']);
     Editmessagetext($from_id, $message_id, card_legacy_settings_caption($cl_m[1]), card_legacy_settings_payload($cl_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^cardlegacylocked:([a-z]{2})$/', $datain, $cl_m) && $adminrulecheck['rule'] == "administrator") {
+    telegram('answerCallbackQuery', [
+        'callback_query_id' => $callback_query_id,
+        // Telegram caps this at 200 characters - see the guard in telegram()
+        'text' => '🔒 تا وقتی SMS Forward روشنه، این گزینه قابل روشن کردن نیست.
+
+SMS Forward پرداخت رو با پیامک واقعی بانک تایید می‌کنه، ولی این یکی بدون بررسی و فقط با گذشت زمان.
+
+اول SMS Forward رو خاموش کنید.',
+        'show_alert' => true,
+    ]);
+} elseif (preg_match('/^cardlegacytimetoggle:([a-z]{2})$/', $datain, $cl_m) && $adminrulecheck['rule'] == "administrator") {
+    if ((select("setting", "smsForwardEnabled", null, null, "select")['smsForwardEnabled'] ?? '0') === '1') {
+        telegram('answerCallbackQuery', [
+            'callback_query_id' => $callback_query_id,
+            'text' => '🔒 چون SMS Forward روشنه، زمان تایید خودکار قابل روشن کردن نیست. اول SMS Forward رو خاموش کنید.',
+            'show_alert' => true,
+        ]);
+        Editmessagetext($from_id, $message_id, card_legacy_settings_caption($cl_m[1]), card_legacy_settings_payload($cl_m[1], $textbotlang), 'HTML');
+        return;
+    }
+    // 0 = off. Turning it on starts at 20 minutes; "✏️ تغییر زمان" then edits
+    // that number through the same prompt as before (which only accepts 1+, so
+    // it can never write the off-sentinel back).
+    $cl_timeOn = intval(pay_value('timeauto_not_verify', $cl_m[1], '0')) > 0;
+    gw_pay_override_set('timeauto_not_verify', $cl_m[1], $cl_timeOn ? '0' : '20');
+    Editmessagetext($from_id, $message_id, card_legacy_settings_caption($cl_m[1]), card_legacy_settings_payload($cl_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^cardlegacyclose:([a-z]{2})$/', $datain, $cl_m) && $adminrulecheck['rule'] == "administrator") {
+    step('home', $from_id);
+    deletemessage($from_id, $message_id);
+    sendmessage($from_id, $textbotlang['bottext']['msg_closed'], null, 'HTML');
 } elseif (preg_match('/^cardlegacytime:([a-z]{2})$/', $datain, $cl_m) && $adminrulecheck['rule'] == "administrator") {
-    $cl_prompt = sendmessage($from_id, sprintf($textbotlang['Admin']['Payment']['askAutoConfirmMinutes'], pay_value('timeauto_not_verify', $cl_m[1], '4')), null, 'HTML');
+    $cl_prompt = sendmessage($from_id, sprintf($textbotlang['Admin']['Payment']['askAutoConfirmMinutes'], pay_value('timeauto_not_verify', $cl_m[1], '0')), null, 'HTML');
     $cl_promptId = (int) ($cl_prompt['result']['message_id'] ?? 0);
     step("cardlegacytime:{$cl_m[1]}:{$message_id}:{$cl_promptId}", $from_id);
 } elseif (preg_match('/^cardlegacytime:([a-z]{2}):([0-9]+):([0-9]+)$/', (string) $user['step'], $cl_m) && $datain == '') {
@@ -8475,71 +9637,11 @@ elseif ($datain == "systemsms") {
         deletemessage($from_id, (int) $gw_m[5]);
         Editmessagetext($from_id, (int) $gw_m[4], gateway_settings_caption($gw_m[1], $gw_m[2], $textbotlang), gateway_settings_payload($gw_m[1], $gw_m[2], $textbotlang), 'HTML');
     }
-} elseif (preg_match('/^cardcapdefault:([a-z]{2})$/', $datain, $cc_m) && $adminrulecheck['rule'] == "administrator") {
-    card_invoice_caption_set($cc_m[1], '');
-    Editmessagetext($from_id, $message_id, topup_packages_caption_with_preview($cc_m[1], 'card', $textbotlang), topup_packages_payload($cc_m[1], 'card', $textbotlang), 'HTML');
-} elseif (preg_match('/^cardcap:([a-z]{2})$/', $datain, $cc_m) && $adminrulecheck['rule'] == "administrator") {
-    $cc_cancelKb = json_encode(['inline_keyboard' => [
-        [['text' => $textbotlang['Admin']['TopupPkg']['closeCaptionPromptBtn'], 'callback_data' => "cardcapcancel:{$cc_m[1]}:{$message_id}", 'style' => 'danger']],
-    ]]);
-    $cc_prompt = sendmessage($from_id, $textbotlang['Admin']['GatewayLang']['cardCapAsk'], $cc_cancelKb, 'HTML');
-    $cc_promptId = (int) ($cc_prompt['result']['message_id'] ?? 0);
-    step("cardcapedit:{$cc_m[1]}:{$message_id}:{$cc_promptId}", $from_id);
-} elseif (preg_match('/^cardcapcancel:([a-z]{2}):([0-9]+)$/', $datain, $cc_m) && $adminrulecheck['rule'] == "administrator") {
-    step('home', $from_id);
-    deletemessage($from_id, $message_id);
-    Editmessagetext($from_id, (int) $cc_m[2], topup_packages_caption_with_preview($cc_m[1], 'card', $textbotlang), topup_packages_payload($cc_m[1], 'card', $textbotlang), 'HTML');
-} elseif (preg_match('/^cardcapedit:([a-z]{2}):([0-9]+):([0-9]+)$/', (string) $user['step'], $cc_m) && $datain == '') {
-    deletemessage($from_id, $message_id);
-    $cc_text = trim((string) $text);
-    // same premium-emoji-leading-entity handling as topupcapedit: - one
-    // entity, right at offset 0, never elsewhere in the text
-    $cc_ents = $update['message']['entities'] ?? [];
-    if (!empty($cc_ents[0]) && ($cc_ents[0]['type'] ?? '') === 'custom_emoji' && ($cc_ents[0]['offset'] ?? -1) === 0 && !empty($cc_ents[0]['custom_emoji_id'])) {
-        preg_match('/^\X/u', $cc_text, $cc_lead);
-        $cc_leadChar = $cc_lead[0] ?? '';
-        $cc_rest = mb_substr($cc_text, mb_strlen($cc_leadChar, 'UTF-8'), null, 'UTF-8');
-        $cc_text = '<tg-emoji emoji-id="' . htmlspecialchars((string) $cc_ents[0]['custom_emoji_id'], ENT_QUOTES) . '">' . $cc_leadChar . '</tg-emoji>' . $cc_rest;
-    }
-    card_invoice_caption_set($cc_m[1], $cc_text);
-    step('home', $from_id);
-    deletemessage($from_id, (int) $cc_m[3]);
-    Editmessagetext($from_id, (int) $cc_m[2], topup_packages_caption_with_preview($cc_m[1], 'card', $textbotlang), topup_packages_payload($cc_m[1], 'card', $textbotlang), 'HTML');
-} elseif (preg_match('/^cardexpcapdefault:([a-z]{2})$/', $datain, $ce_m) && $adminrulecheck['rule'] == "administrator") {
-    card_invoice_expired_caption_set($ce_m[1], '');
-    Editmessagetext($from_id, $message_id, topup_packages_caption_with_preview($ce_m[1], 'card', $textbotlang), topup_packages_payload($ce_m[1], 'card', $textbotlang), 'HTML');
-} elseif (preg_match('/^cardexpcap:([a-z]{2})$/', $datain, $ce_m) && $adminrulecheck['rule'] == "administrator") {
-    $ce_cancelKb = json_encode(['inline_keyboard' => [
-        [['text' => $textbotlang['Admin']['TopupPkg']['closeCaptionPromptBtn'], 'callback_data' => "cardexpcapcancel:{$ce_m[1]}:{$message_id}", 'style' => 'danger']],
-    ]]);
-    $ce_prompt = sendmessage($from_id, $textbotlang['Admin']['GatewayLang']['askExpCaption'], $ce_cancelKb, 'HTML');
-    $ce_promptId = (int) ($ce_prompt['result']['message_id'] ?? 0);
-    step("cardexpcapedit:{$ce_m[1]}:{$message_id}:{$ce_promptId}", $from_id);
-} elseif (preg_match('/^cardexpcapcancel:([a-z]{2}):([0-9]+)$/', $datain, $ce_m) && $adminrulecheck['rule'] == "administrator") {
-    step('home', $from_id);
-    deletemessage($from_id, $message_id);
-    Editmessagetext($from_id, (int) $ce_m[2], topup_packages_caption_with_preview($ce_m[1], 'card', $textbotlang), topup_packages_payload($ce_m[1], 'card', $textbotlang), 'HTML');
-} elseif (preg_match('/^cardexpcapedit:([a-z]{2}):([0-9]+):([0-9]+)$/', (string) $user['step'], $ce_m) && $datain == '') {
-    deletemessage($from_id, $message_id);
-    $ce_text = trim((string) $text);
-    // same premium-emoji-leading-entity handling as cardcapedit: - one
-    // entity, right at offset 0, never elsewhere in the text
-    $ce_ents = $update['message']['entities'] ?? [];
-    if (!empty($ce_ents[0]) && ($ce_ents[0]['type'] ?? '') === 'custom_emoji' && ($ce_ents[0]['offset'] ?? -1) === 0 && !empty($ce_ents[0]['custom_emoji_id'])) {
-        preg_match('/^\X/u', $ce_text, $ce_lead);
-        $ce_leadChar = $ce_lead[0] ?? '';
-        $ce_rest = mb_substr($ce_text, mb_strlen($ce_leadChar, 'UTF-8'), null, 'UTF-8');
-        $ce_text = '<tg-emoji emoji-id="' . htmlspecialchars((string) $ce_ents[0]['custom_emoji_id'], ENT_QUOTES) . '">' . $ce_leadChar . '</tg-emoji>' . $ce_rest;
-    }
-    card_invoice_expired_caption_set($ce_m[1], $ce_text);
-    step('home', $from_id);
-    deletemessage($from_id, (int) $ce_m[3]);
-    Editmessagetext($from_id, (int) $ce_m[2], topup_packages_caption_with_preview($ce_m[1], 'card', $textbotlang), topup_packages_payload($ce_m[1], 'card', $textbotlang), 'HTML');
 } elseif (preg_match('/^cardbtn:([a-z]{2})$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['GatewayLang']['cardBtnStyleCaption'], card_invoice_btnstyle_hub_payload($cb_m[1], $textbotlang), 'HTML');
 } elseif (preg_match('/^cardbtncol:([a-z]{2})$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['colorCaption'], card_invoice_btncolor_payload($cb_m[1], $textbotlang), 'HTML');
-} elseif (preg_match('/^cardbtncolpick:([a-z]{2}):(copyCard|paidReceipt)$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^cardbtncolpick:([a-z]{2}):(copyCard\d*|paidReceipt|reissue)$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
     $cb_colorOrder = ['', 'primary', 'success', 'danger'];
     $cb_style = card_invoice_btnstyle_for($cb_m[1], $cb_m[2]);
     $cb_curPos = array_search((string) ($cb_style['color'] ?? ''), $cb_colorOrder, true);
@@ -8551,23 +9653,40 @@ elseif ($datain == "systemsms") {
     }
     card_invoice_btnstyle_set($cb_m[1], $cb_m[2], $cb_style);
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['colorCaption'], card_invoice_btncolor_payload($cb_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^cardbtnlay:([a-z]{2})$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['layoutCaption'], card_invoice_btnlayout_payload($cb_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^cardbtnlaypick:([a-z]{2}):(\d+)$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['layoutCaption'], card_invoice_btnlayout_payload($cb_m[1], $textbotlang, (int) $cb_m[2]), 'HTML');
+} elseif (preg_match('/^cardbtnlaycancel:([a-z]{2})$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['layoutCaption'], card_invoice_btnlayout_payload($cb_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^cardbtnlayswap:([a-z]{2}):(\d+):(\d+)$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
+    card_invoice_layout_swap($cb_m[1], (int) $cb_m[2], (int) $cb_m[3]);
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['layoutCaption'], card_invoice_btnlayout_payload($cb_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^cardbtnlayfull:([a-z]{2})$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
+    $cb_lay = card_invoice_btnstyle_for($cb_m[1], '_layout');
+    $cb_lay['perRow'] = card_invoice_copy_perrow($cb_m[1]) === 1 ? 2 : 1;
+    card_invoice_btnstyle_set($cb_m[1], '_layout', $cb_lay);
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['layoutCaption'], card_invoice_btnlayout_payload($cb_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^cardbtnlayreset:([a-z]{2})$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
+    card_invoice_btnstyle_set($cb_m[1], '_layout', []);
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['layoutCaption'], card_invoice_btnlayout_payload($cb_m[1], $textbotlang), 'HTML');
 } elseif (preg_match('/^cardbtnren:([a-z]{2})$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['BtnStyle']['renameCaption'], card_invoice_btnrename_payload($cb_m[1], $textbotlang), 'HTML');
-} elseif (preg_match('/^cardbtnrenpick:([a-z]{2}):(copyCard|paidReceipt)$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^cardbtnrenpick:([a-z]{2}):(copyCard\d*|paidReceipt|reissue)$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
     $cb_style = card_invoice_btnstyle_for($cb_m[1], $cb_m[2]);
-    $cb_items = card_invoice_btnstyle_items($textbotlang);
-    $cb_label = topup_styled_button($cb_items[$cb_m[2]], $cb_style, '')['text'];
+    $cb_items = card_invoice_btnstyle_items($textbotlang, $cb_m[1]);
+    $cb_label = topup_styled_button($cb_items[$cb_m[2]] ?? $cb_m[2], $cb_style, '')['text'];
     $cb_cancelKb = json_encode(['inline_keyboard' => [
         [['text' => $textbotlang['Admin']['TopupPkg']['closePromptBtn'], 'callback_data' => "cardbtnrencancel:{$cb_m[1]}:{$cb_m[2]}:{$message_id}", 'style' => 'danger']],
     ]]);
     $cb_prompt = sendmessage($from_id, sprintf($textbotlang['Admin']['BtnStyle']['askRenameForItem'], $cb_label), $cb_cancelKb, 'HTML');
     $cb_promptId = (int) ($cb_prompt['result']['message_id'] ?? 0);
     step("cardbtnreni:{$cb_m[1]}:{$cb_m[2]}:{$message_id}:{$cb_promptId}", $from_id);
-} elseif (preg_match('/^cardbtnrencancel:([a-z]{2}):(copyCard|paidReceipt):([0-9]+)$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^cardbtnrencancel:([a-z]{2}):(copyCard\d*|paidReceipt|reissue):([0-9]+)$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
     step('home', $from_id);
     deletemessage($from_id, $message_id);
     Editmessagetext($from_id, (int) $cb_m[3], $textbotlang['Admin']['BtnStyle']['renameCaption'], card_invoice_btnrename_payload($cb_m[1], $textbotlang), 'HTML');
-} elseif (preg_match('/^cardbtnreni:([a-z]{2}):(copyCard|paidReceipt):([0-9]+):([0-9]+)$/', (string) $user['step'], $cb_m) && $datain == '') {
+} elseif (preg_match('/^cardbtnreni:([a-z]{2}):(copyCard\d*|paidReceipt|reissue):([0-9]+):([0-9]+)$/', (string) $user['step'], $cb_m) && $datain == '') {
     deletemessage($from_id, $message_id);
     $cb_newName = trim((string) $text) === '0' ? '' : trim((string) $text);
     $cb_style = card_invoice_btnstyle_for($cb_m[1], $cb_m[2]);
@@ -8583,114 +9702,182 @@ elseif ($datain == "systemsms") {
         card_invoice_btnstyle_set($cb_m[1], $cb_which, $cb_style);
     }
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['BtnStyle']['renameCaption'], card_invoice_btnrename_payload($cb_m[1], $textbotlang), 'HTML');
-} elseif (preg_match('/^plisiocapdefault:([a-z]{2})$/', $datain, $pc_m) && $adminrulecheck['rule'] == "administrator") {
-    plisio_invoice_caption_set($pc_m[1], '');
-    Editmessagetext($from_id, $message_id, topup_packages_caption_with_preview($pc_m[1], 'plisio', $textbotlang), topup_packages_payload($pc_m[1], 'plisio', $textbotlang), 'HTML');
-} elseif (preg_match('/^plisiocap:([a-z]{2})$/', $datain, $pc_m) && $adminrulecheck['rule'] == "administrator") {
-    $pc_cancelKb = json_encode(['inline_keyboard' => [
-        [['text' => $textbotlang['Admin']['TopupPkg']['closeCaptionPromptBtn'], 'callback_data' => "plisiocapcancel:{$pc_m[1]}:{$message_id}", 'style' => 'danger']],
+} elseif (preg_match('/^gwcapdefault:(range|notnumber|inv|exp|paidalert|notseen|noaddress|askhash|hashbad):([a-z]{2}):([a-z0-9]+)$/', $datain, $gc_m) && $adminrulecheck['rule'] == "administrator") {
+    // ---- the per-gateway captions: range / invoice / expired ----
+    // One family for all three kinds and every gateway. What used to be four
+    // handlers per kind per gateway (and only for card-to-card and Plisio) is
+    // these four, driven by topup_gwcap_* - which is why a gateway can no
+    // longer end up with a row whose handler was never written.
+    topup_gwcap_set($gc_m[1], $gc_m[2], $gc_m[3], '');
+    list($gc_cap, $gc_kb) = topup_after_edit_screen($gc_m[2], $gc_m[3], $textbotlang);
+    Editmessagetext($from_id, $message_id, $gc_cap, $gc_kb, 'HTML');
+} elseif (preg_match('/^gwcap:(range|notnumber|inv|exp|paidalert|notseen|noaddress|askhash|hashbad):([a-z]{2}):([a-z0-9]+)$/', $datain, $gc_m) && $adminrulecheck['rule'] == "administrator") {
+    $gc_cancelKb = json_encode(['inline_keyboard' => [
+        [['text' => $textbotlang['Admin']['TopupPkg']['closeCaptionPromptBtn'], 'callback_data' => "gwcapcancel:{$gc_m[1]}:{$gc_m[2]}:{$gc_m[3]}:{$message_id}", 'style' => 'danger']],
     ]]);
-    $pc_prompt = sendmessage($from_id, $textbotlang['Admin']['GatewayLang']['plisioCapAsk'], $pc_cancelKb, 'HTML');
-    $pc_promptId = (int) ($pc_prompt['result']['message_id'] ?? 0);
-    step("plisiocapedit:{$pc_m[1]}:{$message_id}:{$pc_promptId}", $from_id);
-} elseif (preg_match('/^plisiocapcancel:([a-z]{2}):([0-9]+)$/', $datain, $pc_m) && $adminrulecheck['rule'] == "administrator") {
+    $gc_prompt = sendmessage($from_id, topup_gwcap_prompt($gc_m[1], $textbotlang), $gc_cancelKb, 'HTML');
+    step("gwcapedit:{$gc_m[1]}:{$gc_m[2]}:{$gc_m[3]}:{$message_id}:" . (int) ($gc_prompt['result']['message_id'] ?? 0), $from_id);
+} elseif (preg_match('/^gwcapcancel:(range|notnumber|inv|exp|paidalert|notseen|noaddress|askhash|hashbad):([a-z]{2}):([a-z0-9]+):([0-9]+)$/', $datain, $gc_m) && $adminrulecheck['rule'] == "administrator") {
     step('home', $from_id);
     deletemessage($from_id, $message_id);
-    Editmessagetext($from_id, (int) $pc_m[2], topup_packages_caption_with_preview($pc_m[1], 'plisio', $textbotlang), topup_packages_payload($pc_m[1], 'plisio', $textbotlang), 'HTML');
-} elseif (preg_match('/^plisiocapedit:([a-z]{2}):([0-9]+):([0-9]+)$/', (string) $user['step'], $pc_m) && $datain == '') {
+    list($gc_cap, $gc_kb) = topup_after_edit_screen($gc_m[2], $gc_m[3], $textbotlang);
+    Editmessagetext($from_id, (int) $gc_m[4], $gc_cap, $gc_kb, 'HTML');
+} elseif (preg_match('/^gwcapedit:(range|notnumber|inv|exp|paidalert|notseen|noaddress|askhash|hashbad):([a-z]{2}):([a-z0-9]+):([0-9]+):([0-9]+)$/', (string) $user['step'], $gc_m) && $datain == '') {
+    topup_gwcap_set($gc_m[1], $gc_m[2], $gc_m[3], topup_caption_text_from_update($text, $update));
+    step('home', $from_id);
     deletemessage($from_id, $message_id);
-    $pc_text = trim((string) $text);
-    // same premium-emoji-leading-entity handling as cardcapedit: - one
-    // entity, right at offset 0, never elsewhere in the text
-    $pc_ents = $update['message']['entities'] ?? [];
-    if (!empty($pc_ents[0]) && ($pc_ents[0]['type'] ?? '') === 'custom_emoji' && ($pc_ents[0]['offset'] ?? -1) === 0 && !empty($pc_ents[0]['custom_emoji_id'])) {
-        preg_match('/^\X/u', $pc_text, $pc_lead);
-        $pc_leadChar = $pc_lead[0] ?? '';
-        $pc_rest = mb_substr($pc_text, mb_strlen($pc_leadChar, 'UTF-8'), null, 'UTF-8');
-        $pc_text = '<tg-emoji emoji-id="' . htmlspecialchars((string) $pc_ents[0]['custom_emoji_id'], ENT_QUOTES) . '">' . $pc_leadChar . '</tg-emoji>' . $pc_rest;
+    deletemessage($from_id, (int) $gc_m[5]);
+    list($gc_cap, $gc_kb) = topup_after_edit_screen($gc_m[2], $gc_m[3], $textbotlang);
+    Editmessagetext($from_id, (int) $gc_m[4], $gc_cap, $gc_kb, 'HTML');
+} elseif (preg_match('/^gwinvbtnemo:([a-z]{2}):([a-z0-9]+)$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+    // ---- 🎭 emoji on the invoice buttons ----
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['emojiCaption'], topup_invoice_btnemoji_payload($gb_m[1], $gb_m[2], $textbotlang), 'HTML');
+} elseif (preg_match('/^gwinvbtnemopick:([a-z]{2}):([a-z0-9]+):([a-z0-9]+)$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+    $gb_items = topup_invoice_btnstyle_items($gb_m[2], $textbotlang, $gb_m[1]);
+    if (!isset($gb_items[$gb_m[3]])) {
+        return;
     }
-    plisio_invoice_caption_set($pc_m[1], $pc_text);
-    step('home', $from_id);
-    deletemessage($from_id, (int) $pc_m[3]);
-    Editmessagetext($from_id, (int) $pc_m[2], topup_packages_caption_with_preview($pc_m[1], 'plisio', $textbotlang), topup_packages_payload($pc_m[1], 'plisio', $textbotlang), 'HTML');
-} elseif (preg_match('/^plisioexpcapdefault:([a-z]{2})$/', $datain, $pe_m) && $adminrulecheck['rule'] == "administrator") {
-    plisio_invoice_expired_caption_set($pe_m[1], '');
-    Editmessagetext($from_id, $message_id, topup_packages_caption_with_preview($pe_m[1], 'plisio', $textbotlang), topup_packages_payload($pe_m[1], 'plisio', $textbotlang), 'HTML');
-} elseif (preg_match('/^plisioexpcap:([a-z]{2})$/', $datain, $pe_m) && $adminrulecheck['rule'] == "administrator") {
-    $pe_cancelKb = json_encode(['inline_keyboard' => [
-        [['text' => $textbotlang['Admin']['TopupPkg']['closeCaptionPromptBtn'], 'callback_data' => "plisioexpcapcancel:{$pe_m[1]}:{$message_id}", 'style' => 'danger']],
+    $gb_label = topup_styled_button($gb_items[$gb_m[3]], topup_invoice_btnstyle_for($gb_m[1], $gb_m[2], $gb_m[3]), '')['text'];
+    $gb_cancelKb = json_encode(['inline_keyboard' => [
+        [['text' => $textbotlang['Admin']['TopupPkg']['closePromptBtn'], 'callback_data' => "gwinvbtnemocancel:{$gb_m[1]}:{$gb_m[2]}:{$gb_m[3]}:{$message_id}", 'style' => 'danger']],
     ]]);
-    $pe_prompt = sendmessage($from_id, $textbotlang['Admin']['GatewayLang']['askPlisioExpCaption'], $pe_cancelKb, 'HTML');
-    $pe_promptId = (int) ($pe_prompt['result']['message_id'] ?? 0);
-    step("plisioexpcapedit:{$pe_m[1]}:{$message_id}:{$pe_promptId}", $from_id);
-} elseif (preg_match('/^plisioexpcapcancel:([a-z]{2}):([0-9]+)$/', $datain, $pe_m) && $adminrulecheck['rule'] == "administrator") {
+    $gb_prompt = sendmessage($from_id, sprintf($textbotlang['Admin']['TopupPkg']['askEmojiForItemTopup'], $gb_label), $gb_cancelKb, 'HTML');
+    step("gwinvbtnemoi:{$gb_m[1]}:{$gb_m[2]}:{$gb_m[3]}:{$message_id}:" . (int) ($gb_prompt['result']['message_id'] ?? 0), $from_id);
+} elseif (preg_match('/^gwinvbtnemocancel:([a-z]{2}):([a-z0-9]+):([a-z0-9]+):([0-9]+)$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     step('home', $from_id);
     deletemessage($from_id, $message_id);
-    Editmessagetext($from_id, (int) $pe_m[2], topup_packages_caption_with_preview($pe_m[1], 'plisio', $textbotlang), topup_packages_payload($pe_m[1], 'plisio', $textbotlang), 'HTML');
-} elseif (preg_match('/^plisioexpcapedit:([a-z]{2}):([0-9]+):([0-9]+)$/', (string) $user['step'], $pe_m) && $datain == '') {
+    Editmessagetext($from_id, (int) $gb_m[4], $textbotlang['Admin']['Help']['emojiCaption'], topup_invoice_btnemoji_payload($gb_m[1], $gb_m[2], $textbotlang), 'HTML');
+} elseif (preg_match('/^gwinvbtnemoi:([a-z]{2}):([a-z0-9]+):([a-z0-9]+):([0-9]+):([0-9]+)$/', (string) $user['step'], $gb_m) && $datain == '') {
     deletemessage($from_id, $message_id);
-    $pe_text = trim((string) $text);
-    // same premium-emoji-leading-entity handling as cardcapedit: - one
-    // entity, right at offset 0, never elsewhere in the text
-    $pe_ents = $update['message']['entities'] ?? [];
-    if (!empty($pe_ents[0]) && ($pe_ents[0]['type'] ?? '') === 'custom_emoji' && ($pe_ents[0]['offset'] ?? -1) === 0 && !empty($pe_ents[0]['custom_emoji_id'])) {
-        preg_match('/^\X/u', $pe_text, $pe_lead);
-        $pe_leadChar = $pe_lead[0] ?? '';
-        $pe_rest = mb_substr($pe_text, mb_strlen($pe_leadChar, 'UTF-8'), null, 'UTF-8');
-        $pe_text = '<tg-emoji emoji-id="' . htmlspecialchars((string) $pe_ents[0]['custom_emoji_id'], ENT_QUOTES) . '">' . $pe_leadChar . '</tg-emoji>' . $pe_rest;
-    }
-    plisio_invoice_expired_caption_set($pe_m[1], $pe_text);
-    step('home', $from_id);
-    deletemessage($from_id, (int) $pe_m[3]);
-    Editmessagetext($from_id, (int) $pe_m[2], topup_packages_caption_with_preview($pe_m[1], 'plisio', $textbotlang), topup_packages_payload($pe_m[1], 'plisio', $textbotlang), 'HTML');
-} elseif (preg_match('/^plisiobtn:([a-z]{2})$/', $datain, $pb_m) && $adminrulecheck['rule'] == "administrator") {
-    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['GatewayLang']['plisioBtnStyleCaption'], plisio_invoice_btnstyle_hub_payload($pb_m[1], $textbotlang), 'HTML');
-} elseif (preg_match('/^plisiobtncol:([a-z]{2})$/', $datain, $pb_m) && $adminrulecheck['rule'] == "administrator") {
-    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['colorCaption'], plisio_invoice_btncolor_payload($pb_m[1], $textbotlang), 'HTML');
-} elseif (preg_match('/^plisiobtncolpick:([a-z]{2}):(pay|reissue)$/', $datain, $pb_m) && $adminrulecheck['rule'] == "administrator") {
-    $pb_colorOrder = ['', 'primary', 'success', 'danger'];
-    $pb_style = plisio_invoice_btnstyle_for($pb_m[1], $pb_m[2]);
-    $pb_curPos = array_search((string) ($pb_style['color'] ?? ''), $pb_colorOrder, true);
-    $pb_nextColor = $pb_colorOrder[(($pb_curPos === false ? 0 : $pb_curPos) + 1) % count($pb_colorOrder)];
-    if ($pb_nextColor === '') {
-        unset($pb_style['color']);
+    $gb_style = topup_invoice_btnstyle_for($gb_m[1], $gb_m[2], $gb_m[3]);
+    if (trim((string) $text) === '0') {
+        // 0 means "no emoji at all", which is different from "no emoji set"
+        unset($gb_style['emoji'], $gb_style['emojiIcon']);
+        $gb_style['noEmoji'] = true;
     } else {
-        $pb_style['color'] = $pb_nextColor;
+        $gb_icon = '';
+        foreach ((array) ($update['message']['entities'] ?? []) as $gb_ent) {
+            if (($gb_ent['type'] ?? '') === 'custom_emoji' && !empty($gb_ent['custom_emoji_id'])) {
+                $gb_icon = $gb_ent['custom_emoji_id'];
+                break;
+            }
+        }
+        if ($gb_icon !== '') {
+            $gb_style['emojiIcon'] = $gb_icon;
+            unset($gb_style['emoji'], $gb_style['noEmoji']);
+        } else {
+            preg_match('/^\X/u', trim((string) $text), $gb_em);
+            $gb_emoji = $gb_em[0] ?? '';
+            if ($gb_emoji === '' || preg_match('/^[0-9a-zA-Z]$/', $gb_emoji)) {
+                $gb_cancelKb = json_encode(['inline_keyboard' => [
+                    [['text' => $textbotlang['Admin']['TopupPkg']['closePromptBtn'], 'callback_data' => "gwinvbtnemocancel:{$gb_m[1]}:{$gb_m[2]}:{$gb_m[3]}:{$gb_m[4]}", 'style' => 'danger']],
+                ]]);
+                Editmessagetext($from_id, (int) $gb_m[5], $textbotlang['Admin']['TopupPkg']['invalidEmoji'], $gb_cancelKb, 'HTML');
+                return;
+            }
+            $gb_style['emoji'] = $gb_emoji;
+            unset($gb_style['emojiIcon'], $gb_style['noEmoji']);
+        }
     }
-    plisio_invoice_btnstyle_set($pb_m[1], $pb_m[2], $pb_style);
-    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['colorCaption'], plisio_invoice_btncolor_payload($pb_m[1], $textbotlang), 'HTML');
-} elseif (preg_match('/^plisiobtnren:([a-z]{2})$/', $datain, $pb_m) && $adminrulecheck['rule'] == "administrator") {
-    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['BtnStyle']['renameCaption'], plisio_invoice_btnrename_payload($pb_m[1], $textbotlang), 'HTML');
-} elseif (preg_match('/^plisiobtnrenpick:([a-z]{2}):(pay|reissue)$/', $datain, $pb_m) && $adminrulecheck['rule'] == "administrator") {
-    $pb_style = plisio_invoice_btnstyle_for($pb_m[1], $pb_m[2]);
-    $pb_items = plisio_invoice_btnstyle_items($textbotlang);
-    $pb_label = topup_styled_button($pb_items[$pb_m[2]], $pb_style, '')['text'];
-    $pb_cancelKb = json_encode(['inline_keyboard' => [
-        [['text' => $textbotlang['Admin']['TopupPkg']['closePromptBtn'], 'callback_data' => "plisiobtnrencancel:{$pb_m[1]}:{$pb_m[2]}:{$message_id}", 'style' => 'danger']],
+    topup_invoice_btnstyle_set($gb_m[1], $gb_m[2], $gb_m[3], $gb_style);
+    step('home', $from_id);
+    deletemessage($from_id, (int) $gb_m[5]);
+    Editmessagetext($from_id, (int) $gb_m[4], $textbotlang['Admin']['Help']['emojiCaption'], topup_invoice_btnemoji_payload($gb_m[1], $gb_m[2], $textbotlang), 'HTML');
+} elseif (preg_match('/^gwinvbtnemopos:([a-z]{2}):([a-z0-9]+):(left|right)$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+    foreach (array_keys(topup_invoice_btnstyle_items($gb_m[2], $textbotlang, $gb_m[1])) as $gb_w) {
+        $gb_style = topup_invoice_btnstyle_for($gb_m[1], $gb_m[2], $gb_w);
+        $gb_style['pos'] = $gb_m[3];
+        topup_invoice_btnstyle_set($gb_m[1], $gb_m[2], $gb_w, $gb_style);
+    }
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['emojiCaption'], topup_invoice_btnemoji_payload($gb_m[1], $gb_m[2], $textbotlang), 'HTML');
+} elseif (preg_match('/^gwinvbtnemoreset:([a-z]{2}):([a-z0-9]+)$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+    foreach (array_keys(topup_invoice_btnstyle_items($gb_m[2], $textbotlang, $gb_m[1])) as $gb_w) {
+        $gb_style = topup_invoice_btnstyle_for($gb_m[1], $gb_m[2], $gb_w);
+        unset($gb_style['emoji'], $gb_style['emojiIcon'], $gb_style['noEmoji'], $gb_style['pos']);
+        topup_invoice_btnstyle_set($gb_m[1], $gb_m[2], $gb_w, $gb_style);
+    }
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['emojiCaption'], topup_invoice_btnemoji_payload($gb_m[1], $gb_m[2], $textbotlang), 'HTML');
+} elseif (preg_match('/^gwinvbtnlay:([a-z]{2}):([a-z0-9]+)$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+    // ---- 📐 the arrangement of those buttons ----
+    if (count(topup_invoice_layout_keys($gb_m[2])) < 2) {
+        return;
+    }
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['layoutCaption'], topup_invoice_btnlayout_payload($gb_m[1], $gb_m[2], $textbotlang), 'HTML');
+} elseif (preg_match('/^gwinvbtnlaypick:([a-z]{2}):([a-z0-9]+):([a-z0-9]+)$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['layoutCaption'], topup_invoice_btnlayout_payload($gb_m[1], $gb_m[2], $textbotlang, $gb_m[3]), 'HTML');
+} elseif (preg_match('/^gwinvbtnlaycancel:([a-z]{2}):([a-z0-9]+)$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['layoutCaption'], topup_invoice_btnlayout_payload($gb_m[1], $gb_m[2], $textbotlang), 'HTML');
+} elseif (preg_match('/^gwinvbtnlayswap:([a-z]{2}):([a-z0-9]+):([a-z0-9]+):([a-z0-9]+)$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+    topup_invoice_layout_swap($gb_m[1], $gb_m[2], $gb_m[3], $gb_m[4]);
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['layoutCaption'], topup_invoice_btnlayout_payload($gb_m[1], $gb_m[2], $textbotlang), 'HTML');
+} elseif (preg_match('/^gwinvbtnlayperrow:([a-z]{2}):([a-z0-9]+)$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+    $gb_l = topup_invoice_layout_get($gb_m[1], $gb_m[2]);
+    $gb_now = topup_invoice_layout_perrow($gb_m[1], $gb_m[2]);
+    // one across, two across, three across, then back to one
+    $gb_l['perRow'] = $gb_now >= 3 ? 1 : $gb_now + 1;
+    $gb_l['order'] = topup_invoice_ordered_keys($gb_m[1], $gb_m[2]);
+    topup_invoice_layout_set($gb_m[1], $gb_m[2], $gb_l);
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['layoutCaption'], topup_invoice_btnlayout_payload($gb_m[1], $gb_m[2], $textbotlang), 'HTML');
+} elseif (preg_match('/^gwinvbtnlayreset:([a-z]{2}):([a-z0-9]+)$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+    // back to the arrangement the gateway ships with, which for TON is not a
+    // single row width but a shape - so this clears the setting rather than
+    // writing a default over it
+    topup_invoice_layout_set($gb_m[1], $gb_m[2], []);
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['layoutCaption'], topup_invoice_btnlayout_payload($gb_m[1], $gb_m[2], $textbotlang), 'HTML');
+} elseif (preg_match('/^gwinvbtn:([a-z]{2}):([a-z0-9]+)$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+    // ---- the invoice's own buttons, shared by the online gateways ----
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['GatewayLang']['plisioBtnStyleCaption'], topup_invoice_btnstyle_hub_payload($gb_m[1], $gb_m[2], $textbotlang), 'HTML');
+} elseif (preg_match('/^gwinvbtncol:([a-z]{2}):([a-z0-9]+)$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['colorCaption'], topup_invoice_btncolor_payload($gb_m[1], $gb_m[2], $textbotlang), 'HTML');
+} elseif (preg_match('/^gwinvbtncolpick:([a-z]{2}):([a-z0-9]+):([a-z]+)$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+    $gb_order = ['', 'primary', 'success', 'danger'];
+    $gb_items = topup_invoice_btnstyle_items($gb_m[2], $textbotlang, $gb_m[1]);
+    if (!isset($gb_items[$gb_m[3]])) {
+        return;
+    }
+    $gb_style = topup_invoice_btnstyle_for($gb_m[1], $gb_m[2], $gb_m[3]);
+    $gb_pos = array_search((string) ($gb_style['color'] ?? ''), $gb_order, true);
+    $gb_next = $gb_order[(($gb_pos === false ? 0 : $gb_pos) + 1) % count($gb_order)];
+    if ($gb_next === '') {
+        unset($gb_style['color']);
+    } else {
+        $gb_style['color'] = $gb_next;
+    }
+    topup_invoice_btnstyle_set($gb_m[1], $gb_m[2], $gb_m[3], $gb_style);
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['colorCaption'], topup_invoice_btncolor_payload($gb_m[1], $gb_m[2], $textbotlang), 'HTML');
+} elseif (preg_match('/^gwinvbtnren:([a-z]{2}):([a-z0-9]+)$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['BtnStyle']['renameCaption'], topup_invoice_btnrename_payload($gb_m[1], $gb_m[2], $textbotlang), 'HTML');
+} elseif (preg_match('/^gwinvbtnrenpick:([a-z]{2}):([a-z0-9]+):([a-z]+)$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+    $gb_items = topup_invoice_btnstyle_items($gb_m[2], $textbotlang, $gb_m[1]);
+    if (!isset($gb_items[$gb_m[3]])) {
+        return;
+    }
+    $gb_style = topup_invoice_btnstyle_for($gb_m[1], $gb_m[2], $gb_m[3]);
+    $gb_label = topup_styled_button($gb_items[$gb_m[3]], $gb_style, '')['text'];
+    $gb_cancelKb = json_encode(['inline_keyboard' => [
+        [['text' => $textbotlang['Admin']['TopupPkg']['closePromptBtn'], 'callback_data' => "gwinvbtnrencancel:{$gb_m[1]}:{$gb_m[2]}:{$gb_m[3]}:{$message_id}", 'style' => 'danger']],
     ]]);
-    $pb_prompt = sendmessage($from_id, sprintf($textbotlang['Admin']['BtnStyle']['askRenameForItem'], $pb_label), $pb_cancelKb, 'HTML');
-    $pb_promptId = (int) ($pb_prompt['result']['message_id'] ?? 0);
-    step("plisiobtnreni:{$pb_m[1]}:{$pb_m[2]}:{$message_id}:{$pb_promptId}", $from_id);
-} elseif (preg_match('/^plisiobtnrencancel:([a-z]{2}):(pay|reissue):([0-9]+)$/', $datain, $pb_m) && $adminrulecheck['rule'] == "administrator") {
+    $gb_prompt = sendmessage($from_id, sprintf($textbotlang['Admin']['BtnStyle']['askRenameForItem'], $gb_label), $gb_cancelKb, 'HTML');
+    step("gwinvbtnreni:{$gb_m[1]}:{$gb_m[2]}:{$gb_m[3]}:{$message_id}:" . (int) ($gb_prompt['result']['message_id'] ?? 0), $from_id);
+} elseif (preg_match('/^gwinvbtnrencancel:([a-z]{2}):([a-z0-9]+):([a-z]+):([0-9]+)$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     step('home', $from_id);
     deletemessage($from_id, $message_id);
-    Editmessagetext($from_id, (int) $pb_m[3], $textbotlang['Admin']['BtnStyle']['renameCaption'], plisio_invoice_btnrename_payload($pb_m[1], $textbotlang), 'HTML');
-} elseif (preg_match('/^plisiobtnreni:([a-z]{2}):(pay|reissue):([0-9]+):([0-9]+)$/', (string) $user['step'], $pb_m) && $datain == '') {
+    Editmessagetext($from_id, (int) $gb_m[4], $textbotlang['Admin']['BtnStyle']['renameCaption'], topup_invoice_btnrename_payload($gb_m[1], $gb_m[2], $textbotlang), 'HTML');
+} elseif (preg_match('/^gwinvbtnreni:([a-z]{2}):([a-z0-9]+):([a-z]+):([0-9]+):([0-9]+)$/', (string) $user['step'], $gb_m) && $datain == '') {
     deletemessage($from_id, $message_id);
-    $pb_newName = trim((string) $text) === '0' ? '' : trim((string) $text);
-    $pb_style = plisio_invoice_btnstyle_for($pb_m[1], $pb_m[2]);
-    $pb_style['label'] = $pb_newName;
-    plisio_invoice_btnstyle_set($pb_m[1], $pb_m[2], $pb_style);
+    $gb_style = topup_invoice_btnstyle_for($gb_m[1], $gb_m[2], $gb_m[3]);
+    $gb_style['label'] = trim((string) $text) === '0' ? '' : trim((string) $text);
+    topup_invoice_btnstyle_set($gb_m[1], $gb_m[2], $gb_m[3], $gb_style);
     step('home', $from_id);
-    deletemessage($from_id, (int) $pb_m[4]);
-    Editmessagetext($from_id, (int) $pb_m[3], $textbotlang['Admin']['BtnStyle']['renameCaption'], plisio_invoice_btnrename_payload($pb_m[1], $textbotlang), 'HTML');
-} elseif (preg_match('/^plisiobtnrenreset:([a-z]{2})$/', $datain, $pb_m) && $adminrulecheck['rule'] == "administrator") {
-    foreach (['pay', 'reissue'] as $pb_which) {
-        $pb_style = plisio_invoice_btnstyle_for($pb_m[1], $pb_which);
-        $pb_style['label'] = '';
-        plisio_invoice_btnstyle_set($pb_m[1], $pb_which, $pb_style);
+    deletemessage($from_id, (int) $gb_m[5]);
+    Editmessagetext($from_id, (int) $gb_m[4], $textbotlang['Admin']['BtnStyle']['renameCaption'], topup_invoice_btnrename_payload($gb_m[1], $gb_m[2], $textbotlang), 'HTML');
+} elseif (preg_match('/^gwinvbtnrenreset:([a-z]{2}):([a-z0-9]+)$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+    foreach (array_keys(topup_invoice_btnstyle_items($gb_m[2], $textbotlang, $gb_m[1])) as $gb_which) {
+        $gb_style = topup_invoice_btnstyle_for($gb_m[1], $gb_m[2], $gb_which);
+        $gb_style['label'] = '';
+        topup_invoice_btnstyle_set($gb_m[1], $gb_m[2], $gb_which, $gb_style);
     }
-    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['BtnStyle']['renameCaption'], plisio_invoice_btnrename_payload($pb_m[1], $textbotlang), 'HTML');
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['BtnStyle']['renameCaption'], topup_invoice_btnrename_payload($gb_m[1], $gb_m[2], $textbotlang), 'HTML');
 } elseif (preg_match('/^gwcards:([a-z]{2})$/', $datain, $gw_m) && $adminrulecheck['rule'] == "administrator") {
     // also the cancel target for delete/edit mode - always drop back to a
     // clean step so a stale selection can never leak into later taps
@@ -8831,6 +10018,28 @@ elseif ($datain == "systemsms") {
     $ds_n = topup_disc_bulk_off($ds_m[1], $textbotlang);
     list($ds_text, $ds_kb) = topup_disc_gw_list_payload($ds_m[1], $textbotlang);
     Editmessagetext($from_id, $message_id, "🗑 تخفیف خودکار {$ds_n} درگاه خاموش شد.\n\n" . $ds_text, $ds_kb, 'HTML');
+} elseif (preg_match('/^topuplinkmsgdefault:([a-z]{2}):([a-z0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
+    topup_linkmsg_set($tp_m[1], $tp_m[2], '');
+    list($tp_cap2, $tp_kb2) = topup_after_edit_screen($tp_m[1], $tp_m[2], $textbotlang);
+    Editmessagetext($from_id, $message_id, $tp_cap2, $tp_kb2, 'HTML');
+} elseif (preg_match('/^topuplinkmsg:([a-z]{2}):([a-z0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
+    $tp_cancelKb = json_encode(['inline_keyboard' => [
+        [['text' => $textbotlang['Admin']['TopupPkg']['closeCaptionPromptBtn'], 'callback_data' => "topuplinkmsgcancel:{$tp_m[1]}:{$tp_m[2]}:{$message_id}", 'style' => 'danger']],
+    ]]);
+    $tp_prompt = sendmessage($from_id, $textbotlang['Admin']['TopupPkg']['askLinkMsg'], $tp_cancelKb, 'HTML');
+    step("topuplinkmsgedit:{$tp_m[1]}:{$tp_m[2]}:{$message_id}:" . (int) ($tp_prompt['result']['message_id'] ?? 0), $from_id);
+} elseif (preg_match('/^topuplinkmsgcancel:([a-z]{2}):([a-z0-9]+):([0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
+    step('home', $from_id);
+    deletemessage($from_id, $message_id);
+    list($tp_cap2, $tp_kb2) = topup_after_edit_screen($tp_m[1], $tp_m[2], $textbotlang);
+    Editmessagetext($from_id, (int) $tp_m[3], $tp_cap2, $tp_kb2, 'HTML');
+} elseif (preg_match('/^topuplinkmsgedit:([a-z]{2}):([a-z0-9]+):([0-9]+):([0-9]+)$/', (string) $user['step'], $tp_m) && $datain == '') {
+    topup_linkmsg_set($tp_m[1], $tp_m[2], trim((string) $text));
+    step('home', $from_id);
+    deletemessage($from_id, $message_id);
+    deletemessage($from_id, (int) $tp_m[4]);
+    list($tp_cap2, $tp_kb2) = topup_after_edit_screen($tp_m[1], $tp_m[2], $textbotlang);
+    Editmessagetext($from_id, (int) $tp_m[3], $tp_cap2, $tp_kb2, 'HTML');
 } elseif ($text == $textbotlang['keyboard']['topupPackages'] && $adminrulecheck['rule'] == "administrator") {
     sendmessage($from_id, topup_hub_caption('fa', $textbotlang), topup_hub_payload('fa', $textbotlang), 'HTML');
 } elseif ($datain == "topup_close" && $adminrulecheck['rule'] == "administrator") {
@@ -8838,10 +10047,20 @@ elseif ($datain == "systemsms") {
 } elseif (preg_match('/^topuplang:([a-z]{2})$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     topup_packages_map(true);
     Editmessagetext($from_id, $message_id, topup_hub_caption($tp_m[1], $textbotlang), topup_hub_payload($tp_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^topupgrp:([a-z]{2}):([a-z0-9_]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
+    if (!isset(gateway_groups()[$tp_m[2]])) {
+        return;
+    }
+    topup_packages_map(true);
+    list($tp_gCap, $tp_gKb) = topup_hub_group_payload($tp_m[1], $tp_m[2], $textbotlang);
+    Editmessagetext($from_id, $message_id, $tp_gCap, $tp_gKb, 'HTML');
 } elseif (preg_match('/^topupset:([a-z]{2}):([a-z0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     if (!in_array($tp_m[2], gateway_all_keys(), true) || !gateway_applicable_for_lang($tp_m[2], $tp_m[1])) {
         return;
     }
+    // entering from 🏦 بسته‌های شارژ - clear any earlier 🎨 origin so the
+    // caption/button flows return to THIS screen, not the one in 🎨
+    update("user", "tp_edit_origin", "", "id", $from_id);
     deletemessage($from_id, $message_id);
     sendmessage($from_id, topup_packages_caption_with_preview($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
 } elseif (preg_match('/^topupdel:([a-z]{2}):([a-z0-9]+):([0-9]{1,3})$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
@@ -8936,7 +10155,8 @@ elseif ($datain == "systemsms") {
     Editmessagetext($from_id, (int) $tp_m[4], topup_packages_caption_with_preview($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
 } elseif (preg_match('/^topupcapdefault:([a-z]{2}):([a-z0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     topup_caption_set($tp_m[1], $tp_m[2], '');
-    Editmessagetext($from_id, $message_id, topup_packages_caption_with_preview($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
+    list($tp_cap2, $tp_kb2) = topup_after_edit_screen($tp_m[1], $tp_m[2], $textbotlang);
+    Editmessagetext($from_id, $message_id, $tp_cap2, $tp_kb2, 'HTML');
 } elseif (preg_match('/^topupcap:([a-z]{2}):([a-z0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     $tp_cancelKb = json_encode(['inline_keyboard' => [
         [['text' => $textbotlang['Admin']['TopupPkg']['closeCaptionPromptBtn'], 'callback_data' => "topupcapcancel:{$tp_m[1]}:{$tp_m[2]}:{$message_id}", 'style' => 'danger']],
@@ -8947,7 +10167,8 @@ elseif ($datain == "systemsms") {
 } elseif (preg_match('/^topupcapcancel:([a-z]{2}):([a-z0-9]+):([0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     step('home', $from_id);
     deletemessage($from_id, $message_id);
-    Editmessagetext($from_id, (int) $tp_m[3], topup_packages_caption_with_preview($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
+    list($tp_cap2, $tp_kb2) = topup_after_edit_screen($tp_m[1], $tp_m[2], $textbotlang);
+    Editmessagetext($from_id, (int) $tp_m[3], $tp_cap2, $tp_kb2, 'HTML');
 } elseif (preg_match('/^topupcapedit:([a-z]{2}):([a-z0-9]+):([0-9]+):([0-9]+)$/', (string) $user['step'], $tp_m) && $datain == '') {
     $tp_text = trim((string) $text);
     // a premium emoji is only recognised as a caption-leading prefix - one
@@ -8964,10 +10185,94 @@ elseif ($datain == "systemsms") {
     step("home", $from_id);
     deletemessage($from_id, $message_id);
     deletemessage($from_id, (int) $tp_m[4]);
-    Editmessagetext($from_id, (int) $tp_m[3], topup_packages_caption_with_preview($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
+    list($tp_cap2, $tp_kb2) = topup_after_edit_screen($tp_m[1], $tp_m[2], $textbotlang);
+    Editmessagetext($from_id, (int) $tp_m[3], $tp_cap2, $tp_kb2, 'HTML');
 } elseif (preg_match('/^topupcustomcapdefault:([a-z]{2}):([a-z0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     topup_custom_caption_set($tp_m[1], $tp_m[2], '');
-    Editmessagetext($from_id, $message_id, topup_packages_caption_with_preview($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
+    list($tp_cap2, $tp_kb2) = topup_after_edit_screen($tp_m[1], $tp_m[2], $textbotlang);
+    Editmessagetext($from_id, $message_id, $tp_cap2, $tp_kb2, 'HTML');
+} elseif (preg_match('/^tpsl:([a-z]{2}):([a-z0-9]+):([a-z]+)$/', $datain, $sl_m) && $adminrulecheck['rule'] == "administrator") {
+    $sl_p = topup_slot_payload($sl_m[1], $sl_m[2], $sl_m[3], $textbotlang);
+    if ($sl_p === null) {
+        return;
+    }
+    Editmessagetext($from_id, $message_id, $sl_p[0], $sl_p[1], 'HTML');
+} elseif (preg_match('/^tpslc:([a-z]{2}):([a-z0-9]+):([a-z]+):(primary|success|danger)$/', $datain, $sl_m) && $adminrulecheck['rule'] == "administrator") {
+    if (!isset(topup_slot_defs($textbotlang)[$sl_m[3]])) {
+        return;
+    }
+    $sl_st = topup_btnstyle_for($sl_m[1], $sl_m[2], $sl_m[3]);
+    // tapping the colour it already has clears it, so there is a way back to
+    // the built-in default without hunting for the reset button
+    $sl_st['color'] = ((string) ($sl_st['color'] ?? '') === $sl_m[4]) ? '' : $sl_m[4];
+    topup_btnstyle_set($sl_m[1], $sl_m[2], $sl_m[3], $sl_st);
+    $sl_p = topup_slot_payload($sl_m[1], $sl_m[2], $sl_m[3], $textbotlang);
+    Editmessagetext($from_id, $message_id, $sl_p[0], $sl_p[1], 'HTML');
+} elseif (preg_match('/^tpslr:([a-z]{2}):([a-z0-9]+):([a-z]+)$/', $datain, $sl_m) && $adminrulecheck['rule'] == "administrator") {
+    if (!isset(topup_slot_defs($textbotlang)[$sl_m[3]])) {
+        return;
+    }
+    topup_btnstyle_set($sl_m[1], $sl_m[2], $sl_m[3], []);
+    $sl_p = topup_slot_payload($sl_m[1], $sl_m[2], $sl_m[3], $textbotlang);
+    Editmessagetext($from_id, $message_id, $sl_p[0], $sl_p[1], 'HTML');
+} elseif (preg_match('/^tpsllay:([a-z]{2}):([a-z0-9]+):([a-z]+)$/', $datain, $sl_m) && $adminrulecheck['rule'] == "administrator") {
+    if (!isset(topup_slot_defs($textbotlang)[$sl_m[3]])) {
+        return;
+    }
+    topup_slot_swap_toggle($sl_m[1], $sl_m[2], $sl_m[3], $textbotlang);
+    $sl_p = topup_slot_payload($sl_m[1], $sl_m[2], $sl_m[3], $textbotlang);
+    Editmessagetext($from_id, $message_id, $sl_p[0], $sl_p[1], 'HTML');
+} elseif (preg_match('/^tpbackinfo:([a-z]{2}):([a-z0-9]+)$/', $datain, $sl_m) && $adminrulecheck['rule'] == "administrator") {
+    // preview-only row: says what it is and where it is actually edited
+    telegram('answerCallbackQuery', [
+        'callback_query_id' => $callback_query_id,
+        'text' => $textbotlang['Admin']['TopupPkg']['backPreviewAlert'],
+        'show_alert' => true,
+        'cache_time' => 1,
+    ]);
+    return;
+} elseif (preg_match('/^tpsl(note|sep):([a-z]{2}):([a-z0-9]+)(?::([a-z]+))?$/', $datain, $sl_m) && $adminrulecheck['rule'] == "administrator") {
+    // display-only labels: they explain the rows around them instead of moving
+    $sl_tp = $textbotlang['Admin']['TopupPkg'];
+    if ($sl_m[1] === 'sep') {
+        $sl_screen = $sl_m[4] ?? 'amount';
+        $sl_alert = $sl_tp['slotSectionAlert'][$sl_screen] ?? reset($sl_tp['slotSectionAlert']);
+    } else {
+        $sl_alert = $sl_tp['slotPreviewAlert'];
+    }
+    telegram('answerCallbackQuery', [
+        'callback_query_id' => $callback_query_id,
+        'text' => $sl_alert,
+        'show_alert' => true,
+        'cache_time' => 1,
+    ]);
+    return;
+} elseif (preg_match('/^tpsln:([a-z]{2}):([a-z0-9]+):([a-z]+)$/', $datain, $sl_m) && $adminrulecheck['rule'] == "administrator") {
+    if (!isset(topup_slot_defs($textbotlang)[$sl_m[3]])) {
+        return;
+    }
+    savedata("clear", "bt_msgid", $message_id);
+    step("tpslname-{$sl_m[1]}-{$sl_m[2]}-{$sl_m[3]}", $from_id);
+    sendmessage($from_id, $textbotlang['Admin']['TopupPkg']['slotAskName'], null, 'HTML');
+} elseif (preg_match('/^topupgwlist:([a-z]{2})$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
+    list($tp_cap, $tp_kb) = topup_gw_list_payload($tp_m[1], $textbotlang);
+    Editmessagetext($from_id, $message_id, $tp_cap, $tp_kb, 'HTML');
+} elseif (preg_match('/^topupgwgrp:([a-z]{2}):([a-z0-9_]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
+    if (!isset(gateway_groups()[$tp_m[2]])) {
+        return;
+    }
+    list($tp_cap, $tp_kb) = topup_gw_group_payload($tp_m[1], $tp_m[2], $textbotlang);
+    Editmessagetext($from_id, $message_id, $tp_cap, $tp_kb, 'HTML');
+} elseif (preg_match('/^topupgw:([a-z]{2}):([a-z0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
+    if (!in_array($tp_m[2], gateway_all_keys(), true)) {
+        return;
+    }
+    // remember that this gateway's edits were started from 🎨 → 💰, so every
+    // caption/button flow below returns to THIS screen instead of jumping to
+    // 🏦 بسته‌های شارژ where the same flows also live
+    update("user", "tp_edit_origin", "topup", "id", $from_id);
+    list($tp_cap, $tp_kb) = topup_gw_edit_payload($tp_m[1], $tp_m[2], $textbotlang);
+    Editmessagetext($from_id, $message_id, $tp_cap, $tp_kb, 'HTML');
 } elseif (preg_match('/^topupcustomcap:([a-z]{2}):([a-z0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     $tp_cancelKb = json_encode(['inline_keyboard' => [
         [['text' => $textbotlang['Admin']['TopupPkg']['closeCaptionPromptBtn'], 'callback_data' => "topupcustomcapcancel:{$tp_m[1]}:{$tp_m[2]}:{$message_id}", 'style' => 'danger']],
@@ -8978,7 +10283,8 @@ elseif ($datain == "systemsms") {
 } elseif (preg_match('/^topupcustomcapcancel:([a-z]{2}):([a-z0-9]+):([0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     step('home', $from_id);
     deletemessage($from_id, $message_id);
-    Editmessagetext($from_id, (int) $tp_m[3], topup_packages_caption_with_preview($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
+    list($tp_cap2, $tp_kb2) = topup_after_edit_screen($tp_m[1], $tp_m[2], $textbotlang);
+    Editmessagetext($from_id, (int) $tp_m[3], $tp_cap2, $tp_kb2, 'HTML');
 } elseif (preg_match('/^topupcustomcapedit:([a-z]{2}):([a-z0-9]+):([0-9]+):([0-9]+)$/', (string) $user['step'], $tp_m) && $datain == '') {
     $tp_text = trim((string) $text);
     // same premium-emoji-leading-entity handling as topupcapedit: - one
@@ -8994,7 +10300,8 @@ elseif ($datain == "systemsms") {
     step("home", $from_id);
     deletemessage($from_id, $message_id);
     deletemessage($from_id, (int) $tp_m[4]);
-    Editmessagetext($from_id, (int) $tp_m[3], topup_packages_caption_with_preview($tp_m[1], $tp_m[2], $textbotlang), topup_packages_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
+    list($tp_cap2, $tp_kb2) = topup_after_edit_screen($tp_m[1], $tp_m[2], $textbotlang);
+    Editmessagetext($from_id, (int) $tp_m[3], $tp_cap2, $tp_kb2, 'HTML');
 } elseif (preg_match('/^topupdisp:([a-z]{2}):([a-z0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['TopupPkg']['displayPickCaption'], topup_help_hub_payload($tp_m[1], $tp_m[2], $textbotlang), 'HTML');
 } elseif (preg_match('/^topuphelphub:([a-z]{2}):([a-z0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
@@ -9186,7 +10493,12 @@ elseif ($datain == "systemsms") {
     $tp_minmaxCancelKb = json_encode(['inline_keyboard' => [
         [['text' => $textbotlang['Admin']['TopupPkg']['closePromptBtn'], 'callback_data' => "topupminmaxcancel:{$tp_m[1]}:{$tp_m[2]}:{$message_id}", 'style' => 'danger']],
     ]]);
-    $tp_prompt = sendmessage($from_id, strtr($textbotlang['Admin']['TopupPkg']['askMin'], ['{currency}' => currency_get(currency_for_lang($tp_m[1]))['title'] ?? currency_for_lang($tp_m[1])]), $tp_minmaxCancelKb, 'HTML');
+    $tp_floor = topup_usd_floor_toman($tp_m[1], $tp_m[2]);
+    $tp_askMin = strtr($textbotlang['Admin']['TopupPkg'][$tp_floor !== null ? 'askMinOnline' : 'askMin'], [
+        '{currency}' => currency_get(currency_for_lang($tp_m[1]))['title'] ?? currency_for_lang($tp_m[1]),
+        '{minprice}' => $tp_floor !== null ? number_format($tp_floor) : '—',
+    ]);
+    $tp_prompt = sendmessage($from_id, $tp_askMin, $tp_minmaxCancelKb, 'HTML');
     $tp_promptId = (int) ($tp_prompt['result']['message_id'] ?? 0);
     step("topupminval:{$tp_m[1]}:{$tp_m[2]}:{$message_id}:{$tp_promptId}", $from_id);
 } elseif (preg_match('/^topupminmaxcancel:([a-z]{2}):([a-z0-9]+):([0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
@@ -9205,8 +10517,19 @@ elseif ($datain == "systemsms") {
         Editmessagetext($from_id, (int) $tp_m[4], $tp_t['invalidAmount'] . "\n\n" . strtr($tp_t['askMin'], ['{currency}' => currency_get(currency_for_lang($tp_m[1]))['title'] ?? currency_for_lang($tp_m[1])]), $tp_minmaxCancelKb, 'HTML');
         return;
     }
+    // an online gateway cannot go under a dollar, so neither can its minimum
+    $tp_floor = topup_usd_floor_toman($tp_m[1], $tp_m[2]);
+    $tp_wanted = $tp_txt === '0' ? '' : money_normalize($tp_txt);
+    if ($tp_floor !== null && ($tp_wanted === '' || (float) $tp_wanted < $tp_floor)) {
+        $tp_curTitle = currency_get(currency_for_lang($tp_m[1]))['title'] ?? currency_for_lang($tp_m[1]);
+        $tp_minmaxCancelKb = json_encode(['inline_keyboard' => [
+            [['text' => $tp_t['closePromptBtn'], 'callback_data' => "topupminmaxcancel:{$tp_m[1]}:{$tp_m[2]}:{$tp_m[3]}", 'style' => 'danger']],
+        ]]);
+        Editmessagetext($from_id, (int) $tp_m[4], strtr($tp_t['minBelowFloor'], ['{price}' => number_format($tp_floor), '{currency}' => $tp_curTitle]), $tp_minmaxCancelKb, 'HTML');
+        return;
+    }
     [, $tp_curMax] = topup_minmax_for($tp_m[1], $tp_m[2]);
-    topup_minmax_set($tp_m[1], $tp_m[2], $tp_txt === '0' ? '' : money_normalize($tp_txt), $tp_curMax ?? '');
+    topup_minmax_set($tp_m[1], $tp_m[2], $tp_wanted, $tp_curMax ?? '');
     step("home", $from_id);
     deletemessage($from_id, (int) $tp_m[4]);
     [$tp_cap, $tp_kbJson] = topup_minmax_payload($tp_m[1], $tp_m[2], $textbotlang);
@@ -16668,6 +17991,12 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
 } elseif (preg_match('/^tpdautomode:([a-z]{2}):([a-z0-9_]+):(percent|fixed)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
     $td_a = topup_disc_auto_for($td_m[1], $td_m[2]);
     $td_a['mode'] = $td_m[3];
+    // a value entered as a fixed amount can be far above the 100% ceiling that
+    // applies to percentages - carry it over unchecked and the screen would
+    // show, say, "50000%" as if it were valid
+    if ($td_m[3] === 'percent' && floatval($td_a['value'] ?? 0) > 100) {
+        $td_a['value'] = 100;
+    }
     topup_disc_auto_set($td_m[1], $td_m[2], $td_a);
     list($td_text, $td_kb) = topup_disc_auto_payload($td_m[1], $td_m[2], $textbotlang);
     Editmessagetext($from_id, $message_id, $td_text, $td_kb, 'HTML');
@@ -16707,7 +18036,13 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     list($td_text, $td_kb) = topup_disc_code_payload($td_m[1], $td_m[2], (int) $td_m[3], $textbotlang);
     Editmessagetext($from_id, $message_id, $td_text, $td_kb, 'HTML');
 } elseif (preg_match('/^tpdmode:([a-z]{2}):([a-z0-9_]+):(\d+):(percent|fixed)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
-    topup_disc_code_update($td_m[1], $td_m[2], (int) $td_m[3], ['mode' => $td_m[4]]);
+    // same clamp as the auto discount's mode switch above
+    $td_upd = ['mode' => $td_m[4]];
+    $td_cur = topup_disc_code_get($td_m[1], $td_m[2], (int) $td_m[3]);
+    if ($td_m[4] === 'percent' && floatval($td_cur['value'] ?? 0) > 100) {
+        $td_upd['value'] = 100;
+    }
+    topup_disc_code_update($td_m[1], $td_m[2], (int) $td_m[3], $td_upd);
     list($td_text, $td_kb) = topup_disc_code_payload($td_m[1], $td_m[2], (int) $td_m[3], $textbotlang);
     Editmessagetext($from_id, $message_id, $td_text, $td_kb, 'HTML');
 } elseif (preg_match('/^tpd(val|limit|user|exp):([a-z]{2}):([a-z0-9_]+):(\d+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
@@ -18163,6 +19498,86 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     Editmessagetext($from_id, $message_id, $help_caption, $help_kb, 'HTML');
 } elseif ($datain == "btnstyle_close" && $adminrulecheck['rule'] == "administrator") {
     deletemessage($from_id, $message_id);
+} elseif (preg_match('/^gwgrp:([a-z]{2})$/', $datain, $gg_m) && $adminrulecheck['rule'] == "administrator") {
+    // ---- 🗂 دسته‌بندی درگاه‌ها ----
+    list($gg_cap, $gg_kb) = topup_group_hub_payload($gg_m[1], $textbotlang);
+    Editmessagetext($from_id, $message_id, $gg_cap, $gg_kb, 'HTML');
+} elseif (preg_match('/^gwgrpsep:([a-z]{2})$/', $datain, $gg_m) && $adminrulecheck['rule'] == "administrator") {
+    // a label, not a button - say so rather than doing nothing
+    telegram('answerCallbackQuery', [
+        'callback_query_id' => $callback_query_id,
+        'text' => $textbotlang['Admin']['BtnStyle']['groupBtnsLabel'],
+        'show_alert' => false,
+    ]);
+} elseif (preg_match('/^gwgrptog:([a-z]{2})$/', $datain, $gg_m) && $adminrulecheck['rule'] == "administrator") {
+    topup_group_methods_set($gg_m[1], !topup_group_methods_on($gg_m[1]));
+    list($gg_cap, $gg_kb) = topup_group_hub_payload($gg_m[1], $textbotlang);
+    Editmessagetext($from_id, $message_id, $gg_cap, $gg_kb, 'HTML');
+} elseif (preg_match('/^gwgrpcapdefault:([a-z]{2})$/', $datain, $gg_m) && $adminrulecheck['rule'] == "administrator") {
+    topup_group_caption_set($gg_m[1], '');
+    list($gg_cap, $gg_kb) = topup_group_hub_payload($gg_m[1], $textbotlang);
+    Editmessagetext($from_id, $message_id, $gg_cap, $gg_kb, 'HTML');
+} elseif (preg_match('/^gwgrpcap:([a-z]{2})$/', $datain, $gg_m) && $adminrulecheck['rule'] == "administrator") {
+    $gg_cancelKb = json_encode(['inline_keyboard' => [
+        [['text' => $textbotlang['Admin']['TopupPkg']['closeCaptionPromptBtn'], 'callback_data' => "gwgrpcapcancel:{$gg_m[1]}:{$message_id}", 'style' => 'danger']],
+    ]]);
+    $gg_prompt = sendmessage($from_id, $textbotlang['Admin']['BtnStyle']['askGroupCaption'], $gg_cancelKb, 'HTML');
+    step("gwgrpcapedit:{$gg_m[1]}:{$message_id}:" . (int) ($gg_prompt['result']['message_id'] ?? 0), $from_id);
+} elseif (preg_match('/^gwgrpcapcancel:([a-z]{2}):([0-9]+)$/', $datain, $gg_m) && $adminrulecheck['rule'] == "administrator") {
+    step('home', $from_id);
+    deletemessage($from_id, $message_id);
+    list($gg_cap, $gg_kb) = topup_group_hub_payload($gg_m[1], $textbotlang);
+    Editmessagetext($from_id, (int) $gg_m[2], $gg_cap, $gg_kb, 'HTML');
+} elseif (preg_match('/^gwgrpcapedit:([a-z]{2}):([0-9]+):([0-9]+)$/', (string) $user['step'], $gg_m) && $datain == '') {
+    topup_group_caption_set($gg_m[1], topup_caption_text_from_update($text, $update));
+    step('home', $from_id);
+    deletemessage($from_id, $message_id);
+    deletemessage($from_id, (int) $gg_m[3]);
+    list($gg_cap, $gg_kb) = topup_group_hub_payload($gg_m[1], $textbotlang);
+    Editmessagetext($from_id, (int) $gg_m[2], $gg_cap, $gg_kb, 'HTML');
+} elseif (preg_match('/^gwgrpcol:([a-z]{2})$/', $datain, $gg_m) && $adminrulecheck['rule'] == "administrator") {
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['colorCaption'], topup_group_color_payload($gg_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^gwgrpcolpick:([a-z]{2}):([a-z]+)$/', $datain, $gg_m) && $adminrulecheck['rule'] == "administrator") {
+    if (!isset(gateway_groups()[$gg_m[2]])) {
+        return;
+    }
+    $gg_order = ['primary', 'success', 'danger'];
+    $gg_style = topup_group_btnstyle_for($gg_m[1], $gg_m[2]);
+    $gg_pos = array_search((string) ($gg_style['color'] ?? 'primary'), $gg_order, true);
+    $gg_style['color'] = $gg_order[(($gg_pos === false ? 0 : $gg_pos) + 1) % count($gg_order)];
+    topup_group_btnstyle_set($gg_m[1], $gg_m[2], $gg_style);
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['colorCaption'], topup_group_color_payload($gg_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^gwgrpren:([a-z]{2})$/', $datain, $gg_m) && $adminrulecheck['rule'] == "administrator") {
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['BtnStyle']['renameCaption'], topup_group_rename_payload($gg_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^gwgrprenpick:([a-z]{2}):([a-z]+)$/', $datain, $gg_m) && $adminrulecheck['rule'] == "administrator") {
+    if (!isset(gateway_groups()[$gg_m[2]])) {
+        return;
+    }
+    $gg_label = topup_styled_button(gateway_group_label($gg_m[2], $textbotlang), topup_group_btnstyle_for($gg_m[1], $gg_m[2]), '')['text'];
+    $gg_cancelKb = json_encode(['inline_keyboard' => [
+        [['text' => $textbotlang['Admin']['TopupPkg']['closePromptBtn'], 'callback_data' => "gwgrprencancel:{$gg_m[1]}:{$gg_m[2]}:{$message_id}", 'style' => 'danger']],
+    ]]);
+    $gg_prompt = sendmessage($from_id, sprintf($textbotlang['Admin']['BtnStyle']['askRenameForItem'], $gg_label), $gg_cancelKb, 'HTML');
+    step("gwgrpreni:{$gg_m[1]}:{$gg_m[2]}:{$message_id}:" . (int) ($gg_prompt['result']['message_id'] ?? 0), $from_id);
+} elseif (preg_match('/^gwgrprencancel:([a-z]{2}):([a-z]+):([0-9]+)$/', $datain, $gg_m) && $adminrulecheck['rule'] == "administrator") {
+    step('home', $from_id);
+    deletemessage($from_id, $message_id);
+    Editmessagetext($from_id, (int) $gg_m[3], $textbotlang['Admin']['BtnStyle']['renameCaption'], topup_group_rename_payload($gg_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^gwgrpreni:([a-z]{2}):([a-z]+):([0-9]+):([0-9]+)$/', (string) $user['step'], $gg_m) && $datain == '') {
+    deletemessage($from_id, $message_id);
+    $gg_style = topup_group_btnstyle_for($gg_m[1], $gg_m[2]);
+    $gg_style['label'] = trim((string) $text) === '0' ? '' : trim((string) $text);
+    topup_group_btnstyle_set($gg_m[1], $gg_m[2], $gg_style);
+    step('home', $from_id);
+    deletemessage($from_id, (int) $gg_m[4]);
+    Editmessagetext($from_id, (int) $gg_m[3], $textbotlang['Admin']['BtnStyle']['renameCaption'], topup_group_rename_payload($gg_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^gwgrprenreset:([a-z]{2})$/', $datain, $gg_m) && $adminrulecheck['rule'] == "administrator") {
+    foreach (array_keys(gateway_groups()) as $gg_group) {
+        $gg_style = topup_group_btnstyle_for($gg_m[1], $gg_group);
+        $gg_style['label'] = '';
+        topup_group_btnstyle_set($gg_m[1], $gg_group, $gg_style);
+    }
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['BtnStyle']['renameCaption'], topup_group_rename_payload($gg_m[1], $textbotlang), 'HTML');
 } elseif (preg_match('/^btnstyle_kindhub:(panel|product|category|gateway):(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
     $help_kind = $help_m[1];
     $help_lang = $help_m[2];

@@ -528,15 +528,27 @@ function generateUUID()
 }
 function rate_arze()
 {
+    // Two third-party pages, either of which can go down, get blocked, or
+    // change shape. A zero coming out of that is not a rate, it is a failure -
+    // and every caller divides by it, which on PHP 8 is a fatal rather than a
+    // bad number. So a failure returns null, which every caller already reads
+    // as "no rate available" and turns into a clean message for the customer.
     $arze_rate = [];
-    $requests_tron = json_decode(file_get_contents('https://api.diadata.org/v1/assetQuotation/Tron/0x0000000000000000000000000000000000000000'), true);
-    $html_read = file_get_contents("https://www.bon-bast.com/");
-    preg_match('/<span>\s*([\d,]+)\s*<\/span>/', $html_read, $matches);
-    if (!empty($matches[1])) {
-        $requestsusd = str_replace(',', '', $matches[1]);
+    $requestsusd = null;
+    $tron_raw = @file_get_contents('https://api.diadata.org/v1/assetQuotation/Tron/0x0000000000000000000000000000000000000000');
+    $requests_tron = $tron_raw === false ? null : json_decode($tron_raw, true);
+    $html_read = @file_get_contents("https://www.bon-bast.com/");
+    if ($html_read !== false) {
+        preg_match('/<span>\s*([\d,]+)\s*<\/span>/', $html_read, $matches);
+        if (!empty($matches[1])) {
+            $requestsusd = str_replace(',', '', $matches[1]);
+        }
     }
     $arze_rate['USD'] = intval($requestsusd);
-    $arze_rate['TRX'] = intval($requests_tron['Price'] * $arze_rate['USD']);
+    if ($arze_rate['USD'] <= 0) {
+        return null;
+    }
+    $arze_rate['TRX'] = intval(((float) ($requests_tron['Price'] ?? 0)) * $arze_rate['USD']);
 
     return $arze_rate;
 }
@@ -860,24 +872,6 @@ function DirectPayment($order_id, $image = 'images.jpg')
             update("invoice", "user_info", $dataoutput['subscription_url'], "id_invoice", $get_invoice['id_invoice']);
         }
         sendMessageService($marzban_list_get, $dataoutput['configs'], $output_config_link, $dataoutput['username'], $Shoppinginfo, $textcreatuser, $get_invoice['id_invoice'], $get_invoice['id_user'], $image);
-        $partsdic = explode("_", $Balance_id['Processing_value_four'], $get_invoice['id_user']);
-        if ($partsdic[0] == "dis") {
-            $SellDiscountlimit = select("DiscountSell", "*", "codeDiscount", $partsdic[1], "select");
-            $value = intval($SellDiscountlimit['usedDiscount']) + 1;
-            update("DiscountSell", "usedDiscount", $value, "codeDiscount", $partsdic[1]);
-            $stmt = $pdo->prepare("INSERT INTO Giftcodeconsumed (id_user,code) VALUES (:id_user,:code)");
-            $stmt->bindParam(':id_user', $Balance_id['id']);
-            $stmt->bindParam(':code', $partsdic[1]);
-            $stmt->execute();
-            $text_report = sprintf($textbotlang['hardcoded']['discountCodeUsedAdmin'], $Balance_id['username'], $Balance_id['id'], $partsdic[1]);
-            if (strlen($setting['Channel_Report']) > 0) {
-                telegram('sendmessage', [
-                    'chat_id' => $setting['Channel_Report'],
-                    'message_thread_id' => $otherreport,
-                    'text' => $text_report,
-                ]);
-            }
-        }
         $affiliatescommission = select("affiliates", "*", null, null, "select");
         $marzbanporsant_one_buy = select("affiliates", "*", null, null, "select");
         $stmt = $pdo->prepare("SELECT * FROM invoice WHERE name_product != :name_product  AND id_user = :id_user AND Status != 'Unpaid'");
@@ -1046,24 +1040,6 @@ function DirectPayment($order_id, $image = 'images.jpg')
 
         update("service_other", "output", json_encode($extend), "id", $data_order['id']);
         update("service_other", "status", "paid", "id", $data_order['id']);
-        $partsdic = explode("_", $Balance_id['Processing_value_four']);
-        if ($partsdic[0] == "dis") {
-            $SellDiscountlimit = select("DiscountSell", "*", "codeDiscount", $partsdic[1], "select");
-            $value = intval($SellDiscountlimit['usedDiscount']) + 1;
-            update("DiscountSell", "usedDiscount", $value, "codeDiscount", $partsdic[1]);
-            $stmt = $pdo->prepare("INSERT INTO Giftcodeconsumed (id_user,code) VALUES (:id_user,:code)");
-            $stmt->bindParam(':id_user', $Balance_id['id']);
-            $stmt->bindParam(':code', $partsdic[1]);
-            $stmt->execute();
-            $text_report = sprintf($textbotlang['hardcoded']['discountCodeUsedAdminFn'], $Balance_id['username'], $Balance_id['id'], $partsdic[1]);
-            if (strlen($setting['Channel_Report']) > 0) {
-                telegram('sendmessage', [
-                    'chat_id' => $setting['Channel_Report'],
-                    'message_thread_id' => $otherreport,
-                    'text' => $text_report,
-                ]);
-            }
-        }
         $keyboardextendfnished = json_encode([
             'inline_keyboard' => [
                 [
@@ -1302,6 +1278,9 @@ function DirectPayment($order_id, $image = 'images.jpg')
         $bc_kb = json_encode(['inline_keyboard' => [[genbtn_render($bc_defs[0], $bc_ov, $bc_defs[0]['callback_data'])]]]);
         sendmessage($Payment_report['id_user'], $bc_caption, $bc_kb, 'HTML');
     }
+    // every gateway reaches here once its payment is confirmed, so this is
+    // the one place the settled invoice needs updating
+    topup_paid_notify($order_id);
 }
 function plisio($order_id, $price, $from_id)
 {
@@ -1571,6 +1550,159 @@ if (!function_exists('card_invoice_btnstyle_for')) {
         return is_array($v) ? $v : [];
     }
 }
+if (!function_exists('card_invoice_btnstyle_default_color')) {
+    // Out-of-the-box colours for the invoice buttons, used whenever the admin
+    // hasn't picked one. They used to fall back to no style at all, which
+    // Telegram renders as a plain white button - the copy-card and
+    // send-receipt buttons are the two the customer is meant to act on, so
+    // they read as blue/green instead. Shared by the invoice renderer AND the
+    // colour picker, so what the admin previews is what the customer sees.
+    function card_invoice_btnstyle_default_color($which)
+    {
+        $defaults = [
+            'copyCard' => 'primary',
+            'paidReceipt' => 'success',
+            'reissue' => 'danger',
+        ];
+        // copyCard2, copyCard3, ... are the second and later cards; they share
+        // the first card's blue rather than falling through to a white button
+        if (card_invoice_copy_index($which) !== null) {
+            return 'primary';
+        }
+        return $defaults[$which] ?? '';
+    }
+}
+if (!function_exists('card_invoice_copy_key')) {
+    // The style key for the copy button of card #$i (1-based). Card 1 keeps the
+    // original 'copyCard' key so an admin's existing colour/name survives the
+    // move to per-card styling untouched.
+    function card_invoice_copy_key($i)
+    {
+        return $i <= 1 ? 'copyCard' : ('copyCard' . intval($i));
+    }
+}
+if (!function_exists('card_invoice_copy_index')) {
+    // 1-based card number for a copy-button key, or null if it is not one
+    function card_invoice_copy_index($which)
+    {
+        if ($which === 'copyCard') {
+            return 1;
+        }
+        return preg_match('/^copyCard([2-9]\d*)$/', (string) $which, $m) ? intval($m[1]) : null;
+    }
+}
+if (!function_exists('card_invoice_copy_perrow')) {
+    // How many copy buttons share a row. Stored under the reserved '_layout'
+    // slot of the same per-language style map, so it needs no new setting.
+    function card_invoice_copy_perrow($lang)
+    {
+        $n = intval(card_invoice_btnstyle_for($lang, '_layout')['perRow'] ?? 0);
+        return ($n >= 1 && $n <= 3) ? $n : 1;
+    }
+}
+if (!function_exists('card_invoice_copy_rows')) {
+    // Chunks the copy buttons into keyboard rows per the admin's 📐 چیدمان
+    function card_invoice_copy_rows($lang, array $btns)
+    {
+        if (empty($btns)) {
+            return [];
+        }
+        return array_chunk($btns, max(1, card_invoice_copy_perrow($lang)));
+    }
+}
+if (!function_exists('card_invoice_card_order')) {
+    // Display order of the cards, as a list of positions into the stored card
+    // list. Kept in the reserved '_layout' slot rather than by reordering the
+    // cards themselves, so 📐 چیدمان never rewrites the admin's card data - and
+    // a card added or removed later just falls back to natural order.
+    function card_invoice_card_order($lang, $total)
+    {
+        $raw = card_invoice_btnstyle_for($lang, '_layout')['order'] ?? null;
+        $order = [];
+        if (is_array($raw)) {
+            foreach ($raw as $i) {
+                $i = intval($i);
+                if ($i >= 0 && $i < $total && !in_array($i, $order, true)) {
+                    $order[] = $i;
+                }
+            }
+        }
+        for ($i = 0; $i < $total; $i++) {
+            if (!in_array($i, $order, true)) {
+                $order[] = $i;
+            }
+        }
+        return $order;
+    }
+}
+if (!function_exists('card_invoice_ordered_cards')) {
+    // The cards in the order the invoice should show them. Used for BOTH the
+    // caption and the buttons, so the "name | number" lines and the copy rows
+    // can never disagree about which card is first.
+    function card_invoice_ordered_cards($lang)
+    {
+        $cards = array_values(gw_cards_for_lang($lang));
+        $out = [];
+        foreach (card_invoice_card_order($lang, count($cards)) as $i) {
+            $out[] = $cards[$i];
+        }
+        return $out;
+    }
+}
+if (!function_exists('card_invoice_layout_swap')) {
+    // Swaps two display slots. Both the card order AND the two slots' styles
+    // move, so the whole button the admin sees - card, colour and custom name -
+    // travels together, which is what the 📐 screen shows happening.
+    function card_invoice_layout_swap($lang, $a, $b)
+    {
+        $total = count(gw_cards_for_lang($lang));
+        $a = intval($a);
+        $b = intval($b);
+        if ($a === $b || $a < 0 || $b < 0 || $a >= $total || $b >= $total) {
+            return;
+        }
+        $order = card_invoice_card_order($lang, $total);
+        $tmp = $order[$a];
+        $order[$a] = $order[$b];
+        $order[$b] = $tmp;
+        $lay = card_invoice_btnstyle_for($lang, '_layout');
+        $lay['order'] = $order;
+        card_invoice_btnstyle_set($lang, '_layout', $lay);
+
+        $keyA = card_invoice_copy_key($a + 1);
+        $keyB = card_invoice_copy_key($b + 1);
+        $styleA = card_invoice_btnstyle_for($lang, $keyA);
+        $styleB = card_invoice_btnstyle_for($lang, $keyB);
+        card_invoice_btnstyle_set($lang, $keyA, $styleB);
+        card_invoice_btnstyle_set($lang, $keyB, $styleA);
+    }
+}
+if (!function_exists('card_invoice_copy_label')) {
+    // Default label for card #$i's copy button. With a single card it stays
+    // exactly what it always was; from two cards on it gains an ordinal, since
+    // otherwise every card renders the same button text.
+    function card_invoice_copy_label($i, $total, $textbotlang)
+    {
+        $base = $textbotlang['keyboard']['copyCardNumber'];
+        if ($total < 2) {
+            return $base;
+        }
+        $ords = $textbotlang['keyboard']['cardOrdinals'] ?? [];
+        $ord = $ords[$i - 1] ?? (string) $i;
+        return $base . ' ' . $ord;
+    }
+}
+if (!function_exists('card_invoice_btnstyle_color')) {
+    // The colour a given invoice button actually renders with: the admin's
+    // pick if they made one, otherwise this button's built-in default.
+    function card_invoice_btnstyle_color($lang, $which)
+    {
+        $color = (string) (card_invoice_btnstyle_for($lang, $which)['color'] ?? '');
+        return in_array($color, ['success', 'danger', 'primary'], true)
+            ? $color
+            : card_invoice_btnstyle_default_color($which);
+    }
+}
 if (!function_exists('card_invoice_btnstyle_set')) {
     function card_invoice_btnstyle_set($lang, $which, array $style)
     {
@@ -1583,6 +1715,15 @@ if (!function_exists('card_invoice_btnstyle_set')) {
         $color = (string) ($style['color'] ?? '');
         if (in_array($color, ['success', 'danger', 'primary'], true)) {
             $clean['color'] = $color;
+        }
+        // the reserved '_layout' slot carries no label/colour, just how many
+        // copy buttons share a row - without this it would be sanitised away
+        $perRow = intval($style['perRow'] ?? 0);
+        if ($perRow >= 1 && $perRow <= 3) {
+            $clean['perRow'] = $perRow;
+        }
+        if (isset($style['order']) && is_array($style['order'])) {
+            $clean['order'] = array_values(array_map('intval', $style['order']));
         }
         if (!isset($m[$lang]) || !is_array($m[$lang])) {
             $m[$lang] = [];
@@ -1707,41 +1848,44 @@ if (!function_exists('gw_field_registry')) {
             ],
             'plisio' => [
                 ['field' => 'apinowpayment', 'type' => 'text', 'label' => 'apiKeyLabel', 'scope' => 'global'],
-                ['field' => 'chashbackplisio', 'type' => 'text', 'label' => 'cashbackLabel', 'scope' => 'global'],
                 ['field' => 'plisioInvoiceExpireMinutes', 'type' => 'number', 'label' => 'invoiceExpireLabel'],
             ],
             'nowpayment' => [
                 ['field' => 'marchent_tronseller', 'type' => 'text', 'label' => 'apiKeyLabel', 'scope' => 'global'],
-                ['field' => 'cashbacknowpayment', 'type' => 'text', 'label' => 'cashbackLabel', 'scope' => 'global'],
+                ['field' => 'nowpaymentInvoiceExpireMinutes', 'type' => 'number', 'label' => 'invoiceExpireLabel'],
             ],
             'digitaltron' => [
                 ['field' => 'walletaddress', 'type' => 'text', 'label' => 'walletLabel'],
+                ['field' => 'digitaltronInvoiceExpireMinutes', 'type' => 'number', 'label' => 'invoiceExpireLabel'],
+            ],
+            'ton' => [
+                ['field' => 'walletaddresston', 'type' => 'text', 'label' => 'tonWalletLabel'],
+                ['field' => 'tonInvoiceExpireMinutes', 'type' => 'number', 'label' => 'invoiceExpireLabel'],
+            ],
+            'trx' => [
+                ['field' => 'walletaddresstrx', 'type' => 'text', 'label' => 'trxWalletLabel'],
+                ['field' => 'trxInvoiceExpireMinutes', 'type' => 'number', 'label' => 'invoiceExpireLabel'],
             ],
             'iranpay1' => [
                 ['field' => 'marchent_floypay', 'type' => 'text', 'label' => 'merchantLabel', 'scope' => 'global'],
-                ['field' => 'chashbackiranpay1', 'type' => 'text', 'label' => 'cashbackLabel', 'scope' => 'global'],
             ],
             'iranpay2' => [
                 ['field' => 'apiternado', 'type' => 'text', 'label' => 'apiKeyLabel', 'scope' => 'global'],
                 ['field' => 'walletaddress', 'type' => 'text', 'label' => 'walletLabel'],
                 ['field' => 'urlpaymenttron', 'type' => 'text', 'label' => 'payUrlLabel', 'scope' => 'global'],
-                ['field' => 'chashbackiranpay2', 'type' => 'text', 'label' => 'cashbackLabel', 'scope' => 'global'],
             ],
             'iranpay3' => [
                 ['field' => 'apiiranpay', 'type' => 'text', 'label' => 'apiKeyLabel', 'scope' => 'global'],
-                ['field' => 'chashbackiranpay3', 'type' => 'text', 'label' => 'cashbackLabel', 'scope' => 'global'],
             ],
             'aqayepardakht' => [
                 ['field' => 'merchant_id_aqayepardakht', 'type' => 'text', 'label' => 'merchantLabel', 'scope' => 'global'],
-                ['field' => 'chashbackaqaypardokht', 'type' => 'text', 'label' => 'cashbackLabel', 'scope' => 'global'],
             ],
             'zarinpal' => [
                 ['field' => 'merchant_zarinpal', 'type' => 'text', 'label' => 'merchantLabel', 'scope' => 'global'],
-                ['field' => 'chashbackzarinpal', 'type' => 'text', 'label' => 'cashbackLabel', 'scope' => 'global'],
             ],
             'paymentnotverify' => [],
             'startelegrams' => [
-                ['field' => 'chashbackstar', 'type' => 'text', 'label' => 'cashbackLabel', 'scope' => 'global'],
+                ['field' => 'starInvoiceExpireMinutes', 'type' => 'number', 'label' => 'invoiceExpireLabel'],
             ],
         ];
     }
@@ -1858,6 +2002,8 @@ if (!function_exists('gateway_registry')) {
             'card' => $textbotlang['textbot']['cartToCart'],
             'plisio' => $textbotlang['textbot']['nowPayment'],
             'nowpayment' => $textbotlang['textbot']['cryptoPayment'],
+            'ton' => $textbotlang['textbot']['tonPayment'],
+            'trx' => $textbotlang['textbot']['trxPayment'],
             'digitaltron' => $textbotlang['textbot']['nowPaymentTron'],
             'iranpay1' => $textbotlang['textbot']['iranPay2'],
             'iranpay2' => $textbotlang['textbot']['iranPay3'],
@@ -1869,12 +2015,68 @@ if (!function_exists('gateway_registry')) {
         ];
     }
 }
+if (!function_exists('gateway_groups')) {
+    // Gateways that belong together get one collapsible row on the 💳 hub
+    // instead of a row each. Only families with more than one member are worth
+    // grouping - a "group" holding a single gateway would just add a tap.
+    // Anything not listed here keeps its own direct row, exactly as before.
+    function gateway_groups()
+    {
+        return [
+            // processor-settled: the gateway confirms the payment itself, so
+            // nothing here ever waits on an admin
+            // TON is paid into the shop's own wallet, but cronbot/ton.php
+            // settles it off the public chain with no admin in the loop -
+            // which is what this family means
+            'online' => ['plisio', 'nowpayment', 'startelegrams', 'ton', 'trx'],
+            // paid straight to the bot's own wallet, so an admin has to confirm
+            // each one by hand - a different workflow, hence its own group
+            'offline' => ['digitaltron'],
+            // rial processors - every one of these is fa-only (see
+            // gateway_fa_only_keys), so the group simply never appears on the
+            // other language tabs
+            'rial' => ['iranpay1', 'iranpay2', 'iranpay3', 'aqayepardakht', 'zarinpal', 'paymentnotverify'],
+        ];
+    }
+}
+if (!function_exists('gateway_group_label')) {
+    function gateway_group_label($group, $textbotlang)
+    {
+        return $textbotlang['Admin']['GatewayLang']['groups'][$group]
+            ?? ($textbotlang['Admin']['GatewayLang']['groups']['online'] ?? $group);
+    }
+}
+if (!function_exists('gateway_group_of')) {
+    // the group a gateway belongs to, or null when it stands on its own
+    function gateway_group_of($key)
+    {
+        foreach (gateway_groups() as $group => $members) {
+            if (in_array($key, $members, true)) {
+                return $group;
+            }
+        }
+        return null;
+    }
+}
+if (!function_exists('gateway_group_members')) {
+    // members of a group that make sense for this language at all
+    function gateway_group_members($group, $lang)
+    {
+        $out = [];
+        foreach (gateway_groups()[$group] ?? [] as $key) {
+            if (gateway_applicable_for_lang($key, $lang)) {
+                $out[] = $key;
+            }
+        }
+        return $out;
+    }
+}
 if (!function_exists('gateway_all_keys')) {
     // Stable identifiers for the payment buttons, taken from their callback_data
     // (card-to-card is keyed by name because it can render as a url button).
     function gateway_all_keys()
     {
-        return ['card', 'plisio', 'nowpayment', 'digitaltron', 'iranpay1', 'iranpay2',
+        return ['card', 'plisio', 'nowpayment', 'ton', 'trx', 'digitaltron', 'iranpay1', 'iranpay2',
             'iranpay3', 'aqayepardakht', 'zarinpal', 'paymentnotverify', 'startelegrams'];
     }
 }
@@ -2284,6 +2486,23 @@ if (!function_exists('sms_forward_toggle')) {
         } else {
             update("setting", "smsForwardEnabled", '1', null, null);
             update("setting", "cardRandomAmount", '1', null, null);
+            // The blind auto-confirms are mutually exclusive with SMS Forward:
+            // this feature confirms a payment because the bank actually said so,
+            // while those two confirm on a timer whether or not any money
+            // arrived. The admin screen refuses to switch them on while SMS
+            // Forward is active, so also clear anything already on (global AND
+            // every per-language override) - otherwise enabling SMS Forward on
+            // top of an already-running timer would leave both live.
+            pay_global_set('autoconfirmcart', 'offauto');
+            pay_global_set('timeauto_not_verify', '0');
+            $m = gw_lang_settings_map();
+            foreach (array_keys($m) as $l) {
+                unset($m[$l]['pay']['autoconfirmcart'], $m[$l]['pay']['timeauto_not_verify']);
+                if (isset($m[$l]['pay']) && empty($m[$l]['pay'])) {
+                    unset($m[$l]['pay']);
+                }
+            }
+            gw_lang_settings_save($m);
             sms_forward_ensure_secret();
         }
         return $wasOn;
@@ -2407,6 +2626,37 @@ if (!function_exists('sms_forward_extract_text_from_request')) {
         return $rawBody;
     }
 }
+if (!function_exists('payment_notify_admins_auto_confirmed')) {
+    // Tells every admin that an invoice confirmed itself, so a receipt the
+    // user may already have sent (which is sitting in the admin's chat with
+    // live تایید/رد buttons) is visibly settled and nobody taps confirm on a
+    // payment that is already credited. Shared by the SMS-forward webhook and
+    // croncard's timer-based auto-confirm - both run in a cron context where
+    // DirectPayment()'s own Editmessagetext() calls silently no-op, so this is
+    // the only signal the admin gets.
+    function payment_notify_admins_auto_confirmed(array $Payment_report, $reasonText)
+    {
+        global $textbotlang;
+        $tpl = $textbotlang['hardcoded']['autoConfirmedAdminNotice'] ?? '';
+        if (trim((string) $tpl) === '') {
+            return; // not translated for this bot's language - nothing to send
+        }
+        $notice = sprintf(
+            $tpl,
+            $Payment_report['id_order'],
+            $Payment_report['id_user'],
+            number_format(intval($Payment_report['price'])),
+            $reasonText
+        );
+        foreach ((array) select("admin", "id_admin", null, null, "FETCH_COLUMN") as $id_admin) {
+            $adminRow = select("admin", "*", "id_admin", $id_admin, "select");
+            if (is_array($adminRow) && ($adminRow['rule'] ?? '') === 'support') {
+                continue; // same exclusion the receipt notification itself uses
+            }
+            sendmessage($id_admin, $notice, null, 'HTML');
+        }
+    }
+}
 if (!function_exists('sms_forward_find_pending_match')) {
     // Looks for exactly one pending card-to-card invoice whose price (in
     // rial) equals $rialAmount. 'Unpaid' is included alongside 'waiting' on
@@ -2469,7 +2719,9 @@ if (!function_exists('topup_card_invoice_generate')) {
         // original amount-pick flow AND the expired-invoice "ساخت فاکتور
         // جدید" reissue flow - pure builder, no message send/edit/delete of
         // its own, so both callers stay in charge of their own delivery.
-        $cardList = gw_cards_for_lang($lang);
+        // display order comes from 📐 چیدمان, and is applied here so the caption's
+        // "name | number" lines and the copy buttons below always agree
+        $cardList = card_invoice_ordered_cards($lang);
         if (empty($cardList)) {
             return null;
         }
@@ -2516,25 +2768,31 @@ if (!function_exists('topup_card_invoice_generate')) {
         $Payment_Method = "cart to cart";
         $stmt->execute([$from_id, $randomString, $dateacc, $amount, $payment_Status, $Payment_Method, $idInvoice]);
         if ($setting['statuscopycart'] == "1") {
-            $copyStyle = card_invoice_btnstyle_for($lang, 'copyCard');
-            $copyLabel = trim((string) ($copyStyle['label'] ?? '')) !== '' ? $copyStyle['label'] : $textbotlang['keyboard']['copyCardNumber'];
-            $copyColor = in_array($copyStyle['color'] ?? '', ['success', 'danger', 'primary'], true) ? $copyStyle['color'] : '';
-            $copyRows = [];
-            foreach ($cardList as $c) {
-                $cName = trim((string) ($c['name'] ?? ''));
-                $label = (count($cardList) > 1 && $cName !== '') ? ($copyLabel . ' — ' . $cName) : $copyLabel;
+            // one style entry per card (copyCard, copyCard2, ...) so each row can
+            // carry its own colour and name - a single shared entry rendered
+            // every card with the identical label the moment a card had no name
+            $total = count($cardList);
+            $copyBtns = [];
+            foreach (array_values($cardList) as $idx => $c) {
+                $which = card_invoice_copy_key($idx + 1);
+                $style = card_invoice_btnstyle_for($lang, $which);
+                $label = trim((string) ($style['label'] ?? '')) !== ''
+                    ? $style['label']
+                    : card_invoice_copy_label($idx + 1, $total, $textbotlang);
                 $copyBtn = ['text' => $label, 'copy_text' => ['text' => (string) ($c['number'] ?? '')]];
-                if ($copyColor !== '') {
-                    $copyBtn['style'] = $copyColor;
+                $color = card_invoice_btnstyle_color($lang, $which);
+                if ($color !== '') {
+                    $copyBtn['style'] = $color;
                 }
-                $copyRows[] = [$copyBtn];
+                $copyBtns[] = $copyBtn;
             }
+            $copyRows = card_invoice_copy_rows($lang, $copyBtns);
             $receiptStyle = card_invoice_btnstyle_for($lang, 'paidReceipt');
-            $receiptBtn = topup_styled_button($textbotlang['keyboard']['paidSendReceipt'], $receiptStyle, "sendresidcart-" . $randomString);
+            $receiptBtn = topup_styled_button($textbotlang['keyboard']['paidSendReceipt'], $receiptStyle, "sendresidcart-" . $randomString, card_invoice_btnstyle_default_color('paidReceipt'));
             $sendresidcart = json_encode(['inline_keyboard' => array_merge($copyRows, [[$receiptBtn]])]);
         } else {
             $receiptStyle = card_invoice_btnstyle_for($lang, 'paidReceipt');
-            $receiptBtn = topup_styled_button($textbotlang['keyboard']['paidSendReceipt'], $receiptStyle, "sendresidcart-" . $randomString);
+            $receiptBtn = topup_styled_button($textbotlang['keyboard']['paidSendReceipt'], $receiptStyle, "sendresidcart-" . $randomString, card_invoice_btnstyle_default_color('paidReceipt'));
             $sendresidcart = json_encode(['inline_keyboard' => [[$receiptBtn]]]);
         }
         return [
@@ -2650,8 +2908,10 @@ if (!function_exists('topup_card_invoice_generate')) {
         }
         $usd = $rates['USD'];
         $usdprice = $amount / $usd;
-        if ($usdprice <= 1) {
-            return ['error' => 'toolow'];
+        // strictly below: a dollar exactly is the minimum, not the first
+        // amount over it - the message names $1 as what is required
+        if ($usdprice < 1) {
+            return ['error' => 'toolow', 'usd' => $usd];
         }
         $randomString = bin2hex(random_bytes(5));
         $pay = plisio($randomString, $usdprice, $from_id);
@@ -2663,10 +2923,7 @@ if (!function_exists('topup_card_invoice_generate')) {
         $payment_Status = "Unpaid";
         $Payment_Method = "plisio";
         $stmt->execute([$from_id, $randomString, $dateacc, $amount, $payment_Status, $Payment_Method, $idInvoice, $pay['txn_id']]);
-        $expireMinutes = (int) pay_value('plisioInvoiceExpireMinutes', $lang, 30);
-        if ($expireMinutes < 1) {
-            $expireMinutes = 30;
-        }
+        $expireMinutes = topup_expire_minutes($lang, 'plisio');
         $captionTemplate = plisio_invoice_caption_for($lang, $textbotlang['users']['Balance']['cryptoInstruction']);
         $textnowpayments = strtr($captionTemplate, [
             '{order}' => $randomString,
@@ -2674,8 +2931,7 @@ if (!function_exists('topup_card_invoice_generate')) {
             '{usd}' => number_format($usd),
             '{minutes}' => $expireMinutes,
         ]);
-        $payStyle = plisio_invoice_btnstyle_for($lang, 'pay');
-        $payBtn = topup_styled_button($textbotlang['users']['Balance']['payments'], $payStyle, '', '');
+        $payBtn = topup_styled_button($textbotlang['users']['Balance']['payments'], topup_invoice_btnstyle_for($lang, 'plisio', 'pay'), '', topup_invoice_btnstyle_default_color('pay'));
         $payBtn['url'] = $pay['invoice_url'];
         $paymentkeyboard = json_encode(['inline_keyboard' => [[$payBtn]]]);
         return [
@@ -2698,9 +2954,7 @@ if (!function_exists('topup_card_invoice_generate')) {
         $mainbalance = pay_value("minbalancecart", $user['lang'] ?? null);
         $maxbalance = pay_value("maxbalancecart", $user['lang'] ?? null);
         if ($user['Processing_value'] < $mainbalance || $user['Processing_value'] > $maxbalance) {
-            $mainbalance = number_format($mainbalance);
-            $maxbalance = number_format($maxbalance);
-            sendmessage($from_id, strtr($textbotlang['users']['Balance']['depositRange'], ['{mainbalance}' => $mainbalance, '{maxbalance}' => $maxbalance]), null, 'HTML');
+            topup_range_notice($from_id, $user['lang'] ?? 'fa', 'card', $mainbalance, $maxbalance, $textbotlang);
             return;
         }
         $invoice = "{$user['Processing_value_tow']}|{$user['Processing_value_one']}";
@@ -2709,6 +2963,7 @@ if (!function_exists('topup_card_invoice_generate')) {
             sendmessage($from_id, $textbotlang['users']['Balance']['noActiveCard'], null, 'HTML');
             return;
         }
+        topup_amount_prompt_clear($from_id);
         deletemessage($from_id, $message_id);
         $gethelp = pay_value("helpcart", $user['lang'] ?? null, '2');
         if ($gethelp != 2) {
@@ -2739,28 +2994,29 @@ if (!function_exists('topup_plisio_invoice_generate')) {
     function topup_plisio_invoice_generate($from_id, array $user, $message_id, $textbotlang, array $setting)
     {
         global $pdo, $keyboard, $username, $errorreport;
-        $mainbalanceplisio = pay_value("minbalanceplisio", $user['lang'] ?? null);
-        $maxbalanceplisio = pay_value("maxbalanceplisio", $user['lang'] ?? null);
+        $mainbalanceplisio = topup_effective_gateway_min($user['lang'] ?? 'fa', 'plisio', pay_value("minbalanceplisio", $user['lang'] ?? null));
+        $maxbalanceplisio = topup_effective_gateway_max($user['lang'] ?? 'fa', 'plisio', pay_value("maxbalanceplisio", $user['lang'] ?? null));
         if ($user['Processing_value'] < $mainbalanceplisio || $user['Processing_value'] > $maxbalanceplisio) {
-            $mainbalanceplisio = number_format($mainbalanceplisio);
-            $maxbalanceplisio = number_format($maxbalanceplisio);
-            sendmessage($from_id, strtr($textbotlang['users']['Balance']['depositRangePlisio'], ['{mainbalance}' => $mainbalanceplisio, '{maxbalance}' => $maxbalanceplisio]), null, 'HTML');
+            topup_range_notice($from_id, $user['lang'] ?? 'fa', 'plisio', $mainbalanceplisio, $maxbalanceplisio, $textbotlang);
             return;
         }
         deletemessage($from_id, $message_id);
-        sendmessage($from_id, $textbotlang['users']['Balance']['linkpayments'], $keyboard, 'HTML');
+        topup_linkmsg_show($from_id, $user['lang'] ?? 'fa', 'plisio', $textbotlang['users']['Balance']['linkpayments']);
         $invoice = "{$user['Processing_value_tow']}|{$user['Processing_value_one']}";
         $built = plisio_invoice_build($from_id, $user['lang'] ?? 'fa', $user['Processing_value'], $invoice, $textbotlang, $setting);
         if ($built['error'] === 'rate') {
+            topup_linkmsg_drop($from_id);
             sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
             step('home', $from_id);
             return;
         }
         if ($built['error'] === 'toolow') {
-            sendmessage($from_id, $textbotlang['users']['Balance']['nowpayments'], null, 'HTML');
+            topup_linkmsg_drop($from_id);
+            topup_range_notice($from_id, $user['lang'] ?? 'fa', 'plisio', $mainbalanceplisio, $maxbalanceplisio, $textbotlang);
             return;
         }
         if ($built['error'] === 'api') {
+            topup_linkmsg_drop($from_id);
             sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
             step('home', $from_id);
             $ErrorsLinkPayment = sprintf($textbotlang['Admin']['reportgroup']['errorCryptoLink'], $built['apiMessage'], $from_id, $username);
@@ -2774,19 +3030,8 @@ if (!function_exists('topup_plisio_invoice_generate')) {
             }
             return;
         }
-        $gethelp = select("PaySetting", "ValuePay", "NamePay", "helpplisio", "select")['ValuePay'];
-        if ($gethelp != 2) {
-            $data = json_decode($gethelp, true);
-            if ($data['type'] == "text") {
-                sendmessage($from_id, $data['text'], null, 'HTML');
-            } elseif ($data['type'] == "photo") {
-                sendphoto($from_id, $data['photoid'], null);
-            } elseif ($data['type'] == "video") {
-                sendvideo($from_id, $data['videoid'], null);
-            }
-        }
-        $message_id = sendmessage($from_id, $built['text'], $built['keyboard'], 'HTML');
-        updatePaymentMessageId($message_id, $built['randomString']);
+        topup_linkmsg_help($from_id, 'helpplisio');
+        topup_track_invoice_message($built['randomString'], topup_linkmsg_finish($from_id, $built['text'], $built['keyboard']));
     }
 }
 if (!function_exists('plisio_expire_notify')) {
@@ -2796,13 +3041,1536 @@ if (!function_exists('plisio_expire_notify')) {
     // edit-in-place + reissue-button treatment (not the old plain text)
     function plisio_expire_notify($id_user, $id_order, $price, $message_id, $payer_lang)
     {
-        $plisioExpireLang = languagechange(null, $payer_lang);
-        $expiredCapTemplate = plisio_invoice_expired_caption_for($payer_lang, $plisioExpireLang['users']['Balance']['plisioInvoiceExpiredCaption']);
-        $expiredCaption = strtr($expiredCapTemplate, ['{price}' => number_format($price)]);
-        $reissueStyle = plisio_invoice_btnstyle_for($payer_lang, 'reissue');
-        $reissueBtn = topup_styled_button($plisioExpireLang['users']['Balance']['reissueInvoiceBtn'], $reissueStyle, "plisioreissue:{$id_order}", 'danger');
-        $reissueKb = json_encode(['inline_keyboard' => [[$reissueBtn]]]);
-        Editmessagetext($id_user, $message_id, $expiredCaption, $reissueKb, 'HTML');
+        // one implementation for every gateway that words its own expiry -
+        // see topup_expire_notify(); this stays as the name the two plisio
+        // crons already call
+        topup_expire_notify('plisio', $id_user, $id_order, $price, $message_id, $payer_lang);
+    }
+}
+if (!function_exists('topup_amount_prompt_clear')) {
+    // The "#️⃣ مبلغ دلخواه" prompt and any min/max notice under it have done
+    // their job once a gateway commits to building an invoice - leaving them
+    // above it just asks for an amount that has already been given.
+    //
+    // Called at the moment a gateway commits, never when one refuses the
+    // amount: a rejected amount has to keep the prompt to try again on.
+    function topup_amount_prompt_clear($chat_id)
+    {
+        $u = select("user", "*", "id", $chat_id, "select");
+        foreach (['topup_custom_msg_id', 'topup_range_msg_id'] as $col) {
+            $mid = (int) ($u[$col] ?? 0);
+            if ($mid > 0) {
+                deletemessage($chat_id, $mid);
+                update("user", $col, "0", "id", $chat_id);
+            }
+        }
+    }
+}
+if (!function_exists('topup_linkmsg_show')) {
+    // ---- the "درحال ساخت لینک پرداخت..." progress message ----
+    // Every redirect gateway shows it while it talks to the payment provider,
+    // and it used to stay in the chat forever with the invoice piling up under
+    // it. These four functions give it a lifecycle instead, shared by all of
+    // them so no gateway can drift.
+    //
+    // It is sent WITHOUT the main reply keyboard on purpose: Telegram refuses
+    // to edit a message that carries one ("message can't be edited"), and
+    // turning this message into the invoice is the whole point. An inline
+    // keyboard never replaces the reply keyboard anyway, so nothing is lost.
+    function topup_linkmsg_show($chat_id, $lang, $gatewayKey, $default)
+    {
+        topup_amount_prompt_clear($chat_id);
+        $res = sendmessage($chat_id, topup_linkmsg_for($lang, $gatewayKey, $default), null, 'HTML');
+        $GLOBALS['topup_linkmsg_mid'] = (int) ($res['result']['message_id'] ?? 0);
+        $GLOBALS['topup_linkmsg_stale'] = false;
+        return $GLOBALS['topup_linkmsg_mid'];
+    }
+    // The per-gateway "راهنمای پرداخت" extra (helpplisio, helpzarinpal, ...).
+    // Whatever it sends lands BELOW the progress message, so it also marks that
+    // message stale: editing it into the invoice afterwards would leave the
+    // invoice sitting above the help instead of last, where the pay button
+    // belongs.
+    function topup_linkmsg_help($chat_id, $payName)
+    {
+        $raw = select("PaySetting", "ValuePay", "NamePay", $payName, "select")['ValuePay'] ?? '2';
+        if (intval($raw) == 2) {
+            return false;
+        }
+        $data = json_decode((string) $raw, true);
+        if (!is_array($data)) {
+            return false;
+        }
+        $type = (string) ($data['type'] ?? '');
+        if ($type === 'text') {
+            sendmessage($chat_id, $data['text'], null, 'HTML');
+        } elseif ($type === 'photo') {
+            sendphoto($chat_id, $data['photoid'], null);
+        } elseif ($type === 'video') {
+            sendvideo($chat_id, $data['videoid'], null);
+        } else {
+            return false;
+        }
+        $GLOBALS['topup_linkmsg_stale'] = true;
+        return true;
+    }
+    // Puts the finished invoice where the progress message was: edits it in
+    // place when nothing was sent in between (the usual case - the help extra
+    // is off by default), and otherwise takes it away and sends the invoice
+    // fresh so it stays the last thing in the chat. Returns the message id the
+    // invoice ended up on, for Payment_report.message_id.
+    function topup_linkmsg_finish($chat_id, $text, $keyboard)
+    {
+        $mid = (int) ($GLOBALS['topup_linkmsg_mid'] ?? 0);
+        $stale = !empty($GLOBALS['topup_linkmsg_stale']);
+        $GLOBALS['topup_linkmsg_mid'] = 0;
+        $GLOBALS['topup_linkmsg_stale'] = false;
+        if ($mid > 0 && !$stale) {
+            $res = Editmessagetext($chat_id, $mid, $text, $keyboard, 'HTML');
+            if (is_array($res) && !empty($res['ok'])) {
+                return $mid;
+            }
+            // the edit was refused for some reason - drop it and send the
+            // invoice fresh rather than losing it
+        }
+        if ($mid > 0) {
+            deletemessage($chat_id, $mid);
+        }
+        $res = sendmessage($chat_id, $text, $keyboard, 'HTML');
+        return (int) ($res['result']['message_id'] ?? 0);
+    }
+    // The link could not be built. Take the progress message away before the
+    // error lands, so nobody is left staring at "درحال ساخت لینک پرداخت...".
+    function topup_linkmsg_drop($chat_id)
+    {
+        $mid = (int) ($GLOBALS['topup_linkmsg_mid'] ?? 0);
+        if ($mid > 0) {
+            deletemessage($chat_id, $mid);
+        }
+        $GLOBALS['topup_linkmsg_mid'] = 0;
+        $GLOBALS['topup_linkmsg_stale'] = false;
+    }
+    // updatePaymentMessageId() takes a raw sendmessage response; when the
+    // invoice was edited into an existing message there is no response to pass,
+    // only the id it landed on.
+    function topup_track_invoice_message($orderId, $messageId)
+    {
+        if ((int) $messageId > 0) {
+            update("Payment_report", "message_id", (int) $messageId, "id_order", $orderId);
+        }
+    }
+}
+if (!function_exists('topup_caption_text_from_update')) {
+    // An admin can start a caption with a Telegram premium emoji. It does not
+    // arrive in the text - it comes as a custom_emoji entity alongside it - so
+    // it has to be folded back in as a <tg-emoji> tag or the caption silently
+    // loses it. One entity, at offset 0 only; anywhere else it is left alone.
+    function topup_caption_text_from_update($text, $update)
+    {
+        $text = trim((string) $text);
+        $ents = $update['message']['entities'] ?? [];
+        if (empty($ents[0]) || ($ents[0]['type'] ?? '') !== 'custom_emoji'
+            || ($ents[0]['offset'] ?? -1) !== 0 || empty($ents[0]['custom_emoji_id'])) {
+            return $text;
+        }
+        preg_match('/^\\X/u', $text, $lead);
+        $leadChar = $lead[0] ?? '';
+        $rest = mb_substr($text, mb_strlen($leadChar, 'UTF-8'), null, 'UTF-8');
+        return '<tg-emoji emoji-id="' . htmlspecialchars((string) $ents[0]['custom_emoji_id'], ENT_QUOTES) . '">' . $leadChar . '</tg-emoji>' . $rest;
+    }
+}
+if (!function_exists('topup_range_caption_map')) {
+    // ---- the "❌ حداقل مبلغ واریزی ..." notice, worded per gateway ----
+    // {lang: {gatewayKey: text}}, same shape and contract as
+    // topup_linkmsg_map(). Every gateway falls back to the shared translation
+    // until an admin gives that one its own wording.
+    function topup_range_caption_map($fresh = false)
+    {
+        static $cache = null;
+        if ($cache !== null && !$fresh) {
+            return $cache;
+        }
+        $setting = select("setting", "*", null, null, "select");
+        $m = json_decode((string) ($setting['topup_range_captions'] ?? ''), true);
+        $cache = is_array($m) ? $m : [];
+        return $cache;
+    }
+    function topup_range_caption_for($lang, $gatewayKey, $default)
+    {
+        $v = trim((string) (topup_range_caption_map()[$lang][$gatewayKey] ?? ''));
+        return $v !== '' ? $v : $default;
+    }
+    function topup_range_caption_has_override($lang, $gatewayKey)
+    {
+        return trim((string) (topup_range_caption_map()[$lang][$gatewayKey] ?? '')) !== '';
+    }
+    function topup_range_caption_set($lang, $gatewayKey, $text)
+    {
+        $m = topup_range_caption_map(true);
+        $text = trim((string) $text);
+        if ($text === '') {
+            unset($m[$lang][$gatewayKey]);
+            if (empty($m[$lang])) {
+                unset($m[$lang]);
+            }
+        } else {
+            $m[$lang][$gatewayKey] = $text;
+        }
+        update("setting", "topup_range_captions", empty($m) ? '{}' : json_encode($m, JSON_UNESCAPED_UNICODE), null, null);
+        topup_range_caption_map(true);
+    }
+}
+if (!function_exists('topup_range_notice')) {
+    // Shows the min/max notice and nothing else: the amount the customer typed
+    // is taken away, and so is the notice already on screen, so a run of wrong
+    // amounts leaves exactly one message behind instead of a wall of them. The
+    // ❌ button under it ends the top-up session the same way the shared
+    // main-menu close does.
+    // Shared by every "that amount will not do" message - the min/max refusal
+    // and the crypto gateways' $1 floor. Exactly one is ever on screen: the
+    // previous one and the number the customer typed both go first. It also
+    // puts the customer back on the screen they came from: the step is moved to
+    // 'get_step_payment' before a gateway ever sees the amount, so without this
+    // a refusal would strand them on a step where typing does nothing.
+    function topup_amount_notice($chat_id, $text, $textbotlang, $typedMessageId = 0)
+    {
+        $typedMessageId = (int) $typedMessageId > 0
+            ? (int) $typedMessageId
+            : (int) ($GLOBALS['topup_typed_message_id'] ?? 0);
+        if ($typedMessageId > 0) {
+            deletemessage($chat_id, $typedMessageId);
+        }
+        $prev = (int) (select("user", "*", "id", $chat_id, "select")['topup_range_msg_id'] ?? 0);
+        if ($prev > 0) {
+            deletemessage($chat_id, $prev);
+        }
+        $back = (string) ($GLOBALS['topup_amount_origin_step'] ?? '');
+        if ($back !== '') {
+            step($back, $chat_id);
+        }
+        $kb = json_encode(['inline_keyboard' => [[[
+            'text' => $textbotlang['bottext']['btn_close'] ?? '❌ بستن',
+            'callback_data' => 'topup_range_close',
+            'style' => 'danger',
+        ]]]]);
+        $res = sendmessage($chat_id, $text, $kb, 'HTML');
+        update("user", "topup_range_msg_id", (string) (int) ($res['result']['message_id'] ?? 0), "id", $chat_id);
+    }
+    // The one wording a refused amount gets, wherever it was refused - the
+    // custom-amount step, the gateway's own check, or its dollar floor. They
+    // used to disagree, so the same amount could be turned down twice with
+    // two different numbers.
+    function topup_range_text($lang, $gatewayKey, $min, $max, $textbotlang)
+    {
+        $fmt = function ($v) {
+            return is_numeric($v) ? number_format((float) $v, 0) : (string) $v;
+        };
+        $rate = topup_has_usd_floor($gatewayKey) ? topup_usd_rate() : 0;
+        $usd = function ($v) use ($rate) {
+            return ($rate > 0 && is_numeric($v)) ? rtrim(rtrim(number_format((float) $v / $rate, 2), '0'), '.') : '—';
+        };
+        return strtr(
+            topup_range_caption_for($lang, $gatewayKey, topup_range_default($gatewayKey, $textbotlang)),
+            ['{mainbalance}' => $fmt($min), '{maxbalance}' => $fmt($max), '{maxusd}' => $usd($max), '{minusd}' => $usd($min)]
+        );
+    }
+    function topup_range_notice($chat_id, $lang, $gatewayKey, $min, $max, $textbotlang, $typedMessageId = 0)
+    {
+        topup_amount_notice($chat_id, topup_range_text($lang, $gatewayKey, $min, $max, $textbotlang), $textbotlang, $typedMessageId);
+    }
+}
+if (!function_exists('topup_invoice_caption_for')) {
+    // ---- one API for every gateway's invoice texts and buttons ----
+    // Card-to-card and Plisio already had their own stores, with data in them
+    // and their own admin flows; rather than migrate that, these forward to
+    // them and use a shared per-gateway store for everyone else. Callers - the
+    // gateway screens, the previews, the checkout, the expiry cron - only ever
+    // see this one API, so a gateway added later needs no special case.
+    function topup_invoice_caption_for($lang, $key, $default)
+    {
+        if ($key === 'card') {
+            return card_invoice_caption_for($lang, $default);
+        }
+        if ($key === 'plisio') {
+            return plisio_invoice_caption_for($lang, $default);
+        }
+        $v = trim((string) (topup_gwstore_map('topup_invoice_captions')[$lang][$key] ?? ''));
+        return $v !== '' ? $v : $default;
+    }
+    function topup_invoice_caption_has_override($lang, $key)
+    {
+        if ($key === 'card') {
+            return trim((string) (card_invoice_caption_get()[$lang] ?? '')) !== '';
+        }
+        if ($key === 'plisio') {
+            return trim((string) (plisio_invoice_caption_get()[$lang] ?? '')) !== '';
+        }
+        return trim((string) (topup_gwstore_map('topup_invoice_captions')[$lang][$key] ?? '')) !== '';
+    }
+    function topup_invoice_caption_set($lang, $key, $text)
+    {
+        if ($key === 'card') {
+            card_invoice_caption_set($lang, $text);
+            return;
+        }
+        if ($key === 'plisio') {
+            plisio_invoice_caption_set($lang, $text);
+            return;
+        }
+        topup_gwstore_set('topup_invoice_captions', $lang, $key, $text);
+    }
+    function topup_invoice_expired_caption_for($lang, $key, $default)
+    {
+        if ($key === 'card') {
+            return card_invoice_expired_caption_for($lang, $default);
+        }
+        if ($key === 'plisio') {
+            return plisio_invoice_expired_caption_for($lang, $default);
+        }
+        $v = trim((string) (topup_gwstore_map('topup_invoice_expired_captions')[$lang][$key] ?? ''));
+        return $v !== '' ? $v : $default;
+    }
+    function topup_invoice_expired_caption_has_override($lang, $key)
+    {
+        if ($key === 'card') {
+            return trim((string) (card_invoice_expired_caption_get()[$lang] ?? '')) !== '';
+        }
+        if ($key === 'plisio') {
+            return trim((string) (plisio_invoice_expired_caption_get()[$lang] ?? '')) !== '';
+        }
+        return trim((string) (topup_gwstore_map('topup_invoice_expired_captions')[$lang][$key] ?? '')) !== '';
+    }
+    function topup_invoice_expired_caption_set($lang, $key, $text)
+    {
+        if ($key === 'card') {
+            card_invoice_expired_caption_set($lang, $text);
+            return;
+        }
+        if ($key === 'plisio') {
+            plisio_invoice_expired_caption_set($lang, $text);
+            return;
+        }
+        topup_gwstore_set('topup_invoice_expired_captions', $lang, $key, $text);
+    }
+}
+if (!function_exists('nobitex_rates_toman')) {
+    // ---- prices, from Nobitex ----
+    // The bot's old rate source (bon-bast) answers 403 from this server, and
+    // Nobitex covers everything in one call - including TON, which it lists
+    // under the token's original name, GRAM.
+    //
+    // Everything here comes back in RIALS; a toman is ten of them. Getting that
+    // wrong is a silent factor-of-ten, so the division happens once, here.
+    function nobitex_rates_toman($fresh = false)
+    {
+        static $cache = null;
+        if ($cache !== null && !$fresh) {
+            return $cache;
+        }
+        $ctx = stream_context_create(['http' => ['timeout' => 12]]);
+        $raw = @file_get_contents('https://apiv2.nobitex.ir/market/stats?srcCurrency=gram,usdt,trx&dstCurrency=rls', false, $ctx);
+        $j = $raw === false ? null : json_decode($raw, true);
+        $out = [];
+        foreach ((array) ($j['stats'] ?? []) as $pair => $s) {
+            $rial = (float) ($s['latest'] ?? 0);
+            if ($rial > 0) {
+                $out[explode('-', $pair)[0]] = $rial / 10;
+            }
+        }
+        $cache = $out;
+        return $out;
+    }
+    // 0 means "no price right now" - every caller has to treat that as a
+    // failure rather than dividing by it
+    function nobitex_rate_toman($symbol)
+    {
+        $v = (float) (nobitex_rates_toman()[$symbol] ?? 0);
+        return $v > 0 ? $v : 0.0;
+    }
+    function topup_ton_rate_toman()
+    {
+        return nobitex_rate_toman('gram');
+    }
+    // the wallet the customer is asked to pay into, per language
+    function topup_ton_address($lang)
+    {
+        return trim((string) pay_value('walletaddresston', $lang, ''));
+    }
+}
+if (!function_exists('topup_trx_address')) {
+    // ---- TRX, settled off the TRON chain ----
+    // TON could name the invoice in the transfer's comment. TRON cannot: of the
+    // last nineteen real transfers into this shop's own wallet, not one carried
+    // a note - wallets simply do not send them. So the amount IS the name: every
+    // invoice is given a figure no other open invoice has, down to the last
+    // decimal, and an incoming transfer of exactly that much identifies exactly
+    // one invoice.
+    //
+    // The customer can also just hand over the transaction hash, which settles
+    // it outright - see trx_verify_hash().
+    function topup_trx_address($lang)
+    {
+        return trim((string) pay_value('walletaddresstrx', $lang, ''));
+    }
+    function topup_trx_rate_toman()
+    {
+        return nobitex_rate_toman('trx');
+    }
+    // A figure in sun (a millionth of a TRX) that no other open invoice is
+    // waiting for. Rounded UP to the nearest 0.01 TRX before the unique tail is
+    // added, so the shop is never asked for less than the invoice is worth.
+    function trx_unique_sun($base)
+    {
+        global $pdo;
+        $floor = (int) (ceil($base / 10000) * 10000);
+        $open = $pdo->query("SELECT dec_not_confirmed FROM Payment_report WHERE Payment_Method = 'TRX' AND payment_Status = 'Unpaid'")
+            ->fetchAll(PDO::FETCH_COLUMN);
+        $taken = array_flip(array_map('intval', (array) $open));
+        for ($i = 0; $i < 60; $i++) {
+            $candidate = $floor + random_int(1, 9999);
+            if (!isset($taken[$candidate])) {
+                return $candidate;
+            }
+        }
+        // sixty collisions means the shop has thousands of open TRX invoices at
+        // once; step past the block rather than hand back a duplicate
+        return $floor + 10000 + random_int(1, 9999);
+    }
+    function trx_sun_to_text($sun)
+    {
+        return rtrim(rtrim(number_format($sun / 1000000, 6, '.', ''), '0'), '.');
+    }
+}
+if (!function_exists('trx_invoice_build')) {
+    // Same contract as the other builders. Never execute this in a test: it
+    // reads the live Nobitex price. Source-verify only.
+    function trx_invoice_build($from_id, $lang, $amount, $idInvoice, $textbotlang, array $setting)
+    {
+        global $pdo;
+        $addr = topup_trx_address($lang);
+        if ($addr === '') {
+            return ['error' => 'noaddress'];
+        }
+        $rate = topup_trx_rate_toman();
+        if ($rate <= 0) {
+            return ['error' => 'rate'];
+        }
+        $sun = trx_unique_sun((int) round(($amount / $rate) * 1000000));
+        if ($sun < 1) {
+            return ['error' => 'toolow'];
+        }
+        $trxText = trx_sun_to_text($sun);
+        $randomString = bin2hex(random_bytes(5));
+        $dateacc = date('Y/m/d H:i:s');
+        // dec_not_confirmed holds the exact figure the watcher waits for - the
+        // same column plisio uses for its txn id
+        $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice,dec_not_confirmed) VALUES (?,?,?,?,?,?,?,?)");
+        $stmt->execute([$from_id, $randomString, $dateacc, $amount, "Unpaid", "TRX", $idInvoice, $sun]);
+        $b = $textbotlang['users']['Balance'];
+        $text = strtr(topup_invoice_caption_for($lang, 'trx', $b['trxInvoiceCaption']), [
+            '{order}' => $randomString,
+            '{trx}' => $trxText,
+            '{price}' => number_format($amount, 0),
+            '{rate}' => number_format($rate, 0),
+            '{minutes}' => topup_expire_minutes($lang, 'trx'),
+            '{address}' => $addr,
+        ]);
+        $copy = function ($which, $label, $value) use ($lang) {
+            $btn = topup_styled_button($label, topup_invoice_btnstyle_for($lang, 'trx', $which), '', topup_invoice_btnstyle_default_color($which, 'trx'));
+            unset($btn['callback_data']);
+            $btn['copy_text'] = ['text' => $value];
+            return $btn;
+        };
+        $plain = function ($which, $label, $cb) use ($lang) {
+            return topup_styled_button($label, topup_invoice_btnstyle_for($lang, 'trx', $which), $cb, topup_invoice_btnstyle_default_color($which, 'trx'));
+        };
+        $made = [
+            'copyamt' => $copy('copyamt', $b['trxCopyAmountBtn'], $trxText),
+            'copyaddr' => $copy('copyaddr', $b['trxCopyAddressBtn'], $addr),
+            'check' => $plain('check', $b['trxCheckBtn'], "trxcheck:{$randomString}"),
+            'backmethod' => $plain('backmethod', $b['tonBackMethodBtn'], 'topup_back_methods'),
+            'back' => $plain('back', $b['tonBackBtn'], 'gwinvclose'),
+        ];
+        if (topup_invoice_layout_touched($lang, 'trx')) {
+            $rows = [];
+            $ordered = [];
+            foreach (topup_invoice_ordered_keys($lang, 'trx') as $w) {
+                $ordered[] = $made[$w];
+            }
+            foreach (array_chunk($ordered, max(1, topup_invoice_layout_perrow($lang, 'trx'))) as $chunk) {
+                $rows[] = $chunk;
+            }
+        } else {
+            $rows = [
+                [$made['copyamt'], $made['copyaddr']],
+                [$made['check']],
+                [$made['backmethod']],
+                [$made['back']],
+            ];
+        }
+        return [
+            'error' => null,
+            'text' => $text,
+            'keyboard' => json_encode(['inline_keyboard' => $rows]),
+            'randomString' => $randomString,
+        ];
+    }
+}
+if (!function_exists('trx_incoming_transfers')) {
+    // Plain TRX transfers into the shop's wallet, as [sun => timestamp_ms].
+    // Token transfers are skipped - the wallet is a magnet for TRC10 spam with
+    // round amounts - and so is the dust that address-poisoning bots send.
+    // null means the lookup failed, which is not the same as nothing arrived.
+    function trx_incoming_transfers($address, $sinceMs = 0, $limit = 100)
+    {
+        $url = 'https://api.trongrid.io/v1/accounts/' . rawurlencode($address)
+            . '/transactions?only_to=true&limit=' . (int) $limit;
+        if ($sinceMs > 0) {
+            $url .= '&min_timestamp=' . (int) $sinceMs;
+        }
+        $raw = @file_get_contents($url, false, stream_context_create(['http' => ['timeout' => 20]]));
+        $j = $raw === false ? null : json_decode($raw, true);
+        if (!is_array($j) || !isset($j['data']) || !is_array($j['data'])) {
+            return null;
+        }
+        $out = [];
+        foreach ($j['data'] as $tx) {
+            $c = $tx['raw_data']['contract'][0] ?? [];
+            if (($c['type'] ?? '') !== 'TransferContract') {
+                continue;   // a token, not TRX
+            }
+            if (($tx['ret'][0]['contractRet'] ?? '') !== 'SUCCESS') {
+                continue;
+            }
+            $sun = (int) ($c['parameter']['value']['amount'] ?? 0);
+            if ($sun < 10000) {
+                continue;   // dust: address-poisoning spam, never a payment
+            }
+            $ts = (int) ($tx['block_timestamp'] ?? 0);
+            if (!isset($out[$sun]) || $ts > $out[$sun]) {
+                $out[$sun] = $ts;
+            }
+        }
+        return $out;
+    }
+}
+if (!function_exists('trx_payment_settled')) {
+    // The amount is the invoice's name, so it has to match exactly - a
+    // tolerance would make two invoices answer to the same transfer. The
+    // transfer also has to be newer than the invoice, or an older payment of a
+    // coincidentally equal amount would settle it.
+    function trx_payment_settled(array $row, $incoming)
+    {
+        if (!is_array($incoming)) {
+            return false;
+        }
+        $want = (int) $row['dec_not_confirmed'];
+        if ($want < 1 || !isset($incoming[$want])) {
+            return false;
+        }
+        $issuedMs = strtotime((string) $row['time']) * 1000;
+        // a minute of slack for clock differences between this box and the chain
+        return $issuedMs <= 0 || $incoming[$want] >= ($issuedMs - 60000);
+    }
+}
+if (!function_exists('trx_verify_hash')) {
+    // The other way in: the customer hands over the transaction hash and the
+    // chain answers directly. Returns true only for a successful plain TRX
+    // transfer of exactly this invoice's figure.
+    //
+    // Nothing needs to remember which hashes have been used: the figure is
+    // unique per open invoice, so a hash that settles one cannot settle another.
+    function trx_verify_hash(array $row, $hash, $address)
+    {
+        $hash = strtolower(trim((string) $hash));
+        if (!preg_match('/^[a-f0-9]{64}$/', $hash)) {
+            return false;
+        }
+        $raw = @file_get_contents('https://api.trongrid.io/wallet/gettransactionbyid', false, stream_context_create([
+            'http' => [
+                'method' => 'POST',
+                'header' => "Content-Type: application/json\r\n",
+                'content' => json_encode(['value' => $hash]),
+                'timeout' => 20,
+            ],
+        ]));
+        $j = $raw === false ? null : json_decode($raw, true);
+        if (!is_array($j) || ($j['ret'][0]['contractRet'] ?? '') !== 'SUCCESS') {
+            return false;
+        }
+        $c = $j['raw_data']['contract'][0] ?? [];
+        if (($c['type'] ?? '') !== 'TransferContract') {
+            return false;
+        }
+        $v = $c['parameter']['value'] ?? [];
+        if ((int) ($v['amount'] ?? 0) !== (int) $row['dec_not_confirmed']) {
+            return false;
+        }
+        // the destination comes back hex-encoded; compare on the base58 form the
+        // admin actually configured
+        $to = strtolower((string) ($v['to_address'] ?? ''));
+        return $to !== '' && $to === strtolower(trx_base58_to_hex($address));
+    }
+    // TRON addresses are base58check over a 21-byte payload that starts 0x41.
+    // Decoding it here avoids depending on a library for one comparison.
+    function trx_base58_to_hex($base58)
+    {
+        $alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+        $num = '0';
+        $len = strlen((string) $base58);
+        for ($i = 0; $i < $len; $i++) {
+            $p = strpos($alphabet, $base58[$i]);
+            if ($p === false) {
+                return '';
+            }
+            $num = bcadd(bcmul($num, '58'), (string) $p);
+        }
+        $hex = '';
+        while (bccomp($num, '0') > 0) {
+            $hex = dechex((int) bcmod($num, '16')) . $hex;
+            $num = bcdiv($num, '16', 0);
+        }
+        // leading '1's in base58 are leading zero bytes
+        for ($i = 0; $i < $len && $base58[$i] === '1'; $i++) {
+            $hex = '00' . $hex;
+        }
+        if (strlen($hex) % 2 === 1) {
+            $hex = '0' . $hex;
+        }
+        // drop the 4-byte checksum
+        return strlen($hex) > 8 ? substr($hex, 0, -8) : '';
+    }
+}
+if (!function_exists('ton_invoice_build')) {
+    // Same contract as the other builders: a pure builder that returns the
+    // invoice text, keyboard and order id. No Telegram calls of its own.
+    //
+    // TON is paid straight into the shop's own wallet, so there is no processor
+    // to ask "was this paid". The order id travels as the transfer's comment
+    // instead, and cronbot/ton.php matches it back. That comment is the whole
+    // mechanism - a transfer without it cannot be attributed to anyone.
+    //
+    // Never execute this in a test: it reads the live Nobitex price. Source-
+    // verify only, the same rule the other builders carry.
+    function ton_invoice_build($from_id, $lang, $amount, $idInvoice, $textbotlang, array $setting)
+    {
+        global $pdo;
+        $addr = topup_ton_address($lang);
+        if ($addr === '') {
+            return ['error' => 'noaddress'];
+        }
+        $rate = topup_ton_rate_toman();
+        if ($rate <= 0) {
+            return ['error' => 'rate'];
+        }
+        $ton = $amount / $rate;
+        $nano = (int) round($ton * 1000000000);
+        if ($nano < 1) {
+            return ['error' => 'toolow', 'usd' => nobitex_rate_toman('usdt')];
+        }
+        // TON's smallest unit is a nanoton; quote the exact figure the customer
+        // has to send, with no trailing zeros to mistype
+        $tonText = rtrim(rtrim(number_format($nano / 1000000000, 9, '.', ''), '0'), '.');
+        $randomString = bin2hex(random_bytes(5));
+        $dateacc = date('Y/m/d H:i:s');
+        // dec_not_confirmed carries the exact nanoton figure the watcher has to
+        // see arrive - the same column plisio uses for its txn id
+        $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice,dec_not_confirmed) VALUES (?,?,?,?,?,?,?,?)");
+        $stmt->execute([$from_id, $randomString, $dateacc, $amount, "Unpaid", "TON", $idInvoice, $nano]);
+        $minutes = topup_expire_minutes($lang, 'ton');
+        $b = $textbotlang['users']['Balance'];
+        $text = strtr(topup_invoice_caption_for($lang, 'ton', $b['tonInvoiceCaption']), [
+            '{order}' => $randomString,
+            '{ton}' => $tonText,
+            '{price}' => number_format($amount, 0),
+            '{rate}' => number_format($rate, 0),
+            '{minutes}' => $minutes,
+            '{address}' => $addr,
+            '{memo}' => $randomString,
+        ]);
+        // The wallet link pre-fills all three values, which is the path that
+        // cannot go wrong. The copy buttons are for anyone paying from a wallet
+        // the link does not open.
+        $openBtn = topup_styled_button($b['tonOpenWalletBtn'], topup_invoice_btnstyle_for($lang, 'ton', 'pay'), '', topup_invoice_btnstyle_default_color('pay', 'ton'));
+        $openBtn['url'] = "https://app.tonkeeper.com/transfer/{$addr}?amount={$nano}&text=" . rawurlencode($randomString);
+        $copy = function ($which, $label, $value) use ($lang) {
+            $b = topup_styled_button($label, topup_invoice_btnstyle_for($lang, 'ton', $which), '', topup_invoice_btnstyle_default_color($which, 'ton'));
+            unset($b['callback_data']);
+            $b['copy_text'] = ['text' => $value];
+            return $b;
+        };
+        // one colour for the whole keyboard, and a way back out of it - the
+        // customer who opens this and changes their mind should not have to
+        // start the whole top-up again
+        $plain = function ($which, $label, $cb) use ($lang) {
+            return topup_styled_button($label, topup_invoice_btnstyle_for($lang, 'ton', $which), $cb, topup_invoice_btnstyle_default_color($which, 'ton'));
+        };
+        $made = [
+            'pay' => $openBtn,
+            'copymemo' => $copy('copymemo', $b['tonCopyMemoBtn'], $randomString),
+            'copyamt' => $copy('copyamt', $b['tonCopyAmountBtn'], $tonText),
+            'copyaddr' => $copy('copyaddr', $b['tonCopyAddressBtn'], $addr),
+            'check' => $plain('check', $b['tonCheckBtn'], "toncheck:{$randomString}"),
+            'backmethod' => $plain('backmethod', $b['tonBackMethodBtn'], 'topup_back_methods'),
+            // this one gives up on the invoice entirely: the message goes and
+            // the main menu comes back, keyboard and all
+            'back' => $plain('back', $b['tonBackBtn'], 'gwinvclose'),
+        ];
+        if (topup_invoice_layout_touched($lang, 'ton')) {
+            // the admin arranged it themselves, so their order and row width win
+            $rows = [];
+            $ordered = [];
+            foreach (topup_invoice_ordered_keys($lang, 'ton') as $w) {
+                $ordered[] = $made[$w];
+            }
+            foreach (array_chunk($ordered, max(1, topup_invoice_layout_perrow($lang, 'ton'))) as $chunk) {
+                $rows[] = $chunk;
+            }
+        } else {
+            // the arrangement it ships with: the three copy buttons share a
+            // row because they are one job, everything else stands alone
+            $rows = [
+                [$made['pay']],
+                [$made['copymemo'], $made['copyamt'], $made['copyaddr']],
+                [$made['check']],
+                [$made['backmethod']],
+                [$made['back']],
+            ];
+        }
+        return [
+            'error' => null,
+            'text' => $text,
+            'keyboard' => json_encode(['inline_keyboard' => $rows]),
+            'randomString' => $randomString,
+        ];
+    }
+}
+if (!function_exists('ton_incoming_transfers')) {
+    // Incoming transfers to the shop's wallet, newest first, as
+    // [comment => nanotons]. toncenter needs no key; a failure returns null so
+    // the caller can tell "nothing arrived" from "could not look".
+    function ton_incoming_transfers($address, $limit = 50)
+    {
+        $url = 'https://toncenter.com/api/v2/getTransactions?address=' . rawurlencode($address)
+            . '&limit=' . (int) $limit . '&archival=false';
+        $ctx = stream_context_create(['http' => ['timeout' => 15]]);
+        $raw = @file_get_contents($url, false, $ctx);
+        $j = $raw === false ? null : json_decode($raw, true);
+        if (!is_array($j) || empty($j['ok'])) {
+            return null;
+        }
+        $out = [];
+        foreach ((array) ($j['result'] ?? []) as $tx) {
+            $in = $tx['in_msg'] ?? null;
+            if (!is_array($in) || trim((string) ($in['source'] ?? '')) === '') {
+                continue;   // outgoing, or a message with no sender
+            }
+            $comment = trim((string) ($in['message'] ?? ''));
+            if ($comment === '') {
+                continue;   // nothing to attribute it to
+            }
+            $value = (int) ($in['value'] ?? 0);
+            // if the same comment arrives twice, the larger transfer wins
+            if (!isset($out[$comment]) || $value > $out[$comment]) {
+                $out[$comment] = $value;
+            }
+        }
+        return $out;
+    }
+}
+if (!function_exists('ton_payment_settled')) {
+    // Has this order's transfer arrived? The customer may round up, and a
+    // wallet may take a fee off the top, so anything within a small tolerance
+    // under the asked-for figure counts - being strict here would reject
+    // honest payments and strand the money in the shop's own wallet.
+    function ton_payment_settled(array $row, $incoming)
+    {
+        if (!is_array($incoming)) {
+            return false;
+        }
+        $comment = (string) $row['id_order'];
+        if (!isset($incoming[$comment])) {
+            return false;
+        }
+        $want = (int) $row['dec_not_confirmed'];
+        if ($want < 1) {
+            return false;
+        }
+        // 2% under, or 0.01 TON, whichever is larger
+        $slack = max((int) round($want * 0.02), 10000000);
+        return $incoming[$comment] >= ($want - $slack);
+    }
+}
+if (!function_exists('topup_usd_rate')) {
+    // rate_arze() makes two blocking HTTP calls, and the floor below is read
+    // on admin screens as well as on the customer's path - so it is fetched
+    // at most once per request.
+    function topup_usd_rate()
+    {
+        static $rate = null;
+        if ($rate !== null) {
+            return $rate;
+        }
+        $r = rate_arze();
+        $rate = (is_array($r) && !empty($r['USD'])) ? (float) $r['USD'] : 0.0;
+        return $rate;
+    }
+    // The online crypto gateways cannot settle an invoice under a dollar -
+    // the processor refuses it, or the network fee swallows the payment. So
+    // it is a floor rather than a preference: an admin may set a minimum
+    // above it, never below.
+    function topup_has_usd_floor($key)
+    {
+        // TON is priced straight in toman, so there is no dollar in the middle
+        // to floor it against - its minimum is simply what the admin set
+        if ($key === 'ton' || $key === 'trx') {
+            return false;
+        }
+        return function_exists('gateway_group_of') && gateway_group_of($key) === 'online';
+    }
+    // What that dollar is worth right now, or null when this gateway has no
+    // floor - or when the rate cannot be fetched, in which case nothing new
+    // is enforced and the old limits stand.
+    function topup_usd_floor_toman($lang, $key)
+    {
+        if (!topup_has_usd_floor($key)) {
+            return null;
+        }
+        $rate = topup_usd_rate();
+        return $rate > 0 ? (int) ceil($rate) : null;
+    }
+    // Payment_report and PaySetting each name the gateways differently; this
+    // is the suffix its minbalance/maxbalance rows are stored under.
+    function topup_gateway_paysetting_suffix($key)
+    {
+        return [
+            'card' => 'cart',
+            'plisio' => 'plisio',
+            'nowpayment' => 'nowpayment',
+            'startelegrams' => 'star',
+            'ton' => 'ton',
+            'trx' => 'trx',
+            'digitaltron' => 'digitaltron',
+            'zarinpal' => 'zarinpal',
+            'aqayepardakht' => 'aqayepardakht',
+            'iranpay1' => 'iranpay1',
+            'iranpay2' => 'iranpay2',
+            'iranpay3' => 'iranpay',
+        ][$key] ?? null;
+    }
+    // What an online gateway's ceiling is before anyone sets one. Without a
+    // default an unset ceiling reads as zero and refuses every amount.
+    function topup_default_max($key)
+    {
+        return topup_has_usd_floor($key) ? 1000000 : null;
+    }
+    function topup_effective_gateway_max($lang, $key, $configured)
+    {
+        $default = topup_default_max($key);
+        if ($default === null) {
+            return $configured;
+        }
+        return ($configured === null || $configured === '' || (float) $configured <= 0) ? $default : $configured;
+    }
+    // the floor the gateway itself enforces, for the same reason
+    function topup_gateway_min($lang, $key)
+    {
+        $suffix = topup_gateway_paysetting_suffix($key);
+        $raw = $suffix === null ? null : pay_value("minbalance{$suffix}", $lang, '');
+        $v = topup_effective_gateway_min($lang, $key, $raw);
+        return ($v === null || $v === '' || (float) $v <= 0) ? null : $v;
+    }
+    // the ceiling the gateway itself enforces, so the custom-amount step can
+    // quote the same number the gateway will hold the customer to
+    function topup_gateway_max($lang, $key)
+    {
+        $suffix = topup_gateway_paysetting_suffix($key);
+        $raw = $suffix === null ? null : pay_value("maxbalance{$suffix}", $lang, '');
+        $v = topup_effective_gateway_max($lang, $key, $raw);
+        return ($v === null || $v === '' || (float) $v <= 0) ? null : $v;
+    }
+    // The limits the customer is actually held to on the custom-amount step.
+    function topup_effective_limits($lang, $key)
+    {
+        [$min, $max] = topup_minmax_for($lang, $key);
+        $floor = topup_usd_floor_toman($lang, $key);
+        if ($floor !== null && ($min === null || (float) $min < $floor)) {
+            $min = $floor;
+        }
+        // the gateway keeps its own ceiling in 💎 مالی; without folding it in
+        // here the refusal would quote a maximum of zero and then the gateway
+        // would hold the customer to a different number anyway
+        if ($min === null) {
+            $min = topup_gateway_min($lang, $key);
+        }
+        if ($max === null) {
+            $max = topup_gateway_max($lang, $key);
+        }
+        return [$min, $max];
+    }
+    // ...and the same floor applied to the gateway's own minimum, so the two
+    // checks a customer passes through can never disagree and refuse them
+    // twice with two different numbers.
+    function topup_effective_gateway_min($lang, $key, $configured)
+    {
+        $floor = topup_usd_floor_toman($lang, $key);
+        return ($floor !== null && (float) $configured < $floor) ? $floor : $configured;
+    }
+    // The defaults differ for a gateway with a floor: its wording has to name
+    // the dollar as well as the toman, or the number looks arbitrary.
+    function topup_range_default($key, $textbotlang)
+    {
+        $b = $textbotlang['users']['Balance'];
+        return topup_has_usd_floor($key) ? $b['depositRangeOnline'] : $b['depositRange'];
+    }
+    function topup_custom_caption_default($key, $textbotlang)
+    {
+        $b = $textbotlang['users']['Balance'];
+        return topup_has_usd_floor($key) ? $b['customAmountPromptTitleOnline'] : $b['customAmountPromptTitle'];
+    }
+    // "لطفاً فقط عدد وارد کنید" - per gateway, like every other text here
+    function topup_notnumber_caption_for($lang, $key, $default)
+    {
+        $v = trim((string) (topup_gwstore_map('topup_notnumber_captions')[$lang][$key] ?? ''));
+        return $v !== '' ? $v : $default;
+    }
+    function topup_notnumber_caption_has_override($lang, $key)
+    {
+        return trim((string) (topup_gwstore_map('topup_notnumber_captions')[$lang][$key] ?? '')) !== '';
+    }
+    function topup_notnumber_caption_set($lang, $key, $text)
+    {
+        topup_gwstore_set('topup_notnumber_captions', $lang, $key, $text);
+    }
+    // it replaces itself and takes the offending message with it, exactly
+    // like the two amount refusals
+    function topup_notnumber_notice($chat_id, $lang, $key, $textbotlang, $typedMessageId = 0)
+    {
+        topup_amount_notice($chat_id, topup_notnumber_caption_for($lang, $key, $textbotlang['users']['Balance']['errorprice']), $textbotlang, $typedMessageId);
+    }
+}
+if (!function_exists('topup_minusd_caption_for')) {
+    // the $1 floor message and the alert an already-paid invoice answers
+    // with - per gateway, same contract as every other caption here
+    function topup_minusd_caption_for($lang, $key, $default)
+    {
+        $v = trim((string) (topup_gwstore_map('topup_minusd_captions')[$lang][$key] ?? ''));
+        return $v !== '' ? $v : $default;
+    }
+    function topup_minusd_caption_has_override($lang, $key)
+    {
+        return trim((string) (topup_gwstore_map('topup_minusd_captions')[$lang][$key] ?? '')) !== '';
+    }
+    function topup_minusd_caption_set($lang, $key, $text)
+    {
+        topup_gwstore_set('topup_minusd_captions', $lang, $key, $text);
+    }
+    function topup_paid_alert_for($lang, $key, $default)
+    {
+        $v = trim((string) (topup_gwstore_map('topup_paid_alerts')[$lang][$key] ?? ''));
+        return $v !== '' ? $v : $default;
+    }
+    function topup_paid_alert_has_override($lang, $key)
+    {
+        return trim((string) (topup_gwstore_map('topup_paid_alerts')[$lang][$key] ?? '')) !== '';
+    }
+    function topup_paid_alert_set($lang, $key, $text)
+    {
+        topup_gwstore_set('topup_paid_alerts', $lang, $key, $text);
+    }
+}
+if (!function_exists('topup_hashbad_caption_for')) {
+    // what a rejected hash is answered with, quoted on top of the prompt
+    function topup_hashbad_caption_for($lang, $key, $default)
+    {
+        $v = trim((string) (topup_gwstore_map('topup_hashbad_captions')[$lang][$key] ?? ''));
+        return $v !== '' ? $v : $default;
+    }
+    function topup_hashbad_caption_has_override($lang, $key)
+    {
+        return trim((string) (topup_gwstore_map('topup_hashbad_captions')[$lang][$key] ?? '')) !== '';
+    }
+    function topup_hashbad_caption_set($lang, $key, $text)
+    {
+        topup_gwstore_set('topup_hashbad_captions', $lang, $key, $text);
+    }
+}
+if (!function_exists('topup_askhash_caption_for')) {
+    // the prompt that asks a TRX customer for their transaction hash
+    function topup_askhash_caption_for($lang, $key, $default)
+    {
+        $v = trim((string) (topup_gwstore_map('topup_askhash_captions')[$lang][$key] ?? ''));
+        return $v !== '' ? $v : $default;
+    }
+    function topup_askhash_caption_has_override($lang, $key)
+    {
+        return trim((string) (topup_gwstore_map('topup_askhash_captions')[$lang][$key] ?? '')) !== '';
+    }
+    function topup_askhash_caption_set($lang, $key, $text)
+    {
+        topup_gwstore_set('topup_askhash_captions', $lang, $key, $text);
+    }
+}
+if (!function_exists('topup_notseen_caption_for')) {
+    // TON's own two: what "ثبت پرداخت" answers with when the transfer is not
+    // on the chain yet, and what a customer sees if the gateway is on but has
+    // no wallet behind it. Same contract as every other per-gateway text.
+    function topup_notseen_caption_for($lang, $key, $default)
+    {
+        $v = trim((string) (topup_gwstore_map('topup_notseen_captions')[$lang][$key] ?? ''));
+        return $v !== '' ? $v : $default;
+    }
+    function topup_notseen_caption_has_override($lang, $key)
+    {
+        return trim((string) (topup_gwstore_map('topup_notseen_captions')[$lang][$key] ?? '')) !== '';
+    }
+    function topup_notseen_caption_set($lang, $key, $text)
+    {
+        topup_gwstore_set('topup_notseen_captions', $lang, $key, $text);
+    }
+    function topup_noaddress_caption_for($lang, $key, $default)
+    {
+        $v = trim((string) (topup_gwstore_map('topup_noaddress_captions')[$lang][$key] ?? ''));
+        return $v !== '' ? $v : $default;
+    }
+    function topup_noaddress_caption_has_override($lang, $key)
+    {
+        return trim((string) (topup_gwstore_map('topup_noaddress_captions')[$lang][$key] ?? '')) !== '';
+    }
+    function topup_noaddress_caption_set($lang, $key, $text)
+    {
+        topup_gwstore_set('topup_noaddress_captions', $lang, $key, $text);
+    }
+}
+if (!function_exists('topup_gwstore_map')) {
+    // The shared {lang: {gatewayKey: text}} store behind the generic half of
+    // the API above. One column per kind, cached per column.
+    function topup_gwstore_map($column, $fresh = false)
+    {
+        static $cache = [];
+        if (isset($cache[$column]) && !$fresh) {
+            return $cache[$column];
+        }
+        $setting = select("setting", "*", null, null, "select");
+        $m = json_decode((string) ($setting[$column] ?? ''), true);
+        $cache[$column] = is_array($m) ? $m : [];
+        return $cache[$column];
+    }
+    function topup_gwstore_set($column, $lang, $key, $text)
+    {
+        $m = topup_gwstore_map($column, true);
+        $text = trim((string) $text);
+        if ($text === '') {
+            unset($m[$lang][$key]);
+            if (empty($m[$lang])) {
+                unset($m[$lang]);
+            }
+        } else {
+            $m[$lang][$key] = $text;
+        }
+        update("setting", $column, empty($m) ? '{}' : json_encode($m, JSON_UNESCAPED_UNICODE), null, null);
+        topup_gwstore_map($column, true);
+    }
+}
+if (!function_exists('topup_invoice_layout_get')) {
+    // ---- the arrangement of an invoice's own buttons ----
+    // Stored beside the per-button styles, under a name no real button can
+    // have, so the styling handlers (which only match [a-z]+) can never write
+    // to it by accident.
+    function topup_invoice_layout_get($lang, $key)
+    {
+        $v = topup_invoice_btnstyle_for($lang, $key, '_layout');
+        return is_array($v) ? $v : [];
+    }
+    function topup_invoice_layout_set($lang, $key, array $layout)
+    {
+        topup_invoice_btnstyle_set($lang, $key, '_layout', $layout);
+    }
+    // 0 means "nothing has been set" - the builder then uses the arrangement it
+    // ships with, which is shaped to the invoice rather than to a single number.
+    function topup_invoice_layout_perrow($lang, $key)
+    {
+        $n = (int) (topup_invoice_layout_get($lang, $key)['perRow'] ?? 0);
+        return $n > 0 ? $n : 1;
+    }
+    function topup_invoice_layout_touched($lang, $key)
+    {
+        $l = topup_invoice_layout_get($lang, $key);
+        return !empty($l['order']) || !empty($l['perRow']);
+    }
+    // The buttons that share one keyboard, in the order they are shown. Only
+    // these can be rearranged; reissue and paid live on their own keyboards.
+    function topup_invoice_layout_keys($key)
+    {
+        if ($key === 'ton') {
+            return ['pay', 'copymemo', 'copyamt', 'copyaddr', 'check', 'backmethod', 'back'];
+        }
+        if ($key === 'trx') {
+            return ['copyamt', 'copyaddr', 'check', 'backmethod', 'back'];
+        }
+        // card-to-card arranges its own copy buttons on its own screen, which
+        // knows about cards; the shared one would only get in the way
+        if ($key === 'card') {
+            return [];
+        }
+        return ['pay'];
+    }
+    function topup_invoice_ordered_keys($lang, $key)
+    {
+        $all = topup_invoice_layout_keys($key);
+        $saved = (array) (topup_invoice_layout_get($lang, $key)['order'] ?? []);
+        $out = [];
+        foreach ($saved as $w) {
+            if (in_array($w, $all, true) && !in_array($w, $out, true)) {
+                $out[] = $w;
+            }
+        }
+        // anything added to the gateway since the admin last arranged it goes
+        // on the end rather than disappearing
+        foreach ($all as $w) {
+            if (!in_array($w, $out, true)) {
+                $out[] = $w;
+            }
+        }
+        return $out;
+    }
+    // swaps two buttons' places, leaving every other setting alone
+    function topup_invoice_layout_swap($lang, $key, $a, $b)
+    {
+        $order = topup_invoice_ordered_keys($lang, $key);
+        $ia = array_search($a, $order, true);
+        $ib = array_search($b, $order, true);
+        if ($ia === false || $ib === false) {
+            return;
+        }
+        [$order[$ia], $order[$ib]] = [$order[$ib], $order[$ia]];
+        $l = topup_invoice_layout_get($lang, $key);
+        $l['order'] = $order;
+        topup_invoice_layout_set($lang, $key, $l);
+    }
+}
+if (!function_exists('topup_invoice_btnstyle_items')) {
+    // The buttons a gateway's invoice actually carries. Card-to-card's invoice
+    // is built in the chat and has a row of its own (copy-card, receipt sent,
+    // reissue), which is why it keeps its own screen; the online gateways all
+    // show the same two, so they share one.
+    function topup_invoice_btnstyle_items($key, $textbotlang, $lang = null)
+    {
+        $b = $textbotlang['users']['Balance'];
+        if ($key === 'card' && function_exists('card_invoice_btnstyle_items')) {
+            // card-to-card has one copy button per card, so its list is built
+            // from the cards that language actually has
+            return card_invoice_btnstyle_items($textbotlang, $lang);
+        }
+        if ($key === 'trx') {
+            // no wallet-opening button: TRON has no deep link every wallet
+            // honours, so the two values are copied instead
+            return [
+                'copyamt' => $b['trxCopyAmountBtn'],
+                'copyaddr' => $b['trxCopyAddressBtn'],
+                'check' => $b['trxCheckBtn'],
+                'backmethod' => $b['tonBackMethodBtn'],
+                'back' => $b['tonBackBtn'],
+                'reissue' => $b['reissueInvoiceBtn'],
+                'paid' => $b['paidInvoiceBtn'],
+            ];
+        }
+        if ($key === 'ton') {
+            // its invoice is paid by hand from a wallet, so it carries the
+            // copy buttons and the two ways back that the redirect gateways
+            // have no use for
+            return [
+                'pay' => $b['tonOpenWalletBtn'],
+                'copymemo' => $b['tonCopyMemoBtn'],
+                'copyamt' => $b['tonCopyAmountBtn'],
+                'copyaddr' => $b['tonCopyAddressBtn'],
+                'check' => $b['tonCheckBtn'],
+                'backmethod' => $b['tonBackMethodBtn'],
+                'back' => $b['tonBackBtn'],
+                'reissue' => $b['reissueInvoiceBtn'],
+                'paid' => $b['paidInvoiceBtn'],
+            ];
+        }
+        return [
+            'pay' => $textbotlang['users']['Balance']['payments'],
+            'reissue' => $textbotlang['users']['Balance']['reissueInvoiceBtn'],
+            'paid' => $textbotlang['users']['Balance']['paidInvoiceBtn'],
+        ];
+    }
+    // What each button looks like before an admin touches it. A button with
+    // no colour renders white, which reads as "not a real button" - so the
+    // pay button is blue from a fresh install, not colourless.
+    function topup_invoice_btnstyle_default_color($which, $key = null)
+    {
+        if ($key === 'card' && function_exists('card_invoice_btnstyle_default_color')) {
+            // card-to-card has had its own defaults since before this existed -
+            // blue copy buttons, a green receipt button, a red reissue - and the
+            // styling screens have to show the customer's colours, not ours
+            $c = card_invoice_btnstyle_default_color($which);
+            if ($c !== '') {
+                return $c;
+            }
+            // 'paid' is not one of card's own buttons - the shared map below
+            // is what actually renders it, so it decides the colour too
+        }
+        if ($key === 'trx') {
+            // same convention as TON: green moves the payment forward, blue
+            // only copies, red abandons the invoice
+            return ['check' => 'success', 'back' => 'danger', 'reissue' => 'danger', 'paid' => 'success'][$which] ?? 'primary';
+        }
+        if ($key === 'ton') {
+            // green moves the payment forward, blue only copies, red abandons
+            // the invoice - and '' is a real choice, not a missing one: the
+            // wallet button leaves Telegram, and white sets it apart from the
+            // coloured ones that act inside the chat
+            return array_key_exists($which, $tonDefaults = [
+                'pay' => '',
+                'check' => 'success',
+                'back' => 'danger',
+                'reissue' => 'danger',
+                'paid' => 'success',
+            ]) ? $tonDefaults[$which] : 'primary';
+        }
+        return ['reissue' => 'danger', 'paid' => 'success'][$which] ?? 'primary';
+    }
+    function topup_invoice_btnstyle_map_of($lang, $key)
+    {
+        if ($key === 'plisio') {
+            return plisio_invoice_btnstyle_map()[$lang] ?? [];
+        }
+        return topup_gwstore_btnstyle_map()[$lang][$key] ?? [];
+    }
+    function topup_invoice_btnstyle_for($lang, $key, $which)
+    {
+        if ($key === 'plisio') {
+            return plisio_invoice_btnstyle_for($lang, $which);
+        }
+        if ($key === 'card') {
+            return card_invoice_btnstyle_for($lang, $which);
+        }
+        return topup_gwstore_btnstyle_map()[$lang][$key][$which] ?? [];
+    }
+    function topup_invoice_btnstyle_set($lang, $key, $which, array $style)
+    {
+        if ($key === 'plisio') {
+            plisio_invoice_btnstyle_set($lang, $which, $style);
+            return;
+        }
+        $map = topup_gwstore_btnstyle_map(true);
+        $map[$lang][$key][$which] = $style;
+        update("setting", "topup_invoice_btnstyle", json_encode($map, JSON_UNESCAPED_UNICODE), null, null);
+        topup_gwstore_btnstyle_map(true);
+    }
+    function topup_gwstore_btnstyle_map($fresh = false)
+    {
+        static $cache = null;
+        if ($cache !== null && !$fresh) {
+            return $cache;
+        }
+        $setting = select("setting", "*", null, null, "select");
+        $m = json_decode((string) ($setting['topup_invoice_btnstyle'] ?? ''), true);
+        $cache = is_array($m) ? $m : [];
+        return $cache;
+    }
+}
+
+if (!function_exists('topup_expire_minutes')) {
+    // The setting each gateway keeps its invoice lifetime in. Anything not
+    // listed has no invoice to expire.
+    function topup_expire_field($key)
+    {
+        return [
+            'card' => 'cardInvoiceExpireMinutes',
+            'plisio' => 'plisioInvoiceExpireMinutes',
+            'nowpayment' => 'nowpaymentInvoiceExpireMinutes',
+            'startelegrams' => 'starInvoiceExpireMinutes',
+            'ton' => 'tonInvoiceExpireMinutes',
+            'trx' => 'trxInvoiceExpireMinutes',
+            'digitaltron' => 'digitaltronInvoiceExpireMinutes',
+        ][$key] ?? null;
+    }
+    // How long this gateway's invoice stays payable, set per language on the
+    // gateway's own screen. Kept in one place so the number a caption promises
+    // and the number cronbot/payment_expire.php enforces cannot drift apart.
+    function topup_expire_minutes($lang, $key)
+    {
+        // TON quotes an exact amount of coin at the moment the invoice is
+        // made, and that price moves, so it starts far shorter than the rest
+        $default = ($key === 'ton' || $key === 'trx') ? 15 : 30;
+        $field = topup_expire_field($key);
+        $m = $field === null ? $default : (int) pay_value($field, $lang, $default);
+        return $m > 0 ? $m : $default;
+    }
+}
+if (!function_exists('nowpayment_invoice_build')) {
+    // Same contract as plisio_invoice_build(): a pure builder that talks to the
+    // payment provider and returns the invoice text, keyboard and order id -
+    // no Telegram calls of its own. Shared by the checkout and by the "ساخت
+    // فاکتور جدید" button an expired invoice grows.
+    // Never execute this in a test: it calls the live rate and NowPayments
+    // APIs. Source-verify only, the same rule the other builders carry.
+    function nowpayment_invoice_build($from_id, $lang, $amount, $idInvoice, $textbotlang, array $setting)
+    {
+        global $pdo;
+        $rates = rate_arze();
+        if ($rates === null) {
+            return ['error' => 'rate'];
+        }
+        $usd = $rates['USD'];
+        $usdprice = $amount / $usd;
+        // the same floor Plisio has always had: an invoice under a dollar is
+        // below what the processors will settle, and a 0-star invoice is not
+        // payable at all
+        // strictly below: a dollar exactly is the minimum, not the first
+        // amount over it - the message names $1 as what is required
+        if ($usdprice < 1) {
+            return ['error' => 'toolow', 'usd' => $usd];
+        }
+        $randomString = bin2hex(random_bytes(5));
+        $pay = nowPayments('invoice', $usdprice, $randomString, 'TopUp - ' . $from_id);
+        $dateacc = date('Y/m/d H:i:s');
+        // the row is written before the response is checked, exactly as the
+        // original inline handler did - the failure path below still reports it
+        $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice,dec_not_confirmed) VALUES (?,?,?,?,?,?,?,?)");
+        $stmt->execute([$from_id, $randomString, $dateacc, $amount, "Unpaid", "nowpayment", $idInvoice, $pay['id'] ?? null]);
+        if (!isset($pay['id'])) {
+            return ['error' => 'api', 'apiMessage' => json_encode($pay)];
+        }
+        $captionTemplate = topup_invoice_caption_for($lang, 'nowpayment', $textbotlang['users']['Balance']['nowpaymentInvoiceCaption']);
+        $text = strtr($captionTemplate, [
+            '{order}' => $randomString,
+            '{price}' => number_format($amount, 0),
+            '{usd}' => number_format($usd),
+            '{minutes}' => topup_expire_minutes($lang, 'nowpayment'),
+        ]);
+        $payBtn = topup_styled_button($textbotlang['users']['Balance']['payments'], topup_invoice_btnstyle_for($lang, 'nowpayment', 'pay'), '', topup_invoice_btnstyle_default_color('pay'));
+        $payBtn['url'] = $pay['invoice_url'];
+        return [
+            'error' => null,
+            'text' => $text,
+            'keyboard' => json_encode(['inline_keyboard' => [[$payBtn]]]),
+            'randomString' => $randomString,
+        ];
+    }
+}
+if (!function_exists('star_invoice_build')) {
+    // Telegram Stars, same contract as the two builders above.
+    // Never execute this in a test: it calls the live rate API and
+    // createInvoiceLink. Source-verify only.
+    function star_invoice_build($from_id, $lang, $amount, $idInvoice, $textbotlang, array $setting)
+    {
+        global $pdo;
+        $rates = rate_arze(['USD', 'Ton']);
+        if ($rates === null) {
+            return ['error' => 'rate'];
+        }
+        $usd = $rates['USD'];
+        $perStar = $usd * 0.016;
+        if ($perStar <= 0) {
+            return ['error' => 'rate'];
+        }
+        $starAmount = intval($amount / $perStar);
+        if ($amount / $usd < 1 || $starAmount < 1) {
+            return ['error' => 'toolow', 'usd' => $usd];
+        }
+        $randomString = bin2hex(random_bytes(5));
+        $dateacc = date('Y/m/d H:i:s');
+        $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice) VALUES (?,?,?,?,?,?,?)");
+        $stmt->execute([$from_id, $randomString, $dateacc, $amount, "Unpaid", "Star Telegram", $idInvoice]);
+        $link = telegram('createInvoiceLink', [
+            'title' => "Buy for Price {$amount}",
+            'description' => "Buy price",
+            'payload' => $randomString,
+            'currency' => "XTR",
+            'prices' => json_encode([['label' => "Price", 'amount' => $starAmount]]),
+        ]);
+        if (empty($link['ok'])) {
+            return ['error' => 'api', 'apiMessage' => json_encode($link)];
+        }
+        $captionTemplate = topup_invoice_caption_for($lang, 'startelegrams', $textbotlang['users']['Balance']['starInvoiceCaption']);
+        $text = strtr($captionTemplate, [
+            '{order}' => $randomString,
+            '{stars}' => $starAmount,
+            '{price}' => number_format($amount, 0),
+            '{minutes}' => topup_expire_minutes($lang, 'startelegrams'),
+        ]);
+        $payBtn = topup_styled_button($textbotlang['users']['Balance']['payments'], topup_invoice_btnstyle_for($lang, 'startelegrams', 'pay'), '', topup_invoice_btnstyle_default_color('pay'));
+        $payBtn['url'] = $link['result'];
+        return [
+            'error' => null,
+            'text' => $text,
+            'keyboard' => json_encode(['inline_keyboard' => [[$payBtn]]]),
+            'randomString' => $randomString,
+        ];
+    }
+}
+if (!function_exists('topup_gateway_key_by_method')) {
+    // Payment_report keeps each gateway under its own historical name; this
+    // is the whole map back to the key the caption and button stores use.
+    function topup_gateway_key_by_method($method)
+    {
+        $m = [
+            'cart to cart' => 'card',
+            'plisio' => 'plisio',
+            'nowpayment' => 'nowpayment',
+            'Star Telegram' => 'startelegrams',
+            'TON' => 'ton',
+            'TRX' => 'trx',
+            'arze digital offline' => 'digitaltron',
+            'zarinpal' => 'zarinpal',
+            'aqayepardakht' => 'aqayepardakht',
+            'Currency Rial 1' => 'iranpay1',
+            'Currency Rial 2' => 'iranpay2',
+            'Currency Rial 3' => 'iranpay3',
+            'paymentnotverify' => 'paymentnotverify',
+        ];
+        return $m[(string) $method] ?? null;
+    }
+}
+if (!function_exists('topup_paid_notify')) {
+    // The wallet is credited, but the invoice is still sitting in the chat
+    // with a live payment link on it - and tapping a url button tells the bot
+    // nothing, so it cannot answer. Swap it for a button that can: the
+    // customer's natural second tap then gets the gateway's own alert instead
+    // of reopening a payment page for an invoice that is already settled.
+    function topup_paid_notify($order_id)
+    {
+        $row = select("Payment_report", "*", "id_order", $order_id, "select");
+        if (!is_array($row) || (int) ($row['message_id'] ?? 0) < 1) {
+            return;
+        }
+        $key = topup_gateway_key_by_method($row['Payment_Method'] ?? '');
+        if ($key === null) {
+            return;
+        }
+        $lang = (string) (select("user", "*", "id", $row['id_user'], "select")['lang'] ?? 'fa');
+        $t = languagechange(null, $lang);
+        $btn = topup_styled_button(
+            $t['users']['Balance']['paidInvoiceBtn'],
+            topup_invoice_btnstyle_for($lang, $key, 'paid'),
+            "gwpaid:{$key}",
+            topup_invoice_btnstyle_default_color('paid', $key)
+        );
+        telegram('editMessageReplyMarkup', [
+            'chat_id' => $row['id_user'],
+            'message_id' => (int) $row['message_id'],
+            'reply_markup' => json_encode(['inline_keyboard' => [[$btn]]]),
+        ]);
+    }
+}
+if (!function_exists('topup_expire_gateway_keys')) {
+    // Payment_report stores each gateway under its own historical name;
+    // these are the ones that word their own expiry, mapped to the gateway
+    // key the caption and button stores are indexed by. Card-to-card is not
+    // here - it has its own reissue flow, with buttons no other gateway has.
+    function topup_expire_gateway_keys()
+    {
+        return [
+            'plisio' => 'plisio',
+            'nowpayment' => 'nowpayment',
+            'Star Telegram' => 'startelegrams',
+            'TON' => 'ton',
+            'TRX' => 'trx',
+        ];
+    }
+}
+if (!function_exists('topup_expire_notify')) {
+    // What an expired invoice turns into, for every gateway that has its own
+    // wording: the caption an admin can edit plus a "ساخت فاکتور جدید" button.
+    // Plisio has had this since it was built; the other online gateways used to
+    // have their invoice silently deleted instead.
+    function topup_expire_notify($key, $id_user, $id_order, $price, $message_id, $payer_lang)
+    {
+        $t = languagechange(null, $payer_lang);
+        $default = $key === 'plisio'
+            ? $t['users']['Balance']['plisioInvoiceExpiredCaption']
+            : $t['users']['Balance']['topupInvoiceExpiredCaption'];
+        $caption = strtr(topup_invoice_expired_caption_for($payer_lang, $key, $default), [
+            '{price}' => number_format($price),
+        ]);
+        $btn = topup_styled_button(
+            $t['users']['Balance']['reissueInvoiceBtn'],
+            topup_invoice_btnstyle_for($payer_lang, $key, 'reissue'),
+            "gwreissue:{$key}:{$id_order}",
+            'danger'
+        );
+        Editmessagetext($id_user, $message_id, $caption, json_encode(['inline_keyboard' => [[$btn]]]), 'HTML');
+    }
+}
+
+if (!function_exists('topup_slot_defs')) {
+    // The four buttons of the top-up amount flow that an admin can restyle, each
+    // with its own storage slot. 'back' and 'backcustom' are BOTH "بازگشت به روش
+    // پرداخت" but on different screens - they used to share the 'back' slot, so
+    // recolouring one silently recoloured the other.
+    function topup_slot_defs($textbotlang)
+    {
+        $b = $textbotlang['users']['Balance'];
+        return [
+            'custom' => ['label' => $b['customAmountBtn'], 'color' => 'primary', 'screen' => 'amount', 'pair' => 'back'],
+            'back' => ['label' => $b['backToMethodBtn'], 'color' => 'danger', 'screen' => 'amount', 'pair' => 'custom'],
+            'backcustom' => ['label' => $b['backToMethodBtn'], 'color' => 'danger', 'screen' => 'custom', 'pair' => 'backpkg'],
+            'backpkg' => ['label' => $b['backToPrevMenuBtn'] ?? '🔙 بازگشت به منوی قبلی', 'color' => 'danger', 'screen' => 'custom', 'pair' => 'backcustom'],
+        ];
+    }
+}
+if (!function_exists('topup_slot_label')) {
+    // the text this button actually shows the customer: the admin's own name if
+    // they set one, otherwise the slot's built-in label
+    function topup_slot_label($lang, $key, $slot, $textbotlang)
+    {
+        $style = topup_btnstyle_for($lang, $key, $slot);
+        $label = trim((string) ($style['label'] ?? ''));
+        if ($label !== '') {
+            return $label;
+        }
+        return topup_slot_defs($textbotlang)[$slot]['label'] ?? $slot;
+    }
+}
+if (!function_exists('topup_slot_color')) {
+    function topup_slot_color($lang, $key, $slot, $textbotlang)
+    {
+        $c = (string) (topup_btnstyle_for($lang, $key, $slot)['color'] ?? '');
+        return in_array($c, ['primary', 'success', 'danger'], true)
+            ? $c
+            : (topup_slot_defs($textbotlang)[$slot]['color'] ?? '');
+    }
+}
+if (!function_exists('topup_custom_screen_swapped')) {
+    // the same left/right swap the amount screen has, for the pair on the
+    // "#️⃣ مبلغ دلخواه" screen (بازگشت به روش پرداخت / بازگشت به منوی قبلی)
+    function topup_custom_screen_swapped($lang, $gatewayKey)
+    {
+        $m = topup_btnstyle_map();
+        return !empty($m[$lang][$gatewayKey]['_customScreenSwapped']);
+    }
+    function topup_custom_screen_toggle($lang, $gatewayKey)
+    {
+        $m = topup_btnstyle_map();
+        if (!empty($m[$lang][$gatewayKey]['_customScreenSwapped'])) {
+            unset($m[$lang][$gatewayKey]['_customScreenSwapped']);
+        } else {
+            $m[$lang][$gatewayKey]['_customScreenSwapped'] = true;
+        }
+        topup_btnstyle_save($m);
+    }
+}
+if (!function_exists('topup_slot_swapped')) {
+    // which swap flag governs a slot's row
+    function topup_slot_swapped($lang, $key, $slot, $textbotlang)
+    {
+        $screen = topup_slot_defs($textbotlang)[$slot]['screen'] ?? 'amount';
+        return $screen === 'custom'
+            ? topup_custom_screen_swapped($lang, $key)
+            : topup_custom_back_swapped($lang, $key);
+    }
+    function topup_slot_swap_toggle($lang, $key, $slot, $textbotlang)
+    {
+        $screen = topup_slot_defs($textbotlang)[$slot]['screen'] ?? 'amount';
+        if ($screen === 'custom') {
+            topup_custom_screen_toggle($lang, $key);
+        } else {
+            topup_custom_back_toggle($lang, $key);
+        }
     }
 }
 if (!function_exists('topup_custom_back_swapped')) {
@@ -2869,6 +4637,54 @@ if (!function_exists('topup_captions_map')) {
         $m = json_decode((string) ($setting['topup_captions'] ?? ''), true);
         $cache = is_array($m) ? $m : [];
         return $cache;
+    }
+}
+if (!function_exists('topup_linkmsg_map')) {
+    // "درحال ساخت لینک پرداخت..." per gateway. It used to be one shared string
+    // for all nine redirect gateways, so wording it for one silently reworded
+    // the rest; each now keeps its own text, falling back to the shared default.
+    function topup_linkmsg_map($fresh = false)
+    {
+        static $cache = null;
+        if ($cache !== null && !$fresh) {
+            return $cache;
+        }
+        $setting = select("setting", "*", null, null, "select");
+        $m = json_decode((string) ($setting['topup_linkmsgs'] ?? ''), true);
+        $cache = is_array($m) ? $m : [];
+        return $cache;
+    }
+}
+if (!function_exists('topup_linkmsg_for')) {
+    function topup_linkmsg_for($lang, $gatewayKey, $default)
+    {
+        $m = topup_linkmsg_map();
+        $v = trim((string) ($m[$lang][$gatewayKey] ?? ''));
+        return $v !== '' ? $v : $default;
+    }
+}
+if (!function_exists('topup_linkmsg_has_override')) {
+    function topup_linkmsg_has_override($lang, $gatewayKey)
+    {
+        $m = topup_linkmsg_map();
+        return trim((string) ($m[$lang][$gatewayKey] ?? '')) !== '';
+    }
+}
+if (!function_exists('topup_linkmsg_set')) {
+    function topup_linkmsg_set($lang, $gatewayKey, $text)
+    {
+        $m = topup_linkmsg_map();
+        $text = trim((string) $text);
+        if ($text === '') {
+            unset($m[$lang][$gatewayKey]);
+            if (empty($m[$lang])) {
+                unset($m[$lang]);
+            }
+        } else {
+            $m[$lang][$gatewayKey] = $text;
+        }
+        update("setting", "topup_linkmsgs", empty($m) ? '{}' : json_encode($m, JSON_UNESCAPED_UNICODE), null, null);
+        topup_linkmsg_map(true);
     }
 }
 if (!function_exists('topup_caption_for')) {
@@ -3035,10 +4851,11 @@ if (!function_exists('gateway_apply_button_style')) {
             if ($emo['icon'] !== '') {
                 $btn['icon_custom_emoji_id'] = $emo['icon'];
             }
+            // blue unless the admin picked something else: with no style at all
+            // Telegram draws a plain white button, which read as disabled next
+            // to the coloured ones around it
             $color = $section['color'][$key] ?? '';
-            if ($color !== '' && in_array($color, ['primary', 'success', 'danger'], true)) {
-                $btn['style'] = $color;
-            }
+            $btn['style'] = in_array($color, ['primary', 'success', 'danger'], true) ? $color : 'primary';
             $buttons[$key] = $btn;
             $order[] = $key;
         }
@@ -3052,13 +4869,181 @@ if (!function_exists('gateway_apply_button_style')) {
         }
         return $out;
     }
-}if (!function_exists('topup_method_keyboard')) {
+}if (!function_exists('topup_group_methods_on')) {
+    // ---- grouping the payment methods the customer sees ----
+    // The admin side has shown the gateways in families for a while; the
+    // customer's list is the one place that stayed flat, and with eleven live it
+    // reads as a wall. This collapses it to one row per family.
+    //
+    // Only families with more than one live member are collapsed: a "group"
+    // holding a single gateway would cost a tap and give nothing back, so a
+    // language with one gateway is left exactly as it was.
+    function topup_group_methods_map($fresh = false)
+    {
+        static $cache = null;
+        if ($cache !== null && !$fresh) {
+            return $cache;
+        }
+        $setting = select("setting", "*", null, null, "select");
+        $m = json_decode((string) ($setting['topup_group_methods'] ?? ''), true);
+        $cache = is_array($m) ? $m : [];
+        return $cache;
+    }
+    function topup_group_methods_on($lang)
+    {
+        return (string) (topup_group_methods_map()[$lang] ?? '') === '1';
+    }
+    function topup_group_methods_set($lang, $on)
+    {
+        $m = topup_group_methods_map(true);
+        if ($on) {
+            $m[$lang] = '1';
+        } else {
+            unset($m[$lang]);
+        }
+        update("setting", "topup_group_methods", empty($m) ? '{}' : json_encode($m, JSON_UNESCAPED_UNICODE), null, null);
+        topup_group_methods_map(true);
+    }
+    // per-family button styling, the same shape every other style store here uses
+    function topup_group_btnstyle_map($fresh = false)
+    {
+        static $cache = null;
+        if ($cache !== null && !$fresh) {
+            return $cache;
+        }
+        $setting = select("setting", "*", null, null, "select");
+        $m = json_decode((string) ($setting['topup_group_btnstyle'] ?? ''), true);
+        $cache = is_array($m) ? $m : [];
+        return $cache;
+    }
+    function topup_group_btnstyle_for($lang, $group)
+    {
+        return topup_group_btnstyle_map()[$lang][$group] ?? [];
+    }
+    function topup_group_btnstyle_set($lang, $group, array $style)
+    {
+        $m = topup_group_btnstyle_map(true);
+        $m[$lang][$group] = $style;
+        update("setting", "topup_group_btnstyle", json_encode($m, JSON_UNESCAPED_UNICODE), null, null);
+        topup_group_btnstyle_map(true);
+    }
+    // the caption a family's own screen carries; {group} becomes its name
+    function topup_group_caption_for($lang, $default)
+    {
+        $v = trim((string) (topup_gwstore_map('topup_group_captions')[$lang]['all'] ?? ''));
+        return $v !== '' ? $v : $default;
+    }
+    function topup_group_caption_has_override($lang)
+    {
+        return trim((string) (topup_gwstore_map('topup_group_captions')[$lang]['all'] ?? '')) !== '';
+    }
+    function topup_group_caption_set($lang, $text)
+    {
+        topup_gwstore_set('topup_group_captions', $lang, 'all', $text);
+    }
+    // Which gateways this rendered keyboard actually offers - read off the
+    // buttons rather than the config, so it reflects what the customer sees
+    // after the per-language filtering has already run.
+    function topup_group_live_keys($rows, $cartToCartText = null)
+    {
+        $out = [];
+        foreach ((array) $rows as $row) {
+            foreach ((array) $row as $btn) {
+                $k = gateway_button_key($btn, $cartToCartText);
+                if ($k !== null) {
+                    $out[] = $k;
+                }
+            }
+        }
+        return $out;
+    }
+    function topup_group_collapsible($rows, $cartToCartText = null)
+    {
+        $live = topup_group_live_keys($rows, $cartToCartText);
+        $out = [];
+        foreach (gateway_groups() as $group => $members) {
+            if (count(array_intersect($members, $live)) > 1) {
+                $out[] = $group;
+            }
+        }
+        return $out;
+    }
+    function topup_group_button($lang, $group, $textbotlang)
+    {
+        return topup_styled_button(
+            gateway_group_label($group, $textbotlang),
+            topup_group_btnstyle_for($lang, $group),
+            "topupmgrp:{$group}",
+            'primary'
+        );
+    }
+    // The method screen with each collapsible family replaced by one button.
+    // The button takes the place of that family's first member, so whatever
+    // order and row width the admin set in 📐 چیدمان still decides the layout.
+    function topup_group_method_rows($rows, $lang, $textbotlang, $cartToCartText = null)
+    {
+        $collapse = topup_group_collapsible($rows, $cartToCartText);
+        if (empty($collapse)) {
+            return $rows;
+        }
+        $out = [];
+        $done = [];
+        foreach ((array) $rows as $row) {
+            $keep = [];
+            foreach ((array) $row as $btn) {
+                $k = gateway_button_key($btn, $cartToCartText);
+                $g = $k === null ? null : gateway_group_of($k);
+                if ($g !== null && in_array($g, $collapse, true)) {
+                    if (isset($done[$g])) {
+                        continue;
+                    }
+                    $done[$g] = true;
+                    $keep[] = topup_group_button($lang, $g, $textbotlang);
+                    continue;
+                }
+                $keep[] = $btn;
+            }
+            if (!empty($keep)) {
+                $out[] = $keep;
+            }
+        }
+        return $out;
+    }
+    // One family's own screen: its gateways exactly as they were arranged on the
+    // flat list - same styling, same rows - plus a way back. Taking them from
+    // the already-styled keyboard is what keeps 📐 چیدمان working inside a family
+    // instead of the grouping quietly flattening it.
+    function topup_group_screen_rows($rows, $group, $lang, $textbotlang, $cartToCartText = null)
+    {
+        $members = gateway_groups()[$group] ?? [];
+        $out = [];
+        foreach ((array) $rows as $row) {
+            $keep = [];
+            foreach ((array) $row as $btn) {
+                $k = gateway_button_key($btn, $cartToCartText);
+                if ($k !== null && in_array($k, $members, true)) {
+                    $keep[] = $btn;
+                }
+            }
+            if (!empty($keep)) {
+                $out[] = $keep;
+            }
+        }
+        $out[] = [[
+            'text' => $textbotlang['users']['Balance']['groupBackBtn'],
+            'callback_data' => 'topup_back_methods',
+            'style' => 'danger',
+        ]];
+        return $out;
+    }
+}
+if (!function_exists('topup_method_keyboard')) {
     // $step_payment already carries a shared "❌ بستن لیست" row used by ~9
     // other flows in this bot - the method-first top-up screen doesn't want
     // it (its own بازگشت/close buttons cover that), so this strips just that
     // trailing row for THIS display without touching the shared variable
     // every other flow still relies on unmodified.
-    function topup_method_keyboard($stepPaymentJson)
+    function topup_method_keyboard($stepPaymentJson, $lang = null)
     {
         $kb = json_decode($stepPaymentJson, true);
         if (!is_array($kb['inline_keyboard'] ?? null)) {
@@ -3077,6 +5062,12 @@ if (!function_exists('gateway_apply_button_style')) {
                 'callback_data' => 'mmclose',
                 'style' => 'danger',
             ]];
+        }
+        // 🗂 دسته‌بندی درگاه‌ها, off unless this language turned it on. Done last
+        // so the close row above is already in place and stays where it is.
+        if ($lang !== null && topup_group_methods_on($lang)) {
+            global $textbotlang;
+            $rows = topup_group_method_rows($rows, $lang, $textbotlang, $textbotlang['textbot']['cartToCart'] ?? null);
         }
         $kb['inline_keyboard'] = array_values($rows);
         return json_encode($kb);
@@ -3112,6 +5103,15 @@ if (!function_exists('gateway_button_key')) {
             return $cb;
         }
         return null;
+    }
+}
+if (!function_exists('gateway_datain')) {
+    // The inverse of gateway_button_key(): the callback a gateway's checkout is
+    // keyed on. Card-to-card answers to the legacy 'cart_to_offline' rather than
+    // its own key; every other gateway is keyed on the key itself.
+    function gateway_datain($key)
+    {
+        return $key === 'card' ? 'cart_to_offline' : (string) $key;
     }
 }
 if (!function_exists('gateway_filter_rows')) {
@@ -3520,6 +5520,10 @@ function activecron()
         "*/5 * * * * curl https://$domainhosts/cronbot/payment_expire.php",
         "*/1 * * * * curl https://$domainhosts/cronbot/sendmessage.php",
         "*/3 * * * * curl https://$domainhosts/cronbot/plisio.php",
+        // TON is settled by reading the chain, so nothing credits a customer
+        // until this runs - it is the whole gateway, not an extra
+        "*/2 * * * * curl https://$domainhosts/cronbot/ton.php",
+        "*/2 * * * * curl https://$domainhosts/cronbot/trx.php",
         "*/1 * * * * curl https://$domainhosts/cronbot/activeconfig.php",
         "*/1 * * * * curl https://$domainhosts/cronbot/disableconfig.php",
         "*/1 * * * * curl https://$domainhosts/cronbot/iranpay1.php",
@@ -4037,6 +6041,72 @@ if (!function_exists('bottext_all_item_keys')) {
             $keys[] = $extra;
         }
         return array_values(array_unique($keys));
+    }
+}
+if (!function_exists('sell_sticker_retire')) {
+    // Takes away the sticker the current purchase screen put up. sell_screen()
+    // calls it on every step; the paths that LEAVE the flow (a product is
+    // chosen, or the user cancels) call it directly, so the last screen's
+    // sticker does not end up sitting above an unrelated invoice.
+    function sell_sticker_retire($chat_id)
+    {
+        $sr_user = select("user", "*", "id", $chat_id, "select");
+        $sr_old = (int) ($sr_user['bt_sticker_id'] ?? 0);
+        if ($sr_old > 0) {
+            deletemessage($chat_id, $sr_old);
+            update("user", "bt_sticker_id", "0", "id", $chat_id);
+        }
+    }
+}
+if (!function_exists('sell_screen')) {
+    // One choke point for the three screens of 🔐 خرید اشتراک (panel → category
+    // → product). What decides how to move between them is whether the screen
+    // being opened has a sticker OF ITS OWN:
+    //
+    //   no sticker of its own -> edit the open message in place and leave any
+    //                            sticker already on screen exactly where it is.
+    //                            So a sticker set only on the panel step stays
+    //                            up across category and product, and a flow with
+    //                            no stickers at all never deletes or re-sends
+    //                            anything - it is one screen changing.
+    //   has its own sticker   -> a sticker cannot live inside a text message and
+    //                            a new one would land BELOW the caption, so the
+    //                            screen is REPLACED: the previous sticker and
+    //                            caption go, then the new sticker is sent with
+    //                            the new caption underneath it.
+    //
+    // The sticker that is up is therefore only ever taken away by a screen that
+    // brings its own, or by sell_sticker_retire() when the flow is left - which
+    // is what stops stickers from piling up down the chat. Pass $message_id = 0
+    // when there is no open bot message to replace (the reply keyboard tap,
+    // where $message_id is the user's own message).
+    function sell_screen($chat_id, $message_id, $text, $keyboard)
+    {
+        $ss_mid = (int) $message_id;
+        $ss_extras = function_exists('bottext_extras_for_text') ? bottext_extras_for_text($text) : null;
+        $ss_hasSticker = is_array($ss_extras) && ($ss_extras['sticker'] ?? '') !== '';
+        if (!$ss_hasSticker) {
+            // $ss_mid === 0 means the flow is being ENTERED fresh rather than
+            // navigated, so a sticker left behind by an abandoned run is an
+            // orphan and goes; mid-flow the sticker on screen is kept.
+            if ($ss_mid > 0) {
+                Editmessagetext($chat_id, $ss_mid, $text, $keyboard, 'HTML');
+            } else {
+                sell_sticker_retire($chat_id);
+                sendmessage($chat_id, $text, $keyboard, 'HTML');
+            }
+            return;
+        }
+        // this screen brings its own sticker, so the previous pair makes way
+        sell_sticker_retire($chat_id);
+        if ($ss_mid > 0) {
+            deletemessage($chat_id, $ss_mid);
+        }
+        // sendmessage() fires the sticker BEFORE the text, so the sticker lands
+        // above its own caption rather than under it
+        $ss_res = sendmessage($chat_id, $text, $keyboard, 'HTML');
+        $ss_new = (int) ($ss_res['_sticker_message_id'] ?? 0);
+        update("user", "bt_sticker_id", $ss_new > 0 ? (string) $ss_new : "0", "id", $chat_id);
     }
 }
 if (!function_exists('statusbtn_defs')) {
@@ -5232,7 +7302,7 @@ if (!function_exists('bt_section_meta')) {
             ],
             'confirm' => [
                 'label' => '🧾 تأیید خرید',
-                'alert' => 'این بخش کپشن‌های صفحه‌ی تأیید نهایی خرید رو مدیریت می‌کنه.',
+                'alert' => 'کپشن صفحه‌ی تأیید نهایی خرید. دو حالت داره: خرید عادی و خرید عمده - هر کدوم کپشن خودشو داره، ولی دکمه‌های تایید/انصرافشون مشترکه.',
             ],
             'btnstyle' => [
                 'label' => '🎨 ظاهر دکمه‌های انتخاب',
@@ -5249,10 +7319,6 @@ if (!function_exists('bt_section_meta')) {
             'processing' => [
                 'label' => '⏳ پیام‌های در حال پردازش',
                 'alert' => 'این بخش پیام‌های موقتی‌ای رو مدیریت می‌کنه که وقتی کاربر منتظره نشون داده می‌شن (در حال ساخت لینک پرداخت، در حال ساخت سرویس).',
-            ],
-            'preinvoice_afterpay' => [
-                'label' => '🧾 پیش‌فاکتور و پیام بعد از خرید',
-                'alert' => 'این بخش کپشن پیش‌فاکتور و پیامی که درست بعد از تکمیل‌شدن خرید (همراه کانفیگ) برای کاربر فرستاده می‌شه رو مدیریت می‌کنه.',
             ],
             'cfgdeliv_link' => [
                 'label' => '📌 نحوه‌ی نمایش کانفیگ',
@@ -5342,6 +7408,22 @@ if (!function_exists('bt_section_meta')) {
                 'label' => '🛍 پیام‌ها و بخش‌های خرید',
                 'alert' => 'این بخش پیام‌های مرتبط با خرید و دو زیرمنوی کامل «مراحل خرید» و «سرویس‌های من» رو مدیریت می‌کنه.',
             ],
+            'home_topup' => [
+                'label' => '💰 افزایش موجودی',
+                'alert' => 'این بخش پیام‌های مسیر «💰 افزایش موجودی» رو مدیریت می‌کنه - از زدن مبلغ تا شارژ شدن کیف پول. جدا از خرید سرویسه.',
+            ],
+            'topup_flow' => [
+                'label' => '⏳ در جریان پرداخت',
+                'alert' => 'پیام‌هایی که کاربر بین ثبت مبلغ تا رسیدن رسیدش می‌بینه.',
+            ],
+            'topup_done' => [
+                'label' => '✅ بعد از تایید شارژ',
+                'alert' => 'پیام‌هایی که بعد از تایید پرداخت و شارژ شدن کیف پول برای کاربر می‌ره.',
+            ],
+            'topup_card' => [
+                'label' => '💳 کپشن و دکمه‌های کارت به کارت',
+                'alert' => 'کپشن صفحه‌ی بسته‌ها، متن مبلغ دلخواه، متن فاکتور و فاکتور منقضی، و ظاهر دکمه‌های پرداخت - همه مخصوص کارت‌به‌کارت. قبلاً توی 🏬 تنظیمات فروشگاه بودن و از اینجا منتقل شدن.',
+            ],
             'home_usertest' => [
                 'label' => '🔑 اکانت تست',
                 'alert' => 'این بخش پیام‌های مسیر اکانت تست (تنظیم یوزرنیم و پیام پایان اعتبار) رو مدیریت می‌کنه.',
@@ -5388,6 +7470,9 @@ if (!function_exists('genbtn_alias_map')) {
             // it bot-wide instead of a per-screen copy)
             'rn' => 'users.extend.invoiceCreated',
             'cl' => 'users.changeLink.warnchange',
+            // own-key trick again - the 🎁 code-entry screen owns both its
+            // "کد تخفیف دارم" row on the method screen and its own back button
+            'td' => 'users.Balance.topupDiscPrompt',
         ];
     }
 }
@@ -5431,6 +7516,16 @@ if (!function_exists('genbtn_defs')) {
         if ($alias === 'sc') {
             return [
                 0 => ['name' => '🔴 دکمه بستن', 'text' => $textbotlang['bottext']['btn_close'], 'style' => 'danger', 'callback_data' => 'servclose'],
+            ];
+        }
+        if ($alias === 'td') {
+            // idx 0 lives on the 💰 افزایش موجودی method screen, idx 1 on the
+            // code prompt this opens - both hang off the prompt's own caption
+            // key (the own-key trick), since that is the one item the pair
+            // belongs to in 🎨 شخصی‌سازی پیام‌های ربات
+            return [
+                0 => ['name' => '🔵 دکمه «کد تخفیف دارم»', 'text' => $textbotlang['users']['Balance']['topupDiscHaveCodeBtn'], 'style' => 'primary', 'callback_data' => 'topup_disc_enter'],
+                1 => ['name' => '🔴 دکمه بازگشت به منوی قبل', 'text' => $textbotlang['users']['Balance']['topupDiscBackBtn'], 'style' => 'danger', 'callback_data' => 'topup_disc_cancel'],
             ];
         }
         if ($alias === 'bc') {
@@ -5747,7 +7842,10 @@ if (!function_exists('genbtn_list_payload')) {
         // same color but do something completely different when tapped
         $kb['inline_keyboard'][] = [['text' => bt_section_meta('genbtn_actions')['label'], 'callback_data' => 'bt_sep|genbtn_actions']];
         $kb['inline_keyboard'][] = [['text' => '🔁 ریست همه به پیش‌فرض', 'callback_data' => "gbtn|rstall|{$lang}|{$alias}{$gb_sfx}", 'style' => 'danger']];
-        $backKeyMap = ['su' => 'users.sell.selectUsernamePrompt', 'cf' => 'users.sell.preInvoice', 'ns' => 'users.sell.service_not_available', 'te' => 'textbot.testExpired', 'sc' => 'users.sell.service_sell', 'bc' => 'users.Balance.chargeSuccess', 'rn' => 'users.extend.invoiceCreated', 'cl' => 'users.changeLink.warnchange'];
+        // 'cf' points at textbot.preInvoice (the normal-purchase تأیید خرید) -
+        // it used to point at users.sell.preInvoice, the discount-code variant,
+        // which was removed along with that whole dead feature
+        $backKeyMap = ['su' => 'users.sell.selectUsernamePrompt', 'cf' => 'textbot.preInvoice', 'ns' => 'users.sell.service_not_available', 'te' => 'textbot.testExpired', 'sc' => 'users.sell.service_sell', 'bc' => 'users.Balance.chargeSuccess', 'rn' => 'users.extend.invoiceCreated', 'cl' => 'users.changeLink.warnchange', 'td' => 'users.Balance.topupDiscPrompt'];
         $backKey = ($origin === 'u') ? 'users.usertest.selectUsernamePrompt' : ($backKeyMap[$alias] ?? 'users.sell.selectUsernamePrompt');
         $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "bt_edit|{$lang}|{$backKey}", 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
@@ -6462,26 +8560,60 @@ if (!function_exists('topup_disc_terms_line')) {
     // admin in the info alert - uses left and the Jalali expiry date
     function topup_disc_terms_line(array $c, $userId = null, $gatewayKey = null, $textbotlang = null)
     {
-        require_once __DIR__ . '/jdf.php';
-        $parts = [];
-        // a code only ever applies to the gateway it was created under - saying
-        // so up front stops a user picking a method that silently awards nothing
-        if ($gatewayKey !== null && $textbotlang !== null) {
-            $parts[] = "💳 فقط برای: " . topup_disc_gateway_label($gatewayKey, $textbotlang);
-        }
         $perUser = intval($c['limitPerUser'] ?? 0);
-        if ($perUser > 0) {
-            $used = ($userId !== null) ? topup_disc_code_user_count($c['code'] ?? '', $userId) : 0;
-            $left = max(0, $perUser - $used);
-            $parts[] = "🔁 قابل استفاده: {$left} بار از {$perUser} بار";
-        } else {
-            $parts[] = "🔁 قابل استفاده: نامحدود";
+        $used = ($perUser > 0 && $userId !== null) ? topup_disc_code_user_count($c['code'] ?? '', $userId) : 0;
+        return topup_disc_render_block('users.Balance.topupDiscActiveBlock', $textbotlang, [
+            '{title}' => topup_disc_caption_line($c, $textbotlang),
+            '{gateway}' => ($gatewayKey !== null && $textbotlang !== null) ? topup_disc_gateway_label($gatewayKey, $textbotlang) : '',
+            '{uses}' => topup_disc_uses_text($perUser, $used, $textbotlang),
+            '{expiry}' => topup_disc_expiry_text(intval($c['expiry'] ?? 0), $textbotlang),
+        ]);
+    }
+}
+if (!function_exists('topup_disc_render_block')) {
+    // Renders one of the discount blocks from its customizable template. The
+    // admin's edit in 🎨 شخصی‌سازی پیام‌های ربات wins; the language file is the
+    // fallback. Values are escaped here, never the template, so an admin can
+    // still use <b>/<blockquote> in their own wording.
+    function topup_disc_render_block($key, $textbotlang, array $vars)
+    {
+        $tpl = function_exists('bottext_resolve_key') ? bottext_resolve_key($key) : '';
+        if (trim((string) $tpl) === '') {
+            $leaf = substr($key, strrpos($key, '.') + 1);
+            $tpl = (string) ($textbotlang['users']['Balance'][$leaf] ?? '');
         }
-        $exp = intval($c['expiry'] ?? 0);
-        $parts[] = ($exp > 0)
-            ? ("⏳ اعتبار تا: " . jdate('Y/m/d - H:i', $exp))
-            : "⏳ اعتبار: بدون محدودیت زمانی";
-        return implode("\n", $parts);
+        $safe = [];
+        foreach ($vars as $k => $v) {
+            $safe[$k] = htmlspecialchars((string) $v, ENT_QUOTES);
+        }
+        return trim(strtr($tpl, $safe));
+    }
+}
+if (!function_exists('topup_disc_uses_text')) {
+    // "N بار از M بار" or "نامحدود" - one place, so the code block and the
+    // codeless block can never drift apart
+    function topup_disc_uses_text($perUser, $used, $textbotlang)
+    {
+        $bal = $textbotlang['users']['Balance'] ?? [];
+        if (intval($perUser) <= 0) {
+            return (string) ($bal['topupDiscUsesUnlimited'] ?? 'نامحدود');
+        }
+        $left = max(0, intval($perUser) - intval($used));
+        return strtr((string) ($bal['topupDiscUsesLimited'] ?? '{left} بار از {total} بار'), [
+            '{left}' => $left,
+            '{total}' => intval($perUser),
+        ]);
+    }
+}
+if (!function_exists('topup_disc_expiry_text')) {
+    function topup_disc_expiry_text($ts, $textbotlang)
+    {
+        $bal = $textbotlang['users']['Balance'] ?? [];
+        if (intval($ts) <= 0) {
+            return (string) ($bal['topupDiscExpiryNone'] ?? 'بدون محدودیت زمانی');
+        }
+        require_once __DIR__ . '/jdf.php';
+        return jdate('Y/m/d - H:i', intval($ts));
     }
 }
 if (!function_exists('topup_disc_decorate_button')) {
@@ -6524,7 +8656,10 @@ if (!function_exists('topup_backpkg_label')) {
     {
         $style = topup_btnstyle_for($lang, $key, 'backpkg');
         $label = trim((string) ($style['label'] ?? ''));
-        return $label !== '' ? $label : '🔙 بازگشت';
+        // it returns to the amount screen this one was opened from, so it says
+        // so - a bare "بازگشت" next to "بازگشت به روش پرداخت" said nothing about
+        // which of the two steps back it actually takes
+        return $label !== '' ? $label : '🔙 بازگشت به منوی قبلی';
     }
 }
 if (!function_exists('topup_backpkg_payload')) {
@@ -6554,7 +8689,11 @@ if (!function_exists('topup_backpkg_payload')) {
             ['text' => ($color === 'danger' ? '✅ ' : '') . '🔴 قرمز', 'callback_data' => "tpbpc:{$lang}:{$key}:danger", 'style' => 'danger'],
         ];
         $kb['inline_keyboard'][] = [['text' => '🔁 بازگشت به پیش‌فرض', 'callback_data' => "tpbpr:{$lang}:{$key}", 'style' => 'danger']];
-        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "topupminmax:{$lang}:{$key}"]];
+        // reachable from 🏦 (via مبلغ دلخواه) and from 🎨 directly, so it returns
+        // to whichever screen actually opened it
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => function_exists('topup_owner_screen_cb')
+            ? topup_owner_screen_cb($lang, $key)
+            : "topupminmax:{$lang}:{$key}"]];
         return [$info, json_encode($kb)];
     }
 }
@@ -6636,9 +8775,10 @@ if (!function_exists('topup_disc_method_caption')) {
         if ($activeCode !== null) {
             $found = topup_disc_find_code($activeCode);
             if ($found !== null) {
-                $parts[] = '🎟 <b>' . htmlspecialchars(topup_disc_caption_line($found['code'], $textbotlang), ENT_QUOTES) . '</b>'
-                    . "\n<code>" . htmlspecialchars($activeCode, ENT_QUOTES) . '</code>'
-                    . "\n" . htmlspecialchars(topup_disc_terms_line($found['code'], $userId, $found['gateway'], $textbotlang), ENT_QUOTES);
+                // the code itself is deliberately NOT printed here - the whole
+                // block comes from the admin-editable template, which has no
+                // placeholder for it
+                $parts[] = topup_disc_terms_line($found['code'], $userId, $found['gateway'], $textbotlang);
             }
         }
 
@@ -6650,31 +8790,25 @@ if (!function_exists('topup_disc_method_caption')) {
             }
         }
         if (!empty($eligibleAutos)) {
-            $autoLines = ['🎯 <b>تخفیف خودکار (بدون کد)</b>'];
+            $autoLines = [];
             $exp = 0;
             foreach ($eligibleAutos as $gw => $a) {
-                $autoLines[] = '• ' . htmlspecialchars(topup_disc_gateway_label($gw, $textbotlang), ENT_QUOTES)
-                    . ': <b>' . htmlspecialchars(topup_disc_admin_value_label($a), ENT_QUOTES) . '</b>';
                 $perUser = intval($a['limitPerUser'] ?? 0);
-                if ($perUser > 0) {
-                    $used = topup_disc_auto_user_count($userId, $lang, $gw);
-                    $left = max(0, $perUser - $used);
-                    $autoLines[] = '  🔁 قابل استفاده: ' . $left . ' بار از ' . $perUser . ' بار';
-                } else {
-                    $autoLines[] = '  🔁 نامحدود';
-                }
+                $autoLines[] = topup_disc_render_block('users.Balance.topupDiscAutoLine', $textbotlang, [
+                    '{gateway}' => topup_disc_gateway_label($gw, $textbotlang),
+                    '{value}' => topup_disc_admin_value_label($a),
+                    '{uses}' => topup_disc_uses_text($perUser, $perUser > 0 ? topup_disc_auto_user_count($userId, $lang, $gw) : 0, $textbotlang),
+                ]);
                 $e = intval($a['expiry'] ?? 0);
                 if ($e > 0 && ($exp === 0 || $e < $exp)) {
                     $exp = $e;
                 }
             }
-            if ($exp > 0) {
-                require_once __DIR__ . '/jdf.php';
-                $autoLines[] = '⏳ اعتبار تا: ' . jdate('Y/m/d - H:i', $exp);
-            } else {
-                $autoLines[] = '⏳ اعتبار: بدون محدودیت زمانی';
-            }
-            $parts[] = implode("\n", $autoLines);
+            // {lines} is already-rendered markup, so it is substituted after the
+            // escaping pass rather than through it
+            $parts[] = strtr(topup_disc_render_block('users.Balance.topupDiscAutoBlock', $textbotlang, [
+                '{expiry}' => topup_disc_expiry_text($exp, $textbotlang),
+            ]), ['{lines}' => implode("\n", $autoLines)]);
         }
 
         if (empty($parts)) {
@@ -6713,22 +8847,48 @@ if (!function_exists('topup_disc_method_keyboard')) {
         if (!$anyCodes) {
             return json_encode($kb);
         }
-        $active = topup_disc_active_label($userId, $lang);
-        if ($active !== null) {
-            // deliberately NOT a remove button - once a code is applied the user
-            // should not be able to drop it from this screen
-            $kb['inline_keyboard'][] = [[
-                'text' => "🎁 کد فعال: {$active}",
-                'callback_data' => 'topup_disc_info',
-                'style' => 'success',
-            ]];
-        } else {
-            $kb['inline_keyboard'][] = [[
-                'text' => '🎁 کد تخفیف دارم',
-                'callback_data' => 'topup_disc_enter',
-            ]];
+        // Once a code IS applied there is no row at all: the caption already
+        // states the discount and its terms, so a "🎁 کد فعال: X" button only
+        // repeated it - and it exposed the code itself, which it should not.
+        if (topup_disc_active_label($userId, $lang) === null) {
+            global $textbotlang;
+            $defs = genbtn_defs('td', $textbotlang);
+            $ov = genbtn_override($lang, 'users.Balance.topupDiscPrompt', 0);
+            $row = [genbtn_render($defs[0], $ov, 'topup_disc_enter')];
+            // the row belongs UNDER the payment methods but ABOVE ❌ بستن, which
+            // topup_method_keyboard() always leaves as the last row
+            $rows = $kb['inline_keyboard'];
+            $last = end($rows);
+            $closeAt = (is_array($last) && count($last) === 1 && in_array($last[0]['callback_data'] ?? '', ['mmclose', 'colselist'], true))
+                ? count($rows) - 1 : count($rows);
+            array_splice($rows, $closeAt, 0, [$row]);
+            $kb['inline_keyboard'] = array_values($rows);
         }
         return json_encode($kb);
+    }
+}
+if (!function_exists('topup_disc_prompt_payload')) {
+    // The 🎁 code-entry screen: the same caption + back button whether it is
+    // being opened for the first time or re-shown with an error on it, so the
+    // whole exchange happens inside ONE message that keeps getting edited.
+    // $error is already-escaped plain text, or null for the clean prompt.
+    function topup_disc_prompt_payload($lang, $textbotlang, $error = null)
+    {
+        $caption = bottext_resolve_key('users.Balance.topupDiscPrompt');
+        if (trim((string) $caption) === '') {
+            $caption = $textbotlang['users']['Balance']['topupDiscPrompt'];
+        }
+        if ($error !== null) {
+            $tpl = bottext_resolve_key('users.Balance.topupDiscInvalid');
+            if (trim((string) $tpl) === '') {
+                $tpl = $textbotlang['users']['Balance']['topupDiscInvalid'];
+            }
+            $caption = strtr($tpl, ['{reason}' => $error]) . "\n\n" . $caption;
+        }
+        $defs = genbtn_defs('td', $textbotlang);
+        $ov = genbtn_override($lang, 'users.Balance.topupDiscPrompt', 1);
+        $kb = json_encode(['inline_keyboard' => [[genbtn_render($defs[1], $ov, 'topup_disc_cancel')]]]);
+        return [$caption, $kb];
     }
 }
 if (!function_exists('topup_disc_caption_line')) {
@@ -7372,6 +9532,14 @@ if (!function_exists('topup_disc_bonus_of')) {
         }
         if (($disc['mode'] ?? 'percent') === 'fixed') {
             return round($value);
+        }
+        // The 100% ceiling is enforced where a value is TYPED, against the mode
+        // selected at that moment - so switching the mode afterwards used to
+        // carry the old number over unchecked: a legal fixed 50000 became a
+        // 50000% discount, crediting 50,000,000 on a 100,000 payment. Clamping
+        // here makes every read safe, including rows already stored wrong.
+        if ($value > 100) {
+            $value = 100;
         }
         return round(($amount * $value) / 100);
     }

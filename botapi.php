@@ -12,6 +12,14 @@ function telegram($method, $datas = [], $token = null)
         unset($datas['message_thread_id']);
     }
 
+    // answerCallbackQuery's text is capped at 200 characters by Telegram, and
+    // going over doesn't truncate - the whole call is rejected and the admin
+    // simply sees no alert at all, with nothing in the logs to explain it.
+    // Trim here so a long alert degrades to a shortened one instead of silence.
+    if (strcasecmp($method, 'answerCallbackQuery') === 0 && isset($datas['text']) && mb_strlen((string) $datas['text']) > 200) {
+        $datas['text'] = mb_substr((string) $datas['text'], 0, 199) . '…';
+    }
+
     $ch = curl_init($url);
     if ($ch === false) {
         error_log('Unable to initialise cURL for Telegram request.');
@@ -95,7 +103,7 @@ if (!function_exists('bottext_extras_for_text')) {
                     continue;
                 }
                 // match against the literal segments around sprintf placeholders
-                $bts_segs = preg_split('/%[-+0-9.]*[a-zA-Z]|\{[a-zA-Z_]+\}/', $bts_val);
+                $bts_segs = preg_split('/%[-+0-9.]*[a-zA-Z]/', $bts_val);
                 $bts_seg0 = trim($bts_segs[0] ?? '');
                 $bts_seg1 = trim($bts_segs[1] ?? '');
                 $bts_seg0 = mb_substr($bts_seg0, 0, 40);
@@ -103,14 +111,19 @@ if (!function_exists('bottext_extras_for_text')) {
                 if (mb_strlen($bts_seg0) < 3 && $bts_seg1 === '') {
                     continue;
                 }
+                // stickers/reactions are stored PER LANGUAGE by bt_media_set()
+                // ({key: {fa: id}}), so they have to be read back through
+                // bt_media_lookup(). Casting the entry straight to string
+                // yielded the literal "Array" as the file_id, which Telegram
+                // rejects - every sticker silently failed to send.
                 global $user;
-                $bts_lang = (is_array($user) && !empty($user['lang'])) ? $user['lang'] : 'fa';
+                $bts_lang = $user['lang'] ?? 'fa';
                 $bts_cache[] = [
                     'key' => $bts_k,
                     'seg0' => $bts_seg0,
                     'seg1' => $bts_seg1,
-                    'sticker' => bt_media_lookup($bts_st, $bts_k, $bts_lang),
-                    'reaction' => bt_media_lookup($bts_re, $bts_k, $bts_lang),
+                    'sticker' => function_exists('bt_media_lookup') ? bt_media_lookup($bts_st, $bts_k, $bts_lang) : '',
+                    'reaction' => function_exists('bt_media_lookup') ? bt_media_lookup($bts_re, $bts_k, $bts_lang) : '',
                 ];
             }
         }
@@ -122,113 +135,32 @@ if (!function_exists('bottext_extras_for_text')) {
         return null;
     }
 }
-if (!function_exists('bottext_extras_sent_store')) {
-    // one de-dupe store for the whole request, shared by everything below so a
-    // screen cannot fire its sticker twice - and so it can be inspected without
-    // being consumed
-    function &bottext_extras_sent_store()
+if (!function_exists('bottext_send_extras')) {
+    // Fires the sticker/reaction an admin attached to a bot message. Shared by
+    // sendmessage() AND Editmessagetext(): most of the purchase flow navigates
+    // by EDITING the open message rather than sending a new one, so a sticker
+    // wired only into sendmessage() never appeared for the panel/category/
+    // product captions (users.sell.serviceSelect has no sendmessage call site
+    // at all). The once-per-key-per-chat guard is shared too, so a flow that
+    // sends and then edits the same caption still only fires one sticker.
+    // Returns the message id of the sticker it sent (0 when it sent none), so a
+    // caller that owns a multi-screen flow can delete that sticker again when the
+    // next screen replaces it. sendmessage() passes it back as
+    // '_sticker_message_id'.
+    function bottext_send_extras($chat_id, $text, $bot_token = null)
     {
         static $bts_sent = [];
-        return $bts_sent;
-    }
-}
-if (!function_exists('bottext_sticker_forget')) {
-    // Deletes the sticker the message manager auto-fired for the screen the user
-    // is currently looking at, and clears the note of it.
-    //
-    // A sticker is decoration for one screen, but it is a separate message, so
-    // replacing the screen used to leave it stranded: choosing a category
-    // swapped the caption for the product list and left the category sticker
-    // hanging above it. Called whenever that screen is replaced, and again
-    // before a new sticker is fired, so two never coexist.
-    function bottext_sticker_retire($chat_id, $owner_id = null)
-    {
-        static $bts_busy = false;
-        if ($bts_busy || !function_exists('select') || !function_exists('update')) {
-            return;
-        }
-        $bts_row = select("user", "*", "id", $chat_id, "select");
-        if (!is_array($bts_row) || !array_key_exists('bt_sticker_id', $bts_row)) {
-            return;
-        }
-        $bts_old = (string) $bts_row['bt_sticker_id'];
-        if (!ctype_digit($bts_old) || intval($bts_old) <= 0) {
-            return;
-        }
-        // when an owner is named, only retire the sticker if it really belongs
-        // to that message - deleting some unrelated message must not strip a
-        // sticker whose own caption is still on screen
-        if ($owner_id !== null) {
-            $bts_owner = (string) ($bts_row['bt_sticker_owner'] ?? '');
-            if (!ctype_digit($bts_owner) || intval($bts_owner) !== intval($owner_id)) {
-                return;
-            }
-        }
-        // clear the note BEFORE deleting: deletemessage() calls back in here, and
-        // an empty note is what stops that from going round again
-        update("user", "bt_sticker_id", "0", "id", $chat_id);
-        update("user", "bt_sticker_owner", "0", "id", $chat_id);
-        $bts_busy = true;
-        deletemessage($chat_id, intval($bts_old));
-        $bts_busy = false;
-    }
-}
-if (!function_exists('bottext_sticker_remember')) {
-    // $owner_id is the message the sticker was fired for. The sticker lives
-    // exactly as long as that message does.
-    function bottext_sticker_remember($chat_id, $message_id, $owner_id = 0)
-    {
-        if (!function_exists('update')) {
-            return;
-        }
-        $bts_id = intval($message_id);
-        update("user", "bt_sticker_id", $bts_id > 0 ? (string) $bts_id : "0", "id", $chat_id);
-        update("user", "bt_sticker_owner", intval($owner_id) > 0 ? (string) intval($owner_id) : "0", "id", $chat_id);
-    }
-}
-if (!function_exists('bottext_pending_sticker')) {
-    // Would $text still produce a sticker if it were sent right now?
-    // Deliberately does NOT mark it as sent - only an actual send does that.
-    function bottext_pending_sticker($chat_id, $text)
-    {
-        $bts_extras = bottext_extras_for_text($text);
-        if ($bts_extras === null || $bts_extras['sticker'] === '') {
-            return false;
-        }
-        $bts_sent = &bottext_extras_sent_store();
-        return !isset($bts_sent[$bts_extras['key'] . '|' . $chat_id]);
-    }
-}
-if (!function_exists('bottext_fire_extras')) {
-    // Sends the sticker (and the reaction, where there is a user message to
-    // react to) that the message manager has configured for $text, and returns
-    // the sticker's message_id.
-    //
-    // Shared by sendmessage() AND Editmessagetext(). It used to live inside
-    // sendmessage() only - but a screen reached by tapping an inline button is
-    // delivered by EDITING the message that is already there, never by sending a
-    // new one. So every such screen (the category picker, the product list)
-    // silently ignored its sticker no matter what the admin set.
-    //
-    // The de-dupe list is static here, so both senders share it and one screen
-    // cannot fire the same sticker twice within a request.
-    function bottext_fire_extras($chat_id, $text, $bot_token = null)
-    {
-        $bts_sent = &bottext_extras_sent_store();
         $bts_extras = bottext_extras_for_text($text);
         if ($bts_extras === null) {
-            return null;
+            return 0;
         }
         $bts_uid = $bts_extras['key'] . '|' . $chat_id;
         if (isset($bts_sent[$bts_uid])) {
-            return null;
+            return 0;
         }
         $bts_sent[$bts_uid] = true;
         if ($bts_extras['reaction'] !== '') {
             global $update;
-            // only a genuine incoming user message can carry a reaction; an edit
-            // is driven by a callback, where there is nothing of the user's to
-            // react to, so this simply stays silent there
             $bts_mid = $update['message']['message_id'] ?? 0;
             if ($bts_mid) {
                 telegram('setMessageReaction', [
@@ -239,38 +171,31 @@ if (!function_exists('bottext_fire_extras')) {
             }
         }
         if ($bts_extras['sticker'] !== '') {
-            // never let two auto-fired stickers sit in the chat at once
-            bottext_sticker_retire($chat_id);
-            $bts_sticker_resp = telegram('sendSticker', [
+            $bts_res = telegram('sendSticker', [
                 'chat_id' => $chat_id,
                 'sticker' => $bts_extras['sticker'],
             ], $bot_token);
-            // the caller records it against the message it belongs to, once that
-            // message exists and its id is known
-            return $bts_sticker_resp['result']['message_id'] ?? null;
+            return (int) ($bts_res['result']['message_id'] ?? 0);
         }
-        return null;
+        return 0;
     }
 }
-function sendmessage($chat_id,$text,$keyboard,$parse_mode,$bot_token = null,$entities = null){
+function sendmessage($chat_id,$text,$keyboard,$parse_mode,$bot_token = null){
     if(intval($chat_id) == 0)return ['ok' => false];
-    $bts_sticker_message_id = bottext_fire_extras($chat_id, $text, $bot_token);
-    $send_params = [
+    $bts_stickerId = bottext_send_extras($chat_id, $text, $bot_token);
+    $sm_result = telegram('sendmessage',[
         'chat_id' => $chat_id,
         'text' => $text,
         'reply_markup' => $keyboard,
-    ];
-    if (!empty($entities)) {
-        $send_params['entities'] = json_encode($entities);
-    } else {
-        $send_params['parse_mode'] = $parse_mode;
+        'parse_mode' => $parse_mode,
+
+        ],$bot_token);
+    // the caller may need to take this sticker away again when the screen it
+    // belongs to is replaced (the purchase flow does exactly that)
+    if ($bts_stickerId > 0 && is_array($sm_result)) {
+        $sm_result['_sticker_message_id'] = $bts_stickerId;
     }
-    $bts_main_result = telegram('sendmessage', $send_params, $bot_token);
-    if (!empty($bts_sticker_message_id)) {
-        $bts_main_result['_sticker_message_id'] = $bts_sticker_message_id;
-        bottext_sticker_remember($chat_id, $bts_sticker_message_id, $bts_main_result['result']['message_id'] ?? 0);
-    }
-    return $bts_main_result;
+    return $sm_result;
 }
 function sendDocument($chat_id, $documentPath, $caption) {
         return telegram('sendDocument',[
@@ -309,23 +234,8 @@ function senddocumentsid($chat_id,$documentid,$caption){
     ]);
 }
 function Editmessagetext($chat_id, $message_id, $text, $keyboard,$parse_mode = 'HTML'){
-    // A screen that has a sticker configured cannot be delivered by an edit: the
-    // edited message keeps its original position in the chat, so the sticker -
-    // which is necessarily a new message - always lands UNDERNEATH the caption.
-    // Replace the message instead, and let sendmessage() do what it already does
-    // everywhere else: sticker first, caption directly after it.
-    // Only screens with a sticker take this path; every other edit is untouched.
-    //
-    // Either way the screen on display is being replaced, so its own sticker has
-    // to go first - otherwise it outlives the caption it belonged to.
-    bottext_sticker_retire($chat_id, $message_id);
-    if (bottext_pending_sticker($chat_id, $text)) {
-        deletemessage($chat_id, $message_id);
-        return sendmessage($chat_id, $text, $keyboard, $parse_mode);
-    }
-    // no sticker, but there may still be a reaction to fire
-    $bts_sticker_message_id = bottext_fire_extras($chat_id, $text);
-    $bts_result = telegram('editmessagetext', [
+    bottext_send_extras($chat_id, $text);
+    return telegram('editmessagetext', [
         'chat_id' => $chat_id,
         'message_id' => $message_id,
         'text' => $text,
@@ -333,19 +243,8 @@ function Editmessagetext($chat_id, $message_id, $text, $keyboard,$parse_mode = '
         'parse_mode' => $parse_mode,
 
     ]);
-    if (!empty($bts_sticker_message_id)) {
-        $bts_result['_sticker_message_id'] = $bts_sticker_message_id;
-    }
-    return $bts_result;
 }
  function deletemessage($chat_id, $message_id){
-  // A sticker belongs to one message. Handlers that move the user on by deleting
-  // the current screen and sending the next one - rather than editing it - would
-  // otherwise strand it: choosing a category does exactly that, and left the
-  // category sticker hanging above the service list.
-  if (function_exists('bottext_sticker_retire')) {
-    bottext_sticker_retire($chat_id, $message_id);
-  }
   telegram('deletemessage', [
 'chat_id' => $chat_id, 
 'message_id' => $message_id,

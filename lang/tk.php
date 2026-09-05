@@ -745,10 +745,15 @@ Hyzmatyňyzyň amatlylygyndan we tizliginden hoşal bolandygyňyza umyt edýäri
       'receiptCooldown' => '❗ Siz soňky 2 minutda kwitansiýa iberdiňiz, täze kwitansiýany 2 minutdan soň iberiň.',
       'alreadyConfirmed' => '❗️ Amalyňyz bot tarapyndan eýýäm tassyklandy.',
       'transactionExpired' => '❗ Bu amalyň möhleti gutardy we tölemek mümkin däl.',
-      'askReceiptImage' => '🖼 Kwitansiýaňyzyň suratyny iberiň',
+      'askReceiptImage' => '🧾 Töleg kwitansiýaňyzy iberiň
+
+🖼 Kwitansiýanyň suratyny iberip bilersiňiz (isleseňiz düşündiriş bilen)
+✍️ Ýa-da bank SMS-iňiziň tekstini göçürip şu ýere iberiň',
       'askReceiptOrTron' => '📌 Geçiriminiziň suratyny ýa-da Tron amalynyň salgysyny iberiň.',
       'restartPurchaseOrPay' => '❌ Ýalňyşlyk ýüze çykdy, satyn alyş ýa-da töleg ädimlerini täzeden ýerine ýetiriň',
       'onlyOneImage' => '❌ Diňe bir surat ibermäge rugsat berilýär',
+      'receiptNeedsPhotoOrText' => '❌ Kwitansiýanyň suratyny ýa-da bank SMS tekstini (mukdary görkezilen) iberiň.',
+      'textReceiptFromUser' => '🧾 <b>Ulanyjydan tekst kwitansiýasy:</b>',
       'receiptSentRenew' => '🚀 Kwitansiýaňyz iberildi, barlagdan soň hyzmatyňyz täzelener',
       'receiptSentExtraVolume' => '🚀 Kwitansiýaňyz iberildi, barlagdan soň hyzmatyňyza goşmaça göwrüm goşular.',
       'receiptSentExtraTime' => '🚀 Kwitansiýaňyz iberildi, barlagdan soň hyzmatyňyza goşmaça wagt goşular',
@@ -8037,7 +8042,12 @@ Häzirki dil: <b>{lang}</b>',
         'label' => '👋 Hoş geldiňiz teksti',
         'key' => 'users.text_start',
       ),
-      1 => 
+      'back' =>
+      array (
+        'label' => '🏠 Baş menýu gaýdyş habary',
+        'key' => 'users.back',
+      ),
+      1 =>
       array (
         'label' => 'Düwme: Abuna satyn almak',
         'key' => 'textbot.sell',

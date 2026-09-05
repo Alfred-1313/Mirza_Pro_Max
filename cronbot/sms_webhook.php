@@ -78,6 +78,10 @@ foreach ($amounts as $rialAmount) {
         if (!empty($row['message_id'])) {
             deletemessage($row['id_user'], $row['message_id']);
         }
+        // the user may have sent a receipt before the SMS landed - that receipt
+        // is sitting in the admin's chat with live تایید/رد buttons on an
+        // invoice that is already credited, so say so explicitly.
+        payment_notify_admins_auto_confirmed($row, $textbotlang['hardcoded']['autoConfirmedBySms']);
         $priceCashback = select("PaySetting", "ValuePay", "NamePay", "chashbackcart", "select")['ValuePay'];
         $balanceRow = select("user", "*", "id", $row['id_user'], "select");
         if ($priceCashback != "0") {

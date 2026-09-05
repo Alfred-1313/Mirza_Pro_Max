@@ -30,6 +30,12 @@ while ($result = $stmt->fetch(PDO::FETCH_ASSOC)) {
             $expire_minutes = $default_expire_minutes;
         }
     }
+    // a gateway that words its own expiry also sets its own cutoff, or the
+    // caption promises one number while the cron enforces another
+    $gw_key_for_expiry = topup_gateway_key_by_method($result['Payment_Method']);
+    if ($gw_key_for_expiry !== null) {
+        $expire_minutes = topup_expire_minutes($payer_lang, $gw_key_for_expiry);
+    }
     $row_ts = strtotime((string) $result['time']);
     if ($row_ts === false || $row_ts >= time() - ($expire_minutes * 60)) {
         continue; // not expired yet under this row's own cutoff
@@ -71,9 +77,10 @@ if ($result['Payment_Method'] === 'cart to cart') {
     $reissueBtn = topup_styled_button($cardExpireLang['users']['Balance']['reissueInvoiceBtn'], $reissueStyle, "cardreissue:{$result['id_order']}", 'danger');
     $reissueKb = json_encode(['inline_keyboard' => [[$reissueBtn]]]);
     Editmessagetext($result['id_user'], $result['message_id'], $expiredCaption, $reissueKb, 'HTML');
-} elseif ($result['Payment_Method'] === 'plisio') {
-    // now shared with cronbot/plisio.php - see plisio_expire_notify()
-    plisio_expire_notify($result['id_user'], $result['id_order'], $result['price'], $result['message_id'], $payer_lang);
+} elseif (isset(topup_expire_gateway_keys()[$result['Payment_Method']])) {
+    // every online gateway now words its own expiry and offers a fresh
+    // invoice, instead of the message simply vanishing
+    topup_expire_notify(topup_expire_gateway_keys()[$result['Payment_Method']], $result['id_user'], $result['id_order'], $result['price'], $result['message_id'], $payer_lang);
 } else {
     deletemessage($result['id_user'], $result['message_id']);
 }

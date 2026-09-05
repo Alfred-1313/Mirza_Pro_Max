@@ -138,7 +138,6 @@ $usernameinvoice = select("invoice", "username", null, null, "FETCH_COLUMN");
 $code_Discount = select("Discount", "code", null, null, "FETCH_COLUMN");
 $marzban_list = select("marzban_panel", "name_panel", null, null, "FETCH_COLUMN");
 $name_product = select("product", "name_product", null, null, "FETCH_COLUMN");
-$SellDiscount = select("DiscountSell", "codeDiscount", null, null, "FETCH_COLUMN");
 $channels_id = select("channels", "link", null, null, "FETCH_COLUMN");
 $pricepayment = select("Payment_report", "price", null, null, "FETCH_COLUMN");
 $listcard = select("card_number", "cardnumber", null, null, "FETCH_COLUMN");
@@ -580,6 +579,35 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         update("user", "menu_sticker_id", "0", "id", $from_id);
     }
     menu_tap_cleanup($from_id, $user);
+    step('home', $from_id);
+} elseif ($datain == "gwinvclose") {
+    // An invoice's own way out. Same cleanup as the shared close, plus the
+    // main menu back on screen: someone who gives up on a payment should
+    // land somewhere they can act from, not on an empty chat with no
+    // keyboard - which is all mmclose leaves behind.
+    deletemessage($from_id, $message_id);
+    if (ctype_digit((string) ($user['menu_sticker_id'] ?? '')) && intval($user['menu_sticker_id']) > 0) {
+        deletemessage($from_id, intval($user['menu_sticker_id']));
+        update("user", "menu_sticker_id", "0", "id", $from_id);
+    }
+    menu_tap_cleanup($from_id, $user);
+    step('home', $from_id);
+    update("user", "Processing_value", "0", "id", $from_id);
+    sendmessage($from_id, $textbotlang['users']['back'], $keyboard, 'html');
+} elseif (preg_match('/^gwpaid:([a-z0-9]+)$/', $datain, $gp_m)) {
+    // the invoice this button is on has already been paid - say so instead
+    // of reopening a payment page. Wording is per gateway; telegram()
+    // trims it to the 200 characters Telegram allows an alert.
+    telegram('answerCallbackQuery', [
+        'callback_query_id' => $callback_query_id,
+        'text' => topup_paid_alert_for($user['lang'] ?? 'fa', $gp_m[1], $textbotlang['users']['Balance']['topupPaidAlert']),
+        'show_alert' => true,
+    ]);
+} elseif ($datain == "topup_range_close") {
+    // ❌ under the "حداقل/حداکثر مبلغ" notice: drop the notice and end the
+    // top-up session, the same way the shared main-menu close does
+    deletemessage($from_id, $message_id);
+    update("user", "topup_range_msg_id", "0", "id", $from_id);
     step('home', $from_id);
 } elseif ($datain == "sellclose") {
     // closes the panel picker and removes the buy-button sticker that was
@@ -1817,94 +1845,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     } else {
         Editmessagetext($from_id, $message_id, $textextend, $keyboardextend);
     }
-} elseif ($datain == "discountextend") {
-    sendmessage($from_id, $textbotlang['users']['Discount']['getcodesell'], $backuser, 'HTML');
-    step('getcodesellDiscountextend', $from_id);
-    deletemessage($from_id, $message_id);
-} elseif ($user['step'] == "getcodesellDiscountextend") {
-    $userdate = json_decode($user['Processing_value'], true);
-    $nameloc = select("invoice", "*", "id_invoice", $userdate['id_invoice'], "select");
-    $marzban_list_get = select("marzban_panel", "*", "name_panel", $nameloc['Service_location'], "select");
-    if (!in_array($text, $SellDiscount)) {
-        sendmessage($from_id, $textbotlang['users']['Discount']['notcode'], $backuser, 'HTML');
-        return;
-    }
-    $stmt = $pdo->prepare("SELECT * FROM DiscountSell WHERE (code_product = :code_product OR code_product = 'all') AND (code_panel = :code_panel OR code_panel = '/all') AND codeDiscount = :codeDiscount AND (agent = :agent OR agent = 'allusers') AND (type = 'all' OR type = 'extend')");
-    $stmt->bindParam(':code_product', $userdate['code_product'], PDO::PARAM_STR);
-    $stmt->bindParam(':code_panel', $marzban_list_get['code_panel'], PDO::PARAM_STR);
-    $stmt->bindParam(':agent', $user['agent'], PDO::PARAM_STR);
-    $stmt->bindParam(':codeDiscount', $text, PDO::PARAM_STR);
-    $stmt->execute();
-    $SellDiscountlimit = $stmt->fetch(PDO::FETCH_ASSOC);
-    $stmt = $pdo->prepare("SELECT * FROM Giftcodeconsumed WHERE id_user = :from_id AND code = :code");
-    $stmt->bindParam(':from_id', $from_id, PDO::PARAM_STR);
-    $stmt->bindParam(':code', $text, PDO::PARAM_STR);
-    $stmt->execute();
-    $Checkcodesql = $stmt->rowCount();
-    if (intval($SellDiscountlimit['time']) != 0 and time() >= intval($SellDiscountlimit['time'])) {
-        sendmessage($from_id, $textbotlang['users']['Discount']['expired'], null, 'HTML');
-        return;
-    }
-    if ($SellDiscountlimit == 0) {
-        sendmessage($from_id, $textbotlang['users']['Discount']['invalidCode'], null, 'HTML');
-        return;
-    }
-    if (($SellDiscountlimit['limitDiscount'] <= $SellDiscountlimit['usedDiscount'])) {
-        sendmessage($from_id, $textbotlang['users']['Discount']['errorLimit'], null, 'HTML');
-        return;
-    }
-    if (intval($Checkcodesql) >= $SellDiscountlimit['useuser']) {
-        $textoncode = strtr($textbotlang['users']['Discount']['useLimit'], ['{useuser}' => $SellDiscountlimit['useuser']]);
-        sendmessage($from_id, $textoncode, $keyboard, 'HTML');
-        step('home', $from_id);
-        return;
-    }
-    if ($SellDiscountlimit['usefirst'] == "1") {
-        $countinvoice = select("invoice", "*", "id_user", $from_id, "count");
-        if ($countinvoice != 0) {
-            sendmessage($from_id, $textbotlang['users']['Discount']['firstdiscount'], null, 'HTML');
-            return;
-        }
-    }
-    sendmessage($from_id, strtr($textbotlang['users']['Discount']['applied'], ['{discount_price}' => $SellDiscountlimit['price']]), $keyboard, 'HTML');
-    $eextraprice = json_decode($marzban_list_get['pricecustomvolume'], true);
-    $custompricevalue = $eextraprice[$user['agent']];
-    $eextraprice = json_decode($marzban_list_get['pricecustomtime'], true);
-    $customtimevalueprice = $eextraprice[$user['agent']];
-    if ($nameloc['name_product'] == $textbotlang['users']['customSellVolume']['btnVolume'] || $nameloc['name_product'] == $textbotlang['users']['customSellVolume']['btnService']) {
-        $info_product['code_product'] = "pre";
-        $info_product['name_product'] = $nameloc['name_product'];
-        $info_product['price_product'] = ($userdate['data_limit'] * $custompricevalue) + ($userdate['time'] * $customtimevalueprice);
-        $info_product['Service_time'] = $userdate['time'];
-        $info_product['Volume_constraint'] = $userdate['data_limit'];
-    } else {
-        $stmt = $pdo->prepare("SELECT * FROM product WHERE code_product = :code_product AND (Location = :Location or Location = '/all') AND (FIND_IN_SET(:userlang, lang) OR lang = 'all' OR lang IS NULL OR lang = '') LIMIT 1");
-        $stmt->bindParam(':code_product', $userdate['code_product'], PDO::PARAM_STR);
-        $stmt->bindParam(':Location', $marzban_list_get['name_panel'], PDO::PARAM_STR);
-        $stmt->bindValue(':userlang', $user['lang'] ?? 'fa', PDO::PARAM_STR);
-        $stmt->execute();
-        $info_product = $stmt->fetch(PDO::FETCH_ASSOC);
-    }
-    $result = ($SellDiscountlimit['price'] / 100) * $info_product['price_product'];
-    $info_product['price_product'] = $info_product['price_product'] - $result;
-    $info_product['price_product'] = round($info_product['price_product']);
-    if (intval($info_product['Service_time']) == 0)
-        $info_product['Service_time'] = $textbotlang['users']['status']['unlimited'];
-    if ($info_product['price_product'] < 0)
-        $info_product['price_product'] = 0;
-    $textextend = sprintf($textbotlang['users']['extend']['invoiceCreated2'], $nameloc['username'], $info_product['name_product'], $info_product['price_product'], $info_product['Service_time'], $info_product['Volume_constraint'], $info_product['note'], $user['Balance']);
-    $keyboardextend = json_encode([
-        'inline_keyboard' => [
-            [
-                ['text' => $textbotlang['users']['extend']['confirm'], 'callback_data' => "confirmserdiscount"],
-            ]
-        ]
-    ]);
-    sendmessage($from_id, $textextend, $keyboardextend, 'HTML');
-    $parametrsendvalue = "dis_" . $text . "_" . $info_product['price_product'];
-    update("user", "Processing_value_four", $parametrsendvalue, "id", $from_id);
-    step("home", $from_id);
-} elseif ($datain == "confirmserivce" || $datain == "confirmserdiscount") {
+} elseif ($datain == "confirmserivce") {
     $partsdic = explode("_", $user['Processing_value_four']);
     $userdata = json_decode($user['Processing_value'], true);
     $id_invoice = $userdata['id_invoice'];
@@ -1943,12 +1884,6 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     if ($prodcut == false || !in_array($nameloc['Status'], ['active', 'end_of_time', 'end_of_volume', 'sendedwarn', 'send_on_hold'])) {
         sendmessage($from_id, $textbotlang['users']['extend']['error'], null, 'HTML');
         return;
-    }
-    if ($datain == "confirmserdiscount") {
-        $SellDiscountlimit = select("DiscountSell", "*", "codeDiscount", $partsdic[1], "select");
-        if ($SellDiscountlimit != false) {
-            $pricelastextend = $partsdic[2];
-        }
     }
     if (intval($user['pricediscount']) != 0) {
         $result = ($pricelastextend * $user['pricediscount']) / 100;
@@ -1990,24 +1925,6 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     Editmessagetext($from_id, $message_id, $text_inline, json_encode(['inline_keyboard' => []]));
     $randomString = bin2hex(random_bytes(2));
     $DataUserOut = $ManagePanel->DataUser($nameloc['Service_location'], $nameloc['username']);
-    if ($datain == "confirmserdiscount") {
-        $SellDiscountlimit = select("DiscountSell", "*", "codeDiscount", $partsdic[1], "select");
-        if ($SellDiscountlimit != false) {
-            $value = intval($SellDiscountlimit['usedDiscount']) + 1;
-            update("DiscountSell", "usedDiscount", $value, "codeDiscount", $partsdic[1]);
-            $stmt = $pdo->prepare("INSERT INTO Giftcodeconsumed (id_user,code) VALUES (?,?)");
-            $stmt->execute([$from_id, $partsdic[1]]);
-            $text_report = strtr($textbotlang['Admin']['reportgroup']['discountUsedRenew'], ['{username}' => $username, '{from_id}' => $from_id, '{discount_code}' => $partsdic[1]]);
-            if (strlen($setting['Channel_Report']) > 0) {
-                telegram('sendmessage', [
-                    'chat_id' => $setting['Channel_Report'],
-                    'message_thread_id' => $otherreport,
-                    'text' => $text_report,
-                    'parse_mode' => "HTML"
-                ]);
-            }
-        }
-    }
     if (intval($user['maxbuyagent']) != 0 and $user['agent'] == "n2") {
         if (($user['Balance'] - $pricelastextend) < intval("-" . $user['maxbuyagent'])) {
             sendmessage($from_id, $textbotlang['users']['Balance']['maxpurchasereached'], null, 'HTML');
@@ -3831,11 +3748,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
                 } else {
                     $backuser = "backuser";
                 }
-                if ($datain == "buy") {
-                    Editmessagetext($from_id, $message_id, $textbotlang['users']['sell']['selectCategory'], KeyboardCategory($location, $user['agent'], $backuser));
-                } else {
-                    sendmessage($from_id, $textbotlang['users']['sell']['selectCategory'], KeyboardCategory($location, $user['agent'], $backuser), 'HTML');
-                }
+                sell_screen($from_id, $datain == "buy" ? $message_id : 0, $textbotlang['users']['sell']['selectCategory'], KeyboardCategory($location, $user['agent'], $backuser));
             } else {
                 $query = "SELECT * FROM product WHERE (Location = '$location' OR Location = '/all')AND agent= '{$user['agent']}' AND (FIND_IN_SET('{$user['lang']}', lang) OR lang = 'all' OR lang IS NULL OR lang = '')";
                 $marzban_list_get = select("marzban_panel", "*", "name_panel", $location, "select");
@@ -3856,11 +3769,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
                 } else {
                     $backuser = "backuser";
                 }
-                if ($datain == "buy") {
-                    Editmessagetext($from_id, $message_id, $textproduct, KeyboardProduct($marzban_list_get['name_panel'], $query, $user['pricediscount'], $datakeyboard, $statuscustom, $backuser));
-                } else {
-                    sendmessage($from_id, $textproduct, KeyboardProduct($marzban_list_get['name_panel'], $query, $user['pricediscount'], $datakeyboard, $statuscustom, $backuser), 'HTML');
-                }
+                sell_screen($from_id, $datain == "buy" ? $message_id : 0, $textproduct, KeyboardProduct($marzban_list_get['name_panel'], $query, $user['pricediscount'], $datakeyboard, $statuscustom, $backuser));
             }
         } else {
             $nullproduct = select("product", "*", null, null, "count");
@@ -3891,10 +3800,12 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         savedata('clear', "nameconfig", $text);
         step("home", $from_id);
     }
+    // step 1 of the purchase flow - sell_screen() edits in place when the panel
+    // caption has no sticker, and replaces the screen when it has one
     if ($datain == "buy" || $datain == "buybacktow" || $datain == "buyback") {
-        Editmessagetext($from_id, $message_id, $textbotlang['textbot']['selectLocation'], $list_marzban_panel_user);
+        sell_screen($from_id, $message_id, $textbotlang['textbot']['selectLocation'], $list_marzban_panel_user);
     } else {
-        sendmessage($from_id, $textbotlang['textbot']['selectLocation'], $list_marzban_panel_user, 'HTML');
+        sell_screen($from_id, 0, $textbotlang['textbot']['selectLocation'], $list_marzban_panel_user);
     }
 } elseif (preg_match('/^location_(.*)/', $datain, $dataget) || $datain == "backproduct") {
     // the 🔐 خرید اشتراک sticker belongs to the panel list only - once a panel
@@ -3948,7 +3859,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     if ($setting['statuscategory'] == "offcategory") {
         if ($setting['statuscategorygenral'] == "oncategorys") {
             $marzban_list_get = select("marzban_panel", "*", "name_panel", $location, "select");
-            Editmessagetext($from_id, $message_id, $textbotlang['users']['sell']['selectCategory'], KeyboardCategory($location, $user['agent'], "buybacktow"));
+            sell_screen($from_id, $message_id, $textbotlang['users']['sell']['selectCategory'], KeyboardCategory($location, $user['agent'], "buybacktow"));
         } else {
             $query = "SELECT * FROM product WHERE (Location = '$location' OR Location = '/all')AND agent= '{$user['agent']}' AND (FIND_IN_SET('{$user['lang']}', lang) OR lang = 'all' OR lang IS NULL OR lang = '')";
             $statuscustomvolume = json_decode($marzban_list_get['customvolume'], true)[$user['agent']];
@@ -3966,7 +3877,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
             // message and re-sends the sticker + panel menu, rather than editing
             // this message in place (which showed no sticker)
             $back = "buyfresh";
-            Editmessagetext($from_id, $message_id, $textbotlang['users']['sell']['serviceSelect'], KeyboardProduct($marzban_list_get['name_panel'], $query, $user['pricediscount'], $datakeyboard, $statuscustom, $back));
+            sell_screen($from_id, $message_id, $textbotlang['users']['sell']['serviceSelect'], KeyboardProduct($marzban_list_get['name_panel'], $query, $user['pricediscount'], $datakeyboard, $statuscustom, $back));
         }
     } else {
         $nullproduct = select("product", "*", null, null, "count");
@@ -3982,9 +3893,6 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         Editmessagetext($from_id, $message_id, $textbotlang['users']['sell']['selectDuration'], $monthkeyboard);
     }
 } elseif (preg_match('/^categorynames_(.*)/', $datain, $dataget)) {
-    // the buy sticker is already gone by now (removed when the panel was
-    // picked); this only clears the category message it replaces
-    deletemessage($from_id, $message_id);
     $categorynames = $dataget[1];
     $categorynames = select("category", "remark", "id", $categorynames, "select")['remark'];
     $userdate = json_decode($user['Processing_value'], true);
@@ -4005,7 +3913,9 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     } else {
         $statuscustom = false;
     }
-    sendmessage($from_id, $textbotlang['users']['sell']['serviceSelectFirst'], KeyboardProduct($marzban_list_get['name_panel'], $query, $user['pricediscount'], $datakeyboard, $statuscustom, "location_{$marzban_list_get['code_panel']}"), 'HTML');
+    // picking a category used to delete this screen and post a brand new one,
+    // which broke the "one screen changing" feel of the two steps before it
+    sell_screen($from_id, $message_id, $textbotlang['users']['sell']['serviceSelectFirst'], KeyboardProduct($marzban_list_get['name_panel'], $query, $user['pricediscount'], $datakeyboard, $statuscustom, "location_{$marzban_list_get['code_panel']}"));
 } elseif (preg_match('/^productmonth_(\w+)/', $datain, $dataget)) {
     $monthenumber = $dataget[1];
     $userdate = json_decode($user['Processing_value'], true);
@@ -4021,7 +3931,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         } else {
             $back = "location_{$marzban_list_get['code_panel']}";
         }
-        Editmessagetext($from_id, $message_id, $textbotlang['users']['sell']['selectCategory'], KeyboardCategory($marzban_list_get['name_panel'], $user['agent'], $back));
+        sell_screen($from_id, $message_id, $textbotlang['users']['sell']['selectCategory'], KeyboardCategory($marzban_list_get['name_panel'], $user['agent'], $back));
     } else {
         $query = "SELECT * FROM product WHERE (Location = '{$userdate['name_panel']}' OR Location = '/all') AND agent= '{$user['agent']}' AND Service_time = '$monthenumber' AND (FIND_IN_SET('{$user['lang']}', lang) OR lang = 'all' OR lang IS NULL OR lang = '')";
         $marzban_list_get = select("marzban_panel", "*", "name_panel", $userdate['name_panel'], "select");
@@ -4036,7 +3946,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         } else {
             $statuscustom = false;
         }
-        Editmessagetext($from_id, $message_id, $textbotlang['users']['sell']['serviceSelectFirst'], KeyboardProduct($marzban_list_get['name_panel'], $query, $user['pricediscount'], $datakeyboard, $statuscustom, "location_{$marzban_list_get['code_panel']}"));
+        sell_screen($from_id, $message_id, $textbotlang['users']['sell']['serviceSelectFirst'], KeyboardProduct($marzban_list_get['name_panel'], $query, $user['pricediscount'], $datakeyboard, $statuscustom, "location_{$marzban_list_get['code_panel']}"));
     }
 } elseif ($datain == "customsellvolume") {
     $userdate = json_decode($user['Processing_value'], true);
@@ -4108,6 +4018,9 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         step('endstepuser', $from_id);
         deletemessage($from_id, $message_id);
     }
+    // the product screen is being left for the username prompt - take its
+    // sticker with it
+    sell_sticker_retire($from_id);
     $usernamePromptMsg = sendmessage($from_id, $textbotlang['users']['sell']['selectUsernamePrompt'], $selectUsernameKb, 'html');
     update("user", "Processing_value_tow", (string) ($usernamePromptMsg['result']['message_id'] ?? 0), "id", $from_id);
 } elseif ($user['step'] == "endstepuser" || $user['step'] == "endstepusers" || preg_match('/prodcutservice_(.*)/', $datain, $dataget) || $user['step'] == "getvolumecustomuser") {
@@ -4201,6 +4114,9 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         sendmessage($from_id, $textbotlang['users']['Balance']['confirmError'], $keyboard, 'HTML');
         return;
     }
+    // past every early return the purchase is committed and the product screen
+    // is gone for good - its sticker must not stay behind above the invoice
+    sell_sticker_retire($from_id);
     if (intval($user['pricediscount']) != 0) {
         $resultper = ($info_product['price_product'] * $user['pricediscount']) / 100;
         $info_product['price_product'] = $info_product['price_product'] - $resultper;
@@ -4242,7 +4158,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         sendmessage($from_id, $textin, $payment, 'HTML');
     }
     step('payment', $from_id);
-} elseif ($user['step'] == "payment" && $datain == "confirmandgetservice" || $datain == "confirmandgetserviceDiscount") {
+} elseif ($user['step'] == "payment" && $datain == "confirmandgetservice") {
     $userdate = json_decode($user['Processing_value'], true);
     Editmessagetext($from_id, $message_id, $text_inline, json_encode(['inline_keyboard' => []]));
     // $pats for customm service
@@ -4277,16 +4193,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     }
     if (!isset($info_product['price_product']))
         return;
-    if ($datain == "confirmandgetserviceDiscount") {
-        $discountcode = select("DiscountSell", "*", "codeDiscount", $partsdic[0], "count");
-        if ($discountcode == 0) {
-            sendmessage($from_id, $textbotlang['users']['Discount']['notAllowed'], null, 'HTML');
-            return;
-        }
-        $priceproduct = $partsdic[1];
-    } else {
-        $priceproduct = $info_product['price_product'];
-    }
+    $priceproduct = $info_product['price_product'];
     $username_ac = strtolower($user['Processing_value_tow']);
     $DataUserOut = $ManagePanel->DataUser($marzban_list_get['name_panel'], $username_ac);
     if (isset($DataUserOut['username']) || in_array($username_ac, $usernameinvoice)) {
@@ -4339,24 +4246,6 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         }
     }
     Editmessagetext($from_id, $message_id, $textbotlang['users']['sell']['creating'], null);
-    if ($datain == "confirmandgetserviceDiscount") {
-        $SellDiscountlimit = select("DiscountSell", "*", "codeDiscount", $partsdic[0], "select");
-        if ($SellDiscountlimit != false) {
-            $value = intval($SellDiscountlimit['usedDiscount']) + 1;
-            $stmt = $pdo->prepare("INSERT INTO Giftcodeconsumed (id_user,code) VALUES (?,?)");
-            $stmt->execute([$from_id, $partsdic[0]]);
-            update("DiscountSell", "usedDiscount", $value, "codeDiscount", $partsdic[0]);
-            $text_report = strtr($textbotlang['Admin']['reportgroup']['discountUsed'], ['{username}' => $username, '{from_id}' => $from_id, '{discount_code}' => $partsdic[0]]);
-            if (strlen($setting['Channel_Report']) > 0) {
-                telegram('sendmessage', [
-                    'chat_id' => $setting['Channel_Report'],
-                    'message_thread_id' => $otherreport,
-                    'text' => $text_report,
-                    'parse_mode' => "HTML"
-                ]);
-            }
-        }
-    }
     $datetimestep = strtotime("+" . $info_product['Service_time'] . "days");
     if ($info_product['Service_time'] == 0) {
         $datetimestep = 0;
@@ -4534,103 +4423,6 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     }
     update("user", "Processing_value_four", "none", "id", $from_id);
     step('home', $from_id);
-} elseif ($datain == "aptdc") {
-    sendmessage($from_id, $textbotlang['users']['Discount']['getcodesell'], $backuser, 'HTML');
-    step('getcodesellDiscount', $from_id);
-    deletemessage($from_id, $message_id);
-} elseif ($user['step'] == "getcodesellDiscount") {
-    $userdate = json_decode($user['Processing_value'], true);
-    if (!isset($userdate['name_panel'])) {
-        sendmessage($from_id, $textbotlang['users']['sell']['restartFromStart'], $keyboard, 'HTML');
-        return;
-    }
-    $stmt = $pdo->prepare("SELECT * FROM product WHERE code_product = :code_product AND (Location = :Location or Location = '/all') AND (FIND_IN_SET(:userlang, lang) OR lang = 'all' OR lang IS NULL OR lang = '') LIMIT 1");
-    $stmt->bindParam(':code_product', $user['Processing_value_one'], PDO::PARAM_STR);
-    $stmt->bindParam(':Location', $userdate['name_panel'], PDO::PARAM_STR);
-    $stmt->bindValue(':userlang', $user['lang'] ?? 'fa', PDO::PARAM_STR);
-    $stmt->execute();
-    $info_product = $stmt->fetch(PDO::FETCH_ASSOC);
-    $marzban_list_get = select("marzban_panel", "*", "name_panel", $userdate['name_panel'], "select");
-    if (!in_array($text, $SellDiscount)) {
-        sendmessage($from_id, $textbotlang['users']['Discount']['notcode'], $backuser, 'HTML');
-        return;
-    }
-    $stmt = $pdo->prepare("SELECT * FROM DiscountSell WHERE (code_product = :code_product OR code_product = 'all') AND (code_panel = :code_panel OR code_panel = '/all') AND codeDiscount = :codeDiscount AND (agent = :agent OR agent = 'allusers') AND (type = 'all' OR type = 'buy')");
-    $stmt->bindParam(':code_product', $info_product['code_product'], PDO::PARAM_STR);
-    $stmt->bindParam(':code_panel', $marzban_list_get['code_panel'], PDO::PARAM_STR);
-    $stmt->bindParam(':agent', $user['agent'], PDO::PARAM_STR);
-    $stmt->bindParam(':codeDiscount', $text, PDO::PARAM_STR);
-    $stmt->execute();
-    $SellDiscountlimit = $stmt->fetch(PDO::FETCH_ASSOC);
-    $stmt = $pdo->prepare("SELECT * FROM Giftcodeconsumed WHERE id_user = :from_id AND code = :code");
-    $stmt->bindParam(':from_id', $from_id, PDO::PARAM_STR);
-    $stmt->bindParam(':code', $text, PDO::PARAM_STR);
-    $stmt->execute();
-    $Checkcodesql = $stmt->rowCount();
-    if ($SellDiscountlimit == 0) {
-        sendmessage($from_id, $textbotlang['users']['Discount']['invalidCode'], null, 'HTML');
-        return;
-    }
-    if (intval($SellDiscountlimit['time']) != 0 and time() >= intval($SellDiscountlimit['time'])) {
-        sendmessage($from_id, $textbotlang['users']['Discount']['expired'], null, 'HTML');
-        return;
-    }
-    if (($SellDiscountlimit['limitDiscount'] <= $SellDiscountlimit['usedDiscount'])) {
-        sendmessage($from_id, $textbotlang['users']['Discount']['errorLimit'], null, 'HTML');
-        return;
-    }
-    if ($Checkcodesql >= $SellDiscountlimit['useuser']) {
-        $textoncode = strtr($textbotlang['users']['Discount']['useLimit'], ['{useuser}' => $SellDiscountlimit['useuser']]);
-        sendmessage($from_id, $textoncode, $keyboard, 'HTML');
-        step('home', $from_id);
-        return;
-    }
-    if ($SellDiscountlimit['usefirst'] == "1") {
-        $countinvoice = $pdo->prepare("SELECT * FROM invoice WHERE id_user = ? AND name_product != ? AND  (status = 'active' OR status = 'end_of_time'  OR status = 'end_of_volume' OR status = 'sendedwarn' OR Status = 'send_on_hold')");
-        $countinvoice->execute([$from_id, $textbotlang['common']['labels']['testServiceName']]);
-        if (($countinvoice)->rowCount() != 0) {
-            sendmessage($from_id, $textbotlang['users']['Discount']['firstdiscount'], null, 'HTML');
-            return;
-        }
-    }
-    sendmessage($from_id, strtr($textbotlang['users']['Discount']['applied'], ['{discount_price}' => $SellDiscountlimit['price']]), null, 'HTML');
-    step('payment', $from_id);
-    $parts = explode("_", $user['Processing_value_one']);
-    $eextraprice = json_decode($marzban_list_get['pricecustomvolume'], true);
-    $custompricevalue = $eextraprice[$user['agent']];
-    $eextraprice = json_decode($marzban_list_get['pricecustomtime'], true);
-    $customtimevalueprice = $eextraprice[$user['agent']];
-    if ($parts[0] == "customvolume") {
-        $info_product['Volume_constraint'] = $parts[2];
-        $info_product['name_product'] = $textbotlang['users']['customSellVolume']['title'];
-        $info_product['code_product'] = $textbotlang['users']['customSellVolume']['title'];
-        $info_product['Service_time'] = $parts[1];
-        $info_product['price_product'] = ($parts[2] * $custompricevalue) + ($parts[1] * $customtimevalueprice);
-    } else {
-        $stmt = $pdo->prepare("SELECT * FROM product WHERE code_product = :code_product AND (Location = :location OR Location = '/all') AND (FIND_IN_SET(:userlang, lang) OR lang = 'all' OR lang IS NULL OR lang = '') LIMIT 1");
-        $stmt->bindValue(':code_product', $user['Processing_value_one'], PDO::PARAM_STR);
-        $stmt->bindValue(':location', $userdate['name_panel'], PDO::PARAM_STR);
-        $stmt->bindValue(':userlang', $user['lang'] ?? 'fa', PDO::PARAM_STR);
-        $stmt->execute();
-        $info_product = $stmt->fetch(PDO::FETCH_ASSOC);
-    }
-    $result = ($SellDiscountlimit['price'] / 100) * $info_product['price_product'];
-
-    $info_productmain = $info_product['price_product'];
-    $info_product['price_product'] = $info_product['price_product'] - $result;
-    $info_product['price_product'] = round($info_product['price_product']);
-    if ($info_product['Service_time'] == 0)
-        $info_product['Service_time'] = $textbotlang['users']['status']['unlimited'];
-    if (intval($info_product['Volume_constraint']) == 0)
-        $info_product['Volume_constraint'] = $textbotlang['users']['status']['unlimited'];
-    if ($info_product['price_product'] < 0)
-        $info_product['price_product'] = 0;
-    $pi_cur = $info_product['currency'] ?? null;
-    $textin = sprintf($textbotlang['users']['sell']['preInvoice'], $user['Processing_value_tow'], $info_product['name_product'], $info_product['Service_time'], money($info_productmain, $pi_cur), money($info_product['price_product'], $pi_cur), $info_product['Volume_constraint'], $user['Balance']);
-    $paymentDiscount = sell_confirm_kb($user['lang'] ?? 'fa', $textbotlang, "confirmandgetserviceDiscount");
-    $parametrsendvalue = $text . "_" . $info_product['price_product'];
-    update("user", "Processing_value_four", $parametrsendvalue, "id", $from_id);
-    sendmessage($from_id, $textin, $paymentDiscount, 'HTML');
 } elseif ($text == $textbotlang['keyboard']['bulkPurchase'] || $datain == "kharidanbuh") {
     if ($setting['bulkbuy'] == "offbulk") {
         sendmessage($from_id, $textbotlang['users']['Major']['disabled'], null, 'HTML');
@@ -5018,7 +4810,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     step('topup_pick_method', $from_id);
     // only a callback gives us a bot-authored message to edit; the reply
     // button and /topup must send a fresh one (same shape as accountWallet)
-    $tp_methodKb = topup_disc_method_keyboard(topup_method_keyboard($step_payment), $from_id, $user['lang'] ?? 'fa');
+    $tp_methodKb = topup_disc_method_keyboard(topup_method_keyboard($step_payment, $user['lang'] ?? 'fa'), $from_id, $user['lang'] ?? 'fa');
     if ($datain == "Add_Balance") {
         Editmessagetext($from_id, $message_id, topup_disc_method_caption($from_id, $user['lang'] ?? 'fa', $textbotlang), $tp_methodKb, 'HTML');
     } else {
@@ -5027,32 +4819,21 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     return;
 } elseif ($datain == "topup_disc_enter" && $user['step'] == "topup_pick_method") {
     step('topup_disc_code', $from_id);
-    Editmessagetext($from_id, $message_id, "🎁 کد تخفیف رو همین‌جا بفرست:", json_encode([
-        'inline_keyboard' => [[['text' => '🔙 بازگشت', 'callback_data' => 'topup_disc_cancel', 'style' => 'danger']]],
-    ]), 'HTML');
+    // remember THIS message: the code arrives as a message of the user's own, so
+    // without its id the reply below would have nothing to edit and would have
+    // to post a new screen instead
+    update("user", "topup_disc_msg_id", (string) intval($message_id), "id", $from_id);
+    list($tp_pCap, $tp_pKb) = topup_disc_prompt_payload($user['lang'] ?? 'fa', $textbotlang);
+    Editmessagetext($from_id, $message_id, $tp_pCap, $tp_pKb, 'HTML');
 } elseif ($datain == "topup_disc_cancel" && $user['step'] == "topup_disc_code") {
     step('topup_pick_method', $from_id);
-    Editmessagetext($from_id, $message_id, topup_disc_method_caption($from_id, $user['lang'] ?? 'fa', $textbotlang), topup_disc_method_keyboard(topup_method_keyboard($step_payment), $from_id, $user['lang'] ?? 'fa'), 'HTML');
+    Editmessagetext($from_id, $message_id, topup_disc_method_caption($from_id, $user['lang'] ?? 'fa', $textbotlang), topup_disc_method_keyboard(topup_method_keyboard($step_payment, $user['lang'] ?? 'fa'), $from_id, $user['lang'] ?? 'fa'), 'HTML');
 } elseif ($datain == "topup_disc_auto_info" && $user['step'] == "topup_pick_method") {
     // the codeless discount has no code to show, so this is the only place a
     // user can read its terms before choosing a gateway
     telegram('answerCallbackQuery', [
         'callback_query_id' => $callback_query_id,
         'text' => topup_disc_auto_info_text($user['lang'] ?? 'fa', $textbotlang),
-        'show_alert' => true,
-        'cache_time' => 1,
-    ]);
-} elseif ($datain == "topup_disc_info" && $user['step'] == "topup_pick_method") {
-    // replaces the old remove-code button: an applied code can no longer be
-    // dropped from this screen, tapping it just explains its terms
-    $tp_act = topup_disc_user_active($from_id);
-    $tp_found = ($tp_act !== null) ? topup_disc_find_code($tp_act['code']) : null;
-    $tp_msg = ($tp_found === null)
-        ? 'این کد دیگه فعال نیست.'
-        : (topup_disc_caption_line($tp_found['code'], $textbotlang) . "\n\n" . topup_disc_terms_line($tp_found['code'], $from_id, $tp_found['gateway'], $textbotlang));
-    telegram('answerCallbackQuery', [
-        'callback_query_id' => $callback_query_id,
-        'text' => $tp_msg,
         'show_alert' => true,
         'cache_time' => 1,
     ]);
@@ -5063,37 +4844,57 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     $tp_typed = trim((string) $text);
     $tp_found = topup_disc_find_code($tp_typed);
     deletemessage($from_id, $message_id);
+    $tp_bal = $textbotlang['users']['Balance'];
     $tp_err = null;
     if ($tp_found === null) {
-        $tp_err = "❌ این کد معتبر نیست.";
+        $tp_err = $tp_bal['topupDiscErrNotFound'];
     } elseif ((string) $tp_found['lang'] !== (string) $tp_lang) {
-        $tp_err = "❌ این کد برای زبان شما نیست.";
+        $tp_err = $tp_bal['topupDiscErrWrongLang'];
     } else {
         $tp_st = topup_disc_code_status($tp_found['code']);
         if ($tp_st === 'expired') {
-            $tp_err = "❌ اعتبار این کد تموم شده.";
+            $tp_err = $tp_bal['topupDiscErrExpired'];
         } elseif ($tp_st === 'exhausted') {
-            $tp_err = "❌ ظرفیت این کد پر شده.";
+            $tp_err = $tp_bal['topupDiscErrExhausted'];
         } elseif ($tp_st !== 'active') {
-            $tp_err = "❌ این کد در حال حاضر فعال نیست.";
+            $tp_err = $tp_bal['topupDiscErrInactive'];
         } else {
             $tp_per = intval($tp_found['code']['limitPerUser'] ?? 0);
             if ($tp_per > 0 && topup_disc_code_user_count($tp_found['code']['code'], $from_id) >= $tp_per) {
-                $tp_err = "❌ شما قبلاً از این کد استفاده کردید.";
+                $tp_err = $tp_bal['topupDiscErrUsed'];
             }
         }
     }
+    // the whole exchange stays inside the prompt message that topup_disc_enter
+    // opened; the user's typed code was deleted above, so nothing but this one
+    // screen is left in the chat either way
+    $tp_promptId = intval($user['topup_disc_msg_id'] ?? 0);
     if ($tp_err !== null) {
-        sendmessage($from_id, $tp_err, json_encode([
-            'inline_keyboard' => [[['text' => '🔙 بازگشت', 'callback_data' => 'topup_disc_cancel', 'style' => 'danger']]],
-        ]), 'HTML');
+        list($tp_eCap, $tp_eKb) = topup_disc_prompt_payload($tp_lang, $textbotlang, $tp_err);
+        if ($tp_promptId > 0) {
+            Editmessagetext($from_id, $tp_promptId, $tp_eCap, $tp_eKb, 'HTML');
+        } else {
+            $tp_sent = sendmessage($from_id, $tp_eCap, $tp_eKb, 'HTML');
+            update("user", "topup_disc_msg_id", (string) intval($tp_sent['result']['message_id'] ?? 0), "id", $from_id);
+        }
         return;
     }
     topup_disc_user_activate($from_id, $tp_found['code']['code'], $tp_found['lang'], $tp_found['gateway']);
     step('topup_pick_method', $from_id);
-    $tp_okLine = topup_disc_caption_line($tp_found['code'], $textbotlang);
-    $tp_terms = topup_disc_terms_line($tp_found['code'], $from_id, $tp_found['gateway'], $textbotlang);
-    sendmessage($from_id, "✅ کد فعال شد!\n\n<blockquote><b>" . htmlspecialchars($tp_okLine, ENT_QUOTES) . "</b></blockquote>\n" . $tp_terms . "\n\nحالا روش پرداخت رو انتخاب کن 👇", topup_disc_method_keyboard(topup_method_keyboard($step_payment), $from_id, $tp_lang), 'HTML');
+    update("user", "topup_disc_msg_id", "0", "id", $from_id);
+    // back to the method screen, with the activation confirmed above its own
+    // caption (which already carries the discount and its terms)
+    $tp_okMsg = bottext_resolve_key('users.Balance.topupDiscActivated');
+    if (trim((string) $tp_okMsg) === '') {
+        $tp_okMsg = $textbotlang['users']['Balance']['topupDiscActivated'];
+    }
+    $tp_okCap = trim((string) $tp_okMsg) . "\n\n" . topup_disc_method_caption($from_id, $tp_lang, $textbotlang);
+    $tp_okKb = topup_disc_method_keyboard(topup_method_keyboard($step_payment, $user['lang'] ?? 'fa'), $from_id, $tp_lang);
+    if ($tp_promptId > 0) {
+        Editmessagetext($from_id, $tp_promptId, $tp_okCap, $tp_okKb, 'HTML');
+    } else {
+        sendmessage($from_id, $tp_okCap, $tp_okKb, 'HTML');
+    }
     return;
 } elseif ($user['step'] == "topup_pick_method" && gateway_button_key(['callback_data' => $datain], $textbotlang['textbot']['cartToCart'] ?? null) !== null) {
     $tp_lang = $user['lang'] ?? 'fa';
@@ -5121,27 +4922,63 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     $tp_kb['inline_keyboard'][] = $tp_customBackRow;
     step("topup_pkg:{$tp_key}", $from_id);
     Editmessagetext($from_id, $message_id, topup_caption_for($tp_lang, $tp_key, $textbotlang['users']['Balance']['pkgPromptTitle']) . topup_disc_caption_block($from_id, $tp_lang, $tp_key, $textbotlang), json_encode($tp_kb), 'HTML');
-} elseif ($datain == "topup_back_methods" && (preg_match('/^topup_pkg:/', (string) $user['step']) || preg_match('/^topup_custom:/', (string) $user['step']))) {
+// 'get_step_payment' is included because the confirm-before-invoice screen is
+// rendered AFTER that step is set - without it, the back button on that screen
+// matched nothing and simply did nothing when tapped
+} elseif (preg_match('/^topupmgrp:([a-z]+)$/', $datain, $tg_m) && $user['step'] === 'topup_pick_method') {
+    // one family's own screen. Its rows come from the ungrouped keyboard, so
+    // the buttons keep the styling and the layout the admin gave them.
+    if (!isset(gateway_groups()[$tg_m[1]])) {
+        return;
+    }
+    $tg_lang = $user['lang'] ?? 'fa';
+    $tg_flat = json_decode(topup_method_keyboard($step_payment), true)['inline_keyboard'] ?? [];
+    $tg_rows = topup_group_screen_rows($tg_flat, $tg_m[1], $tg_lang, $textbotlang, $textbotlang['textbot']['cartToCart'] ?? null);
+    Editmessagetext($from_id, $message_id, strtr(
+        topup_group_caption_for($tg_lang, $textbotlang['users']['Balance']['groupMethodCaption']),
+        ['{group}' => gateway_group_label($tg_m[1], $textbotlang)]
+    ), json_encode(['inline_keyboard' => $tg_rows]), 'HTML');
+} elseif ($datain == "topup_back_methods" && (preg_match('/^topup_pkg:/', (string) $user['step']) || preg_match('/^topup_custom:/', (string) $user['step']) || $user['step'] === 'get_step_payment'
+    || $user['step'] === 'topup_pick_method')) {
     if ($step_payment_none) {
         step('home', $from_id);
         sendmessage($from_id, $noCreditText, null, 'HTML');
         return;
     }
     step('topup_pick_method', $from_id);
-    Editmessagetext($from_id, $message_id, topup_disc_method_caption($from_id, $user['lang'] ?? 'fa', $textbotlang), topup_disc_method_keyboard(topup_method_keyboard($step_payment), $from_id, $user['lang'] ?? 'fa'), 'HTML');
+    Editmessagetext($from_id, $message_id, topup_disc_method_caption($from_id, $user['lang'] ?? 'fa', $textbotlang), topup_disc_method_keyboard(topup_method_keyboard($step_payment, $user['lang'] ?? 'fa'), $from_id, $user['lang'] ?? 'fa'), 'HTML');
 } elseif (preg_match('/^topup_pkg:([a-z0-9]+)$/', (string) $user['step'], $tp_m) && $datain == "topup_custom_start") {
     step("topup_custom:{$tp_m[1]}", $from_id);
     $tp_lang = $user['lang'] ?? 'fa';
     $tp_key = $tp_m[1];
-    $tp_backStyle = topup_btnstyle_for($tp_lang, $tp_key, 'back', true);
-    $tp_customCap = topup_custom_caption_for($tp_lang, $tp_key, $textbotlang['users']['Balance']['customAmountPromptTitle']);
-    Editmessagetext($from_id, $message_id, strtr($tp_customCap, ['{currency}' => currency_get(currency_for_lang($tp_lang))['title'] ?? currency_for_lang($tp_lang)]) . topup_disc_caption_block($from_id, $tp_lang, $tp_key, $textbotlang), json_encode([
-        'inline_keyboard' => [[
-            topup_styled_button($textbotlang['users']['Balance']['backToMethodBtn'], $tp_backStyle, 'topup_back_methods', 'danger'),
-            topup_styled_button(topup_backpkg_label($tp_lang, $tp_key, $textbotlang), topup_btnstyle_for($tp_lang, $tp_key, 'backpkg', true), 'topup_back_pkg', ''),
-        ]],
+    $tp_customCap = topup_custom_caption_for($tp_lang, $tp_key, topup_custom_caption_default($tp_key, $textbotlang));
+    // two ways back, one step each: to the amount screen this was opened from,
+    // and all the way out to the payment-method list. This screen's own back
+    // button has its own style slot ('backcustom'): it used to share 'back' with
+    // the amount screen's button, so restyling one restyled both.
+    $tp_customRow = [
+        topup_styled_button(topup_slot_label($tp_lang, $tp_key, 'backcustom', $textbotlang), topup_btnstyle_for($tp_lang, $tp_key, 'backcustom', true), 'topup_back_methods', 'danger'),
+        topup_styled_button(topup_slot_label($tp_lang, $tp_key, 'backpkg', $textbotlang), topup_btnstyle_for($tp_lang, $tp_key, 'backpkg', true), "topup_back_pkg:{$tp_key}", 'danger'),
+    ];
+    if (topup_custom_screen_swapped($tp_lang, $tp_key)) {
+        $tp_customRow = array_reverse($tp_customRow);
+    }
+    $tp_floor = topup_usd_floor_toman($tp_lang, $tp_key);
+    Editmessagetext($from_id, $message_id, strtr($tp_customCap, [
+        '{currency}' => currency_get(currency_for_lang($tp_lang))['title'] ?? currency_for_lang($tp_lang),
+        '{minprice}' => $tp_floor !== null ? number_format($tp_floor) : '—',
+    ]) . topup_disc_caption_block($from_id, $tp_lang, $tp_key, $textbotlang), json_encode([
+        'inline_keyboard' => [$tp_customRow],
     ]), 'HTML');
-} elseif (preg_match('/^topup_custom:([a-z0-9]+)$/', (string) $user['step'], $tp_m) && $datain == "topup_back_pkg") {
+    // remembered so it can be taken away once an invoice is actually made -
+    // see topup_amount_prompt_clear()
+    update("user", "topup_custom_msg_id", (string) intval($message_id), "id", $from_id);
+// back one step, to the "#️⃣ مبلغ واریز" screen with its package buttons. The
+// gateway comes from the callback rather than the step, because the screens that
+// offer this button sit on three different steps (topup_custom:, topup_pkg: and
+// get_step_payment) and only two of them carry the key.
+} elseif (preg_match('/^topup_back_pkg:([a-z0-9]+)$/', (string) $datain, $tp_m)
+    && (preg_match('/^topup_custom:/', (string) $user['step']) || preg_match('/^topup_pkg:/', (string) $user['step']) || $user['step'] === 'get_step_payment')) {
     $tp_key = $tp_m[1];
     $tp_lang = $user['lang'] ?? 'fa';
     $tp_kb = ['inline_keyboard' => []];
@@ -5173,58 +5010,51 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     }
     update("user", "Processing_value", $tp_pkg['amount'], "id", $from_id);
     step('get_step_payment', $from_id);
-    if ($tp_key === 'card') {
-        $user['Processing_value'] = $tp_pkg['amount'];
-        topup_card_invoice_generate($from_id, $user, $message_id, $textbotlang, $setting);
+    // Straight into the gateway's own checkout, the way card-to-card and Plisio
+    // already worked. No "✅ مبلغ ... انتخاب شد" screen in between any more, for
+    // any gateway: one amount, one path. gateway_datain() maps the key to the
+    // callback the checkout block is keyed on, and a handler's early return
+    // comes back from the include as NULL.
+    $user['Processing_value'] = $tp_pkg['amount'];
+    // if the gateway refuses this amount, its notice puts the customer back
+    // on this screen rather than the dead step the dispatch runs on
+    $GLOBALS['topup_amount_origin_step'] = "topup_pkg:{$tp_key}";
+    $datain = gateway_datain($tp_key);
+    if ((include __DIR__ . '/topup_gateway_dispatch.php') !== 1) {
         return;
     }
-    if ($tp_key === 'plisio') {
-        $user['Processing_value'] = $tp_pkg['amount'];
-        topup_plisio_invoice_generate($from_id, $user, $message_id, $textbotlang, $setting);
-        return;
-    }
-    $tp_label = gateway_registry($textbotlang)[$tp_key] ?? $tp_key;
-    Editmessagetext($from_id, $message_id, sprintf($textbotlang['users']['Balance']['confirmContinueCaption'], topup_package_label($tp_pkg, $tp_lang), $tp_label), json_encode([
-        'inline_keyboard' => [
-            [['text' => sprintf($textbotlang['users']['Balance']['confirmContinueBtn'], $tp_label), 'callback_data' => $tp_key]],
-            [topup_styled_button($textbotlang['users']['Balance']['backToMethodBtn'], topup_btnstyle_for($tp_lang, $tp_key, 'back', true), 'topup_back_methods', 'danger')],
-        ],
-    ]), 'HTML');
 } elseif (preg_match('/^topup_custom:([a-z0-9]+)$/', (string) $user['step'], $tp_m) && $datain == '' && preg_match('/[0-9۰-۹]/u', (string) $text)) {
     $tp_key = $tp_m[1];
     $tp_lang = $user['lang'] ?? 'fa';
     if (!money_valid((string) $text, currency_for_lang($tp_lang))) {
-        sendmessage($from_id, $textbotlang['users']['Balance']['errorprice'], null, 'HTML');
+        // letters, symbols, anything that is not a plain amount: take it away
+        // and say so, the same self-replacing notice a bad amount gets
+        topup_notnumber_notice($from_id, $tp_lang, $tp_key, $textbotlang, (int) ($update['message']['message_id'] ?? 0));
         return;
     }
     $tp_amt = money_normalize((string) $text);
-    [$tp_min, $tp_max] = topup_minmax_for($tp_lang, $tp_key);
+    // the gateway's dollar floor is folded in here, so a customer is refused
+    // once with one number instead of twice with two
+    [$tp_min, $tp_max] = topup_effective_limits($tp_lang, $tp_key);
     if (($tp_min !== null && $tp_amt < $tp_min) || ($tp_max !== null && $tp_amt > $tp_max)) {
-        sendmessage($from_id, strtr($textbotlang['users']['Balance']['depositRange'], [
-            '{mainbalance}' => money($tp_min ?? '0', currency_for_lang($tp_lang)),
-            '{maxbalance}' => money($tp_max ?? '0', currency_for_lang($tp_lang)),
-        ]), null, 'HTML');
+        // the number the customer typed goes with the notice, so a second
+        // wrong try leaves one message on screen rather than a column of them
+        topup_range_notice($from_id, $tp_lang, $tp_key, $tp_min ?? 0, $tp_max ?? 0,
+            $textbotlang, (int) ($update['message']['message_id'] ?? 0));
         return;
     }
     update("user", "Processing_value", $tp_amt, "id", $from_id);
     step('get_step_payment', $from_id);
-    if ($tp_key === 'card') {
-        $user['Processing_value'] = $tp_amt;
-        topup_card_invoice_generate($from_id, $user, $message_id, $textbotlang, $setting);
+    // the same direct hand-off the package buttons above make
+    $user['Processing_value'] = $tp_amt;
+    // same for the custom-amount screen - and the number they typed, so a
+    // refusal from inside the gateway can take it away too
+    $GLOBALS['topup_amount_origin_step'] = "topup_custom:{$tp_key}";
+    $GLOBALS['topup_typed_message_id'] = (int) ($update['message']['message_id'] ?? 0);
+    $datain = gateway_datain($tp_key);
+    if ((include __DIR__ . '/topup_gateway_dispatch.php') !== 1) {
         return;
     }
-    if ($tp_key === 'plisio') {
-        $user['Processing_value'] = $tp_amt;
-        topup_plisio_invoice_generate($from_id, $user, $message_id, $textbotlang, $setting);
-        return;
-    }
-    $tp_label = gateway_registry($textbotlang)[$tp_key] ?? $tp_key;
-    sendmessage($from_id, sprintf($textbotlang['users']['Balance']['confirmContinueCaption'], money($tp_amt, currency_for_lang($tp_lang)), $tp_label), json_encode([
-        'inline_keyboard' => [
-            [['text' => sprintf($textbotlang['users']['Balance']['confirmContinueBtn'], $tp_label), 'callback_data' => $tp_key]],
-            [topup_styled_button($textbotlang['users']['Balance']['backToMethodBtn'], topup_btnstyle_for($tp_lang, $tp_key, 'back', true), 'topup_back_methods', 'danger')],
-        ],
-    ]), 'HTML');
 } elseif ($user['step'] == "getprice") {
     deletemessage($from_id, $user['Processing_value']);
     if (!is_numeric($text))
@@ -5249,541 +5079,8 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     sendmessage($from_id, $textbotlang['users']['Balance']['selectPayment'], $step_payment, 'HTML');
     step('get_step_payment', $from_id);
 } elseif ($user['step'] == "get_step_payment") {
-    if ($datain == "cart_to_offline") {
-        topup_card_invoice_generate($from_id, $user, $message_id, $textbotlang, $setting);
-    } elseif ($datain == "aqayepardakht") {
-        if ($user['Processing_value'] < 5000) {
-            sendmessage($from_id, $textbotlang['users']['Balance']['zarinpal'], null, 'HTML');
-            return;
-        }
-        $mainbalance = pay_value("minbalanceaqayepardakht", $user['lang'] ?? null);
-        $maxbalance = pay_value("maxbalanceaqayepardakht", $user['lang'] ?? null);
-        if ($user['Processing_value'] < $mainbalance || $user['Processing_value'] > $maxbalance) {
-            $mainbalance = number_format($mainbalance);
-            $maxbalance = number_format($maxbalance);
-            sendmessage($from_id, strtr($textbotlang['users']['Balance']['depositRange'], ['{mainbalance}' => $mainbalance, '{maxbalance}' => $maxbalance]), null, 'HTML');
-            return;
-        }
-        deletemessage($from_id, $message_id);
-        sendmessage($from_id, $textbotlang['users']['Balance']['linkpayments'], $keyboard, 'HTML');
-        $invoice = "{$user['Processing_value_tow']}|{$user['Processing_value_one']}";
-        $dateacc = date('Y/m/d H:i:s');
-        $randomString = bin2hex(random_bytes(5));
-        $pay = createPayaqayepardakht($user['Processing_value'], $randomString);
-        if ($pay['status'] != "success") {
-            $text_error = json_encode($pay);
-            sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
-            step('home', $from_id);
-            $ErrorsLinkPayment = sprintf($textbotlang['Admin']['reportgroup']['errorAqayePardakhtLink'], $text_error, $from_id, $username);
-            if (strlen($setting['Channel_Report']) > 0) {
-                telegram('sendmessage', [
-                    'chat_id' => $setting['Channel_Report'],
-                    'message_thread_id' => $errorreport,
-                    'text' => $ErrorsLinkPayment,
-                    'parse_mode' => "HTML"
-                ]);
-            }
-            return;
-        }
-        $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice) VALUES (?,?,?,?,?,?,?)");
-        $payment_Status = "Unpaid";
-        $Payment_Method = "aqayepardakht";
-        $stmt->execute([$from_id, $randomString, $dateacc, $user['Processing_value'], $payment_Status, $Payment_Method, $invoice]);
-        $paymentkeyboard = json_encode([
-            'inline_keyboard' => [
-                [
-                    ['text' => $textbotlang['users']['Balance']['payments'], 'url' => "https://panel.aqayepardakht.ir/startpay/" . $pay['transid']],
-                ]
-            ]
-        ]);
-        $price_format = number_format($user['Processing_value'], 0);
-        $textnowpayments = sprintf($textbotlang['users']['Balance']['invoiceCreated'], $randomString, $price_format);
-        $gethelp = select("PaySetting", "ValuePay", "NamePay", "helpaqayepardakht", "select")['ValuePay'];
-        if ($gethelp != 2) {
-            $data = json_decode($gethelp, true);
-            if ($data['type'] == "text") {
-                sendmessage($from_id, $data['text'], null, 'HTML');
-            } elseif ($data['type'] == "photo") {
-                sendphoto($from_id, $data['photoid'], null);
-            } elseif ($data['type'] == "video") {
-                sendvideo($from_id, $data['videoid'], null);
-            }
-        }
-        $message_id = sendmessage($from_id, $textnowpayments, $paymentkeyboard, 'HTML');
-        updatePaymentMessageId($message_id, $randomString);
-    } elseif ($datain == "zarinpal") {
-        if ($user['Processing_value'] < 5000) {
-            sendmessage($from_id, $textbotlang['users']['Balance']['zarinpal'], null, 'HTML');
-            return;
-        }
-        $mainbalance = pay_value("minbalancezarinpal", $user['lang'] ?? null);
-        $maxbalance = pay_value("maxbalancezarinpal", $user['lang'] ?? null);
-        if ($user['Processing_value'] < $mainbalance || $user['Processing_value'] > $maxbalance) {
-            $mainbalance = number_format($mainbalance);
-            $maxbalance = number_format($maxbalance);
-            sendmessage($from_id, strtr($textbotlang['users']['Balance']['depositRange'], ['{mainbalance}' => $mainbalance, '{maxbalance}' => $maxbalance]), null, 'HTML');
-            return;
-        }
-        deletemessage($from_id, $message_id);
-        sendmessage($from_id, $textbotlang['users']['Balance']['linkpayments'], $keyboard, 'HTML');
-        $randomString = bin2hex(random_bytes(5));
-        $pay = createPayZarinpal($user['Processing_value'], $randomString);
-        if ($pay['data']['code'] != 100) {
-            $text_error = json_encode($pay['errors']);
-            sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
-            step('home', $from_id);
-            $ErrorsLinkPayment = sprintf($textbotlang['Admin']['reportgroup']['errorZarinpalLink'], $text_error, $from_id, $username);
-            if (strlen($setting['Channel_Report']) > 0) {
-                telegram('sendmessage', [
-                    'chat_id' => $setting['Channel_Report'],
-                    'message_thread_id' => $errorreport,
-                    'text' => $ErrorsLinkPayment,
-                    'parse_mode' => "HTML"
-                ]);
-            }
-            return;
-        }
-        $invoice = "{$user['Processing_value_tow']}|{$user['Processing_value_one']}";
-        $dateacc = date('Y/m/d H:i:s');
-        $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice,dec_not_confirmed) VALUES (?,?,?,?,?,?,?,?)");
-        $payment_Status = "Unpaid";
-        $Payment_Method = "zarinpal";
-        $stmt->execute([$from_id, $randomString, $dateacc, $user['Processing_value'], $payment_Status, $Payment_Method, $invoice, $pay['data']['authority']]);
-        $paymentkeyboard = json_encode([
-            'inline_keyboard' => [
-                [
-                    ['text' => $textbotlang['users']['Balance']['payments'], 'url' => "https://www.zarinpal.com/pg/StartPay/" . $pay['data']['authority']],
-                ]
-            ]
-        ]);
-        $price_format = number_format($user['Processing_value'], 0);
-        $textnowpayments = sprintf($textbotlang['users']['Balance']['invoiceCreated2'], $randomString, $price_format);
-        $gethelp = select("PaySetting", "ValuePay", "NamePay", "helpzarinpal", "select")['ValuePay'];
-        if ($gethelp != 2) {
-            $data = json_decode($gethelp, true);
-            if ($data['type'] == "text") {
-                sendmessage($from_id, $data['text'], null, 'HTML');
-            } elseif ($data['type'] == "photo") {
-                sendphoto($from_id, $data['photoid'], null);
-            } elseif ($data['type'] == "video") {
-                sendvideo($from_id, $data['videoid'], null);
-            }
-        }
-        $message_id = sendmessage($from_id, $textnowpayments, $paymentkeyboard, 'HTML');
-        updatePaymentMessageId($message_id, $randomString);
-    } elseif ($datain == "plisio") {
-        topup_plisio_invoice_generate($from_id, $user, $message_id, $textbotlang, $setting);
-    } elseif ($datain == "nowpayment") {
-        $rates = rate_arze();
-        if ($rates === null) {
-            sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
-            step('home', $from_id);
-            return;
-        }
-        $trx = $rates['TRX'];
-        $usd = $rates['USD'];
-        $trxprice = $user['Processing_value'] / $trx;
-        $usdprice = $user['Processing_value'] / $usd;
-        $mainbalance = pay_value("minbalancenowpayment", $user['lang'] ?? null);
-        $maxbalance = pay_value("maxbalancenowpayment", $user['lang'] ?? null);
-        if ($user['Processing_value'] < $mainbalance || $user['Processing_value'] > $maxbalance) {
-            $mainbalance = number_format($mainbalance);
-            $maxbalance = number_format($maxbalance);
-            sendmessage($from_id, strtr($textbotlang['users']['Balance']['depositRangePlisio'], ['{mainbalance}' => $mainbalance, '{maxbalance}' => $maxbalance]), null, 'HTML');
-            return;
-        }
-        deletemessage($from_id, $message_id);
-        sendmessage($from_id, $textbotlang['users']['Balance']['linkpayments'], $keyboard, 'HTML');
-        $dateacc = date('Y/m/d H:i:s');
-        $randomString = bin2hex(random_bytes(5));
-        $invoice = "{$user['Processing_value_tow']}|{$user['Processing_value_one']}";
-        $pay = nowPayments('invoice', $usdprice, $randomString, 'TopUp - ' . $from_id);
-        $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice,dec_not_confirmed) VALUES (?,?,?,?,?,?,?,?)");
-        $payment_Status = "Unpaid";
-        $Payment_Method = "nowpayment";
-        $stmt->execute([$from_id, $randomString, $dateacc, $user['Processing_value'], $payment_Status, $Payment_Method, $invoice, $pay['id']]);
-        if (!isset($pay['id'])) {
-            $text_error = json_encode($pay);
-            sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
-            step('home', $from_id);
-            $ErrorsLinkPayment = sprintf($textbotlang['Admin']['reportgroup']['errorCryptoLink2'], $text_error, $from_id, $username);
-            if (strlen($setting['Channel_Report']) > 0) {
-                telegram('sendmessage', [
-                    'chat_id' => $setting['Channel_Report'],
-                    'message_thread_id' => $errorreport,
-                    'text' => $ErrorsLinkPayment,
-                    'parse_mode' => "HTML"
-                ]);
-            }
-            return;
-        }
-        $paymentkeyboard = json_encode([
-            'inline_keyboard' => [
-                [
-                    ['text' => $textbotlang['users']['Balance']['payments'], 'url' => $pay['invoice_url']],
-                ]
-            ]
-        ]);
-        $price_format = number_format($user['Processing_value'], 0);
-        $USD = number_format($usd);
-        $textnowpayments = sprintf($textbotlang['users']['Balance']['cryptoInstruction2'], $randomString, $price_format, $USD);
-        $gethelp = select("PaySetting", "ValuePay", "NamePay", "helpnowpayment", "select")['ValuePay'];
-        if ($gethelp != 2) {
-            $data = json_decode($gethelp, true);
-            if ($data['type'] == "text") {
-                sendmessage($from_id, $data['text'], null, 'HTML');
-            } elseif ($data['type'] == "photo") {
-                sendphoto($from_id, $data['photoid'], null);
-            } elseif ($data['type'] == "video") {
-                sendvideo($from_id, $data['videoid'], null);
-            }
-        }
-        $message_id = sendmessage($from_id, $textnowpayments, $paymentkeyboard, 'HTML');
-        updatePaymentMessageId($message_id, $randomString);
-    } elseif ($datain == "iranpay1") {
-        $rates = rate_arze();
-        if ($rates === null) {
-            sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
-            step('home', $from_id);
-            return;
-        }
-        $trx = $rates['TRX'];
-        $usd = $rates['USD'];
-        $trxprice = round($user['Processing_value'] / $trx, 2);
-        $usdprice = $user['Processing_value'] / $usd;
-        $mainbalance = pay_value("minbalanceiranpay1", $user['lang'] ?? null);
-        $maxbalance = pay_value("maxbalanceiranpay1", $user['lang'] ?? null);
-        if ($user['Processing_value'] < $mainbalance || $user['Processing_value'] > $maxbalance) {
-            $mainbalance = number_format($mainbalance);
-            $maxbalance = number_format($maxbalance);
-            sendmessage($from_id, strtr($textbotlang['users']['Balance']['depositRangePlisio'], ['{mainbalance}' => $mainbalance, '{maxbalance}' => $maxbalance]), null, 'HTML');
-            return;
-        }
-        deletemessage($from_id, $message_id);
-        sendmessage($from_id, $textbotlang['users']['Balance']['linkpayments'], $keyboard, 'HTML');
-        $dateacc = date('Y/m/d H:i:s');
-        $randomString = bin2hex(random_bytes(5));
-        $invoice = "{$user['Processing_value_tow']}|{$user['Processing_value_one']}";
-        $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice) VALUES (?,?,?,?,?,?,?)");
-        $payment_Status = "Unpaid";
-        $Payment_Method = "Currency Rial 1";
-        $stmt->execute([$from_id, $randomString, $dateacc, $user['Processing_value'], $payment_Status, $Payment_Method, $invoice]);
-        $pay = createInvoiceiranpay1($user['Processing_value'], $randomString);
-        if ($pay['status'] != "100") {
-            $text_error = $pay['message'];
-            sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
-            step('home', $from_id);
-            $ErrorsLinkPayment = sprintf($textbotlang['Admin']['reportgroup']['errorPaymentLink'], $text_error, $from_id, $Payment_Method, $username);
-            if (strlen($setting['Channel_Report']) > 0) {
-                telegram('sendmessage', [
-                    'chat_id' => $setting['Channel_Report'],
-                    'message_thread_id' => $errorreport,
-                    'text' => $ErrorsLinkPayment,
-                    'parse_mode' => "HTML"
-                ]);
-            }
-            return;
-        }
-        update("Payment_report", "dec_not_confirmed", $pay['Authority'], "id_order", $randomString);
-        $paymentkeyboard = json_encode([
-            'inline_keyboard' => [
-                [
-                    ['text' => $textbotlang['keyboard']['payment'], 'url' => $pay['payment_url_bot']]
-                ]
-            ]
-        ]);
-        $pricetoman = number_format($user['Processing_value'], 0);
-        $textnowpayments = sprintf($textbotlang['users']['Balance']['transactionCreated'], $randomString, $pricetoman);
-        $gethelp = select("PaySetting", "ValuePay", "NamePay", "helpiranpay1", "select")['ValuePay'];
-        if ($gethelp != 2) {
-            $data = json_decode($gethelp, true);
-            if ($data['type'] == "text") {
-                sendmessage($from_id, $data['text'], null, 'HTML');
-            } elseif ($data['type'] == "photo") {
-                sendphoto($from_id, $data['photoid'], null);
-            } elseif ($data['type'] == "video") {
-                sendvideo($from_id, $data['videoid'], null);
-            }
-        }
-        $message_id = sendmessage($from_id, $textnowpayments, $paymentkeyboard, 'HTML');
-        updatePaymentMessageId($message_id, $randomString);
-    } elseif ($datain == "iranpay2") {
-        $rates = rate_arze();
-        if ($rates === null) {
-            sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
-            step('home', $from_id);
-            return;
-        }
-        $trx = $rates['TRX'];
-        $usd = $rates['USD'];
-        $trxprice = $user['Processing_value'] / $trx;
-        $usdprice = $user['Processing_value'] / $usd;
-        $mainbalance = pay_value("minbalanceiranpay2", $user['lang'] ?? null);
-        $maxbalance = pay_value("maxbalanceiranpay2", $user['lang'] ?? null);
-        if ($user['Processing_value'] < $mainbalance || $user['Processing_value'] > $maxbalance) {
-            $mainbalance = number_format($mainbalance);
-            $maxbalance = number_format($maxbalance);
-            sendmessage($from_id, strtr($textbotlang['users']['Balance']['depositRangePlisio'], ['{mainbalance}' => $mainbalance, '{maxbalance}' => $maxbalance]), null, 'HTML');
-            return;
-        }
-        deletemessage($from_id, $message_id);
-        sendmessage($from_id, $textbotlang['users']['Balance']['linkpayments'], $keyboard, 'HTML');
-        $dateacc = date('Y/m/d H:i:s');
-        $randomString = bin2hex(random_bytes(5));
-        $invoice = "{$user['Processing_value_tow']}|{$user['Processing_value_one']}";
-        $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice) VALUES (?,?,?,?,?,?,?)");
-        $payment_Status = "Unpaid";
-        $Payment_Method = "Currency Rial 2";
-        $stmt->execute([$from_id, $randomString, $dateacc, $user['Processing_value'], $payment_Status, $Payment_Method, $invoice]);
-        $payment = trnado($randomString, $trxprice);
-        if ($payment['IsSuccessful'] != "true") {
-            $text_error = json_encode($payment);
-            sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
-            step('home', $from_id);
-            $ErrorsLinkPayment = sprintf($textbotlang['Admin']['reportgroup']['errorPaymentLink2'], $text_error, $from_id, $Payment_Method, $username);
-            if (strlen($setting['Channel_Report']) > 0) {
-                telegram('sendmessage', [
-                    'chat_id' => $setting['Channel_Report'],
-                    'message_thread_id' => $errorreport,
-                    'text' => $ErrorsLinkPayment,
-                    'parse_mode' => "HTML"
-                ]);
-            }
-            return;
-        }
-        $paymentkeyboard = json_encode([
-            'inline_keyboard' => [
-                [
-                    ['text' => $textbotlang['users']['Balance']['payments'], 'url' => "https://t.me/tronado_robot/customerpayment?startapp={$payment['Data']['Token']}"]
-                ]
-            ]
-        ]);
-        $pricetoman = number_format($user['Processing_value'], 0);
-        $textnowpayments = sprintf($textbotlang['users']['Balance']['transactionCreated2'], $randomString, $pricetoman);
-        $gethelp = select("PaySetting", "ValuePay", "NamePay", "helpiranpay2", "select")['ValuePay'];
-        if ($gethelp != 2) {
-            $data = json_decode($gethelp, true);
-            if ($data['type'] == "text") {
-                sendmessage($from_id, $data['text'], null, 'HTML');
-            } elseif ($data['type'] == "photo") {
-                sendphoto($from_id, $data['photoid'], null);
-            } elseif ($data['type'] == "video") {
-                sendvideo($from_id, $data['videoid'], null);
-            }
-        }
-        $message_id = sendmessage($from_id, $textnowpayments, $paymentkeyboard, 'HTML');
-        updatePaymentMessageId($message_id, $randomString);
-    } elseif ($datain == "iranpay3") {
-        $dateacc = date('Y/m/d');
-        $query = "SELECT SUM(price) as price FROM Payment_report WHERE  Payment_Method = 'Currency Rial 1' AND  time LIKE '%$dateacc%'";
-        $stmt = $pdo->prepare($query);
-        $stmt->execute();
-        $sumpayment = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (intval($sumpayment['price']) > 1000000) {
-            sendmessage($from_id, $textbotlang['users']['Balance']['queueBusy'], null, 'HTML');
-            return;
-        }
-        $rates = rate_arze();
-        if ($rates === null) {
-            sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
-            step('home', $from_id);
-            return;
-        }
-        $trx = $rates['TRX'];
-        $usd = $rates['USD'];
-        $trxprice = $user['Processing_value'] / $trx;
-        $usdprice = $user['Processing_value'] / $usd;
-        $mainbalance = pay_value("minbalanceiranpay", $user['lang'] ?? null);
-        $maxbalance = pay_value("maxbalanceiranpay", $user['lang'] ?? null);
-        if ($user['Processing_value'] < $mainbalance || $user['Processing_value'] > $maxbalance) {
-            $mainbalance = number_format($mainbalance);
-            $maxbalance = number_format($maxbalance);
-            sendmessage($from_id, strtr($textbotlang['users']['Balance']['depositRangePlisio'], ['{mainbalance}' => $mainbalance, '{maxbalance}' => $maxbalance]), null, 'HTML');
-            return;
-        }
-        deletemessage($from_id, $message_id);
-        sendmessage($from_id, $textbotlang['users']['Balance']['linkpayments'], null, 'HTML');
-        $dateacc = date('Y/m/d H:i:s');
-        $randomString = bin2hex(random_bytes(5));
-        $invoice = "{$user['Processing_value_tow']}|{$user['Processing_value_one']}";
-        $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice) VALUES (?,?,?,?,?,?,?)");
-        $payment_Status = "Unpaid";
-        $Payment_Method = "Currency Rial 3";
-        $stmt->execute([$from_id, $randomString, $dateacc, $user['Processing_value'], $payment_Status, $Payment_Method, $invoice]);
-        $paylink = createInvoice($trxprice);
-        if (!$paylink['success']) {
-            $text_error = $paylink['message'];
-            sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
-            step('home', $from_id);
-            $ErrorsLinkPayment = sprintf($textbotlang['Admin']['reportgroup']['errorPaymentLink3'], $text_error, $from_id, $Payment_Method, $username);
-            if (strlen($setting['Channel_Report']) > 0) {
-                telegram('sendmessage', [
-                    'chat_id' => $setting['Channel_Report'],
-                    'message_thread_id' => $errorreport,
-                    'text' => $ErrorsLinkPayment,
-                    'parse_mode' => "HTML"
-                ]);
-            }
-            return;
-        }
-        update("Payment_report", "dec_not_confirmed", $paylink['data']['id'], "id_order", $randomString);
-        $pricetoman = number_format($user['Processing_value'], 0);
-        $paymentkeyboard = json_encode([
-            'inline_keyboard' => [
-                [
-                    ['text' => $textbotlang['keyboard']['diamondPayment'], 'url' => "t.me/AvidTrx_Bot?start=" . $paylink['data']['id']]
-                ],
-            ]
-        ]);
-        $textnowpayments = sprintf($textbotlang['users']['Balance']['transactionCreated3'], $randomString, $pricetoman);
-        $gethelp = select("PaySetting", "ValuePay", "NamePay", "helpiranpay3", "select")['ValuePay'];
-        if ($gethelp != 2) {
-            $data = json_decode($gethelp, true);
-            if ($data['type'] == "text") {
-                sendmessage($from_id, $data['text'], null, 'HTML');
-            } elseif ($data['type'] == "photo") {
-                sendphoto($from_id, $data['photoid'], null);
-            } elseif ($data['type'] == "video") {
-                sendvideo($from_id, $data['videoid'], null);
-            }
-        }
-        sendmessage($from_id, $textnowpayments, $paymentkeyboard, 'HTML');
-        step("getvoocherx", $from_id);
-        savedata("clear", "id_payment", $randomString);
-    } elseif ($datain == "digitaltron") {
-        $rates = rate_arze();
-        if ($rates === null) {
-            sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
-            step('home', $from_id);
-            return;
-        }
-        $trx = $rates['TRX'];
-        $usd = $rates['USD'];
-        $trxprice = round($user['Processing_value'] / $trx, 2);
-        $usdprice = round($user['Processing_value'] / $usd, 2);
-        if ($trxprice <= 1) {
-            sendmessage($from_id, $textbotlang['users']['Balance']['changeto'], null, 'HTML');
-            return;
-        }
-        $mainbalancedigitaltron = pay_value("minbalancedigitaltron", $user['lang'] ?? null);
-        $maxbalancedigitaltron = pay_value("maxbalancedigitaltron", $user['lang'] ?? null);
-        if ($user['Processing_value'] < $mainbalancedigitaltron || $user['Processing_value'] > $maxbalancedigitaltron) {
-            $mainbalance = number_format($mainbalancedigitaltron);
-            $maxbalance = number_format($maxbalancedigitaltron);
-            sendmessage($from_id, strtr($textbotlang['users']['Balance']['depositRangePlisio'], ['{mainbalance}' => $mainbalance, '{maxbalance}' => $maxbalance]), null, 'HTML');
-            return;
-        }
-        deletemessage($from_id, $message_id);
-        sendmessage($from_id, $textbotlang['users']['Balance']['linkpayments'], $keyboard, 'HTML');
-        $dateacc = date('Y/m/d H:i:s');
-        $randomString = bin2hex(random_bytes(5));
-        $invoice = "{$user['Processing_value_tow']}|{$user['Processing_value_one']}";
-        $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice) VALUES (?,?,?,?,?,?,?)");
-        $payment_Status = "Unpaid";
-        $Payment_Method = "arze digital offline";
-        $stmt->execute([$from_id, $randomString, $dateacc, $user['Processing_value'], $payment_Status, $Payment_Method, $invoice]);
-        $affilnecurrency = pay_value("walletaddress", $user['lang'] ?? null);
-        $paymentkeyboard = json_encode([
-            'inline_keyboard' => [
-                [
-                    ['text' => $textbotlang['keyboard']['sendDepositLink'], 'callback_data' => "sendresidarze-{$randomString}"]
-                ]
-            ]
-        ]);
-        $formatprice = number_format($user['Processing_value'], 0);
-        $textnowpayments = sprintf($textbotlang['users']['Balance']['transactionCreatedTron'], $randomString, $affilnecurrency, $trxprice, $formatprice);
-        $gethelp = getPaySettingValue('helpofflinearze');
-        if ($gethelp !== null && $gethelp != 2) {
-            $data = json_decode($gethelp, true);
-            if ($data['type'] == "text") {
-                sendmessage($from_id, $data['text'], null, 'HTML');
-            } elseif ($data['type'] == "photo") {
-                sendphoto($from_id, $data['photoid'], null);
-            } elseif ($data['type'] == "video") {
-                sendvideo($from_id, $data['videoid'], null);
-            }
-        }
-        $message_id = sendmessage($from_id, $textnowpayments, $paymentkeyboard, 'HTML');
-        updatePaymentMessageId($message_id, $randomString);
-    } elseif ($datain == "startelegrams") {
-        $rates = rate_arze(['USD', 'Ton']);
-        if ($rates === null) {
-            sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
-            step('home', $from_id);
-            return;
-        }
-        $usd = $rates['USD'];
-        $ton = $rates['Ton'];
-        $usdprice = round($user['Processing_value'] / $usd, 2);
-        $starAmount = $usd * 0.016;
-        $starAmount = intval($user['Processing_value'] / $starAmount);
-        $mainbalance = pay_value("minbalancestar", $user['lang'] ?? null);
-        $maxbalance = pay_value("maxbalancestar", $user['lang'] ?? null);
-        if ($user['Processing_value'] < $mainbalance || $user['Processing_value'] > $maxbalance) {
-            $mainbalance = number_format($mainbalance);
-            $maxbalance = number_format($maxbalance);
-            sendmessage($from_id, strtr($textbotlang['users']['Balance']['depositRange'], ['{mainbalance}' => $mainbalance, '{maxbalance}' => $maxbalance]), null, 'HTML');
-            return;
-        }
-        deletemessage($from_id, $message_id);
-        sendmessage($from_id, $textbotlang['users']['Balance']['linkpayments'], $keyboard, 'HTML');
-        $dateacc = date('Y/m/d H:i:s');
-        $randomString = bin2hex(random_bytes(5));
-        $invoice = "{$user['Processing_value_tow']}|{$user['Processing_value_one']}";
-        $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice) VALUES (?,?,?,?,?,?,?)");
-        $payment_Status = "Unpaid";
-        $Payment_Method = "Star Telegram";
-        $stmt->execute([$from_id, $randomString, $dateacc, $user['Processing_value'], $payment_Status, $Payment_Method, $invoice]);
-        $affilnecurrency = pay_value("walletaddress", $user['lang'] ?? null);
-        $straCreateLink = telegram('createInvoiceLink', [
-            'title' => "Buy for Price {$user['Processing_value']}",
-            'description' => "Buy price",
-            'payload' => $randomString,
-            'currency' => "XTR",
-            'prices' => json_encode(array(
-                array(
-                    'label' => "Price",
-                    'amount' => $starAmount
-                )
-            ))
-        ]);
-        if ($straCreateLink['ok'] == false) {
-            $text_error = json_encode($straCreateLink);
-            sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
-            step('home', $from_id);
-            $ErrorsLinkPayment = sprintf($textbotlang['Admin']['reportgroup']['errorStarInvoice'], $text_error, $from_id, $Payment_Method, $username);
-            if (strlen($setting['Channel_Report']) > 0) {
-                telegram('sendmessage', [
-                    'chat_id' => $setting['Channel_Report'],
-                    'message_thread_id' => $errorreport,
-                    'text' => $ErrorsLinkPayment,
-                    'parse_mode' => "HTML"
-                ]);
-            }
-            return;
-        }
-        $paymentkeyboard = json_encode([
-            'inline_keyboard' => [
-                [
-                    ['text' => $textbotlang['users']['Balance']['payments'], 'url' => $straCreateLink['result']]
-                ]
-            ]
-        ]);
-        $formatprice = number_format($user['Processing_value'], 0);
-        $textstar = sprintf($textbotlang['users']['Balance']['transactionCreatedStar'], $randomString, $starAmount, $formatprice, $formatprice);
-        $gethelp = select("PaySetting", "ValuePay", "NamePay", "helpstar", "select")['ValuePay'];
-        if (intval($gethelp) != 2) {
-            $data = json_decode($gethelp, true);
-            if ($data['type'] == "text") {
-                sendmessage($from_id, $data['text'], null, 'HTML');
-            } elseif ($data['type'] == "photo") {
-                sendphoto($from_id, $data['photoid'], null);
-            } elseif ($data['type'] == "video") {
-                sendvideo($from_id, $data['videoid'], null);
-            }
-        }
-        $message_id = sendmessage($from_id, $textstar, $paymentkeyboard, 'HTML');
-        updatePaymentMessageId($message_id, $randomString);
+    if ((include __DIR__ . '/topup_gateway_dispatch.php') !== 1) {
+        return;
     }
 }
 if (preg_match('/Confirmpay_user_(\w+)_(\w+)/', $datain, $dataget)) {
@@ -5923,32 +5220,156 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     }
     Editmessagetext($from_id, $message_id, $built['text'], $built['keyboard'], 'HTML');
     update("Payment_report", "message_id", (int) $message_id, "id_order", $built['randomString']);
-} elseif (preg_match('/^plisioreissue:(.+)$/', $datain, $prm)) {
-    // same reissue mechanism as cardreissue:, adapted for plisio's richer
-    // 3-way error shape (rate fetch failed / amount below plisio's $1
-    // floor / the plisio API itself returned an error) - each needs its
-    // own message, same as the original amount-pick flow shows.
-    $oldRow = select("Payment_report", "*", "id_order", $prm[1], "select");
-    if (!is_array($oldRow) || (string) $oldRow['id_user'] !== (string) $from_id || $oldRow['payment_Status'] !== 'expire') {
+} elseif (preg_match('/^trxcheck:([a-z0-9]+)$/', $datain, $tx_m)) {
+    // One tap does both: look for the transfer first, and only ask for a hash
+    // if the chain has nothing yet. TRON carries no note, so the amount is what
+    // identifies the invoice - and a customer who rounded it needs the hash.
+    $tx_row = select("Payment_report", "*", "id_order", $tx_m[1], "select");
+    if (!is_array($tx_row) || (string) $tx_row['id_user'] !== (string) $from_id) {
         return;
     }
-    Editmessagetext($from_id, $message_id, $textbotlang['users']['Balance']['linkpayments'], null, 'HTML');
-    $built = plisio_invoice_build($from_id, $user['lang'] ?? 'fa', $oldRow['price'], $oldRow['id_invoice'], $textbotlang, $setting);
-    if ($built['error'] === 'rate' || $built['error'] === 'api') {
-        Editmessagetext($from_id, $message_id, $textbotlang['users']['Balance']['errorLinkPayment'], null, 'HTML');
-        if ($built['error'] === 'api' && strlen($setting['Channel_Report']) > 0) {
-            $ErrorsLinkPayment = sprintf($textbotlang['Admin']['reportgroup']['errorCryptoLink'], $built['apiMessage'], $from_id, $username);
-            telegram('sendmessage', [
-                'chat_id' => $setting['Channel_Report'],
-                'message_thread_id' => $errorreport,
-                'text' => $ErrorsLinkPayment,
-                'parse_mode' => "HTML"
-            ]);
+    $tx_lang = $user['lang'] ?? 'fa';
+    if ($tx_row['payment_Status'] === 'paid') {
+        telegram('answerCallbackQuery', [
+            'callback_query_id' => $callback_query_id,
+            'text' => topup_paid_alert_for($tx_lang, 'trx', $textbotlang['users']['Balance']['topupPaidAlert']),
+            'show_alert' => true,
+        ]);
+        return;
+    }
+    $tx_incoming = trx_incoming_transfers(topup_trx_address($tx_lang), 0, 200);
+    if (trx_payment_settled($tx_row, $tx_incoming)) {
+        $tx_claim = $pdo->prepare("UPDATE Payment_report SET payment_Status = 'paid' WHERE id_order = ? AND payment_Status = 'Unpaid'");
+        $tx_claim->execute([$tx_row['id_order']]);
+        if ($tx_claim->rowCount() === 1) {
+            DirectPayment($tx_row['id_order'], "images.jpg");
         }
         return;
     }
+    // say plainly that nothing has arrived yet, then ask for the hash - one
+    // answer per callback, so the alert and the prompt are separate things
+    telegram('answerCallbackQuery', [
+        'callback_query_id' => $callback_query_id,
+        'text' => topup_notseen_caption_for($tx_lang, 'trx', $textbotlang['users']['Balance']['trxNotSeenYet']),
+        'show_alert' => true,
+    ]);
+    // one prompt at a time: tapping again replaces the old one instead of
+    // leaving a column of identical requests behind
+    $tx_prev = (int) (select("user", "*", "id", $from_id, "select")['topup_range_msg_id'] ?? 0);
+    if ($tx_prev > 0) {
+        deletemessage($from_id, $tx_prev);
+    }
+    $tx_cancelKb = json_encode(['inline_keyboard' => [
+        [['text' => $textbotlang['bottext']['btn_close'] ?? '❌', 'callback_data' => 'topup_range_close', 'style' => 'danger']],
+    ]]);
+    $tx_prompt = sendmessage($from_id, topup_askhash_caption_for($tx_lang, 'trx', $textbotlang['users']['Balance']['trxAskHash']), $tx_cancelKb, 'HTML');
+    $tx_promptId = (int) ($tx_prompt['result']['message_id'] ?? 0);
+    update("user", "topup_range_msg_id", (string) $tx_promptId, "id", $from_id);
+    step("trxhash:{$tx_m[1]}:{$tx_promptId}", $from_id);
+} elseif (preg_match('/^trxhash:([a-z0-9]+):([0-9]+)$/', (string) $user['step'], $tx_m) && $datain == '') {
+    // the hash the customer pasted, checked against the chain rather than
+    // against an admin's patience
+    $tx_row = select("Payment_report", "*", "id_order", $tx_m[1], "select");
+    if (!is_array($tx_row) || (string) $tx_row['id_user'] !== (string) $from_id) {
+        step('home', $from_id);
+        return;
+    }
+    $tx_lang = $user['lang'] ?? 'fa';
+    $tx_promptId = (int) $tx_m[2];
+    // whatever they sent goes, right or wrong - a rejected attempt should
+    // not leave a trail above the prompt
+    deletemessage($from_id, (int) ($update['message']['message_id'] ?? 0));
+    if (!trx_verify_hash($tx_row, $text, topup_trx_address($tx_lang))) {
+        // the complaint belongs on the prompt itself, quoted above it, so the
+        // customer reads what went wrong and what to send in one place
+        $tx_cancelKb = json_encode(['inline_keyboard' => [
+            [['text' => $textbotlang['bottext']['btn_close'] ?? '❌', 'callback_data' => 'topup_range_close', 'style' => 'danger']],
+        ]]);
+        Editmessagetext($from_id, $tx_promptId,
+            '<blockquote>' . topup_hashbad_caption_for($tx_lang, 'trx', $textbotlang['users']['Balance']['trxHashInvalid']) . "</blockquote>\n\n"
+            . topup_askhash_caption_for($tx_lang, 'trx', $textbotlang['users']['Balance']['trxAskHash']),
+            $tx_cancelKb, 'HTML');
+        step("trxhash:{$tx_m[1]}:{$tx_promptId}", $from_id);
+        return;
+    }
+    topup_amount_prompt_clear($from_id);
+    step('home', $from_id);
+    $tx_claim = $pdo->prepare("UPDATE Payment_report SET payment_Status = 'paid' WHERE id_order = ? AND payment_Status = 'Unpaid'");
+    $tx_claim->execute([$tx_row['id_order']]);
+    if ($tx_claim->rowCount() === 1) {
+        DirectPayment($tx_row['id_order'], "images.jpg");
+    }
+} elseif (preg_match('/^toncheck:([a-z0-9]+)$/', $datain, $tc_m)) {
+    // The customer asking "have you seen it yet?". It is the same check the
+    // cron makes every few minutes - offered here because waiting in front of
+    // an invoice with no feedback is the worst part of paying on-chain.
+    $tc_row = select("Payment_report", "*", "id_order", $tc_m[1], "select");
+    if (!is_array($tc_row) || (string) $tc_row['id_user'] !== (string) $from_id) {
+        return;
+    }
+    if ($tc_row['payment_Status'] === 'paid') {
+        telegram('answerCallbackQuery', [
+            'callback_query_id' => $callback_query_id,
+            'text' => topup_paid_alert_for($user['lang'] ?? 'fa', 'ton', $textbotlang['users']['Balance']['topupPaidAlert']),
+            'show_alert' => true,
+        ]);
+        return;
+    }
+    // a callback query can be answered exactly once, so the answer has to be
+    // the result - reading the chain first costs a fraction of a second and
+    // Telegram allows far longer than that
+    $tc_incoming = ton_incoming_transfers(topup_ton_address($user['lang'] ?? 'fa'), 100);
+    if (!ton_payment_settled($tc_row, $tc_incoming)) {
+        telegram('answerCallbackQuery', [
+            'callback_query_id' => $callback_query_id,
+            'text' => topup_notseen_caption_for($user['lang'] ?? 'fa', 'ton', $textbotlang['users']['Balance']['tonNotSeenYet']),
+            'show_alert' => true,
+        ]);
+        return;
+    }
+    // claim it before crediting, so the cron cannot pay the same transfer twice
+    $tc_claim = $pdo->prepare("UPDATE Payment_report SET payment_Status = 'paid' WHERE id_order = ? AND payment_Status = 'Unpaid'");
+    $tc_claim->execute([$tc_row['id_order']]);
+    if ($tc_claim->rowCount() === 1) {
+        DirectPayment($tc_row['id_order'], "images.jpg");
+    }
+} elseif (preg_match('/^gwreissue:([a-z0-9]+):(.+)$/', $datain, $grm)) {
+    // "ساخت فاکتور جدید" under an expired invoice. Every online gateway's
+    // builder shares one contract, so the only thing that differs here is which
+    // one to call - Plisio had this to itself until NowPayments and Star
+    // Telegram were brought onto the same footing.
+    $gr_builders = [
+        'plisio' => 'plisio_invoice_build',
+        'nowpayment' => 'nowpayment_invoice_build',
+        'startelegrams' => 'star_invoice_build',
+        'ton' => 'ton_invoice_build',
+        'trx' => 'trx_invoice_build',
+    ];
+    $gr_key = $grm[1];
+    if (!isset($gr_builders[$gr_key])) {
+        return;
+    }
+    $oldRow = select("Payment_report", "*", "id_order", $grm[2], "select");
+    if (!is_array($oldRow) || (string) $oldRow['id_user'] !== (string) $from_id || $oldRow['payment_Status'] !== 'expire') {
+        return;
+    }
+    Editmessagetext($from_id, $message_id, topup_linkmsg_for($user['lang'] ?? 'fa', $gr_key, $textbotlang['users']['Balance']['linkpayments']), null, 'HTML');
+    $built = $gr_builders[$gr_key]($from_id, $user['lang'] ?? 'fa', $oldRow['price'], $oldRow['id_invoice'], $textbotlang, $setting);
     if ($built['error'] === 'toolow') {
-        Editmessagetext($from_id, $message_id, $textbotlang['users']['Balance']['nowpayments'], null, 'HTML');
+        [$gr_min, $gr_max] = topup_effective_limits($user['lang'] ?? 'fa', $gr_key);
+        Editmessagetext($from_id, $message_id, topup_range_text($user['lang'] ?? 'fa', $gr_key, $gr_min, $gr_max, $textbotlang), null, 'HTML');
+        return;
+    }
+    if ($built['error'] !== null) {
+        Editmessagetext($from_id, $message_id, $textbotlang['users']['Balance']['errorLinkPayment'], null, 'HTML');
+        if ($built['error'] === 'api' && strlen($setting['Channel_Report']) > 0) {
+            telegram('sendmessage', [
+                'chat_id' => $setting['Channel_Report'],
+                'message_thread_id' => $errorreport,
+                'text' => sprintf($textbotlang['Admin']['reportgroup']['errorCryptoLink'], $built['apiMessage'], $from_id, $username),
+                'parse_mode' => "HTML"
+            ]);
+        }
         return;
     }
     Editmessagetext($from_id, $message_id, $built['text'], $built['keyboard'], 'HTML');
@@ -6091,14 +5512,45 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     update("Payment_report", "at_updated", $dateacc, "id_order", $PaymentReport['id_order']);
 } elseif ($user['step'] == "cart_to_cart_user") {
     $format_balance = number_format($user['Balance'], 0);
-    if (!$photo or isset($update['message']['media_group_id'])) {
+    // a receipt can be a photo (with or without a caption) OR plain text -
+    // people who bank by SMS often have no screenshot to send, just the bank's
+    // message, and refusing that used to leave them with no way to pay.
+    // An album is still refused: the admin notification below sends exactly
+    // one photo, so extra images would be silently dropped.
+    if (isset($update['message']['media_group_id'])) {
         sendmessage($from_id, $textbotlang['users']['Balance']['onlyOneImage'], null, 'HTML');
+        return;
+    }
+    $rcpt_hasPhoto = !empty($photo);
+    $rcpt_text = trim((string) $text);
+    // A text receipt has to carry at least one digit: every real bank SMS
+    // states an amount, while none of the bot's own menu-button labels contain
+    // a digit in any of the 5 languages. That distinction matters because a few
+    // main-menu buttons (تعرفه اشتراک ها، زیر مجموعه گیری، تمدید سرویس،
+    // گردونه شانس، درخواست نمایندگی) are dispatched further down index.php than
+    // this step, so their label text reaches here - without this check, tapping
+    // one of them mid-flow would be forwarded to the admin as "the receipt" and
+    // would flip the invoice to waiting.
+    $rcpt_hasText = ($rcpt_text !== '' && preg_match('/[0-9۰-۹٠-٩]/u', $rcpt_text) === 1);
+    if (!$rcpt_hasPhoto && !$rcpt_hasText) {
+        sendmessage($from_id, $textbotlang['users']['Balance']['receiptNeedsPhotoOrText'], null, 'HTML');
         return;
     }
     step('home', $from_id);
     $PaymentReport = select("Payment_report", "*", "id_order", $user['Processing_value']);
     if ($PaymentReport == false) {
         sendmessage($from_id, $textbotlang['users']['infoFetchErrorRestart'], $keyboard, 'HTML');
+        return;
+    }
+    // The invoice can settle itself between tapping "رسید را بفرستید" and
+    // actually sending the receipt - SMS Forward confirms from the bank SMS,
+    // croncard confirms on a timer. Without this check the receipt would still
+    // be forwarded to the admins AND the row would be pushed back to 'waiting'
+    // further down, which re-opens an already-credited payment: the admin's
+    // "paid/reject" guard would no longer trip, so tapping تایید would run
+    // DirectPayment() a second time and credit the user twice.
+    if ($PaymentReport['payment_Status'] == "paid") {
+        sendmessage($from_id, $textbotlang['users']['Balance']['alreadyConfirmed'], $keyboard, 'HTML');
         return;
     }
     $Confirm_pay = json_encode([
@@ -6197,16 +5649,27 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
         $rcpt_sent = sendmessage($from_id, $textbotlang['users']['Balance']['sendReceipt'], $keyboard, 'HTML');
         update("Payment_report", "receipt_msg_id", intval($rcpt_sent['result']['message_id'] ?? 0), "id_order", $PaymentReport['id_order']);
     }
+    // both the caption and a text receipt are user-supplied and go out with
+    // parse_mode HTML - escaped so a receipt containing < > & can't break the
+    // admin's message (which would make the send fail outright, silently
+    // costing the admin the receipt)
+    $rcpt_caption = htmlspecialchars((string) $caption, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $rcpt_textBlock = $textbotlang['users']['Balance']['textReceiptFromUser'] . "\n<blockquote>"
+        . htmlspecialchars($rcpt_text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</blockquote>';
     foreach ($admin_ids as $id_admin) {
         $adminrulecheck = select("admin", "*", "id_admin", $id_admin, "select");
         if ($adminrulecheck['rule'] == "support")
             continue;
-        telegram('sendphoto', [
-            'chat_id' => $id_admin,
-            'photo' => $photoid,
-            'caption' => $caption,
-            'parse_mode' => "HTML",
-        ]);
+        if ($rcpt_hasPhoto) {
+            telegram('sendphoto', [
+                'chat_id' => $id_admin,
+                'photo' => $photoid,
+                'caption' => $rcpt_caption,
+                'parse_mode' => "HTML",
+            ]);
+        } else {
+            sendmessage($id_admin, $rcpt_textBlock, null, 'HTML');
+        }
         sendmessage($id_admin, $textsendrasid, $Confirm_pay, 'HTML');
     }
     update("Payment_report", "payment_Status", "waiting", "id_order", $PaymentReport['id_order']);
@@ -7223,6 +6686,16 @@ if (in_array($from_id, $admin_ids))
 // if nothing in this update produced a bot response and the user sent plain text,
 // reply with the customizable "unknown message" (text/sticker/reaction from 📝 manager)
 if (empty($GLOBALS['bt_any_reply']) && !empty($text) && $datain == '') {
+    // On the custom-amount step this is not an unknown message - it is an
+    // amount that is not a number. Getting this far is what proves it was not
+    // a menu button or a command: those all have their own branches, some of
+    // them below the amount step, so a guard up there would have to enumerate
+    // them and would rot the moment one was added.
+    if (preg_match('/^topup_custom:([a-z0-9]+)$/', (string) ($user['step'] ?? ''), $unk_tp)) {
+        $GLOBALS['topup_amount_origin_step'] = "topup_custom:{$unk_tp[1]}";
+        topup_notnumber_notice($from_id, $user['lang'] ?? 'fa', $unk_tp[1], $textbotlang, (int) ($update['message']['message_id'] ?? 0));
+        return;
+    }
     $unk_text = bottext_resolve_key('users.unknownMsg');
     if ($unk_text !== '') {
         sendmessage($from_id, $unk_text, null, 'HTML');

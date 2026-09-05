@@ -7,6 +7,7 @@ return array (
     'resetAllLabel' => '🔁 ریست همه به پیش‌فرض',
     'groupBuyflowLabel' => '🛒 پیام‌های مراحل خرید',
     'groupServicesLabel' => '🛍 پیام‌های سرویس‌های من',
+    'groupTopupLabel' => '💰 پیام‌های افزایش موجودی',
     'btnSettingsLabel' => '🔘 تنظیمات دکمه‌های منوی اصلی',
     'langSwitchLabel' => '🌐 تنظیمات تغییر زبان',
     'groupServicesCaption' => '🛍 <b>پیام‌های سرویس‌های من</b>
@@ -22,9 +23,22 @@ return array (
 
 📌 محصول دو تا کپشن داره: یکی برای وقتی «دسته بندی» روشنه، یکی برای وقتی خاموشه. بسته به تنظیمات فروشگاه، فقط یکیشون فعاله.
 
-📌 تأیید خرید هم بسته به نوع خرید (عادی، تخفیف‌دار یا حجم دلخواه) چند کپشن داره؛ دکمه‌های تاییدش بین همه مشترکه.
+📌 تأیید خرید دو کپشن داره: یکی برای خرید عادی و یکی برای خرید عمده؛ دکمه‌های تایید/انصرافش بین هر دو مشترکه.
 
 📌 ظاهر (رنگ، ترتیب و ایموجی) دکمه‌های پنل، دسته‌بندی و محصول هم همینجاست، زیر یک تیتر جدا - نه متن پیام‌ها.
+
+✅ رنگ سبز دکمه یعنی متن یا استیکر اون از قبل ست شده.',
+    'groupTopupCaption' => '💰 <b>پیام‌های افزایش موجودی</b>
+
+کدوم پیام رو می‌خوای تنظیم کنی؟
+
+📌 این‌ها پیام‌های مسیر «💰 افزایش موجودی» هستن - از لحظه‌ای که کاربر مبلغ رو می‌زنه تا وقتی کیف پولش شارژ می‌شه.
+
+📌 پیام‌های مربوط به خرید سرویس اینجا نیستن؛ اون‌ها توی 🛒 پیام‌های مراحل خرید مدیریت می‌شن.
+
+<blockquote>💡 خودِ بسته‌های شارژ (مبلغ‌ها، حداقل و حداکثر مبلغ دلخواه، و چیدمان دکمه‌ها) اینجا نیست - از این مسیر تنظیم می‌شه:
+
+🏬 تنظیمات فروشگاه ← 🏦 بسته‌های شارژ ← 💳 کارت به کارت</blockquote>
 
 ✅ رنگ سبز دکمه یعنی متن یا استیکر اون از قبل ست شده.',
     'backToListLabel' => '🔙 برگشت به لیست',
@@ -58,12 +72,17 @@ return array (
     ),
     'items' => 
     array (
-      0 => 
+      0 =>
       array (
         'label' => '👋 متن خوش‌آمدید',
         'key' => 'users.text_start',
       ),
-      1 => 
+      'back' =>
+      array (
+        'label' => '🏠 پیام بازگشت به صفحه اصلی',
+        'key' => 'users.back',
+      ),
+      1 =>
       array (
         'label' => 'دکمه: خرید اشتراک',
         'key' => 'textbot.sell',
@@ -128,7 +147,12 @@ return array (
         'label' => 'دکمه: سؤالات متداول',
         'key' => 'textbot.faq',
       ),
-      16 => 
+      14 =>
+      array (
+        'label' => '📦 پیام بعد از دریافت اکانت تست',
+        'key' => 'textbot.afterText',
+      ),
+      16 =>
       array (
         'label' => '⏰ پیام اتمام اکانت تست',
         'key' => 'textbot.testExpired',
@@ -197,14 +221,13 @@ return array (
       ),
       28 => 
       array (
-        'label' => '✏️ ویرایش کپشن تأیید خرید (خرید عادی)',
-        'key' => 'users.sell.preInvoice',
+        'label' => '✏️ کپشن تأیید خرید (خرید عادی)',
+        'key' => 'textbot.preInvoice',
         'group' => 'buyflow',
         'section' => 'confirm',
       ),
-      29 => 
       array (
-        'label' => '✏️ ویرایش کپشن تأیید خرید (حجم دلخواه)',
+        'label' => '✏️ کپشن تأیید خرید (خرید عمده)',
         'key' => 'users.sell.preInvoice2',
         'group' => 'buyflow',
         'section' => 'confirm',
@@ -279,20 +302,56 @@ return array (
       array (
         'label' => '⏳ پیام «در حال ساخت لینک پرداخت»',
         'key' => 'users.Balance.linkpayments',
-        'group' => 'buyflow',
-        'section' => 'processing',
+        'group' => 'topup',
+        'section' => 'topup_flow',
+      ),
+      array (
+        'label' => '🎁 صفحه‌ی ورود کد تخفیف + دکمه‌هایش',
+        'key' => 'users.Balance.topupDiscPrompt',
+        'group' => 'topup',
+        'section' => 'topup_flow',
+      ),
+      array (
+        'label' => '❌ پیام کد تخفیف نامعتبر',
+        'key' => 'users.Balance.topupDiscInvalid',
+        'group' => 'topup',
+        'section' => 'topup_flow',
+      ),
+      array (
+        'label' => '✅ پیام فعال شدن کد تخفیف',
+        'key' => 'users.Balance.topupDiscActivated',
+        'group' => 'topup',
+        'section' => 'topup_flow',
+      ),
+      array (
+        'label' => '🎟 نمایش تخفیف کددار در روش پرداخت',
+        'key' => 'users.Balance.topupDiscActiveBlock',
+        'group' => 'topup',
+        'section' => 'topup_flow',
+      ),
+      array (
+        'label' => '🎯 نمایش تخفیف خودکار در روش پرداخت',
+        'key' => 'users.Balance.topupDiscAutoBlock',
+        'group' => 'topup',
+        'section' => 'topup_flow',
+      ),
+      array (
+        'label' => '🧾 پیام «رسید خود را بفرستید»',
+        'key' => 'users.Balance.askReceiptImage',
+        'group' => 'topup',
+        'section' => 'topup_flow',
+      ),
+      array (
+        'label' => '❌ خطای رسید نامعتبر',
+        'key' => 'users.Balance.receiptNeedsPhotoOrText',
+        'group' => 'topup',
+        'section' => 'topup_flow',
       ),
       array (
         'label' => '♻️ پیام «در حال ساخت سرویس»',
         'key' => 'users.sell.creating',
         'group' => 'buyflow',
         'section' => 'processing',
-      ),
-      array (
-        'label' => '🧾 متن پیش‌فاکتور',
-        'key' => 'textbot.preInvoice',
-        'group' => 'buyflow',
-        'section' => 'preinvoice_afterpay',
       ),
       array (
         'label' => '🛍️ پیام بعد از خرید',
@@ -313,22 +372,26 @@ return array (
       array (
         'label' => '🚀 پیام «رسید پرداخت ارسال شد» (در انتظار تایید)',
         'key' => 'users.Balance.sendReceipt',
-        'group' => 'buyflow',
-        'section' => 'balance_topup',
-      ),
-      array (
-        'label' => '💲 پیام و دکمه‌ی تایید شارژ کیف پول',
-        'key' => 'users.Balance.chargeSuccess',
-        'group' => 'buyflow',
-        'section' => 'balance_topup',
+        'group' => 'topup',
+        'section' => 'topup_flow',
       ),
       array (
         'label' => '⚠️ هشدار مبلغ دقیق (کارت به کارت رندوم)',
         'key' => 'textbot.cardRandomAmountNotice',
-        'group' => 'buyflow',
-        'section' => 'balance_topup',
+        'group' => 'topup',
+        'section' => 'topup_flow',
       ),
       array (
+        'label' => '💲 پیام و دکمه‌ی تایید شارژ کیف پول',
+        'key' => 'users.Balance.chargeSuccess',
+        'group' => 'topup',
+        'section' => 'topup_done',
+      ),
+      array (
+        // deliberately ungrouped: it is opened from inside the
+        // users.Balance.chargeSuccess edit screen and its back button returns
+        // there, so giving it a second entry point in the 💰 group would make
+        // that back button ambiguous (see the $bt_skip_keys note in keyboard.php)
         'label' => '🎁 پیام تخفیف (وقتی تخفیف روی شارژ اعمال بشه)',
         'key' => 'users.Balance.chargeSuccessDiscount',
       ),
@@ -517,7 +580,134 @@ return array (
       'addedNotice5' => '💰کاربر گرامی مبلغ %s تومان به موجودی شما اضافه گردید.',
       'confirmError' => '❌ خطایی در تایید  انجام شده است لطفا مراحل پرداخت را مجددا انجام دهید',
       'depositRange' => '❌ حداقل مبلغ واریزی این روش پرداخت باید {mainbalance} و حداکثر {maxbalance} تومان باشد',
+
+
+      'groupMethodCaption' => '💳 <b>{group}</b>
+
+⬇️ یکی از روش‌های پرداخت زیر را انتخاب کنید:',
+      'groupBackBtn' => '🔙 بازگشت به روش‌های پرداخت',
+
+
+      'trxInvoiceCaption' => '⚡ <b>پرداخت TRX</b>
+
+📊 مبلغ شبکه: TRX <code>{trx}</code>
+💰 معادل تومانی: {price} تومان (نرخ نوبیتکس)
+🔍 تقریباً ۱ TRX ≈ {rate} تومان
+
+🕐 مهلت پرداخت: <b>{minutes} دقیقه</b> (قیمت TRX مدام عوض می‌شود).
+
+📋 جزئیات برای کپی — دو مقدار زیر را با لمس کپی کنید.
+
+مقصد (ولت دریافت):
+<code>{address}</code>
+
+مقدار واریز (TRX):
+<code>{trx}</code>
+
+<blockquote>⚠️ مبلغ را <b>دقیقاً</b> همین‌قدر بفرستید، تا آخرین رقم اعشار. ربات پرداخت شما را از روی همین عدد می‌شناسد؛ شبکهٔ ترون کامنت ندارد.
+
+اگر مبلغ را رند فرستادید یا زودتر می‌خواهید تأیید شود، دکمهٔ «ثبت پرداخت» را بزنید.</blockquote>',
+      'trxCopyAmountBtn' => 'کپی مبلغ TRX',
+      'trxCopyAddressBtn' => 'کپی آدرس',
+      'trxCheckBtn' => 'ثبت پرداخت',
+      'trxAskHash' => '🔗 <b>هش تراکنش (TxID) را بفرستید</b>
+
+۶۴ کاراکتر انگلیسی و عدد است. از دو جا می‌توانید برش دارید:
+
+📱 تاریخچهٔ کیف پول خودتان — روی همان تراکنش بزنید.
+🌐 سایت <a href="https://tronscan.org">tronscan.org</a> — آدرس مقصد را جست‌وجو کنید و تراکنش خودتان را پیدا کنید.
+
+⚠️ مبلغ تراکنش باید <b>دقیقاً</b> همان عددی باشد که در فاکتور نوشته شده.',
+      'trxHashInvalid' => '❌ <b>این هش پذیرفته نشد.</b>
+
+یا آنچه فرستادید هش نبود، یا تراکنش با فاکتور نمی‌خواند. بررسی کنید: ۶۴ کاراکتر انگلیسی و عدد باشد، تراکنش موفق بوده باشد، به همین آدرس رفته باشد، و مبلغش <b>دقیقاً</b> همان عدد فاکتور باشد.',
+      'trxNotSeenYet' => '⏳ هنوز واریزی با این مبلغ روی زنجیره دیده نشد. اگر همین الان فرستادید کمی صبر کنید، یا هش تراکنش را بفرستید.',
+      'trxNoAddress' => '❌ آدرس کیف پول TRX هنوز توسط مدیر تنظیم نشده است. لطفاً روش دیگری را انتخاب کنید.',
+      'tonInvoiceCaption' => '💎 <b>پرداخت TON</b>
+
+📊 مبلغ شبکه: TON <code>{ton}</code>
+💰 معادل تومانی: {price} تومان (نرخ نوبیتکس)
+🔍 تقریباً ۱ TON ≈ {rate} تومان
+
+🕐 مهلت پرداخت: <b>{minutes} دقیقه</b> (قیمت TON مدام عوض می‌شود).
+
+📋 <b>جزئیات برای کپی</b> — سه مقدار زیر را می‌توانید از دکمه‌های «کپی» بردارید؛ کامنت باید <b>عیناً</b> در تراکنش باشد.
+
+مقصد (ولت دریافت):
+<code>{address}</code>
+
+مقدار واریز (TON):
+<code>{ton}</code>
+
+کامنت تراکنش (عیناً همین - ممو تگ):
+<code>{memo}</code>
+
+<blockquote>🌐 دکمهٔ «باز کردن کیف TON» همان مقدار TON و کامنت را به‌صورت خودکار در <b>Tonkeeper</b> اضافه می‌کند.
+
+⚠️ با ولت‌های دیگری هم می‌توانید پرداخت کنید (Tonhub، MyTonWallet، کیف پول تلگرام و…)؛ کافی است سه مقدار بالا را لمس کنید تا «کپی» شود.
+
+کامنت را حتماً وارد کنید. بدون آن، پرداخت شما قابل شناسایی نیست.</blockquote>',
+      'tonOpenWalletBtn' => 'باز کردن کیف TON',
+      'tonCopyAddressBtn' => 'کپی آدرس',
+      'tonCopyAmountBtn' => 'کپی مبلغ TON',
+      'tonCopyMemoBtn' => 'کپی کامنت',
+      'tonCheckBtn' => 'ثبت پرداخت',
+      'tonBackMethodBtn' => 'بازگشت به روش پرداخت',
+      'tonBackBtn' => 'بازگشت',
+      'tonNotSeenYet' => '⏳ هنوز واریزی با این کامنت روی زنجیره دیده نشد.
+
+اگر همین الان پرداخت کردید کمی صبر کنید؛ ربات خودش هم مدام چک می‌کند و به‌محض رسیدن، کیف پول شما شارژ می‌شود.',
+      'tonNoAddress' => '❌ آدرس کیف پول TON هنوز توسط مدیر تنظیم نشده است. لطفاً روش دیگری را انتخاب کنید.',
+      'depositRangeOnline' => '❌ حداقل مبلغ واریزی این روش پرداخت باید 1 دلار معادل {mainbalance} تومان باشد و حداکثر مبلغ {maxbalance} تومان معادل {maxusd} دلار باشد',
+      'customAmountPromptTitleOnline' => '#️⃣ <b>مبلغ دلخواه</b>
+
+فقط عدد به {currency} در چت بفرستید.
+
+<blockquote>مبلغ شما باید حداقل <b>1</b> دلار معادل <b>{minprice}</b> {currency} باشد تا درگاه آنلاین برای شما ارسال شود.</blockquote>
+
+در صورت اشتباه می‌توانید با دکمه‌های زیر برگردید.
+
+⬅️ عدد را بدون حرف یا کاراکتر اضافی بفرستید.',
       'depositRangePlisio' => '❌ حداقل مبلغ واریزی این روش پرداخت باید {mainbalance} و حداکثر {maxbalance} تومان باشد',
+      'nowpaymentInvoiceCaption' => '
+<b>💲 جهت افزایش اعتبار کیف پول خود از طریق ارز دیجیتال روی دکمه پرداخت در انتهای پیام کلیک کنید</b>
+
+⚠️ توجه: زمان پرداخت {minutes} دقیقه می باشد پس از {minutes} دقیقه تراکنش لغو خواهد شد
+
+🧾 شماره فاکتور : {order}
+💰 مبلغ فاکتور : {price} تومان
+📊 قیمت دلار: در این لحظه {usd} تومان
+
+
+<blockquote>⚠️ پس از پرداخت، در صورتی که مبلغ تراکنش به‌درستی واریز شده باشد، کیف پول شما حداکثر تا ۱۵ دقیقه آینده به‌صورت خودکار شارژ خواهد شد.</blockquote>
+
+
+جهت پرداخت از دکمه زیر استفاده کنید 👇🏻',
+      'starInvoiceCaption' => '✅ تراکنش شما ایجاد شد
+
+🛒 کد پیگیری: <code>{order}</code>
+💲 مبلغ تراکنش: {stars} ⭐ (معادل {price} تومان)
+
+📌 لطفاً مبلغ {price} تومان را به استار تلگرام تبدیل کرده و واریز نمایید.
+
+💢 نکات مهم قبل از پرداخت: 👇
+🔹 این تراکنش {minutes} دقیقه معتبر است؛ بعد از انقضا از واریز خودداری کنید.
+
+✅ در صورت مشکل، با پشتیبانی در ارتباط باشید.',
+
+      'topupMinUsdError' => '❌ خطا
+    کمترین مبلغ برای  پرداخت در این درگاه 1 دلار معادل {price} تومان می باشد.',
+      'topupPaidAlert' => '✅ پرداخت شما با موفقیت انجام شد و کیف پول شما شارژ شد.',
+      'paidInvoiceBtn' => '✅ پرداخت شد',
+      'topupInvoiceExpiredCaption' => '<b>فاکتور منقضی شد</b>
+
+مهلت پرداخت این فاکتور به پایان رسیده است.
+
+دیگر از این لینک استفاده نکنید — ممکن است پرداخت شما ثبت نشود.
+
+برای دریافت یک لینک پرداخت تازه با همین مبلغ (<b>{price} تومان</b>)، دکمهٔ زیر را بزنید.
+
+«ساخت فاکتور جدید» یک لینک و شمارهٔ فاکتور تازه نشان می‌دهد.',
       'cardRetrieveError' => '❌ خطای داخلی در بازیابی کارت بانکی رخ داد. لطفاً بعداً تلاش کنید.',
       'noActiveCard' => '❌ کارت بانکی فعالی برای این روش پرداخت یافت نشد. لطفاً بعداً تلاش کنید یا با پشتیبانی تماس بگیرید.',
       'cardInvoiceExpiredCaption' => '<b>فاکتور منقضی شد</b>
@@ -543,10 +733,15 @@ return array (
       'receiptCooldown' => '❗ شما در ۲ دقیقه اخیر رسید ارسال کرده اید لطفا ۲ دقیقه دیگر رسید جدید را ارسال نمایید.',
       'alreadyConfirmed' => '❗️ تراکنش شما توسط ربات تایید گردیده است.',
       'transactionExpired' => '❗زمان این تراکنش به پایان رسیده و امکان پرداخت این تراکنش وجود ندارد.',
-      'askReceiptImage' => '🖼 تصویر رسید خود را ارسال نمایید',
+      'askReceiptImage' => '🧾 رسید پرداخت خود را ارسال نمایید
+
+🖼 می‌توانید تصویر رسید را بفرستید (در صورت تمایل همراه با توضیح)
+✍️ یا متن پیامک بانکی خود را کپی کرده و همین‌جا ارسال کنید',
       'askReceiptOrTron' => '📌 تصویر واریزی خود یا لینک تراکنش ترون را ارسال نمایید.',
       'restartPurchaseOrPay' => '❌ خطایی رخ داده است لطفا مراحل خرید یا پرداخت  را مجدد انجام دهید',
       'onlyOneImage' => '❌  فقط مجاز به ارسال یک تصویر هستید',
+      'receiptNeedsPhotoOrText' => '❌ لطفاً تصویر رسید را بفرستید، یا متن پیامک بانکی (که مبلغ در آن نوشته شده) را ارسال کنید.',
+      'textReceiptFromUser' => '🧾 <b>رسید متنی کاربر:</b>',
       'receiptSentRenew' => '🚀 رسید شما ارسال و پس از بررسی سرویس شما تمدید خواهد شد',
       'receiptSentExtraVolume' => '🚀 رسید شما ارسال و پس از بررسی  به سرویس شما حجم اضافه خواهد شد.',
       'receiptSentExtraTime' => '🚀 رسید شما ارسال و پس از بررسی به سرویس شما زمان اضافه خواهد شد',
@@ -566,18 +761,6 @@ return array (
 
 ⚠️ توجه: زمان پرداخت {minutes} دقیقه می باشد پس از {minutes} دقیقه تراکنش لغو خواهد شد
 
-🌐 برخی از سایت های داخلی جهت خرید ارز دیجیتال
-
-🔹 swapwallet.app
-🔸 nikpardakht.com
-🔹 webpurse.org
-🔸 bitpin.ir
-🔹 sarmayex.com
-🔸 ok-ex.io
-🔹 nobitex.ir
-🔸 bitbarg.com
-🔹 cafearz.com
-🔸 pay98.app
 🧾 شماره فاکتور : {order}
 💰 مبلغ فاکتور : {price} تومان
 📊 قیمت دلار: در این لحظه {usd} تومان
@@ -591,19 +774,6 @@ return array (
 <b>💲 جهت افزایش اعتبار کیف پول خود از طریق ارز دیجیتال روی دکمه پرداخت در انتهای پیام کلیک کنید</b>
 
 ⚠️ توجه: زمان پرداخت 30 دقیقه می باشد پس از 30 دقیقه تراکنش لغو خواهد شد
-
-🌐 برخی از سایت های داخلی جهت خرید ارز دیجیتال
-
-🔹 swapwallet.app
-🔸 nikpardakht.com
-🔹 webpurse.org
-🔸 bitpin.ir
-🔹 sarmayex.com
-🔸 ok-ex.io
-🔹 nobitex.ir
-🔸 bitbarg.com
-🔹 cafearz.com
-🔸 pay98.app
 
 🧾 شماره فاکتور : %s
 💰 مبلغ فاکتور : %s تومان
@@ -720,6 +890,29 @@ return array (
 
 📨 در صورت مشکل میتوانید با پشتیبانی در ارتباط باشید',
       'selectPaymentGrouped' => '⬇️ یکی از روش‌های پرداخت را انتخاب کنید:',
+      'topupDiscHaveCodeBtn' => '🎁 کد تخفیف دارم',
+      'topupDiscBackBtn' => '🔙 بازگشت به منوی قبل',
+      'topupDiscPrompt' => '🎁 کد تخفیف خود را ارسال کنید:',
+      'topupDiscInvalid' => '❌ {reason}',
+      'topupDiscErrNotFound' => 'این کد معتبر نیست.',
+      'topupDiscErrWrongLang' => 'این کد برای زبان شما نیست.',
+      'topupDiscErrExpired' => 'اعتبار این کد تمام شده است.',
+      'topupDiscErrExhausted' => 'ظرفیت این کد پر شده است.',
+      'topupDiscErrInactive' => 'این کد در حال حاضر فعال نیست.',
+      'topupDiscErrUsed' => 'شما قبلاً از این کد استفاده کرده‌اید.',
+      'topupDiscActivated' => '✅ کد تخفیف با موفقیت فعال شد.',
+      'topupDiscActiveBlock' => '🎟 {title}
+💳 فقط برای: {gateway}
+🔁 قابل استفاده: {uses}
+⏳ اعتبار: {expiry}',
+      'topupDiscAutoBlock' => '🎯 تخفیف خودکار (بدون کد)
+{lines}
+⏳ اعتبار: {expiry}',
+      'topupDiscAutoLine' => '• {gateway}: {value}
+  🔁 قابل استفاده: {uses}',
+      'topupDiscUsesLimited' => '{left} بار از {total} بار',
+      'topupDiscUsesUnlimited' => 'نامحدود',
+      'topupDiscExpiryNone' => 'بدون محدودیت زمانی',
       'pkgPromptTitle' => '#️⃣ <b>مبلغ واریز</b>
 
 مبلغ را از دکمه‌ها انتخاب کنید یا گزینهٔ <b>مبلغ دلخواه</b> را بزنید.
@@ -5458,6 +5651,27 @@ nowpayments.io
       'categoriesSubCaption' => '🗂 <b>دسته‌بندی‌ها</b>
 
 زبان فعلی: <b>{lang}</b>',
+      'groupMethodsBtn' => '🗂 دسته‌بندی درگاه‌ها',
+      'groupMethodsCaption' => '🗂 <b>دسته‌بندی درگاه‌ها</b> — {lang}
+
+وقتی روشن باشه، درگاه‌های هم‌خانواده توی صفحهٔ «روش پرداخت» جمع می‌شن و مشتری اول خانواده رو می‌بینه، بعد درگاه‌های داخلش.
+
+📌 خانواده‌ای که فقط یک درگاه زندهٔ داخلش باشه جمع نمی‌شه — یه ضربهٔ اضافه برای یه دکمه ارزشی نداره.
+📐 چیدمانی که براشون گذاشتی از بین نمی‌ره؛ داخل هر خانواده همون‌طور می‌مونه.
+
+وضعیت فعلی: {state}',
+      'groupMethodsStateOn' => '🟢 روشن',
+      'groupMethodsStateOff' => '🔵 خاموش',
+      'groupMethodsOnBtn' => '🟢 روشن — برای خاموش کردن بزن',
+      'groupMethodsOffBtn' => '🔵 خاموش — برای روشن کردن بزن',
+      'groupBtnsLabel' => '🎛 دکمه‌های دسته‌بندی',
+      'editGroupCaptionBtn' => '✏️ ویرایش کپشن صفحهٔ دسته',
+      'defaultGroupCaptionBtn' => '📋 پیش‌فرض (صفحهٔ دسته)',
+      'askGroupCaption' => '✏️ متن جدید کپشن صفحهٔ دسته رو بفرست
+
+<b>📌 متغیر قابل استفاده</b>
+• <code>{group}</code> نام همون دسته (مثلاً 🪙 درگاه‌های آنلاین ارزی)',
+      'groupCaptionPreviewLabel' => '📋 <b>کپشن صفحهٔ دسته:</b>',
       'renameBtn' => '✏️ نام سفارشی',
       'renameCaption' => '✏️ <b>نام سفارشی</b>
 
@@ -5651,6 +5865,8 @@ nowpayments.io
       'onForLang' => '✅ برای این زبان روشنه',
       'offForLang' => '❌ برای این زبان خاموشه',
       'cardsLabel' => '💳 شماره کارت‌ها',
+      'tonWalletLabel' => '💎 آدرس کیف پول TON',
+      'trxWalletLabel' => '⚡ آدرس کیف پول TRX',
       'walletLabel' => '💼 آدرس ولت',
       'inheritedAs' => 'پیش‌فرض (%s)',
       'notSet' => 'تنظیم نشده',
@@ -5676,6 +5892,29 @@ nowpayments.io
       'colTitle' => 'عنوان',
       'colStatus' => 'وضعیت',
       'colAction' => 'عملیات',
+      'groups' => array(
+        'online' => '🪙 درگاه‌های آنلاین ارزی',
+        'offline' => '⏳ درگاه‌های آفلاین ارزی',
+        'rial' => '🏧 درگاه‌های ریالی',
+      ),
+      'groupNotes' => array(
+        'offline' => '📌 پرداخت این درگاه‌ها مستقیم به کیف پول خودت میاد، پس هر تراکنش باید دستی توسط مدیر تایید بشه.',
+      ),
+      'openGroupBtn' => '📂 باز کردن',
+      'groupCaption' => '<b>{group}</b>
+
+زبان فعلی: <b>{lang}</b>
+
+هر درگاه رو جدا روشن/خاموش کن یا برو داخل تنظیماتش.',
+      'colAlert' => '📌 این ردیف فقط عنوان ستون‌هاست و دکمه نیست.',
+      'nameAlert' => '💳 {name}
+
+{state}
+
+برای تنظیمات، دکمه‌ی «تنظیمات» همین ردیف رو بزن.',
+      'nameAlertOn' => '✅ روشن و در دسترس کاربران این زبان.',
+      'nameAlertLangOff' => '❌ برای این زبان خاموشه.',
+      'nameAlertGlobalOff' => '❌ سوییچ سراسری این درگاه خاموشه.',
       'cartDirectLabel' => '👤 آیدی پشتیبانی (پرداخت مستقیم)',
       'apiKeyLabel' => '🔑 کلید API',
       'merchantLabel' => '🔑 کد پذیرنده (مرچنت)',
@@ -5950,6 +6189,132 @@ nowpayments.io
       'captionPreviewPackagesLabel' => '📋 <b>کپشن متن بسته‌ها:</b>',
       'captionPreviewInvoiceLabel' => '📋 <b>کپشن متن فاکتور:</b>',
       'captionPreviewExpiredLabel' => '📋 <b>کپشن متن منقضی:</b>',
+      'captionPreviewCustomLabel' => '📋 <b>کپشن متن مبلغ دلخواه:</b>',
+      'captionPreviewLabel' => '📋 <b>کپشن صفحه‌ی مبلغ واریز:</b>',
+      'editRangeCaptionBtn' => '✏️ ویرایش کپشن حداقل/حداکثر',
+      'defaultRangeCaptionBtn' => '📋 پیش‌فرض (حداقل/حداکثر)',
+      'askRangeCaption' => '✏️ متن جدید پیام «حداقل و حداکثر مبلغ» رو برای همین درگاه بفرست
+
+{mainbalance} جای حداقل و {maxbalance} جای حداکثر مبلغ می‌شینه.',
+      'captionPreviewRangeLabel' => '📋 <b>پیام حداقل/حداکثر مبلغ:</b>',
+      'editInvoiceCaptionBtn' => '✏️ ویرایش کپشن فاکتور',
+      'defaultInvoiceCaptionBtn' => '📋 پیش‌فرض (فاکتور)',
+      'askInvoiceCaption' => '✏️ متن جدید کپشن فاکتور رو برای همین درگاه بفرست',
+      'editExpCaptionBtn' => '✏️ ویرایش متن فاکتور منقضی',
+      'defaultExpCaptionBtn' => '📋 پیش‌فرض (منقضی)',
+      'askExpCaption' => '✏️ متن جدید فاکتور منقضی رو برای همین درگاه بفرست
+
+{price} جای مبلغ فاکتور می‌شینه.',
+      'invoiceBtnStyleBtn' => '🎨 ظاهر دکمه‌های پرداخت فاکتور',
+      'editMinUsdBtn' => '✏️ ویرایش خطای حداقل ۱ دلار',
+      'defaultMinUsdBtn' => '📋 پیش‌فرض (حداقل ۱ دلار)',
+      'askMinUsd' => '✏️ متن جدید خطای «کمترین مبلغ ۱ دلار» رو برای همین درگاه بفرست
+
+{price} جای معادل تومانی یک دلار می‌شینه.',
+      'captionPreviewMinUsdLabel' => '📋 <b>خطای حداقل ۱ دلار:</b>',
+      'editPaidAlertBtn' => '✏️ ویرایش پیام «پرداخت شد»',
+      'defaultPaidAlertBtn' => '📋 پیش‌فرض (پرداخت شد)',
+      'askPaidAlert' => '✏️ متن جدید پیامی که بعد از پرداخت روی دکمهٔ فاکتور نشون داده می‌شه رو بفرست
+
+⚠️ تلگرام برای Alert حداکثر ۲۰۰ کاراکتر قبول می‌کنه؛ بلندتر از اون کوتاه می‌شه.',
+      'captionPreviewPaidAlertLabel' => '📋 <b>پیام Alert بعد از پرداخت:</b>',
+      'minmaxCaptionOnline' => '#️⃣ <b>حداقل و حداکثر مبلغ دلخواه</b>
+
+این محدودیت فقط روی گزینهٔ «مبلغ دلخواه» همین درگاه/زبون اثر داره؛ مبلغ‌های آماده همیشه قابل انتخابن.
+
+<blockquote>⬇️ حداقل: {min}</blockquote>
+<blockquote>⬆️ حداکثر: {max}</blockquote>
+
+🔒 درگاه‌های آنلاین ارزی زیر ۱ دلار فاکتور نمی‌سازن، پس حداقلِ کمتر از اون قابل تنظیم نیست.',
+      'askMinOnline' => '⬇️ حداقل مبلغ رو به <b>{currency}</b> بفرست.
+
+حداقل مبلغ باید 1 دلار معادل با {minprice} {currency} باشد.',
+      'minUsdFloorText' => '1 دلار معادل {price} {currency}',
+      'minBelowFloor' => '⚠️ حداقل نمی‌تونه کمتر از ۱ دلار (معادل {price} {currency}) باشه.',
+      'editNotNumberBtn' => '✏️ ویرایش خطای «فقط عدد»',
+      'defaultNotNumberBtn' => '📋 پیش‌فرض (فقط عدد)',
+      'askNotNumber' => '✏️ متن جدید خطای «لطفاً فقط عدد وارد کنید» رو برای همین درگاه بفرست',
+      'captionPreviewNotNumberLabel' => '📋 <b>خطای «فقط عدد وارد کنید»:</b>',
+      'editHashBadBtn' => '✏️ ویرایش پیام «هش اشتباه»',
+      'defaultHashBadBtn' => '📋 پیش‌فرض (هش اشتباه)',
+      'askHashBad' => '✏️ متن جدید پیامی که وقتی هش اشتباه باشه نشون داده می‌شه بفرست
+
+این متن به صورت Quote بالای همون پیام «هش تراکنش» می‌آد.',
+      'captionPreviewHashBadLabel' => '📋 <b>پیام «هش اشتباه»:</b>',
+      'editAskHashBtn' => '✏️ ویرایش پیام «هش تراکنش»',
+      'defaultAskHashBtn' => '📋 پیش‌فرض (هش تراکنش)',
+      'askAskHash' => '✏️ متن جدید پیامی که هش تراکنش رو از مشتری می‌خواد بفرست',
+      'captionPreviewAskHashLabel' => '📋 <b>پیام «هش تراکنش»:</b>',
+      'editNotSeenBtn' => '✏️ ویرایش پیام «هنوز دیده نشد»',
+      'defaultNotSeenBtn' => '📋 پیش‌فرض (هنوز دیده نشد)',
+      'askNotSeen' => '✏️ متن جدید پیامی که موقع زدن «ثبت پرداخت» نشون داده می‌شه رو بفرست
+
+⚠️ این پیام به صورت Alert روی صفحه می‌آد، پس تلگرام حداکثر ۲۰۰ کاراکتر قبول می‌کنه.',
+      'captionPreviewNotSeenLabel' => '📋 <b>پیام «هنوز دیده نشد» (Alert):</b>',
+      'editNoAddressBtn' => '✏️ ویرایش پیام «کیف پول تنظیم نشده»',
+      'defaultNoAddressBtn' => '📋 پیش‌فرض (کیف پول تنظیم نشده)',
+      'askNoAddress' => '✏️ متن جدید پیامی که وقتی آدرس کیف پول تنظیم نشده به مشتری نشون داده می‌شه رو بفرست',
+      'captionPreviewNoAddressLabel' => '📋 <b>پیام «کیف پول تنظیم نشده»:</b>',
+      'captionPreviewLinkMsgLabel' => '📋 <b>پیام «در حال ساخت لینک پرداخت»:</b>',
+      'editLinkMsgBtn' => '✏️ ویرایش پیام ساخت لینک',
+      'defaultLinkMsgBtn' => '📋 پیش‌فرض (ساخت لینک)',
+      'askLinkMsg' => '✏️ متن جدید پیام «در حال ساخت لینک پرداخت» رو برای همین درگاه بفرست
+
+(برای برگشت به متن پیش‌فرض، این پیام رو ببند و دکمه‌ی «پیش‌فرض» رو بزن)',
+      'slotSectionLabel' => array(
+        'amount' => '🎛 دکمه‌های صفحه‌ی مبلغ واریز',
+        'custom' => '🎛 دکمه‌های صفحه‌ی مبلغ دلخواه',
+        'invoice' => '🧾 فاکتور و پیام‌هایش',
+        'receipt' => '🧾 مرحله‌ی ارسال رسید',
+      ),
+      'slotSectionAlert' => array(
+        'amount' => '🎛 دکمه‌های زیر، همون‌هایی هستن که کاربر توی صفحه‌ی «مبلغ واریز» می‌بینه. روی هرکدوم بزنی، رنگ و اسم و جاش رو جدا تنظیم می‌کنی.',
+        'custom' => '🎛 دکمه‌های زیر، همون‌هایی هستن که کاربر توی صفحه‌ی «مبلغ دلخواه» می‌بینه. تنظیماتشون از دکمه‌های بالا جداست.',
+        'invoice' => '🧾 موارد زیر مربوط به خودِ فاکتوریه که بعد از انتخاب مبلغ ساخته می‌شه: متنش، متن وقتی منقضی می‌شه، و ظاهر دکمه‌هاش.',
+        'receipt' => '🧾 پیام‌های زیر مربوط به مرحله‌ی آخره: وقتی از کاربر رسید می‌خوایم، وقتی چیز نامعتبری می‌فرسته، و وقتی رسیدش ثبت شد و منتظر تایید مدیره.',
+      ),
+      'slotScreenAmount' => 'صفحه‌ی مبلغ واریز',
+      'slotScreenCustom' => 'صفحه‌ی مبلغ دلخواه',
+      'slotStateCustom' => 'سفارشی ✅',
+      'slotStateDefault' => 'پیش‌فرض',
+      'slotCaption' => '🎛 <b>{button}</b>
+➖➖➖➖➖➖➖➖➖➖
+این دکمه توی <b>{screen}</b> به کاربر نشون داده می‌شه.
+
+وضعیت: <b>{state}</b>
+➖➖➖➖➖➖➖➖➖➖
+👁 ردیف اول، پیش‌نمایش زنده‌ی همون ردیفیه که کاربر می‌بینه 👇',
+      'slotPreviewNote' => '👁 پیش‌نمایش زنده',
+      'backToPrevBtn' => '🔙 بازگشت به منوی قبلی',
+      'hubGroupCaption' => '<b>{group}</b>
+
+زبان فعلی: <b>{lang}</b>
+
+درگاهی که می‌خوای بسته‌هاش رو تنظیم کنی انتخاب کن.',
+      'backPreviewAlert' => '👁 این فقط پیش‌نمایشه.
+
+برای تغییر رنگ و اسم و جاش برو به:
+🎨 شخصی‌سازی پیام‌های ربات ← 💰 افزایش موجودی ← 💳 کپشن و دکمه‌های درگاه‌ها ← درگاه موردنظر',
+      'slotPreviewAlert' => '👁 این ردیف فقط پیش‌نمایشه و کارکرد واقعی نداره — دقیقاً همون‌طوری که کاربر می‌بینتش.',
+      'slotLayoutSuffix' => 'جابه‌جایی این دو دکمه',
+      'slotResetBtn' => '🔁 بازگشت به پیش‌فرض',
+      'slotAskName' => '✏️ اسم جدید این دکمه رو بفرست
+
+(برای برگردوندن به اسم پیش‌فرض، عدد 0 رو بفرست)',
+      'gwListBtn' => '💳 کپشن و دکمه‌های درگاه‌ها',
+      'gwListCaption' => '💳 <b>کپشن و دکمه‌های درگاه‌ها</b>
+
+زبان فعلی: <b>{lang}</b>
+
+درگاهی که می‌خوای متن‌هاش رو عوض کنی انتخاب کن.',
+      'gwEditCaption' => '💳 <b>{gateway}</b>
+
+زبان فعلی: <b>{lang}</b>',
+      'gwGroupCaption' => '<b>{group}</b>
+
+زبان فعلی: <b>{lang}</b>
+
+درگاهی که می‌خوای متن‌هاش رو عوض کنی انتخاب کن.',
       'closeCaptionPromptBtn' => '❌ بستن',
 
       'closeAmountPromptBtn' => '❌ بستن',
@@ -6108,6 +6473,8 @@ nowpayments.io
     ',
     'selectLocation' => '<b>برای خرید، پنل که میخای انتخاب کن!</b>',
     'sell' => '🔐 خرید اشتراک',
+    'tonPayment' => '💎 پرداخت با TON',
+    'trxPayment' => '⚡ پرداخت با TRX',
     'starTelegram' => 'Star Telegram',
     'support' => '☎️ پشتیبانی',
     'tariffList' => '💵 تعرفه اشتراک ها',
@@ -6252,6 +6619,9 @@ nowpayments.io
     'confirmed' => '✅ تایید شده',
     'copyCard' => '💳 کپی شماره کارت',
     'copyCardNumber' => 'کپی شماره کارت',
+    // appended to the copy button only when more than one card is shown, so two
+    // unnamed cards never render the same button text
+    'cardOrdinals' => array('اول', 'دوم', 'سوم', 'چهارم', 'پنجم', 'ششم', 'هفتم', 'هشتم', 'نهم', 'دهم'),
     'createDiscountCode' => '🎁 ساخت کد تخفیف',
     'topupDiscounts' => '🎁 تخفیف شارژ',
     'createGiftCode' => '🎁 ساخت کد هدیه',
@@ -7664,19 +8034,6 @@ nowpayments.io
 
 ⚠️ توجه: زمان پرداخت 30 دقیقه می باشد پس از 30 دقیقه تراکنش لغو خواهد شد
 
-🌐 برخی از سایت های داخلی جهت خرید ارز دیجیتال
-
-🔹 swapwallet.app
-🔸 nikpardakht.com
-🔹 webpurse.org
-🔸 bitpin.ir
-🔹 sarmayex.com
-🔸 ok-ex.io
-🔹 nobitex.ir
-🔸 bitbarg.com
-🔹 cafearz.com
-🔸 pay98.app
-
 🧾 شماره فاکتور : %s
 💰 مبلغ فاکتور : %s تومان
 📊 قیمت دلار: در این لحظه %s تومان
@@ -7970,6 +8327,14 @@ nowpayments.io
 روش پرداخت : تایید خودکار از طریق پیامک بانکی
 %s',
     'smsForwardAmbiguousMatch' => '⚠️ یه پیامک بانکی به مبلغ %s ریال رسید، ولی بیشتر از یک فاکتور کارت‌به‌کارتِ در انتظار دقیقاً همین مبلغ رو داره - برای جلوگیری از اشتباه، هیچ‌کدوم خودکار تایید نشدن. لطفاً دستی بررسی کنید.',
+    'autoConfirmedAdminNotice' => '✅ <b>این فاکتور خودکار تایید شد</b>
+
+شماره فاکتور : <code>%s</code>
+آیدی عددی کاربر : %s
+مبلغ : %s تومان
+روش تایید : %s
+
+⚠️ مبلغ اعمال شده و نیازی به تایید دستی این فاکتور نیست؛ اگر رسیدی برای همین فاکتور بالاتر فرستاده شده، نادیده بگیرید.',
     'newPaymentBalanceCharge' => '
 ⭕️ یک پرداخت جدید انجام شده است .
 افزایش موجودی            
@@ -8298,6 +8663,18 @@ nowpayments.io
 
 ‼️درحال حاظر از روش پرداخت دیگری استفاده کنید',
     'plisioGiftDepositNotice' => '🎁 کاربر عزیز مبلغ %s تومان به عنوان هدیه واریز به حساب شما واریز گردید.',
+    'trxNewPaymentLog' => '⚡ <b>پرداخت TRX دریافت شد</b>
+
+👤 کاربر: %s (<code>%s</code>)
+💰 مبلغ: %s تومان
+📊 دریافتی: %s TRX
+🧾 فاکتور: <code>%s</code>',
+    'tonNewPaymentLog' => '💎 <b>پرداخت TON دریافت شد</b>
+
+👤 کاربر: %s (<code>%s</code>)
+💰 مبلغ: %s تومان
+📊 دریافتی: %s TON
+🧾 فاکتور: <code>%s</code>',
     'plisioNewPaymentLog' => '💵 پرداخت جدید
 - 👤 نام کاربری کاربر : @%s
 - ‏🆔آیدی عددی کاربر : %s
