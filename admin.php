@@ -457,7 +457,7 @@ if (!function_exists('bottext_item_menu_payload')) {
             $bt_extra_note = "\nℹ️ این پیام وقتی نشون داده می‌شه که کاربر داخل «🛍 سرویس‌های من» هیچ سرویس فعالی نداشته باشه.\n";
         }
         if ($bt_key === 'users.status.infoFull') {
-            $bt_extra_note = "\nℹ️ این پیام وقتی نشون داده می‌شه که کاربر روی یکی از سرویس‌هاش (داخل «🛍 سرویس‌های من») بزنه - وضعیت کامل همون سرویس رو نشون می‌ده.\n💡 دکمه‌های زیرش (تا ۱۳ تا، بسته به نوع پنل و تنظیمات فقط بعضی‌هاشون واقعاً نشون داده می‌شن) از دکمه‌ی پایین همین صفحه قابل ویرایشن.\n";
+            $bt_extra_note = "\nℹ️ این پیام وقتی نشون داده می‌شه که کاربر روی یکی از سرویس‌هاش (داخل «🛍 سرویس‌های من») بزنه - وضعیت کامل همون سرویس رو نشون می‌ده.\n🖼 این صفحه حالا با QR سابسکریپشن به‌صورت عکس فرستاده می‌شه، پس متنش کپشن عکسه (سقف ۱۰۲۴ کاراکتر).\n📊 «{location_block}» فقط روی پنل‌های چندنودی (marzban / marzneshin / rebecca) پر می‌شه؛ بقیه‌ی پنل‌ها اون تیکه رو خالی می‌بینن و دکمه‌ی «گزارش مصرف»شون فقط توضیح می‌ده.\n💡 دکمه‌های زیرش (تا ۱۴ تا، بسته به نوع پنل و تنظیمات فقط بعضی‌هاشون واقعاً نشون داده می‌شن) از دکمه‌ی پایین همین صفحه قابل ویرایشن.\n";
         }
         if ($bt_key === 'users.sell.service_sell') {
             $bt_extra_note = "\nℹ️ این پیام وقتی نشون داده می‌شه که کاربر داخل «🛍 سرویس‌های من» حداقل یک سرویس فعال داشته باشه - زیرش لیست سرویس‌هاش (که خودکار ساخته می‌شه) و یه دکمه‌ی «بستن» میاد.\n💡 هم متن این پیام، هم دکمه‌ی بستنش (رنگ/اسم/ایموجی) رو می‌تونی از پایین تنظیم کنی.\n";
@@ -507,6 +507,18 @@ if (!function_exists('bottext_item_menu_payload')) {
         if ($bt_key === 'users.status.subscriptionFile') {
             $bt_extra_note = "\nℹ️ این پیام فقط برای پنل‌های نوع WireGuard وقتی نشون داده می‌شه که کاربر روی «🔗 لینک اشتراک» بزنه - به‌جای عکس QR، یه فایل کانفیگ فرستاده می‌شه.\n";
         }
+        // the four discount sentences: "یک درگاه" is about where the discount
+        // was SET, not about which gateway the text belongs to - that reading
+        // is the first thing an admin asks on these screens
+        if (in_array($bt_key, ['hardcoded.topupDiscPercentCaption', 'hardcoded.topupDiscFixedCaption'], true)) {
+            $bt_extra_note = "\nℹ️ این جمله وقتی به کاربر نشون داده می‌شه که تخفیف روی <b>یک درگاهِ تکی</b> ست شده باشه - یا کد تخفیفی زده باشه که مال همون درگاهه.\n"
+                . "💡 مخصوص هیچ درگاه خاصی نیست؛ <b>همه‌ی درگاه‌ها</b> از همین یه جمله استفاده می‌کنن، برای همین اسم درگاه توش نیست.\n"
+                . "💡 اگه تخفیف روی کل یه دسته ست شده باشه، به‌جای این، جمله‌ی «تخفیفِ ست‌شده روی یک دسته» نشون داده می‌شه.\n";
+        }
+        if (in_array($bt_key, ['hardcoded.topupDiscGroupPercentCaption', 'hardcoded.topupDiscGroupFixedCaption'], true)) {
+            $bt_extra_note = "\nℹ️ این جمله وقتی نشون داده می‌شه که تخفیف روی <b>کل یه دسته</b> ست شده باشه - کارت به کارت، ریالی، آنلاین ارزی یا آفلاین ارزی.\n"
+                . "💡 اسم دسته خودش با <code>{group}</code> داخل جمله نوشته می‌شه، پس همین یه متن برای هر چهار دسته کافیه.\n";
+        }
         foreach (($textbotlang['bottext']['items'] ?? []) as $bt_it) {
             if (($bt_it['key'] ?? '') === $bt_key) {
                 $bt_label = $bt_it['label'];
@@ -535,6 +547,13 @@ if (!function_exists('bottext_item_menu_payload')) {
         };
         // reaction needs a triggering user message — only these keys have one
         $bt_can_react = in_array($bt_key, ['users.text_start', 'textbot.faqDesc', 'textbot.tariffListDesc', 'textbot.rules', 'users.unknownMsg'], true);
+        // Items whose text is not a message of its own: it is concatenated into
+        // ANOTHER caption, or shown as an Alert popup. There is no message to
+        // attach a sticker or a reaction to, and a "👁 پیش‌نمایش" screen showing
+        // a fragment out of the caption it belongs to told the admin less than
+        // simply quoting the current text right here does - the same way the
+        // gateway caption screens (💳 کپشن و دکمه‌های درگاه‌ها) already work.
+        $bt_inline = in_array($bt_key, bt_inline_block_keys(), true);
         // NOTE: users.status.getConfigHintBuy deliberately does NOT go in this
         // list - like its usertest counterpart users.status.getConfigHint, its
         // "buttons" aren't genbtn-shaped (button_edit[lang][key]) but the
@@ -544,8 +563,10 @@ if (!function_exists('bottext_item_menu_payload')) {
         $bt_has_buttons = in_array($bt_key, ['users.usertest.selectUsernamePrompt', 'users.Balance.insufficientBalanceSimple', 'users.sell.selectUsernamePrompt', 'users.sell.preInvoice', 'users.sell.preInvoice2', 'textbot.preInvoice', 'users.sell.service_not_available', 'textbot.testExpired', 'users.sell.service_sell', 'users.status.infoFull', 'users.Balance.chargeSuccess', 'textbot.channel', 'users.extend.invoiceCreated', 'users.changeLink.warnchange'], true);
         $info = "📝 <b>{$bt_label}</b>\n➖➖➖➖➖➖➖➖➖➖\n{$bt_extra_note}";
         $info .= "✏️ متن: " . ($bt_custom ? "سفارشی ✅" : "پیش‌فرض") . "\n";
-        $info .= "🖼 استیکر: " . ($bt_sticker !== '' ? "ست شده ✅" : "ندارد ❌") . "\n";
-        if ($bt_can_react) {
+        if (!$bt_inline) {
+            $info .= "🖼 استیکر: " . ($bt_sticker !== '' ? "ست شده ✅" : "ندارد ❌") . "\n";
+        }
+        if ($bt_can_react && !$bt_inline) {
             $info .= "❤️ ری‌اکشن: " . ($bt_react !== '' ? $bt_react : "ندارد ❌") . "\n";
         }
         $bt_btn_custom = false;
@@ -589,24 +610,38 @@ if (!function_exists('bottext_item_menu_payload')) {
             }
             $info .= "{$bt_btn_label}: " . ($bt_btn_custom ? "سفارشی ✅" : "پیش‌فرض") . "\n";
         }
+        // The live text, quoted right here - on every item, the way the gateway
+        // caption screens (💳 کپشن و دکمه‌های درگاه‌ها) already work. Read through
+        // the same resolver the customer-facing code uses, so a reset shows the
+        // default immediately instead of a stale copy. This replaces the
+        // 👁 پیش‌نمایش button, which existed only to show exactly this.
+        $info .= "➖➖➖➖➖➖➖➖➖➖\n👁 <b>متن فعلی:</b>\n" . bt_current_text_quote($bt_key) . "\n";
+        if ($bt_key === 'users.usertest.selectUsernamePrompt') {
+            // this one prompt is followed immediately by a second message the
+            // admin cannot see from anywhere else, so it is quoted too - the
+            // preview screen used to be the only place both appeared together
+            $info .= "\n📌 <b>مرحله‌ی بعد (دریافت کانفیگ):</b>\n" . bt_current_text_quote('users.status.getConfigHint') . "\n";
+        }
         $info .= "➖➖➖➖➖➖➖➖➖➖\n👇 بخشی که می‌خوای تنظیم کنی رو انتخاب کن:";
         $kb = ['inline_keyboard' => []];
-        $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش کپشن', 'callback_data' => "btact|text|{$bt_lang}|{$bt_key}", 'style' => 'primary']];
-        $bt_row = [['text' => '🖼 استیکر', 'callback_data' => "btact|sticker|{$bt_lang}|{$bt_key}", 'style' => 'primary']];
-        if ($bt_can_react) {
-            $bt_row[] = ['text' => '❤️ ری‌اکشن', 'callback_data' => "btact|react|{$bt_lang}|{$bt_key}", 'style' => 'primary'];
+        // [📋 کپشن پیش‌فرض] [✏️ ویرایش کپشن] - the same pair every caption row in
+        // 💳 کپشن و دکمه‌های درگاه‌ها uses: the default sits next to the edit
+        // instead of at the bottom of the screen, and the edit turns green once
+        // this text has been reworded. btact|rsttext clears only this text -
+        // the 🔁 button at the bottom still resets the sticker and buttons too.
+        $kb['inline_keyboard'][] = [
+            ['text' => '📋 کپشن پیش‌فرض', 'callback_data' => "btact|rsttext|{$bt_lang}|{$bt_key}"],
+            ['text' => '✏️ ویرایش کپشن', 'callback_data' => "btact|text|{$bt_lang}|{$bt_key}", 'style' => $bt_custom ? 'success' : 'primary'],
+        ];
+        if (!$bt_inline) {
+            $bt_row = [['text' => '🖼 استیکر', 'callback_data' => "btact|sticker|{$bt_lang}|{$bt_key}", 'style' => 'primary']];
+            if ($bt_can_react) {
+                $bt_row[] = ['text' => '❤️ ری‌اکشن', 'callback_data' => "btact|react|{$bt_lang}|{$bt_key}", 'style' => 'primary'];
+            }
+            $kb['inline_keyboard'][] = $bt_row;
         }
-        $kb['inline_keyboard'][] = $bt_row;
-        // usertest renders its own preview/reset rows early (right after its
-        // self-controls, like every other item) so the shared block at the
-        // bottom of this function is skipped for it - avoids needing a
-        // divider to explain why they'd otherwise reappear after the
-        // "other messages" section below
-        $bt_prev_inline = false;
         if ($bt_key === 'users.usertest.selectUsernamePrompt') {
             $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های انصراف/پیش‌فرض', 'callback_data' => "btact|btns|{$bt_lang}", 'style' => 'primary']];
-            $kb['inline_keyboard'][] = [['text' => '👁 پیش‌نمایش', 'callback_data' => "btact|prev|{$bt_lang}|{$bt_key}", 'style' => 'primary']];
-            $bt_prev_inline = true;
             // white, non-navigating divider (established session pattern) - makes
             // clear the next rows are OTHER messages in the test-account flow,
             // not more controls for the prompt this screen is already editing
@@ -638,11 +673,25 @@ if (!function_exists('bottext_item_menu_payload')) {
             $kb['inline_keyboard'][] = [['text' => '💰 ویرایش دکمه‌ی افزایش موجودی', 'callback_data' => "bt_edit|{$bt_lang}|users.Balance.insufficientBalanceSimple", 'style' => 'primary']];
         } elseif ($bt_key === 'users.changeLink.warnchange') {
             $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های تغییر لینک', 'callback_data' => "gbtn|list|{$bt_lang}|cl", 'style' => 'primary']];
+        } elseif ($bt_key === 'users.Balance.topupDiscPrompt') {
+            // the 'td' alias was wired everywhere except here, so this item's
+            // label promised "+ دکمه‌هایش" while the screen offered no way in
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های کد تخفیف', 'callback_data' => "gbtn|list|{$bt_lang}|td", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '❌ ویرایش متن کد نامعتبر', 'callback_data' => "bt_edit|{$bt_lang}|users.Balance.topupDiscInvalid", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '✅ ویرایش متن فعال شدن کد', 'callback_data' => "bt_edit|{$bt_lang}|users.Balance.topupDiscActivated", 'style' => 'primary']];
         }
-        if (!$bt_prev_inline) {
-            $kb['inline_keyboard'][] = [['text' => '👁 پیش‌نمایش', 'callback_data' => "btact|prev|{$bt_lang}|{$bt_key}", 'style' => 'primary']];
+        // Named for what it actually clears - text, sticker, reaction AND button
+        // overrides. Next to the new "📋 کپشن پیش‌فرض" a second plain "ریست به
+        // پیش‌فرض" read like the same action, and tapping it lost the sticker
+        // and button styling an admin only meant to keep.
+        //
+        // On an item that has no sticker, no reaction and no buttons, the two
+        // ARE the same action - so it is dropped there rather than shown twice.
+        // It comes back the moment there is something else to clear, including
+        // a sticker set before that item became a caption-only one.
+        if (!$bt_inline || $bt_sticker !== '' || $bt_react !== '' || $bt_btn_custom) {
+            $kb['inline_keyboard'][] = [['text' => '🔁 ریست همه‌ی تنظیمات این پیام', 'callback_data' => "btact|rstall|{$bt_lang}|{$bt_key}", 'style' => 'danger']];
         }
-        $kb['inline_keyboard'][] = [['text' => '🔁 ریست به پیش‌فرض', 'callback_data' => "btact|rstall|{$bt_lang}|{$bt_key}", 'style' => 'danger']];
         if ($backOverride !== null) {
             $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => $backOverride, 'style' => 'danger']];
         } elseif ($bt_item_group !== '') {
@@ -666,6 +715,61 @@ if (!function_exists('bottext_item_menu_payload')) {
     }
 }
 
+if (!function_exists('bt_current_text_quote')) {
+    // One item's live text, quoted, for the top of its editing screen.
+    //
+    // Capped: this now sits on the screen itself rather than behind a button,
+    // and an admin's own 3000-character welcome text would push the whole
+    // message past Telegram's 4096 limit - which would not truncate the
+    // preview, it would fail the edit and leave the admin staring at the
+    // previous screen with no way to fix anything.
+    function bt_current_text_quote($key, $limit = 1200)
+    {
+        $txt = bottext_resolve_key($key);
+        if (trim((string) $txt) === '') {
+            return topup_packages_caption_preview_quote('⚠️ متن پیدا نشد.');
+        }
+        if (mb_strlen($txt) > $limit) {
+            // cut on the raw string, so a tag split in half cannot leak an
+            // unclosed element into the screen's own markup
+            $txt = strip_tags($txt);
+            $txt = mb_substr($txt, 0, $limit) . '…';
+        }
+        return topup_packages_caption_preview_quote($txt);
+    }
+}
+if (!function_exists('bt_inline_block_keys')) {
+    // Registry items that are NOT a message of their own. Two kinds, one rule:
+    // there is no Telegram message here to hang a sticker or a reaction on, so
+    // those controls are hidden and the current text is quoted on the editing
+    // screen itself instead of behind a 👁 پیش‌نمایش button that would show a
+    // fragment stripped of the caption it lives in.
+    //
+    // Anything added here must genuinely be one of the two - a line/block
+    // concatenated into another caption, or an answerCallbackQuery alert. A
+    // real message that merely looks small still belongs outside this list.
+    function bt_inline_block_keys()
+    {
+        return [
+            // blocks concatenated into the payment-method caption
+            'users.Balance.topupDiscActiveBlock',
+            'users.Balance.topupDiscAutoBlock',
+            // the quote appended to the top-up confirmation message
+            'users.Balance.chargeSuccessDiscount',
+            // single lines rendered inside a blockquote on the amount screens
+            'hardcoded.topupDiscPercentCaption',
+            'hardcoded.topupDiscFixedCaption',
+            'hardcoded.topupDiscGroupPercentCaption',
+            'hardcoded.topupDiscGroupFixedCaption',
+            // a line inside the service-status caption
+            'users.status.svcLocationMore',
+            // alerts: answerCallbackQuery carries text and nothing else
+            'users.status.svcUsageUnavailable',
+            'users.extend.insufficientBalanceAlert',
+            'keyboard.infoRefreshed',
+        ];
+    }
+}
 if (!function_exists('emoji_sticker_editor_payload')) {
     function emoji_sticker_editor_payload($kind, $textbotlang)
     {
@@ -1518,17 +1622,13 @@ if (!function_exists('topup_hub_payload')) {
                     continue;
                 }
                 $shownGroups[$group] = true;
-                $anyPkg = false;
-                foreach ($liveInGroup as $gk) {
-                    if (count(topup_packages_for($lang, $gk)) > 0) {
-                        $anyPkg = true;
-                        break;
-                    }
-                }
+                // always blue: this row opens a menu, it does not carry a state
+                // of its own. Green here read as "this family is configured"
+                // when it only ever meant "one of the gateways inside is".
                 $kb['inline_keyboard'][] = [[
-                    'text' => gateway_group_label($group, $textbotlang),
+                    'text' => gateway_group_label($group, $textbotlang) . ' (' . count($liveInGroup) . ')',
                     'callback_data' => "topupgrp:{$lang}:{$group}",
-                    'style' => $anyPkg ? 'success' : 'primary',
+                    'style' => 'primary',
                 ]];
                 continue;
             }
@@ -1988,6 +2088,15 @@ if (!function_exists('gateway_settings_payload')) {
                 'style' => 'primary',
             ]];
         }
+        if ($key === 'ton') {
+            // green once the memo shape has been changed from the factory one,
+            // same signal every other customised row on these screens uses
+            $kb['inline_keyboard'][] = [[
+                'text' => '🏷 تنظیمات ممو (تگ)',
+                'callback_data' => "tonmemo:{$lang}",
+                'style' => topup_memo_is_custom($lang, 'ton') ? 'success' : 'primary',
+            ]];
+        }
         $legacy = gw_legacy_settings_datain($key);
         if ($legacy !== null) {
             $kb['inline_keyboard'][] = [['text' => $t['legacyBtn'], 'callback_data' => $legacy]];
@@ -2002,6 +2111,70 @@ if (!function_exists('gateway_settings_payload')) {
         $kb['inline_keyboard'][] = [[
             'text' => $t['backBtn'],
             'callback_data' => $gwGroup !== null ? "gwgroup:{$lang}:{$gwGroup}" : "gwlang:{$lang}",
+            'style' => 'danger',
+        ]];
+        return json_encode($kb);
+    }
+}
+if (!function_exists('ton_memo_settings_payload')) {
+    // What the TON invoice's comment is built out of. Two parts are settable
+    // (a shop prefix and the length of the random part); the customer's id and
+    // username are shown as locked rows rather than left out entirely, so that
+    // tapping one answers "why can't I use this?" in place - the same 🔒 +
+    // explaining-callback pattern the card gateway's locked switches use.
+    function ton_memo_settings_caption($lang)
+    {
+        $cfg = topup_memo_config($lang, 'ton');
+        $lim = topup_memo_limits();
+        $sample = $cfg['prefix'] . str_repeat('x', (int) $cfg['len']);
+        $out = "<blockquote><b>🏷 تنظیمات ممو (تگ) — TON</b></blockquote>\n\n";
+        $out .= "ممو همان کامنتی است که مشتری همراه تراکنش می‌فرستد و ربات پرداخت را از روی آن می‌شناسد.\n\n";
+        $out .= "🔤 <b>پیشوند:</b> " . ($cfg['prefix'] === '' ? '<i>ندارد</i>' : "<code>{$cfg['prefix']}</code>") . "\n";
+        $out .= "🎲 <b>طول بخش تصادفی:</b> <b>{$cfg['len']}</b> کاراکتر\n\n";
+        $out .= "👁 <b>نمونه:</b> <code>{$sample}</code>\n\n";
+        $out .= "<blockquote>پیشوند فقط حروف انگلیسی و عدد می‌پذیرد (حداکثر {$lim['prefixMax']} کاراکتر) و بخش تصادفی بین {$lim['lenMin']} تا {$lim['lenMax']} کاراکتر است. "
+            . "بخش تصادفی حذف‌شدنی نیست؛ تنها چیزی است که فاکتورها را از هم جدا می‌کند.</blockquote>\n\n";
+        $out .= "<blockquote>🔒 <b>چرا آیدی و یوزرنیم کاربر در دسترس نیست؟</b>\n"
+            . "کامنت تراکنش روی بلاکچین TON ثبت می‌شود و برای همیشه عمومی و پاک‌نشدنی است. "
+            . "اگر آیدی عددی یا یوزرنیم مشتری داخل آن باشد، هر کسی که آدرس کیف پول شما را داشته باشد "
+            . "می‌تواند ببیند کدام حساب تلگرام، چه مبلغی و چه زمانی به شما پرداخت کرده — "
+            . "برای مشتری‌های یک فروشگاه VPN دقیقاً همان چیزی که نباید فاش شود.</blockquote>";
+        return $out;
+    }
+    function ton_memo_settings_payload($lang, $textbotlang)
+    {
+        $cfg = topup_memo_config($lang, 'ton');
+        $kb = ['inline_keyboard' => []];
+        $kb['inline_keyboard'][] = [[
+            'text' => '🔤 پیشوند (اسم ربات) — ' . ($cfg['prefix'] === '' ? 'ندارد' : $cfg['prefix']),
+            'callback_data' => "tonmemoprefix:{$lang}",
+            'style' => $cfg['prefix'] === '' ? 'primary' : 'success',
+        ]];
+        $kb['inline_keyboard'][] = [[
+            'text' => '🎲 طول بخش تصادفی — ' . $cfg['len'],
+            'callback_data' => "tonmemolen:{$lang}",
+            'style' => 'primary',
+        ]];
+        $kb['inline_keyboard'][] = [[
+            'text' => '🔒 آیدی عددی کاربر',
+            'callback_data' => "tonmemolocked:{$lang}",
+            'style' => 'primary',
+        ]];
+        $kb['inline_keyboard'][] = [[
+            'text' => '🔒 یوزرنیم کاربر',
+            'callback_data' => "tonmemolocked:{$lang}",
+            'style' => 'primary',
+        ]];
+        if (topup_memo_is_custom($lang, 'ton')) {
+            $kb['inline_keyboard'][] = [[
+                'text' => '🔁 بازگشت به پیش‌فرض',
+                'callback_data' => "tonmemoreset:{$lang}",
+                'style' => 'danger',
+            ]];
+        }
+        $kb['inline_keyboard'][] = [[
+            'text' => $textbotlang['Admin']['GatewayLang']['backBtn'],
+            'callback_data' => "gwset:{$lang}:ton",
             'style' => 'danger',
         ]];
         return json_encode($kb);
@@ -2514,6 +2687,7 @@ if (!function_exists('topup_gwcap_kinds')) {
                 'nowpayment' => $b['nowpaymentInvoiceCaption'],
                 'startelegrams' => $b['starInvoiceCaption'],
                 'ton' => $b['tonInvoiceCaption'],
+                'trx' => $b['trxInvoiceCaption'],
             ][$key] ?? '';
         }
         return [
@@ -3158,7 +3332,78 @@ if (!function_exists('gateway_settings_caption')) {
                 $cap .= "\n\n<blockquote>📝 گزارش موارد تغییریافته:\n" . implode("\n", $report) . '</blockquote>';
             }
         }
+        // every gateway, card included: the numbers that are actually in force
+        $cap .= gateway_effective_report($lang, $key, $textbotlang);
         return $cap;
+    }
+}
+if (!function_exists('gateway_effective_report')) {
+    // "What will this gateway actually use right now?" - as a quote under its
+    // settings screen.
+    //
+    // The buttons above it can only say ست نشده, which is not the same thing as
+    // "nothing happens": an unset invoice lifetime still expires after 30
+    // minutes and an unset range still holds the customer to 100..1,000,000.
+    // Those defaults were invisible, so an admin had to read the code to learn
+    // what their own shop does. Every line here names the number AND where it
+    // came from.
+    function gateway_effective_report($lang, $key, $textbotlang)
+    {
+        $t = $textbotlang['Admin']['GatewayLang'];
+        $src = function ($field) use ($lang) {
+            if (gw_pay_override_has($field, $lang)) {
+                return 'اختصاصی این زبان';
+            }
+            $row = select("PaySetting", "ValuePay", "NamePay", $field, "select");
+            $global = is_array($row) ? trim((string) ($row['ValuePay'] ?? '')) : '';
+            return $global !== '' ? 'تنظیم کلی' : 'پیش‌فرض';
+        };
+        $lines = [];
+        foreach (gw_field_registry()[$key] ?? [] as $f) {
+            if ($f['type'] === 'cards') {
+                $n = count(gw_cards_for_lang($lang));
+                $lines[] = "• {$t[$f['label']]}: " . ($n > 0 ? "{$n} کارت" : 'هیچ کارتی ثبت نشده ❌')
+                    . (gw_cards_has_override($lang) ? ' (اختصاصی این زبان)' : '');
+                continue;
+            }
+            // the invoice lifetime is the one number with a real default behind it
+            if ($f['type'] === 'number' && $f['field'] === topup_expire_field($key)) {
+                $lines[] = "• {$t[$f['label']]}: <b>" . topup_expire_minutes($lang, $key) . " دقیقه</b> ({$src($f['field'])})";
+                continue;
+            }
+            // credentials and wallets: whether it is set, never the value itself
+            if (gw_field_scope($f) === 'global') {
+                $set = trim((string) getPaySettingValue($f['field'])) !== '';
+            } else {
+                $set = trim((string) pay_value($f['field'], $lang, '')) !== '';
+            }
+            $lines[] = "• {$t[$f['label']]}: " . ($set ? 'ثبت شده ✅' : 'ثبت نشده ❌');
+        }
+        // the deposit range lives in its own store, not in gw_field_registry -
+        // but it is exactly the kind of number this report exists for
+        [$min, $max] = topup_effective_limits($lang, $key);
+        if ($min !== null || $max !== null) {
+            $sfx = topup_gateway_paysetting_suffix($key);
+            $cur = currency_get(currency_for_lang($lang))['title'] ?? '';
+            // set in the top-up store, or in 💎 مالی, or neither
+            [$storeMin] = topup_minmax_for($lang, $key);
+            $gwMin = $sfx === null ? '' : trim((string) pay_value("minbalance{$sfx}", $lang, ''));
+            $rangeSrc = ($storeMin !== null || $gwMin !== '') ? 'تنظیم شده' : 'پیش‌فرض';
+            // only say "floored" when the floor is the number actually in
+            // force - Stars has a one-star floor, but an admin who set 20,000
+            // above it is being held to their own number, not to the floor
+            $floor = topup_usd_floor_toman($lang, $key);
+            $note = '';
+            if ($floor !== null && $min !== null && (int) $min === (int) $floor) {
+                $note = topup_has_usd_floor($key) ? ' — کف ۱ دلار' : ' — کف ۱ استار';
+            }
+            $lines[] = "• حداقل مبلغ: <b>" . ($min === null ? '—' : number_format((float) $min)) . " {$cur}</b> ({$rangeSrc}{$note})";
+            $lines[] = "• حداکثر مبلغ: <b>" . ($max === null ? '—' : number_format((float) $max)) . " {$cur}</b>";
+        }
+        if (empty($lines)) {
+            return '';
+        }
+        return "\n\n<blockquote>⚙️ <b>الان چی اعمال می‌شه</b>\n" . implode("\n", $lines) . '</blockquote>';
     }
 }
 if (!function_exists('gateway_cards_payload')) {
@@ -4553,15 +4798,9 @@ if (preg_match('/^bt_sep\|(\w+)$/', $datain, $bt_sep_m) && $adminrulecheck['rule
     ]);
     return;
 }
-if (preg_match('/^btprevdemo-([a-z]{2})$/', $datain, $bt_pd_m) && $adminrulecheck['rule'] == "administrator") {
-    telegram('answerCallbackQuery', [
-        'callback_query_id' => $callback_query_id,
-        'text' => '👁 این دکمه‌ها فقط برای پیش‌نمایش هستن و کارکرد واقعی ندارن.',
-        'show_alert' => true,
-        'cache_time' => 1,
-    ]);
-    return;
-}
+// The alert that answered the sample config buttons on the caption-preview
+// screen lived here. That screen is gone, and nothing else ever produced its
+// callback.
 if (preg_match('/^cfgcolbt-(getfirst|namefirst)-([a-z]{2})$/', $datain, $cc_m) && $adminrulecheck['rule'] == "administrator") {
     $cc_value = ($cc_m[1] === 'namefirst') ? 'name_first' : 'config_first';
     update("setting", "configColOrder", $cc_value, null, null);
@@ -5260,6 +5499,23 @@ if (preg_match('/^btact\|text\|([a-z]{2})\|(.+)$/', $datain, $btm) && $adminrule
         $bt_prompt .= "• آیدی عددی: <code>{userid}</code>";
     }
     $bt_serviceGuides = [
+        'users.status.infoFull' => "• نام کاربری سرویس: <code>{username}</code>\n"
+            . "• وضعیت اشتراک: <code>{status}</code>\n"
+            . "• حجم کل: <code>{traffic}</code>\n"
+            . "• حجم مصرف‌شده: <code>{used}</code>\n"
+            . "• حجم باقی‌مانده: <code>{remaining}</code> و درصدش: <code>{percent}</code>\n"
+            . "• انقضا (شمسی برای فارسی، میلادی برای بقیه): <code>{expiration}</code>\n"
+            . "• زمان باقی‌مانده: <code>{days}</code>\n"
+            . "• نام پنل: <code>{location}</code>\n"
+            . "• نام محصول: <code>{product}</code>\n"
+            . "• یادداشت سرویس: <code>{note_line}</code>\n"
+            . "• رمز/آدرس اشتراک (بعضی پنل‌ها): <code>{password_line}</code>\n"
+            . "\n🆕 بلوک‌های جدید:\n"
+            . "• نوار مصرف: <code>{usage_bar}</code>\n"
+            . "• خط زیر نوار: <code>{usage_line}</code>\n"
+            . "• مصرف لوکیشن با تیتر خودش (روی پنل‌های تک‌سروری خالیه): <code>{location_block}</code>\n"
+            . "• آخرین آنلاین: <code>{online_block}</code>\n"
+            . "• اطلاعات اتصال قدیمی: <code>{connection_info}</code>",
         'textbot.preInvoice' => "• نام سرویس یا پلن: <code>{name_product}</code>\n"
             . "• نام کاربری سرویس: <code>{username}</code>\n"
             . "• مدت زمان: <code>{Service_time}</code>\n"
@@ -5299,6 +5555,20 @@ if (preg_match('/^btact\|text\|([a-z]{2})\|(.+)$/', $datain, $btm) && $adminrule
         'users.Balance.chargeSuccessDiscount' => "• مبلغ تخفیف: <code>{bonus}</code>\n"
             . "• موجودی فعلی کاربر: <code>{balance}</code>",
         'textbot.cardRandomAmountNotice' => "• مبلغ نهایی فاکتور، به ریال: <code>{price_rial}</code>",
+        'hardcoded.topupDiscPercentCaption' => "• درصد تخفیف: <code>{value}</code>\n"
+            . "\n💡 این جمله وقتی نشون داده می‌شه که تخفیف روی <b>یک درگاه</b> ست شده باشه.",
+        'hardcoded.topupDiscFixedCaption' => "• مبلغی که به شارژ اضافه می‌شه: <code>{value}</code>\n"
+            . "\n💡 این جمله وقتی نشون داده می‌شه که تخفیف روی <b>یک درگاه</b> ست شده باشه.",
+        'hardcoded.topupDiscGroupPercentCaption' => "• درصد تخفیف: <code>{value}</code>\n"
+            . "• نام دسته (مثلاً درگاه‌های ریالی): <code>{group}</code>\n"
+            . "\n💡 این جمله وقتی نشون داده می‌شه که تخفیف روی <b>کل یک دسته</b> ست شده باشه.",
+        'hardcoded.topupDiscGroupFixedCaption' => "• مبلغی که به شارژ اضافه می‌شه: <code>{value}</code>\n"
+            . "• نام دسته (مثلاً کارت به کارت): <code>{group}</code>\n"
+            . "\n💡 این جمله وقتی نشون داده می‌شه که تخفیف روی <b>کل یک دسته</b> ست شده باشه.",
+        'users.Balance.amountRangeError' => "این پیام با <code>%s</code> کار می‌کند نه با نام متغیر:\n"
+            . "• اولین <code>%s</code> حداقل مبلغ است\n"
+            . "• دومین <code>%s</code> حداکثر مبلغ\n"
+            . "\n⚠️ ترتیب و تعدادشان را عوض نکنید، وگرنه عددها جابه‌جا نمایش داده می‌شوند.",
     ];
     if (isset($bt_serviceGuides[$btm[2]])) {
         $bt_prompt .= "\n\n🔹 اطلاعات سرویس\n" . $bt_serviceGuides[$btm[2]];
@@ -5329,32 +5599,10 @@ if (preg_match('/^btact\|react\|([a-z]{2})\|(.+)$/', $datain, $btm) && $adminrul
     Editmessagetext($from_id, $message_id, "❤️ ایموجی ری‌اکشن رو بفرست ✍️ (مثل ❤️ 🔥 👍)\n\nوقتی کاربر این پیام رو فعال کنه، ربات روی پیام کاربر این ری‌اکشن رو می‌ذاره", $bt_kb, 'HTML');
     return;
 }
-if (preg_match('/^btact\|prev\|([a-z]{2})\|(.+)$/', $datain, $btm) && $adminrulecheck['rule'] == "administrator") {
-    $bt_val = bottext_resolve_key($btm[2]);
-    if ($bt_val === '') {
-        $bt_val = '⚠️ متن پیدا نشد.';
-    }
-    $bt_prev_text = "👁 <b>پیش‌نمایش:</b>\n\n" . $bt_val;
-    $bt_prev_rows = [];
-    if ($btm[2] === 'users.usertest.selectUsernamePrompt') {
-        $bt_prev_text .= "\n\n➖➖➖➖➖➖➖➖➖➖\n👁 <b>پیش‌نمایش مرحله‌ی بعد (دریافت کانفیگ):</b>\n\n" . $textbotlang['users']['status']['getConfigHint'];
-        $bt_cfg_sample = json_decode(keyboard_config(['vless://uuid@host:443?security=none#' . rawurlencode('🇩🇪 Germany #1')], 0, false), true);
-        foreach ($bt_cfg_sample['inline_keyboard'] as $bt_cfg_row) {
-            foreach ($bt_cfg_row as &$bt_cfg_btn) {
-                // this is a sample render with a fake id_invoice - real callback_data
-                // here would hit the live getconfig handler and fail with "service not
-                // found"; route every button to the demo alert instead
-                $bt_cfg_btn['callback_data'] = "btprevdemo-{$btm[1]}";
-            }
-            unset($bt_cfg_btn);
-            $bt_prev_rows[] = $bt_cfg_row;
-        }
-    }
-    $bt_prev_rows[] = [['text' => '🔙 برگشت', 'callback_data' => "bt_edit|{$btm[1]}|{$btm[2]}"]];
-    $bt_prev_kb = json_encode(['inline_keyboard' => $bt_prev_rows]);
-    Editmessagetext($from_id, $message_id, $bt_prev_text, $bt_prev_kb, 'HTML');
-    return;
-}
+// The 👁 پیش‌نمایش screen used to live here. Every item's editing screen now
+// quotes its own live text (bt_current_text_quote), so nothing pointed at this
+// any more - and a screen the admin had to leave the editor to reach told them
+// strictly less than the quote sitting above the buttons does.
 if (preg_match('/^btact\|back\|([a-z]{2})$/', $datain, $btm) && $adminrulecheck['rule'] == "administrator") {
     step('home', $from_id);
     list($bt_home, $bt_kb) = keyboard_list_text($btm[1]);
@@ -6284,6 +6532,54 @@ if (preg_match('/^tpdautolimitv-([a-z]{2})-([a-z0-9_]+)$/', (string) $user['step
     topup_disc_auto_set($td_m[1], $td_m[2], $td_a);
     step('home', $from_id);
     list($td_text, $td_kb) = topup_disc_auto_payload($td_m[1], $td_m[2], $textbotlang);
+    $td_mid = intval(json_decode((string) ($user['Processing_value'] ?? ''), true)['bt_msgid'] ?? 0);
+    deletemessage($from_id, $message_id);
+    $td_done = "✅ ذخیره شد!\n\n" . $td_text;
+    if ($td_mid > 0) {
+        Editmessagetext($from_id, $td_mid, $td_done, $td_kb, 'HTML');
+    } else {
+        sendmessage($from_id, $td_done, $td_kb, 'HTML');
+    }
+    return;
+}
+// the three typed fields of a CATEGORY's discount - the group twins of
+// tpdautovalv / tpdautoexpv / tpdautolimitv above, same validation, same
+// "edit the screen you came from" ending
+if (preg_match('/^dsgrp(val|exp|limit)v-([a-z]{2})-([a-z0-9_]+)$/', (string) $user['step'], $td_m) && $datain == '' && $adminrulecheck['rule'] == "administrator" && !topup_disc_is_nav_text($text, $textbotlang)) {
+    $td_what = $td_m[1];
+    $td_lang = $td_m[2];
+    $td_group = $td_m[3];
+    $td_raw = trim((string) $text);
+    if ($td_what === 'val') {
+        if (!is_numeric($td_raw) || floatval($td_raw) < 0) {
+            sendmessage($from_id, "⚠️ لطفاً فقط یه عدد بفرست 😅", $backadmin, 'HTML');
+            return;
+        }
+    } elseif (!ctype_digit($td_raw)) {
+        sendmessage($from_id, "⚠️ لطفاً فقط یه عدد بفرست 😅", $backadmin, 'HTML');
+        return;
+    }
+    $td_g = topup_disc_group_for($td_lang, $td_group);
+    if ($td_what === 'val') {
+        if (($td_g['mode'] ?? 'percent') === 'percent' && floatval($td_raw) > 100) {
+            sendmessage($from_id, "⚠️ درصد نمی‌تونه بیشتر از ۱۰۰ باشه 😅", $backadmin, 'HTML');
+            return;
+        }
+        $td_g['value'] = floatval($td_raw);
+        // typing a real value is the admin saying they want it live - the same
+        // rule the per-gateway screen follows, for the same reason
+        if (floatval($td_raw) > 0) {
+            $td_g['enabled'] = true;
+        }
+    } elseif ($td_what === 'exp') {
+        $td_days = intval($td_raw);
+        $td_g['expiry'] = $td_days > 0 ? (time() + $td_days * 86400) : 0;
+    } else {
+        $td_g['limitPerUser'] = intval($td_raw);
+    }
+    topup_disc_group_set($td_lang, $td_group, $td_g);
+    step('home', $from_id);
+    list($td_text, $td_kb) = topup_disc_group_auto_payload($td_lang, $td_group, $textbotlang);
     $td_mid = intval(json_decode((string) ($user['Processing_value'] ?? ''), true)['bt_msgid'] ?? 0);
     deletemessage($from_id, $message_id);
     $td_done = "✅ ذخیره شد!\n\n" . $td_text;
@@ -9253,6 +9549,60 @@ elseif ($datain == "systemsms") {
     }
     gw_lang_settings_map(true);
     Editmessagetext($from_id, $message_id, gateway_settings_caption($gw_m[1], $gw_m[2], $textbotlang), gateway_settings_payload($gw_m[1], $gw_m[2], $textbotlang), 'HTML');
+} elseif (preg_match('/^tonmemo:([a-z]{2})$/', $datain, $tm_m) && $adminrulecheck['rule'] == "administrator") {
+    Editmessagetext($from_id, $message_id, ton_memo_settings_caption($tm_m[1]), ton_memo_settings_payload($tm_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^tonmemolocked:([a-z]{2})$/', $datain, $tm_m) && $adminrulecheck['rule'] == "administrator") {
+    // never becomes available - the reason is a property of a public chain,
+    // not a setting, so this row explains rather than unlocks
+    telegram('answerCallbackQuery', [
+        'callback_query_id' => $callback_query_id,
+        'text' => topup_memo_locked_reason(),
+        'show_alert' => true,
+        'cache_time' => 1,
+    ]);
+} elseif (preg_match('/^tonmemoreset:([a-z]{2})$/', $datain, $tm_m) && $adminrulecheck['rule'] == "administrator") {
+    topup_memo_reset($tm_m[1], 'ton');
+    Editmessagetext($from_id, $message_id, ton_memo_settings_caption($tm_m[1]), ton_memo_settings_payload($tm_m[1], $textbotlang), 'HTML');
+} elseif (preg_match('/^tonmemo(prefix|len):([a-z]{2})$/', $datain, $tm_m) && $adminrulecheck['rule'] == "administrator") {
+    $tm_lim = topup_memo_limits();
+    $tm_cfg = topup_memo_config($tm_m[2], 'ton');
+    if ($tm_m[1] === 'prefix') {
+        $tm_ask = "🔤 <b>پیشوند ممو را بفرستید</b>\n\n"
+            . "فقط حروف انگلیسی و عدد، حداکثر {$tm_lim['prefixMax']} کاراکتر. مثال: <code>MirzaPro</code>\n\n"
+            . "مقدار فعلی: " . ($tm_cfg['prefix'] === '' ? '<i>ندارد</i>' : "<code>{$tm_cfg['prefix']}</code>") . "\n"
+            . "برای برداشتن پیشوند، عدد <b>0</b> را بفرستید.";
+    } else {
+        $tm_ask = "🎲 <b>طول بخش تصادفی را بفرستید</b>\n\n"
+            . "عددی بین {$tm_lim['lenMin']} تا {$tm_lim['lenMax']}.\n\n"
+            . "مقدار فعلی: <b>{$tm_cfg['len']}</b>";
+    }
+    $tm_prompt = sendmessage($from_id, $tm_ask, null, 'HTML');
+    step("tonmemo:{$tm_m[1]}:{$tm_m[2]}:{$message_id}:" . (int) ($tm_prompt['result']['message_id'] ?? 0), $from_id);
+} elseif (preg_match('/^tonmemo:(prefix|len):([a-z]{2}):([0-9]+):([0-9]+)$/', (string) $user['step'], $tm_m) && $datain == '') {
+    $tm_lim = topup_memo_limits();
+    $tm_val = trim((string) $text);
+    deletemessage($from_id, $message_id);
+    step("home", $from_id);
+    if ($tm_m[1] === 'prefix') {
+        // '0' is the agreed "clear this" shortcut across every gateway field,
+        // and a bare digit makes a poor shop prefix anyway
+        $tm_clean = $tm_val === '0' ? '' : topup_memo_clean_prefix($tm_val);
+        if ($tm_val !== '0' && $tm_clean === '') {
+            Editmessagetext($from_id, (int) $tm_m[4], "❌ پیشوند باید فقط از حروف انگلیسی و عدد باشد.", null, 'HTML');
+            step("tonmemo:{$tm_m[1]}:{$tm_m[2]}:{$tm_m[3]}:{$tm_m[4]}", $from_id);
+            return;
+        }
+        topup_memo_set($tm_m[2], 'ton', 'prefix', $tm_clean);
+    } else {
+        if (!ctype_digit($tm_val) || (int) $tm_val < $tm_lim['lenMin'] || (int) $tm_val > $tm_lim['lenMax']) {
+            Editmessagetext($from_id, (int) $tm_m[4], "❌ عددی بین {$tm_lim['lenMin']} تا {$tm_lim['lenMax']} بفرستید.", null, 'HTML');
+            step("tonmemo:{$tm_m[1]}:{$tm_m[2]}:{$tm_m[3]}:{$tm_m[4]}", $from_id);
+            return;
+        }
+        topup_memo_set($tm_m[2], 'ton', 'len', (int) $tm_val);
+    }
+    deletemessage($from_id, (int) $tm_m[4]);
+    Editmessagetext($from_id, (int) $tm_m[3], ton_memo_settings_caption($tm_m[2]), ton_memo_settings_payload($tm_m[2], $textbotlang), 'HTML');
 } elseif (preg_match('/^gwname:([a-z]{2}):([a-z0-9_]+)$/', $datain, $gw_m) && $adminrulecheck['rule'] == "administrator") {
     // display-only label - explains the row instead of navigating anywhere
     telegram('answerCallbackQuery', [
@@ -15902,6 +16252,13 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     sendmessage($from_id, $textbotlang['Admin']['Balance']['askMinDeposit'], $backadmin, 'HTML');
     step("getmaincart", $from_id);
 } elseif ($user['step'] == "getmaincart") {
+    // the only min/max step that never checked its input - a non-numeric value
+    // here becomes the gateway's minimum and every deposit is then compared
+    // against it
+    if (!ctype_digit($text)) {
+        sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
+        return;
+    }
     sendmessage($from_id, $textbotlang['Admin']['Balance']['minDepositSaved'], $CartManage, 'HTML');
     step("home", $from_id);
     update("PaySetting", "ValuePay", $text, "NamePay", "minbalancecart");
@@ -17968,6 +18325,68 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
 } elseif (preg_match('/^tpdauto:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
     list($td_text, $td_kb) = topup_disc_auto_payload($td_m[1], $td_m[2], $textbotlang);
     Editmessagetext($from_id, $message_id, $td_text, $td_kb, 'HTML');
+} elseif (preg_match('/^dsgrp:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
+    if (!isset(gateway_disc_groups()[$td_m[2]])) {
+        return;
+    }
+    topup_disc_map(true);
+    topup_disc_group_map(true);
+    list($td_text, $td_kb) = topup_disc_group_list_payload($td_m[1], $td_m[2], $textbotlang);
+    Editmessagetext($from_id, $message_id, $td_text, $td_kb, 'HTML');
+} elseif (preg_match('/^dsgrpauto:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
+    if (!isset(gateway_disc_groups()[$td_m[2]])) {
+        return;
+    }
+    list($td_text, $td_kb) = topup_disc_group_auto_payload($td_m[1], $td_m[2], $textbotlang);
+    Editmessagetext($from_id, $message_id, $td_text, $td_kb, 'HTML');
+} elseif (preg_match('/^dsgrptog:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
+    $td_g = topup_disc_group_for($td_m[1], $td_m[2]);
+    $td_g['enabled'] = empty($td_g['enabled']);
+    topup_disc_group_set($td_m[1], $td_m[2], $td_g);
+    list($td_text, $td_kb) = topup_disc_group_auto_payload($td_m[1], $td_m[2], $textbotlang);
+    Editmessagetext($from_id, $message_id, $td_text, $td_kb, 'HTML');
+} elseif (preg_match('/^dsgrpnewonly:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
+    $td_g = topup_disc_group_for($td_m[1], $td_m[2]);
+    $td_g['newUserOnly'] = empty($td_g['newUserOnly']);
+    topup_disc_group_set($td_m[1], $td_m[2], $td_g);
+    list($td_text, $td_kb) = topup_disc_group_auto_payload($td_m[1], $td_m[2], $textbotlang);
+    Editmessagetext($from_id, $message_id, $td_text, $td_kb, 'HTML');
+} elseif (preg_match('/^dsgrpmode:([a-z]{2}):([a-z0-9_]+):(percent|fixed)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
+    $td_g = topup_disc_group_for($td_m[1], $td_m[2]);
+    $td_g['mode'] = $td_m[3];
+    // same carry-over guard the per-gateway screen has: a fixed amount is far
+    // above the 100% ceiling a percentage is held to
+    if ($td_m[3] === 'percent' && floatval($td_g['value'] ?? 0) > 100) {
+        $td_g['value'] = 100;
+    }
+    topup_disc_group_set($td_m[1], $td_m[2], $td_g);
+    list($td_text, $td_kb) = topup_disc_group_auto_payload($td_m[1], $td_m[2], $textbotlang);
+    Editmessagetext($from_id, $message_id, $td_text, $td_kb, 'HTML');
+} elseif (preg_match('/^dsgrpresetusage:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
+    topup_disc_group_reset_usage($td_m[1], $td_m[2]);
+    list($td_text, $td_kb) = topup_disc_group_auto_payload($td_m[1], $td_m[2], $textbotlang);
+    Editmessagetext($from_id, $message_id, "🔁 سهمیه‌ی استفاده‌شده‌ی همه‌ی کاربرها صفر شد - تنظیمات تخفیف دست‌نخورده موند.\n\n" . $td_text, $td_kb, 'HTML');
+} elseif (preg_match('/^dsgrpreset:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
+    topup_disc_group_set($td_m[1], $td_m[2], []);
+    list($td_text, $td_kb) = topup_disc_group_auto_payload($td_m[1], $td_m[2], $textbotlang);
+    Editmessagetext($from_id, $message_id, "🔁 تخفیف گروهی به پیش‌فرض برگشت.\n\n" . $td_text, $td_kb, 'HTML');
+} elseif (preg_match('/^dsgrpval:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
+    savedata("clear", "bt_msgid", $message_id);
+    step("dsgrpvalv-{$td_m[1]}-{$td_m[2]}", $from_id);
+    $td_g = topup_disc_group_for($td_m[1], $td_m[2]);
+    $td_hint = (($td_g['mode'] ?? 'percent') === 'fixed') ? 'مبلغ ثابتی که به هر شارژ این دسته اضافه می‌شه رو بفرست (فقط عدد)' : 'درصد تخفیف این دسته رو بفرست (عددی بین ۱ تا ۱۰۰)';
+    $td_kb = json_encode(['inline_keyboard' => [[['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "dsgrpauto:{$td_m[1]}:{$td_m[2]}"]], [['text' => '❌ بستن', 'callback_data' => "tpdclose", 'style' => 'danger']]]]);
+    Editmessagetext($from_id, $message_id, "✏️ {$td_hint}", $td_kb, 'HTML');
+} elseif (preg_match('/^dsgrpexp:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
+    savedata("clear", "bt_msgid", $message_id);
+    step("dsgrpexpv-{$td_m[1]}-{$td_m[2]}", $from_id);
+    $td_kb = json_encode(['inline_keyboard' => [[['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "dsgrpauto:{$td_m[1]}:{$td_m[2]}"]], [['text' => '❌ بستن', 'callback_data' => "tpdclose", 'style' => 'danger']]]]);
+    Editmessagetext($from_id, $message_id, "⏳ تخفیف گروهی تا چند روز دیگه فعال باشه؟ (۰ = بدون محدودیت زمانی)", $td_kb, 'HTML');
+} elseif (preg_match('/^dsgrplimit:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
+    savedata("clear", "bt_msgid", $message_id);
+    step("dsgrplimitv-{$td_m[1]}-{$td_m[2]}", $from_id);
+    $td_kb = json_encode(['inline_keyboard' => [[['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "dsgrpauto:{$td_m[1]}:{$td_m[2]}"]], [['text' => '❌ بستن', 'callback_data' => "tpdclose", 'style' => 'danger']]]]);
+    Editmessagetext($from_id, $message_id, "👤 هر کاربر چند بار بتونه از تخفیف گروهی این دسته استفاده کنه؟ (۰ = نامحدود)", $td_kb, 'HTML');
 } elseif (preg_match('/^tpdautotog:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
     $td_a = topup_disc_auto_for($td_m[1], $td_m[2]);
     $td_a['enabled'] = empty($td_a['enabled']);

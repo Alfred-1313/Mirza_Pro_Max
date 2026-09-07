@@ -69,6 +69,28 @@ function getuser($username_account, $location)
     return $response;
 }
 #-----------------------------#
+// Per-node usage for ONE user - not to be confused with Get_usage_Nodes()
+// below, which is the whole panel's node traffic. Marzban answers
+// {"usages":[{"node_id":..,"node_name":"..","used_traffic":..}, ...]}, the same
+// shape Rebecca uses, so panel_user_usage() normalises them identically.
+// NOTE: written to Marzban's documented API - this shop runs no Marzban panel,
+// so unlike the Rebecca path it could not be verified against a live server.
+function getusage($username_account, $location)
+{
+    $marzban_list_get = select("marzban_panel", "*", "name_panel", $location, "select");
+    $Check_token = token_panel($marzban_list_get['code_panel']);
+    if (!empty($Check_token['error'])) {
+        return $Check_token;
+    }
+    // rtrim so a panel URL stored with a trailing slash cannot produce a double
+    // slash, which some panels answer with an unfollowed 301
+    $url = rtrim((string) $marzban_list_get['url_panel'], '/') . '/api/user/' . $username_account . '/usage';
+    $req = new CurlRequest($url);
+    $req->setHeaders(array('accept: application/json'));
+    $req->setBearerToken($Check_token['access_token']);
+    return $req->get();
+}
+#-----------------------------#
 
 function Get_Nodes($location)
 {

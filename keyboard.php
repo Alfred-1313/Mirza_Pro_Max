@@ -2360,16 +2360,41 @@ function keyboard_list_text($lang, $groupFilter = null)
                 'callback_data' => "topupgwlist:{$lang}",
                 'style' => 'primary',
             ]];
+            // 🎁 پیام‌های تخفیف - nine texts that are one subject. They stay in
+            // this section rather than moving onto the gateway screens because
+            // not one of them is per-gateway: the same sentence is produced for
+            // every gateway, so editing it on one would silently edit it on all.
+            if (!empty($bt_grouped['topupdisc'])) {
+                $bt_disc_custom = false;
+                foreach ($bt_grouped['topupdisc'] as $bt_g) {
+                    list(, $bt_g_style) = $bt_decorate($bt_g['key'], $bt_g['label']);
+                    if ($bt_g_style !== '') {
+                        $bt_disc_custom = true;
+                        break;
+                    }
+                }
+                $keyboard_text['inline_keyboard'][] = [[
+                    'text' => $textbotlang['bottext']['groupTopupDiscLabel'],
+                    'callback_data' => "bt_group|$lang|topupdisc",
+                    'style' => $bt_disc_custom ? 'success' : 'primary',
+                ]];
+            }
             // 🎨 ظاهر نمایش درگاه ها - the styling of the payment-method buttons
             // the customer picks from, moved off the 🏦 بسته‌های شارژ hub
             $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['gatewaysBtn'], 'callback_data' => "btnstyle_kindhub:gateway:{$lang}", 'style' => 'primary']];
         }
         $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['resetAllLabel'], 'callback_data' => "bt_group_resetall|$lang|$groupFilter", 'style' => 'danger']];
+        // a submenu of another group needs one step back to its parent - the
+        // shared "برگشت به لیست" row below jumps all the way out to the home list
+        if ($groupFilter === 'topupdisc') {
+            $keyboard_text['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "bt_group|$lang|topup", 'style' => 'danger']];
+        }
         $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['backToListLabel'], 'callback_data' => "btact|back|$lang", 'style' => 'danger']];
         $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']];
         $bt_captionKey = [
             'myservices' => 'groupServicesCaption',
             'topup' => 'groupTopupCaption',
+            'topupdisc' => 'groupTopupDiscCaption',
         ][$groupFilter] ?? 'groupBuyflowCaption';
         $bt_caption_tpl = $bt_tab_texts['bottext'][$bt_captionKey] ?? $textbotlang['bottext'][$bt_captionKey];
         $bt_caption = strtr($bt_caption_tpl, ['{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang]);

@@ -128,6 +128,12 @@ $mm_exempt_step = ((string) $datain === '' && preg_match('/^(btbtntext|btbbtntex
 if (!$mm_exempt_step && is_main_menu_trigger($text, $datain, $textbotlang)) {
     preempt_active_session($user, $from_id);
 }
+// An amount may be typed the way it reads: "100,000" is the same number as
+// 100000 on every step that asks for money, for the admin and the customer
+// alike. One place rather than sixty, next to the Persian-digit rewrite that
+// already happens in botapi.php, and only for the steps money_input_steps()
+// names - days, volume and counts reach their handlers exactly as typed.
+$text = money_step_text($mm_step, $text);
 $admin_ids = select("admin", "id_admin", null, null, "FETCH_COLUMN");
 if (!is_array($admin_ids)) {
     $admin_ids = [];
@@ -1244,6 +1250,10 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             'ekhtelal' => array(
                 'text' => $textbotlang['keyboard']['sendDisruptionReport'],
                 'callback_data' => "disorder-"
+            ),
+            'usagereport' => array(
+                'text' => $textbotlang['users']['status']['svcUsageReportBtn'],
+                'callback_data' => "usagereport_"
             )
         );
         if ($nameloc['name_product'] == $textbotlang['common']['labels']['testService1']) {
@@ -1332,29 +1342,54 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         } else {
             $textconnect = strtr($textbotlang['users']['status']['lastOnline'], ['{lastonline}' => $lastonline]);
         }
-        $textinfo = strtr(bottext_resolve_key('users.status.infoFull'), [
+        // The location split needs one extra call to the panel, and only three
+        // panel types can answer it at all - panel_user_usage() says which, so
+        // an unsupported panel simply renders without the block instead of
+        // paying for a request that cannot work.
+        $svc_lang = $user['lang'] ?? 'fa';
+        $svc_usage = panel_user_usage($nameloc['Service_location'], $DataUserOut['username']);
+        $svc_blocks = svc_status_blocks($DataUserOut, $svc_usage, $svc_lang, $textbotlang);
+        // Both the old placeholders and the new ones are filled: an admin who
+        // has already written their own template keeps working exactly as
+        // before, and the new blocks are there the moment they want them.
+        // A screen with a subscription QR is a photo, and a photo caption stops
+        // at 1024 characters; without one it is a plain message and gets 4096.
+        // svc_build_caption() trims the location list to whichever applies, so a
+        // shop with many nodes still gets a screen instead of nothing.
+        $svc_cap_limit = (strpos((string) ($DataUserOut['subscription_url'] ?? ''), 'http') === 0) ? 1024 : 4096;
+        $textinfo = svc_build_caption(bottext_resolve_key('users.status.infoFull'), [
             '{status}' => $status_var,
             '{username}' => $DataUserOut['username'],
             '{password_line}' => $userpassword,
             '{note_line}' => $nameconfig,
             '{location}' => $nameloc['Service_location'],
             '{product}' => $nameloc['name_product'],
-            '{traffic}' => $LastTraffic,
-            '{used}' => $usedTrafficGb,
+            '{traffic}' => $svc_blocks['total_text'],
+            '{used}' => $svc_blocks['used_text'],
             '{remaining}' => $RemainingVolume,
             '{percent}' => $Percent,
-            '{expiration}' => $expirationDate,
+            '{expiration}' => svc_expire_text($DataUserOut['expire'] ?? 0, $svc_lang, $textbotlang),
             '{days}' => $day,
             '{connection_info}' => $textconnect,
-        ]);
+            '{usage_bar}' => $svc_blocks['usage_bar'],
+            '{usage_line}' => $svc_blocks['usage_line'],
+            '{online_block}' => $svc_blocks['online_block'],
+        ], (array) ($svc_usage['nodes'] ?? []), $textbotlang, $svc_cap_limit);
     }
+    // the screen carries the subscription QR now; svc_send_status_screen()
+    // edits the caption in place when it can and only re-sends when the
+    // previous message was still text (see its own note)
+    $svc_sub_url = (string) ($DataUserOut['subscription_url'] ?? '');
+    // Only "♻️ بروزرسانی اطلاعات" edits the screen where it stands - that is the
+    // whole point of a refresh, and the message must not jump to the bottom of
+    // the chat for it. Every other way in (the service list, a back button from
+    // تغییر لینک / لینک اشتراک / گزارش مصرف) is arriving from a DIFFERENT screen,
+    // so that screen is taken away and this one is sent fresh.
+    $svc_refresh_in_place = strpos((string) $datain, 'updateproduct_') === 0;
     if ($user['step'] == "getuseragnetservice") {
-        sendmessage($from_id, $textinfo, $keyboardsetting, 'html');
-    } elseif ($datain == "productcheckdata") {
-        deletemessage($from_id, $message_id);
-        sendmessage($from_id, $textinfo, $keyboardsetting, 'html');
+        svc_send_status_screen($from_id, 0, $textinfo, $keyboardsetting, $svc_sub_url, true);
     } else {
-        Editmessagetext($from_id, $message_id, $textinfo, $keyboardsetting);
+        svc_send_status_screen($from_id, $message_id, $textinfo, $keyboardsetting, $svc_sub_url, !$svc_refresh_in_place);
     }
     step('home', $from_id);
     return;
@@ -2203,7 +2238,14 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             [$cl_backBtn],
         ]
     ]);
-    Editmessagetext($from_id, $message_id, $textbotlang['users']['changeLink']['warnchange'], $keyboardextend);
+    // The service screen is a QR photo, and a photo cannot be edited into a text
+    // message - so take it away and send this one. Doing it explicitly rather
+    // than leaning on Editmessagetext()'s fallback: that fallback exists to
+    // catch the paths nobody thought about, and this is one we did think about.
+    // Its back button is product_{id}, which rebuilds the service screen the
+    // same way - fresh, with the old screen removed.
+    deletemessage($from_id, $message_id);
+    sendmessage($from_id, $textbotlang['users']['changeLink']['warnchange'], $keyboardextend, 'HTML');
 } elseif (preg_match('/confirmchange_(\w+)/', $datain, $dataget)) {
     $id_invoice = $dataget[1];
     $nameloc = select("invoice", "*", "id_invoice", $id_invoice, "select");
@@ -2637,6 +2679,62 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             'parse_mode' => "HTML"
         ]);
     }
+} elseif (preg_match('/^usagereport_(\w+)$/', $datain, $dataget)) {
+    // 📊 گزارش مصرف - the day-by-day history, read from the subscription link.
+    // Only the multi-node panels keep it; the rest get an alert saying so
+    // rather than an empty screen (panel_usage_supported() decides).
+    $ur_invoice = select("invoice", "*", "id_invoice", $dataget[1], "select");
+    if ($ur_invoice == false || $ur_invoice['id_user'] != $from_id) {
+        return;
+    }
+    $ur_panel = select("marzban_panel", "*", "name_panel", $ur_invoice['Service_location'], "select");
+    // ask the panel, do not assume from its type - see panel_usage_really_works()
+    if (!panel_usage_really_works($ur_invoice['Service_location'], $ur_invoice['username'], $ur_panel['type'] ?? '')) {
+        telegram('answerCallbackQuery', [
+            'callback_query_id' => $callback_query_id,
+            'text' => bottext_resolve_key('users.status.svcUsageUnavailable'),
+            'show_alert' => true,
+            'cache_time' => 1,
+        ]);
+        return;
+    }
+    // the USERNAME, not the invoice id: the back button goes to
+    // "productcheckdata", and that handler looks the service up with
+    // "WHERE username = Processing_value". Writing an invoice id here made that
+    // lookup find nothing, so بازگشت answered "اطلاعات اکانت در دسترس نیست".
+    // Every other flow that hands off to productcheckdata stores the username
+    // too (see the linksub path).
+    update("user", "Processing_value", $ur_invoice['username'], "id", $from_id);
+    $ur_kb = usage_report_keyboard($user['lang'] ?? 'fa', $textbotlang);
+    // the status screen is a photo, so the menu is a fresh message; its back
+    // button rebuilds the status screen exactly as productcheckdata already does
+    deletemessage($from_id, $message_id);
+    sendmessage($from_id, $textbotlang['users']['status']['svcUsageMenuTitle'], $ur_kb, 'html');
+    return;
+} elseif (preg_match('/^usagerep\|(usage_1|usage_2|usage_10|usage_all)$/', $datain, $dataget)) {
+    // read back by username, matching what the menu stored (and what
+    // productcheckdata expects to find there when بازگشت is tapped)
+    $ur_invoice = select("invoice", "*", "username", $user['Processing_value'], "select");
+    if ($ur_invoice == false || $ur_invoice['id_user'] != $from_id) {
+        return;
+    }
+    $ur_panel = select("marzban_panel", "*", "name_panel", $ur_invoice['Service_location'], "select");
+    $ur_data = $ManagePanel->DataUser($ur_invoice['Service_location'], $ur_invoice['username']);
+    $ur_daily = ($ur_data['status'] ?? '') === 'Unsuccessful'
+        ? ['supported' => false, 'daily' => [], 'error' => 'panel']
+        : svc_daily_usage($ur_data['subscription_url'] ?? '', $ur_panel['type'] ?? null);
+    if (empty($ur_daily['supported'])) {
+        telegram('answerCallbackQuery', [
+            'callback_query_id' => $callback_query_id,
+            'text' => bottext_resolve_key('users.status.svcUsageUnavailable'),
+            'show_alert' => true,
+            'cache_time' => 1,
+        ]);
+        return;
+    }
+    $ur_kb = usage_report_keyboard($user['lang'] ?? 'fa', $textbotlang);
+    Editmessagetext($from_id, $message_id, svc_usage_report_text($dataget[1], $ur_daily['daily'], $user['lang'] ?? 'fa', $textbotlang), $ur_kb);
+    return;
 } elseif (preg_match('/disorder-(\w+)/', $datain, $dataget)) {
     $id_invoice = $dataget[1];
     update("user", "Processing_value", $id_invoice, "id", $from_id);
@@ -4964,9 +5062,16 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         $tp_customRow = array_reverse($tp_customRow);
     }
     $tp_floor = topup_usd_floor_toman($tp_lang, $tp_key);
+    // {min}/{max} come from topup_effective_limits() - the very same function
+    // that refuses an out-of-range amount a moment later. Reading them from
+    // anywhere else is how a prompt ends up promising one number while the
+    // refusal quotes another.
+    [$tp_pmin, $tp_pmax] = topup_effective_limits($tp_lang, $tp_key);
     Editmessagetext($from_id, $message_id, strtr($tp_customCap, [
         '{currency}' => currency_get(currency_for_lang($tp_lang))['title'] ?? currency_for_lang($tp_lang),
         '{minprice}' => $tp_floor !== null ? number_format($tp_floor) : '—',
+        '{min}' => $tp_pmin !== null ? number_format((float) $tp_pmin) : '—',
+        '{max}' => $tp_pmax !== null ? number_format((float) $tp_pmax) : '—',
     ]) . topup_disc_caption_block($from_id, $tp_lang, $tp_key, $textbotlang), json_encode([
         'inline_keyboard' => [$tp_customRow],
     ]), 'HTML');
@@ -5299,7 +5404,10 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     if ($tx_claim->rowCount() === 1) {
         DirectPayment($tx_row['id_order'], "images.jpg");
     }
-} elseif (preg_match('/^toncheck:([a-z0-9]+)$/', $datain, $tc_m)) {
+// mixed case, because the memo may carry the shop's own prefix now and an
+// admin who typed "MirzaPro" should get "MirzaPro" back, not a button that
+// silently stops matching (topup_memo_clean_prefix keeps it to [A-Za-z0-9])
+} elseif (preg_match('/^toncheck:([a-zA-Z0-9]+)$/', $datain, $tc_m)) {
     // The customer asking "have you seen it yet?". It is the same check the
     // cron makes every few minutes - offered here because waiting in front of
     // an invoice with no feedback is the worst part of paying on-chain.

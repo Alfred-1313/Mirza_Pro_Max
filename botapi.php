@@ -235,7 +235,7 @@ function senddocumentsid($chat_id,$documentid,$caption){
 }
 function Editmessagetext($chat_id, $message_id, $text, $keyboard,$parse_mode = 'HTML'){
     bottext_send_extras($chat_id, $text);
-    return telegram('editmessagetext', [
+    $emt_res = telegram('editmessagetext', [
         'chat_id' => $chat_id,
         'message_id' => $message_id,
         'text' => $text,
@@ -243,6 +243,24 @@ function Editmessagetext($chat_id, $message_id, $text, $keyboard,$parse_mode = '
         'parse_mode' => $parse_mode,
 
     ]);
+    if (!empty($emt_res['ok'])) {
+        return $emt_res;
+    }
+    // The service screen carries the subscription QR now, so it is a PHOTO
+    // message - and Telegram refuses a text edit on one with exactly this
+    // error. Every button under that screen ends in an Editmessagetext() call,
+    // so without this they all silently did nothing.
+    //
+    // Deliberately narrow: only this one description triggers the fallback. Any
+    // other failure (message not found, not modified, flood wait) keeps the old
+    // behaviour, because this function is called from hundreds of places and
+    // turning every failed edit into a delete-and-resend would churn screens
+    // that are fine as they are.
+    if (strpos((string) ($emt_res['description'] ?? ''), 'no text in the message') !== false) {
+        deletemessage($chat_id, $message_id);
+        return sendmessage($chat_id, $text, $keyboard, $parse_mode);
+    }
+    return $emt_res;
 }
  function deletemessage($chat_id, $message_id){
   telegram('deletemessage', [

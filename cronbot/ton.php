@@ -7,10 +7,17 @@
 // bot can see a payment land and credit the wallet by itself.
 //
 // Runs like the other crons (cronbot/plisio.php is the closest sibling).
+// The same set cronbot/plisio.php takes, and for the same reason: DirectPayment()
+// creates the service through the panel classes, so panels.php and the composer
+// autoloader have to be here. admin.php must NOT be - it is a dispatcher, not a
+// library: it reads $textbotlang/$version/$admin_ids at the top and returns
+// early for non-admins, so requiring it from a cron is an instant fatal.
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../botapi.php';
+require_once __DIR__ . '/../panels.php';
 require_once __DIR__ . '/../function.php';
-require_once __DIR__ . '/../admin.php';
+require_once __DIR__ . '/../jdf.php';
+require __DIR__ . '/../vendor/autoload.php';
 
 $setting = select("setting", "*", null, null, "select");
 $textbotlang = languagechange(null, 'fa');

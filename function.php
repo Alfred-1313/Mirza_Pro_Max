@@ -533,7 +533,38 @@ function rate_arze()
     // and every caller divides by it, which on PHP 8 is a fatal rather than a
     // bad number. So a failure returns null, which every caller already reads
     // as "no rate available" and turns into a clean message for the customer.
+    // ---- primary source: Nobitex ----
+    // The same feed the TON and TRX gateways already price against, so every
+    // crypto gateway now quotes from one place instead of three.
+    //
+    // It replaced bon-bast as the primary on 2026-09-07 because bon-bast began
+    // answering this server with HTTP 403. That made this function return null,
+    // and null took every dollar-priced gateway down with it: plisio,
+    // nowpayment, Stars and پرداخت مستقیم با ترون all stopped issuing invoices.
+    //
+    // Tether rather than the banknote rate is also the more honest number here:
+    // a customer paying in crypto converts at Tether, and the TRX price comes
+    // straight back in toman instead of being multiplied through a dollar rate,
+    // so there is one source of error instead of two.
     $arze_rate = [];
+    $usdt = nobitex_rate_toman('usdt');
+    if ($usdt > 0) {
+        $arze_rate['USD'] = (int) $usdt;
+        $trx = nobitex_rate_toman('trx');
+        if ($trx > 0) {
+            $arze_rate['TRX'] = (int) $trx;
+            return $arze_rate;
+        }
+        // Nobitex answered for Tether but not for TRX: fall back to the old
+        // two-hop calculation rather than losing the dollar rate as well
+        $tron_raw = @file_get_contents('https://api.diadata.org/v1/assetQuotation/Tron/0x0000000000000000000000000000000000000000');
+        $requests_tron = $tron_raw === false ? null : json_decode($tron_raw, true);
+        $arze_rate['TRX'] = intval(((float) ($requests_tron['Price'] ?? 0)) * $arze_rate['USD']);
+        return $arze_rate;
+    }
+
+    // ---- fallback: the original scrapers ----
+    // Kept so a Nobitex outage is survivable, not because it is preferred.
     $requestsusd = null;
     $tron_raw = @file_get_contents('https://api.diadata.org/v1/assetQuotation/Tron/0x0000000000000000000000000000000000000000');
     $requests_tron = $tron_raw === false ? null : json_decode($tron_raw, true);
@@ -545,6 +576,9 @@ function rate_arze()
         }
     }
     $arze_rate['USD'] = intval($requestsusd);
+    // A zero is not a rate, it is a failure - and every caller divides by it,
+    // which on PHP 8 is a fatal rather than a bad number. null is what every
+    // caller already reads as "no rate available".
     if ($arze_rate['USD'] <= 0) {
         return null;
     }
@@ -2037,6 +2071,55 @@ if (!function_exists('gateway_groups')) {
             // other language tabs
             'rial' => ['iranpay1', 'iranpay2', 'iranpay3', 'aqayepardakht', 'zarinpal', 'paymentnotverify'],
         ];
+    }
+}
+if (!function_exists('gateway_disc_groups')) {
+    // The same families, but as CATEGORIES rather than as a layout rule.
+    //
+    // gateway_groups() decides what collapses behind a submenu, and card-to-card
+    // is deliberately absent from it: two of its readers (💎 مالی → 💳 درگاه‌های
+    // پرداخت and the top-up gateway list) collapse a family with no "more than
+    // one member" guard, so giving card a family there would hide the shop's
+    // single most-used gateway behind an extra tap.
+    //
+    // For 🏦 بسته‌های شارژ and 🎁 تخفیف شارژ, though, card IS a category like any
+    // other - so it gets one here, and only here. Order is display order.
+    function gateway_disc_groups()
+    {
+        $g = gateway_groups();
+        return [
+            'card' => ['card'],
+            'rial' => $g['rial'] ?? [],
+            'online' => $g['online'] ?? [],
+            'offline' => $g['offline'] ?? [],
+        ];
+    }
+}
+if (!function_exists('gateway_disc_group_of')) {
+    function gateway_disc_group_of($key)
+    {
+        foreach (gateway_disc_groups() as $group => $members) {
+            if (in_array($key, $members, true)) {
+                return $group;
+            }
+        }
+        return null;
+    }
+}
+if (!function_exists('gateway_disc_group_members')) {
+    // only the gateways of this category a real customer of this language would
+    // see at checkout right now - the same effective-status rule the rest of
+    // this screen family uses
+    function gateway_disc_group_members($group, $lang, $textbotlang)
+    {
+        $live = topup_disc_enabled_gateways($lang, $textbotlang);
+        $out = [];
+        foreach (gateway_disc_groups()[$group] ?? [] as $key) {
+            if (isset($live[$key])) {
+                $out[$key] = $live[$key];
+            }
+        }
+        return $out;
     }
 }
 if (!function_exists('gateway_group_label')) {
@@ -3670,7 +3753,9 @@ if (!function_exists('ton_invoice_build')) {
         // TON's smallest unit is a nanoton; quote the exact figure the customer
         // has to send, with no trailing zeros to mistype
         $tonText = rtrim(rtrim(number_format($nano / 1000000000, 9, '.', ''), '0'), '.');
-        $randomString = bin2hex(random_bytes(5));
+        // the memo and the order id are the same string on purpose - see
+        // topup_memo_config(); the watcher matches the comment against id_order
+        $randomString = topup_memo_build($lang, 'ton');
         $dateacc = date('Y/m/d H:i:s');
         // dec_not_confirmed carries the exact nanoton figure the watcher has to
         // see arrive - the same column plisio uses for its txn id
@@ -3750,8 +3835,15 @@ if (!function_exists('ton_incoming_transfers')) {
     // the caller can tell "nothing arrived" from "could not look".
     function ton_incoming_transfers($address, $limit = 50)
     {
+        // archival=true, not false: the keyless lite servers behind the plain
+        // endpoint prune old blocks, so as soon as the wallet's last transaction
+        // aged out they answered every call with
+        //   HTTP 500 LITE_SERVER_UNKNOWN ... lt not in db
+        // which this function turned into null - and the watcher reads null as
+        // "could not look" and leaves every invoice alone. An archival node has
+        // the whole chain, and answers 200.
         $url = 'https://toncenter.com/api/v2/getTransactions?address=' . rawurlencode($address)
-            . '&limit=' . (int) $limit . '&archival=false';
+            . '&limit=' . (int) $limit . '&archival=true';
         $ctx = stream_context_create(['http' => ['timeout' => 15]]);
         $raw = @file_get_contents($url, false, $ctx);
         $j = $raw === false ? null : json_decode($raw, true);
@@ -3814,29 +3906,40 @@ if (!function_exists('topup_usd_rate')) {
         $rate = (is_array($r) && !empty($r['USD'])) ? (float) $r['USD'] : 0.0;
         return $rate;
     }
-    // The online crypto gateways cannot settle an invoice under a dollar -
-    // the processor refuses it, or the network fee swallows the payment. So
-    // it is a floor rather than a preference: an admin may set a minimum
-    // above it, never below.
+    // "Does this gateway's wording have to explain the one-dollar rule?"
+    //
+    // Only the two processors that actually refuse a sub-dollar invoice. The
+    // rest of the online family has no dollar in the middle to floor against:
+    // TON and TRX are paid straight into the shop's own wallet and priced in
+    // toman, and Telegram Stars is invoiced in Telegram's own currency - so
+    // quoting a dollar at their customers only ever confused them.
     function topup_has_usd_floor($key)
     {
-        // TON is priced straight in toman, so there is no dollar in the middle
-        // to floor it against - its minimum is simply what the admin set
-        if ($key === 'ton' || $key === 'trx') {
-            return false;
-        }
-        return function_exists('gateway_group_of') && gateway_group_of($key) === 'online';
+        return $key === 'plisio' || $key === 'nowpayment';
     }
-    // What that dollar is worth right now, or null when this gateway has no
-    // floor - or when the rate cannot be fetched, in which case nothing new
-    // is enforced and the old limits stand.
+    // The smallest amount this gateway can actually put on an invoice, in
+    // toman, or null when it has none - and null too when the rate cannot be
+    // fetched, in which case nothing new is enforced and the old limits stand.
+    //
+    // This is the number the prompt shows, the number the refusal quotes, and
+    // the number the invoice builder holds the customer to. They have to be the
+    // same number or the customer is refused twice with two different figures.
     function topup_usd_floor_toman($lang, $key)
     {
-        if (!topup_has_usd_floor($key)) {
+        $rate = topup_usd_rate();
+        if ($rate <= 0) {
             return null;
         }
-        $rate = topup_usd_rate();
-        return $rate > 0 ? (int) ceil($rate) : null;
+        if (topup_has_usd_floor($key)) {
+            return (int) ceil($rate);
+        }
+        // Telegram invoices Stars in whole stars, so one star is the real floor
+        // here - not the dollar the code used to borrow from Plisio. Same
+        // conversion star_invoice_build() itself uses.
+        if ($key === 'startelegrams') {
+            return (int) ceil($rate * 0.016);
+        }
+        return null;
     }
     // Payment_report and PaySetting each name the gateways differently; this
     // is the suffix its minbalance/maxbalance rows are stored under.
@@ -3857,11 +3960,21 @@ if (!function_exists('topup_usd_rate')) {
             'iranpay3' => 'iranpay',
         ][$key] ?? null;
     }
-    // What an online gateway's ceiling is before anyone sets one. Without a
-    // default an unset ceiling reads as zero and refuses every amount.
+    // What a gateway's limits are before anyone sets one. Without a default an
+    // unset ceiling reads as zero and refuses every amount, and an unset floor
+    // lets a one-toman top-up through.
+    //
+    // Every gateway now shares the same pair rather than only the ones with a
+    // dollar floor: a gateway that was never configured used to end up with no
+    // ceiling at all, which is not a deliberate "unlimited" - it is a gap.
+    // A gateway that HAS its own number keeps it; these only fill the blank.
     function topup_default_max($key)
     {
-        return topup_has_usd_floor($key) ? 1000000 : null;
+        return 1000000;
+    }
+    function topup_default_min($key)
+    {
+        return 100;
     }
     function topup_effective_gateway_max($lang, $key, $configured)
     {
@@ -3889,21 +4002,28 @@ if (!function_exists('topup_usd_rate')) {
         return ($v === null || $v === '' || (float) $v <= 0) ? null : $v;
     }
     // The limits the customer is actually held to on the custom-amount step.
+    //
+    // Order matters. The configured minimum is resolved FIRST, and only then is
+    // the gateway's hard floor applied on top - a floor is a lower bound, not a
+    // replacement. Applying it first (as this did) meant a gateway with no
+    // entry in the top-up store never consulted the minimum the admin had set
+    // in 💎 مالی at all: Telegram Stars, floored at one star, quoted 3,636 to
+    // customers while its own screen said 20,000.
     function topup_effective_limits($lang, $key)
     {
         [$min, $max] = topup_minmax_for($lang, $key);
-        $floor = topup_usd_floor_toman($lang, $key);
-        if ($floor !== null && ($min === null || (float) $min < $floor)) {
-            $min = $floor;
-        }
-        // the gateway keeps its own ceiling in 💎 مالی; without folding it in
-        // here the refusal would quote a maximum of zero and then the gateway
-        // would hold the customer to a different number anyway
+        // the gateway keeps its own range in 💎 مالی; without folding it in here
+        // the refusal would quote a maximum of zero and then the gateway would
+        // hold the customer to a different number anyway
         if ($min === null) {
             $min = topup_gateway_min($lang, $key);
         }
         if ($max === null) {
             $max = topup_gateway_max($lang, $key);
+        }
+        $floor = topup_usd_floor_toman($lang, $key);
+        if ($floor !== null && ($min === null || (float) $min < $floor)) {
+            $min = $floor;
         }
         return [$min, $max];
     }
@@ -3912,6 +4032,11 @@ if (!function_exists('topup_usd_rate')) {
     // twice with two different numbers.
     function topup_effective_gateway_min($lang, $key, $configured)
     {
+        // nothing configured: fall back to the shared floor rather than leaving
+        // it blank, which let a one-toman top-up through
+        if ($configured === null || $configured === '' || (float) $configured <= 0) {
+            $configured = topup_default_min($key);
+        }
         $floor = topup_usd_floor_toman($lang, $key);
         return ($floor !== null && (float) $configured < $floor) ? $floor : $configured;
     }
@@ -4069,6 +4194,535 @@ if (!function_exists('topup_gwstore_map')) {
         }
         update("setting", $column, empty($m) ? '{}' : json_encode($m, JSON_UNESCAPED_UNICODE), null, null);
         topup_gwstore_map($column, true);
+    }
+}
+if (!function_exists('svc_bytes_text')) {
+    // ---- the service screen's own formatting ----
+    // Bytes the way a customer reads them. GB below a terabyte, because that is
+    // the unit every plan in this shop is sold in.
+    function svc_bytes_text($bytes)
+    {
+        $b = (float) max(0, (int) $bytes);
+        if ($b >= 1024 ** 4) {
+            return number_format($b / 1024 ** 4, 2) . ' TB';
+        }
+        if ($b >= 1024 ** 3) {
+            return number_format($b / 1024 ** 3, 2) . ' GB';
+        }
+        if ($b >= 1024 ** 2) {
+            return number_format($b / 1024 ** 2, 1) . ' MB';
+        }
+        if ($b >= 1024) {
+            return number_format($b / 1024, 0) . ' KB';
+        }
+        return ((int) $b) . ' B';
+    }
+    // The 20-cell bar above the usage line. An unlimited plan has no fraction to
+    // draw, so it is shown full rather than empty - empty would read as "you
+    // have nothing", which is the opposite of what unlimited means.
+    function svc_usage_bar($used, $limit, $cells = 20)
+    {
+        $limit = (int) $limit;
+        if ($limit <= 0) {
+            return ['bar' => str_repeat('█', $cells), 'percent' => null, 'icon' => '🔋'];
+        }
+        $ratio = min(max(((float) $used) / $limit, 0), 1);
+        $filled = (int) round($ratio * $cells);
+        return [
+            'bar' => str_repeat('█', $filled) . str_repeat('░', $cells - $filled),
+            'percent' => round($ratio * 100, 1),
+            'icon' => $ratio >= 0.9 ? '🪫' : ($ratio >= 0.5 ? '⚠️' : '🔋'),
+        ];
+    }
+    // One location's row: a name, a proportional bar, its share, its bytes. The
+    // share is of the total that was actually attributed to locations, not of
+    // the plan - a plan can be unlimited, but the split still adds up to 100%.
+    // $maxRows limits how many locations are drawn (heaviest first, since the
+    // caller sorted them). The ones left out are summed into a single trailing
+    // line, so the customer still sees that they exist.
+    function svc_location_block(array $nodes, $textbotlang, $cells = 18, $maxRows = null)
+    {
+        $nodes = array_filter($nodes, fn($b) => (int) $b > 0);
+        if (empty($nodes)) {
+            return '';
+        }
+        // the share is always of the REAL total, not of the rows that survived
+        // the trim - otherwise hiding the small locations would silently inflate
+        // the big ones to 100%
+        $total = array_sum($nodes);
+        $hidden = 0;
+        $hiddenBytes = 0;
+        if ($maxRows !== null && $maxRows >= 0 && count($nodes) > $maxRows) {
+            $keep = array_slice($nodes, 0, (int) $maxRows, true);
+            $hiddenBytes = $total - array_sum($keep);
+            $hidden = count($nodes) - count($keep);
+            $nodes = $keep;
+        }
+        $lines = [];
+        foreach ($nodes as $name => $bytes) {
+            $ratio = $total > 0 ? $bytes / $total : 0;
+            $filled = (int) round($ratio * $cells);
+            // at least one cell for a location that carried anything at all,
+            // so a small-but-real share is visible rather than a blank row
+            if ($filled < 1) {
+                $filled = 1;
+            }
+            // name / bar / share / bytes, each on its own line - the shape the
+            // shop asked for, matching the screen they showed
+            $lines[] = '● <b>' . htmlspecialchars((string) $name, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . "</b>\n"
+                . str_repeat('▰', $filled) . str_repeat('▱', max($cells - $filled, 0)) . "\n"
+                . number_format($ratio * 100, 1) . "%\n"
+                . svc_bytes_text($bytes);
+        }
+        if ($hidden > 0) {
+            $b = $textbotlang['users']['status'] ?? [];
+            $lines[] = strtr($b['svcLocationMore'] ?? '➕ و {n} لوکیشن دیگر ({volume})', [
+                '{n}' => $hidden,
+                '{volume}' => svc_bytes_text($hiddenBytes),
+            ]);
+        }
+        return implode("\n\n", $lines);
+    }
+    // Persian tabs get a Jalali date, every other language a Gregorian one -
+    // a Chinese or Russian customer reading "۱۴۰۶/۰۵/۰۵" learns nothing.
+    function svc_expire_text($expire_ts, $lang, $textbotlang)
+    {
+        $b = $textbotlang['users']['status'] ?? [];
+        if (empty($expire_ts)) {
+            return $b['svcNoExpire'] ?? 'بدون انقضا ♾️';
+        }
+        $ts = (int) $expire_ts;
+        if ($lang === 'fa') {
+            return jdate('Y/m/d', $ts);
+        }
+        return date('Y/m/d', $ts);
+    }
+    // "6 مرداد 1405" for fa, "2026-07-28" elsewhere - used by the last-online
+    // block, which shows a date and a clock time on separate lines.
+    function svc_date_text($ts, $lang)
+    {
+        $ts = (int) $ts;
+        if ($ts <= 0) {
+            return '';
+        }
+        return $lang === 'fa' ? jdate('j F Y', $ts) : date('Y-m-d', $ts);
+    }
+    // How long ago, in words. Anything under two minutes is "just now", which is
+    // what the screenshot shows for an active connection.
+    function svc_ago_text($ts, $textbotlang)
+    {
+        $b = $textbotlang['users']['status'] ?? [];
+        $diff = time() - (int) $ts;
+        if ($diff < 120) {
+            return $b['svcAgoNow'] ?? 'همین الان';
+        }
+        if ($diff < 3600) {
+            return strtr($b['svcAgoMinutes'] ?? '{n} دقیقه پیش', ['{n}' => (int) ($diff / 60)]);
+        }
+        if ($diff < 86400) {
+            return strtr($b['svcAgoHours'] ?? '{n} ساعت پیش', ['{n}' => (int) ($diff / 3600)]);
+        }
+        return strtr($b['svcAgoDays'] ?? '{n} روز پیش', ['{n}' => (int) ($diff / 86400)]);
+    }
+}
+if (!function_exists('usage_report_keyboard')) {
+    // The گزارش مصرف menu, built through statusbtn_render() so the colour, the
+    // emoji, the name and the hide switch an admin sets in 🎨 شخصی‌سازی actually
+    // reach it - the same treatment the service screen's own buttons get.
+    // Hiding every report row would leave a screen with no way out, so the back
+    // button is always drawn even if it was hidden.
+    function usage_report_keyboard($lang, $textbotlang)
+    {
+        $rows = [];
+        foreach ([
+            'ur_yesterday' => 'usagerep|usage_1',
+            'ur_2days' => 'usagerep|usage_2',
+            'ur_10days' => 'usagerep|usage_10',
+            'ur_all' => 'usagerep|usage_all',
+        ] as $key => $cb) {
+            if (statusbtn_is_hidden($lang, $key)) {
+                continue;
+            }
+            $b = statusbtn_render($lang, $key, $textbotlang);
+            $b['callback_data'] = $cb;
+            $rows[] = [$b];
+        }
+        $back = statusbtn_render($lang, 'ur_back', $textbotlang);
+        $back['callback_data'] = 'productcheckdata';
+        $rows[] = [$back];
+        return json_encode(['inline_keyboard' => $rows]);
+    }
+}
+if (!function_exists('svc_send_status_screen')) {
+    // The service screen is a QR photo now, and Telegram cannot turn a text
+    // message into a photo by editing it. So: try to edit the caption first -
+    // that is the cheap path, and it is the one taken every time the customer
+    // taps "بارگذاری مجدد" on a screen that is already a photo, leaving the
+    // message where it is in the chat. Only when that fails (the message is
+    // still text, i.e. the customer just arrived from the service list) does it
+    // fall back to deleting and re-sending.
+    //
+    // A panel with no scannable subscription link (WGDashboard hands out a
+    // config file, ibsng/mikrotik have none at all) keeps the old plain-text
+    // screen rather than being given a QR of nothing.
+    function svc_send_status_screen($chat_id, $message_id, $caption, $keyboard, $subscription_url, $force_new = false)
+    {
+        $url = (string) $subscription_url;
+        $qrable = $url !== '' && strpos($url, 'http') === 0;
+        if (!$qrable) {
+            if ($force_new) {
+                deletemessage($chat_id, $message_id);
+                sendmessage($chat_id, $caption, $keyboard, 'html');
+            } else {
+                Editmessagetext($chat_id, $message_id, $caption, $keyboard);
+            }
+            return;
+        }
+        if (!$force_new && $message_id) {
+            $res = telegram('editMessageCaption', [
+                'chat_id' => $chat_id,
+                'message_id' => $message_id,
+                'caption' => $caption,
+                'reply_markup' => $keyboard,
+                'parse_mode' => 'HTML',
+            ]);
+            if (!empty($res['ok'])) {
+                return;   // it was already a photo - nothing moved
+            }
+            // "message is not modified" means the screen is already showing
+            // exactly this; re-sending it would be a pointless jump
+            if (strpos((string) ($res['description'] ?? ''), 'not modified') !== false) {
+                return;
+            }
+        }
+        if ($message_id) {
+            deletemessage($chat_id, $message_id);
+        }
+        $tmp = sys_get_temp_dir() . '/svcqr_' . $chat_id . '_' . bin2hex(random_bytes(3)) . '.png';
+        $ok = false;
+        try {
+            $qrCode = createqrcode($url);
+            file_put_contents($tmp, $qrCode->getString());
+            addBackgroundImage($tmp, $qrCode, __DIR__ . '/images.jpg');
+            $ok = is_file($tmp) && filesize($tmp) > 0;
+        } catch (Throwable $e) {
+            $ok = false;
+        }
+        if (!$ok) {
+            // a QR that could not be drawn must not cost the customer the whole
+            // screen - fall back to the text version
+            if (is_file($tmp)) {
+                @unlink($tmp);
+            }
+            sendmessage($chat_id, $caption, $keyboard, 'html');
+            return;
+        }
+        telegram('sendphoto', [
+            'chat_id' => $chat_id,
+            'photo' => new CURLFile($tmp),
+            'reply_markup' => $keyboard,
+            'caption' => $caption,
+            'parse_mode' => 'HTML',
+        ]);
+        @unlink($tmp);
+    }
+}
+if (!function_exists('svc_daily_usage')) {
+    // ---- day-by-day history, for the گزارش مصرف screen ----
+    // This comes from the SUBSCRIPTION link rather than the admin API: the
+    // panel's /sub/<token>/usage answers with {"usages":[{"date","used_traffic"}],
+    // "node_usages":[...]} and needs no admin credentials. The admin endpoint
+    // used by panel_user_usage() returns the per-node split only.
+    //
+    // Returns ['supported'=>bool,'daily'=>[Y-m-d => bytes],'error'=>string|null].
+    // A panel that cannot answer is 'supported' => false, which is what makes
+    // the گزارش مصرف button explain itself instead of opening an empty screen.
+    function svc_daily_usage($subscription_url, $panel_type = null)
+    {
+        if ($panel_type !== null && !panel_usage_supported($panel_type)) {
+            return ['supported' => false, 'daily' => [], 'error' => null];
+        }
+        $url = rtrim((string) $subscription_url, '/');
+        if ($url === '' || strpos($url, 'http') !== 0) {
+            return ['supported' => false, 'daily' => [], 'error' => 'no subscription url'];
+        }
+        $raw = @file_get_contents($url . '/usage', false, stream_context_create([
+            'http' => ['timeout' => 15, 'ignore_errors' => true],
+            'ssl' => ['verify_peer' => false, 'verify_peer_name' => false],
+        ]));
+        $j = $raw === false ? null : json_decode($raw, true);
+        if (!is_array($j) || !isset($j['usages'])) {
+            return ['supported' => false, 'daily' => [], 'error' => 'unreadable'];
+        }
+        $daily = [];
+        foreach ((array) $j['usages'] as $row) {
+            if (!is_array($row) || empty($row['date'])) {
+                continue;
+            }
+            $daily[(string) $row['date']] = (int) ($row['used_traffic'] ?? 0);
+        }
+        ksort($daily);
+        return ['supported' => true, 'daily' => $daily, 'error' => null];
+    }
+}
+if (!function_exists('svc_status_blocks')) {
+    // The pieces the service caption is assembled from. Kept here rather than in
+    // index.php so the same blocks can be reused by anything else that shows a
+    // service (the alert screens, a future admin preview) without copying them.
+    function svc_status_blocks(array $DataUserOut, array $usage, $lang, $textbotlang)
+    {
+        $b = $textbotlang['users']['status'] ?? [];
+        $limit = (int) ($DataUserOut['data_limit'] ?? 0);
+        $used = (int) ($DataUserOut['used_traffic'] ?? 0);
+        $bar = svc_usage_bar($used, $limit);
+
+        // "20.48 GB مصرف شده از نامحدود ♾️" / "… از 50 GB (41%)"
+        $unlimited = $b['svcUnlimited'] ?? 'نامحدود ♾️';
+        if ($limit > 0) {
+            $usageLine = strtr($b['svcUsageOf'] ?? '🎛 {used} مصرف شده از {total} ({percent}%)', [
+                '{used}' => svc_bytes_text($used),
+                '{total}' => svc_bytes_text($limit),
+                '{percent}' => (string) $bar['percent'],
+            ]);
+        } else {
+            $usageLine = strtr($b['svcUsageOfUnlimited'] ?? '🎛 {used} مصرف شده از {total}', [
+                '{used}' => svc_bytes_text($used),
+                '{total}' => $unlimited,
+            ]);
+        }
+
+        // the location block carries its own heading, so that an unsupported
+        // panel drops the heading too instead of leaving a title over nothing
+        $locBlock = '';
+        if (!empty($usage['supported'])) {
+            $rows = svc_location_block((array) ($usage['nodes'] ?? []), $textbotlang);
+            if ($rows !== '') {
+                $locBlock = "\n\n<blockquote><b>" . ($b['svcLocationTitle'] ?? '🌐 مصرف لوکیشن') . "</b></blockquote>\n\n" . $rows;
+            }
+        }
+
+        // last online: a date line and a clock line, or a single "never" line
+        $onlineRaw = $DataUserOut['online_at'] ?? null;
+        $ts = 0;
+        if (!empty($onlineRaw)) {
+            $ts = is_numeric($onlineRaw) ? (int) $onlineRaw : (int) strtotime(str_replace('/', '-', (string) $onlineRaw));
+        }
+        if ($ts > 0) {
+            $onlineBlock = strtr($b['svcOnlineBlock'] ?? "تاریخ ← {date}\nساعت ← {time} ({ago})", [
+                '{date}' => svc_date_text($ts, $lang),
+                '{time}' => date('H:i', $ts),
+                '{ago}' => svc_ago_text($ts, $textbotlang),
+            ]);
+        } else {
+            $onlineBlock = $b['svcNeverOnline'] ?? 'متصل نشده';
+        }
+
+        return [
+            'usage_bar' => $bar['icon'] . ' <code>' . $bar['bar'] . '</code>',
+            'usage_line' => $usageLine,
+            'location_block' => $locBlock,
+            'online_block' => $onlineBlock,
+            'total_text' => $limit > 0 ? svc_bytes_text($limit) : $unlimited,
+            'used_text' => svc_bytes_text($used),
+        ];
+    }
+}
+if (!function_exists('svc_build_caption')) {
+    // Assembles the service caption and makes sure it FITS.
+    //
+    // A photo caption is capped at 1024 characters by Telegram, and a location
+    // row costs about 49 of them. Measured against this shop's own panel: seven
+    // locations already take 773, so a shop with thirteen nodes would push the
+    // caption over the cap - and Telegram does not truncate, it refuses the
+    // whole message. The service screen would simply stop appearing.
+    //
+    // So rather than freezing a row count, this drops the lightest locations
+    // one at a time until the finished caption fits, and says how many were
+    // left out. A shop with few nodes loses nothing; a shop with many keeps the
+    // ones that actually carry its traffic.
+    function svc_build_caption($template, array $vars, array $nodes, $textbotlang, $limit = 1024)
+    {
+        $nodes = array_filter($nodes, fn($b) => (int) $b > 0);
+        $rows = count($nodes);
+        $heading = "\n\n<blockquote><b>" . (($textbotlang['users']['status']['svcLocationTitle']) ?? '🌐 مصرف لوکیشن') . "</b></blockquote>\n\n";
+        for ($try = $rows; $try >= 0; $try--) {
+            $block = '';
+            if ($try > 0) {
+                $body = svc_location_block($nodes, $textbotlang, 18, $try);
+                if ($body !== '') {
+                    $block = $heading . $body;
+                }
+            }
+            $caption = strtr($template, $vars + ['{location_block}' => $block]);
+            if (mb_strlen($caption) <= $limit) {
+                return $caption;
+            }
+        }
+        // Even with no locations at all it does not fit: the admin has written a
+        // caption longer than Telegram allows. Hand back the shortest version we
+        // can build and let the caller deal with it - silently dropping their
+        // text would be worse than a visible failure.
+        return strtr($template, $vars + ['{location_block}' => '']);
+    }
+}
+if (!function_exists('svc_usage_report_text')) {
+    // The four views behind گزارش مصرف, matching the report the shop already
+    // had in its own tooling: one named day, or the whole history.
+    function svc_usage_report_text($mode, array $daily, $lang, $textbotlang)
+    {
+        $b = $textbotlang['users']['status'] ?? [];
+        $dayOffsets = ['usage_1' => 1, 'usage_2' => 2, 'usage_10' => 10];
+        if (isset($dayOffsets[$mode])) {
+            $date = date('Y-m-d', strtotime("-{$dayOffsets[$mode]} day"));
+            $bytes = (int) ($daily[$date] ?? 0);
+            $shown = $lang === 'fa' ? jdate('Y/m/d', strtotime($date)) : $date;
+            if ($bytes <= 0) {
+                return strtr($b['svcReportEmpty'] ?? '💭 در تاریخ {date} هیچ مصرفی ثبت نشده است.', ['{date}' => $shown]);
+            }
+            return strtr($b['svcReportOneDay'] ?? "<blockquote><b>📊 مصرف {date}</b></blockquote>\n\n💾 مجموع مصرف: <b>{amount}</b>", [
+                '{date}' => $shown,
+                '{amount}' => svc_bytes_text($bytes),
+            ]);
+        }
+        // the whole history, heaviest day scaled to a full bar
+        $active = array_filter($daily, fn($v) => (int) $v > 0);
+        if (empty($active)) {
+            return $b['svcReportNothingYet'] ?? '💭 هنوز هیچ مصرفی برای این سرویس ثبت نشده است.';
+        }
+        $max = max($active);
+        $out = "<blockquote><b>" . ($b['svcReportAllTitle'] ?? '📊 گزارش کل مصرف') . "</b></blockquote>\n\n";
+        $out .= strtr($b['svcReportSummary'] ?? "🟢 روزهای فعال: <b>{days}</b>\n💾 مجموع مصرف: <b>{total}</b>", [
+            '{days}' => count($active),
+            '{total}' => svc_bytes_text(array_sum($active)),
+        ]) . "\n\n";
+        // newest first: the day a customer cares about most is today
+        foreach (array_reverse($active, true) as $date => $bytes) {
+            $filled = max(1, (int) round(($bytes / $max) * 10));
+            $shown = $lang === 'fa' ? jdate('Y/m/d', strtotime($date)) : $date;
+            $out .= "• {$shown}\n<code>" . str_repeat('▰', $filled) . str_repeat('▱', 10 - $filled) . '</code> '
+                . svc_bytes_text($bytes) . "\n\n";
+        }
+        return rtrim($out);
+    }
+}
+if (!function_exists('topup_memo_config')) {
+    // ---- what an invoice's memo (comment / tag) is made of ----
+    //
+    // The memo IS the order id: ton_payment_settled() looks the incoming
+    // transfer up by the exact comment string, so whatever is built here is
+    // what gets stored in Payment_report.id_order and what the watcher then
+    // matches on. Keeping them one and the same is what makes changing this
+    // setting safe for invoices that are already open - each one carries its
+    // own memo in the row, so it keeps matching under the old shape.
+    //
+    // Only two parts are offered, and the omissions are deliberate:
+    //   - an optional shop prefix, so a customer scanning their wallet history
+    //     can tell what the payment was for
+    //   - a random part, which is never optional; it is the only thing making
+    //     one invoice distinguishable from another
+    // The customer's Telegram id and username are NOT available as parts. A
+    // TON comment is written to a public chain and stays there for good, so
+    // putting either one in it would publish, permanently and for anybody to
+    // read off the shop's own wallet, which Telegram account paid this shop
+    // what and when. See topup_memo_locked_reason().
+    function topup_memo_defaults()
+    {
+        return ['prefix' => '', 'len' => 10];
+    }
+    function topup_memo_limits()
+    {
+        // 12 + 16 = 28 characters at most, and "toncheck:" + 28 is well inside
+        // the 64-byte callback_data budget the check button has to fit in
+        return ['prefixMax' => 12, 'lenMin' => 6, 'lenMax' => 16];
+    }
+    function topup_memo_config($lang, $key)
+    {
+        $m = topup_gwstore_map('topup_memo_config');
+        $raw = $m[$lang][$key] ?? null;
+        $cfg = topup_memo_defaults();
+        if (is_string($raw)) {
+            $raw = json_decode($raw, true);
+        }
+        if (is_array($raw)) {
+            if (isset($raw['prefix'])) {
+                $cfg['prefix'] = (string) $raw['prefix'];
+            }
+            if (isset($raw['len'])) {
+                $cfg['len'] = (int) $raw['len'];
+            }
+        }
+        $lim = topup_memo_limits();
+        $cfg['prefix'] = topup_memo_clean_prefix($cfg['prefix']);
+        $cfg['len'] = max($lim['lenMin'], min($lim['lenMax'], (int) $cfg['len']));
+        return $cfg;
+    }
+    // Letters and digits only. The memo travels through a URL query string, a
+    // wallet's comment field and finally a callback_data regex - a separator
+    // or a non-ASCII character would survive some of those and not others.
+    function topup_memo_clean_prefix($prefix)
+    {
+        $p = preg_replace('/[^A-Za-z0-9]/', '', (string) $prefix);
+        return substr((string) $p, 0, topup_memo_limits()['prefixMax']);
+    }
+    function topup_memo_set($lang, $key, $field, $value)
+    {
+        $cfg = topup_memo_config($lang, $key);
+        $cfg[$field] = $field === 'len' ? (int) $value : topup_memo_clean_prefix($value);
+        $def = topup_memo_defaults();
+        // back to the factory shape means no stored row at all, so a reset
+        // leaves the store as clean as a fresh install
+        if ($cfg['prefix'] === $def['prefix'] && (int) $cfg['len'] === (int) $def['len']) {
+            topup_gwstore_set('topup_memo_config', $lang, $key, '');
+            return;
+        }
+        topup_gwstore_set('topup_memo_config', $lang, $key, json_encode($cfg));
+    }
+    function topup_memo_reset($lang, $key)
+    {
+        topup_gwstore_set('topup_memo_config', $lang, $key, '');
+    }
+    function topup_memo_is_custom($lang, $key)
+    {
+        $m = topup_gwstore_map('topup_memo_config');
+        return isset($m[$lang][$key]);
+    }
+    // The random half is drawn from random_bytes, not rand(): a guessable memo
+    // would let somebody watching the chain work out another customer's memo
+    // before they paid it.
+    //
+    // It is also checked against the orders already issued. At the default 10
+    // characters a clash is not worth thinking about, but the admin may shorten
+    // it to 6 - and two invoices sharing a memo is not a cosmetic problem: the
+    // watcher would settle whichever row it read first, crediting the wrong
+    // customer. Cheap to rule out, so it is ruled out.
+    function topup_memo_build($lang, $key)
+    {
+        global $pdo;
+        $cfg = topup_memo_config($lang, $key);
+        $memo = '';
+        for ($try = 0; $try < 6; $try++) {
+            $hex = bin2hex(random_bytes((int) ceil($cfg['len'] / 2)));
+            $memo = $cfg['prefix'] . substr($hex, 0, (int) $cfg['len']);
+            $taken = $pdo->prepare("SELECT 1 FROM Payment_report WHERE id_order = ? LIMIT 1");
+            $taken->execute([$memo]);
+            if ($taken->fetchColumn() === false) {
+                return $memo;
+            }
+        }
+        // six clashes in a row means the random part is far too short for how
+        // many orders this shop has - fall back to the full-length default
+        // rather than handing back a memo already in use
+        return $cfg['prefix'] . bin2hex(random_bytes(8));
+    }
+    // Shown when an admin taps one of the two parts that are not on offer.
+    // answerCallbackQuery truncates past 200 characters, so the short form is
+    // the one that has to fit; the settings screen's own caption carries the
+    // longer version where there is room for it.
+    function topup_memo_locked_reason()
+    {
+        return "⛔️ به دلایل امنیتی در دسترس نیست.\n\n"
+            . "کامنت تراکنش روی بلاکچین TON برای همیشه عمومی می‌ماند. با آیدی یا یوزرنیم "
+            . "داخلش، هر کسی از روی کیف پول شما می‌فهمد کدام حساب تلگرام چه مبلغی پرداخت کرده.";
     }
 }
 if (!function_exists('topup_invoice_layout_get')) {
@@ -4293,9 +4947,12 @@ if (!function_exists('topup_expire_minutes')) {
     // and the number cronbot/payment_expire.php enforces cannot drift apart.
     function topup_expire_minutes($lang, $key)
     {
-        // TON quotes an exact amount of coin at the moment the invoice is
-        // made, and that price moves, so it starts far shorter than the rest
-        $default = ($key === 'ton' || $key === 'trx') ? 15 : 30;
+        // One number for every gateway. TON and TRX used to start at 15 because
+        // they quote an exact amount of coin against a moving price, but a
+        // single default is what an admin can actually reason about - and any
+        // gateway that wants a shorter window still has its own per-language
+        // field on its settings screen.
+        $default = 30;
         $field = topup_expire_field($key);
         $m = $field === null ? $default : (int) pay_value($field, $lang, $default);
         return $m > 0 ? $m : $default;
@@ -4369,7 +5026,11 @@ if (!function_exists('star_invoice_build')) {
             return ['error' => 'rate'];
         }
         $starAmount = intval($amount / $perStar);
-        if ($amount / $usd < 1 || $starAmount < 1) {
+        // one whole star is Telegram's own minimum, and now the only one: the
+        // extra "under a dollar" rule that used to sit here was borrowed from
+        // the crypto processors, which is not what this gateway settles in. It
+        // also disagreed with the minimum the amount screen quoted.
+        if ($starAmount < 1) {
             return ['error' => 'toolow', 'usd' => $usd];
         }
         $randomString = bin2hex(random_bytes(5));
@@ -4480,6 +5141,12 @@ if (!function_exists('topup_expire_notify')) {
     // have their invoice silently deleted instead.
     function topup_expire_notify($key, $id_user, $id_order, $price, $message_id, $payer_lang)
     {
+        // languagechange()'s $lang is a typed string, so a null here is a fatal
+        // rather than a fallback - and this runs inside the expiry cron's loop,
+        // where a fatal means the row never gets marked expired at all. The
+        // caller is fixed, but one missed caller must not be able to stop the
+        // whole cron again.
+        $payer_lang = is_string($payer_lang) && $payer_lang !== '' ? $payer_lang : 'fa';
         $t = languagechange(null, $payer_lang);
         $default = $key === 'plisio'
             ? $t['users']['Balance']['plisioInvoiceExpiredCaption']
@@ -5274,6 +5941,73 @@ if (!function_exists('money_valid')) {
         return strlen(substr($n, $dot + 1)) <= max(0, $dec);
     }
 }
+if (!function_exists('money_input_steps')) {
+    // Every step on which the bot is waiting for an AMOUNT - admin side and
+    // customer side both. A message typed on one of these is read through
+    // money_normalize() first, so "100,000" and "۱۰۰٬۰۰۰" mean exactly what
+    // "100000" means, the same way convertPersianNumbersToEnglish() already
+    // rewrites every incoming message in botapi.php.
+    //
+    // Only amounts belong here. Steps that ask for days, volume, a count or a
+    // percentage are deliberately absent: a separator means nothing there, and
+    // rewriting their input would only hide a typo.
+    // Steps whose names are built at runtime (topup_custom:, gwfld:, the top-up
+    // package editors) already run money_valid()/money_normalize() themselves.
+    function money_input_steps()
+    {
+        return [
+            // customer: the legacy "مبلغ واریز" prompt
+            'getprice',
+            // admin: wallet adjustments
+            'add_Balance_all', 'addbalanceusercurrent', 'addbalanceuser',
+            'addbalancemanual', 'get_price_Negative', 'getpricebackremove',
+            // admin: product and plan prices
+            'get_price', 'change_price', 'setpricechangelocation',
+            'getaddpricepeoduct', 'getkampricepeoduct',
+            'getpricef', 'getpricnn', 'getpricnn2',
+            'getpriceftime', 'getpricnntime', 'getpricnn2time',
+            'GetPriceExtra', 'GetPricecustomvo', 'GetPricetimeextra', 'GetPriceExtratime',
+            // admin: discount and gift codes
+            'get_price_code', 'get_price_codesell', 'getvaluegift',
+            // admin: deposit limits, per gateway
+            'minbalance', 'maxbalance', 'minbalancebulk',
+            'getmaincart', 'getmaxcart',
+            'getmainplisio', 'getmaxplisio',
+            'getmaindigitaltron', 'getmaxdigitaltron',
+            'getmainiranpay1', 'getmaaxiranpay1',
+            'getmainiranpay2', 'getmaaxiranpay2',
+            'getmainaqayepardakht', 'getmaaxaqayepardakht',
+            'getmainaqzarinpal', 'getmaaxzarinpal',
+            'minbalanceiranpay', 'maxbalanceiranpay',
+            'getmainaqstar', 'maxbalancestar',
+            'getmainaqnowpayment', 'maxbalancenowpayment',
+            // admin: other prices
+            'getpricereqagent', 'getpricewheel',
+            'getpricevolumesrc', 'getpricetimesrc',
+        ];
+    }
+}
+if (!function_exists('money_step_text')) {
+    // The rewrite itself. Anything that is not a plain amount is handed back
+    // untouched, so a step's own "مبلغ نامعتبر است" still fires on real typos
+    // instead of being swallowed here.
+    function money_step_text($step, $text)
+    {
+        if (!is_string($text) || trim($text) === '') {
+            return $text;
+        }
+        if (!in_array((string) $step, money_input_steps(), true)) {
+            return $text;
+        }
+        // digits and separators only: a message with a letter in it is a typo
+        // (or a menu label), not an amount someone spaced out
+        if (!preg_match('/^[0-9۰-۹٠-٩,،.٫\s\x{00A0}]+$/u', trim($text))) {
+            return $text;
+        }
+        $n = money_normalize($text);
+        return $n === null ? $text : $n;
+    }
+}
 if (!function_exists('money')) {
     // Renders an amount in one currency. Trailing zeros are trimmed so a price
     // typed as 2.1 reads as "2.1" rather than "2.10", and a whole number never
@@ -5509,31 +6243,116 @@ function addCronIfNotExists($cronCommand)
     return true;
 }
 
+if (!function_exists('pruneUnlockedBotCrons')) {
+    // Removes the old, unguarded shape of the bot's own cron lines: a line that
+    // calls one of $scripts and does NOT go through flock. Anything else in the
+    // crontab - other tools, an admin's own entries, our flock lines - is left
+    // exactly as it is.
+    //
+    // This exists because addCronIfNotExists() can only ever ADD. When the
+    // schedule here changed, the old lines stayed behind and both sets ran.
+    function pruneUnlockedBotCrons(array $scripts)
+    {
+        $scripts = array_values(array_filter($scripts));
+        if (empty($scripts) || !isShellExecAvailable()) {
+            return false;
+        }
+        $crontabBinary = getCrontabBinary();
+        if ($crontabBinary === null) {
+            return false;
+        }
+        $existing = trim((string) runShellCommand(sprintf('%s -l 2>/dev/null', escapeshellarg($crontabBinary))));
+        if ($existing === '') {
+            return true;
+        }
+        $lines = preg_split('/\r?\n/', $existing);
+        $kept = [];
+        $removed = 0;
+        foreach ($lines as $line) {
+            $trimmed = trim($line);
+            $isOurs = false;
+            foreach ($scripts as $s) {
+                if ($trimmed !== '' && strpos($trimmed, '#') !== 0
+                    && strpos($trimmed, 'cronbot/' . $s) !== false
+                    && strpos($trimmed, 'flock') === false) {
+                    $isOurs = true;
+                    break;
+                }
+            }
+            if ($isOurs) {
+                $removed++;
+                continue;
+            }
+            $kept[] = $line;
+        }
+        if ($removed === 0) {
+            return true;
+        }
+        $tmp = tempnam(sys_get_temp_dir(), 'cron');
+        if ($tmp === false) {
+            return false;
+        }
+        file_put_contents($tmp, implode(PHP_EOL, $kept) . PHP_EOL);
+        runShellCommand(sprintf('%s %s', escapeshellarg($crontabBinary), escapeshellarg($tmp)));
+        unlink($tmp);
+        error_log("pruneUnlockedBotCrons: removed $removed unguarded cron line(s)");
+        return true;
+    }
+}
 function activecron()
 {
     global $domainhosts;
 
+    // Every line is wrapped in `flock -n` and carries a `--max-time`, and the
+    // heavy jobs are spread out. Both matter, and both were learned the hard
+    // way on 2026-09-06: the plain one-minute versions of these lines needed
+    // more than 60 seconds of work every 60 seconds on a one-core box, so they
+    // stacked - 21 concurrent croncard runs, load past 180, and Telegram
+    // timing out on the webhook.
+    //
+    // These strings are the source of truth. addCronIfNotExists() compares
+    // lines EXACTLY, so if this list ever drifts from what is installed, the
+    // difference is silently added alongside rather than replacing - which is
+    // precisely how the box ended up running two competing sets of the same
+    // jobs. Change the schedule here, never only in the crontab.
     $cronCommands = [
-        "*/15 * * * * curl https://$domainhosts/cronbot/statusday.php",
-        "*/1 * * * * curl https://$domainhosts/cronbot/croncard.php",
-        "*/1 * * * * curl https://$domainhosts/cronbot/NoticationsService.php",
-        "*/5 * * * * curl https://$domainhosts/cronbot/payment_expire.php",
-        "*/1 * * * * curl https://$domainhosts/cronbot/sendmessage.php",
-        "*/3 * * * * curl https://$domainhosts/cronbot/plisio.php",
-        // TON is settled by reading the chain, so nothing credits a customer
-        // until this runs - it is the whole gateway, not an extra
-        "*/2 * * * * curl https://$domainhosts/cronbot/ton.php",
-        "*/2 * * * * curl https://$domainhosts/cronbot/trx.php",
-        "*/1 * * * * curl https://$domainhosts/cronbot/activeconfig.php",
-        "*/1 * * * * curl https://$domainhosts/cronbot/disableconfig.php",
-        "*/1 * * * * curl https://$domainhosts/cronbot/iranpay1.php",
-        "*/2 * * * * curl https://$domainhosts/cronbot/gift.php",
-        "*/30 * * * * curl https://$domainhosts/cronbot/expireagent.php",
-        "*/15 * * * * curl https://$domainhosts/cronbot/on_hold.php",
-        "*/2 * * * * curl https://$domainhosts/cronbot/configtest.php",
-        "*/15 * * * * curl https://$domainhosts/cronbot/uptime_node.php",
-        "*/15 * * * * curl https://$domainhosts/cronbot/uptime_panel.php",
+        // --- money path: still every minute ---
+        "*/1 * * * * flock -n /tmp/mz_croncard.lock curl -s --max-time 55 https://$domainhosts/cronbot/croncard.php > /dev/null 2>&1",
+        "*/1 * * * * flock -n /tmp/mz_iranpay1.lock curl -s --max-time 55 https://$domainhosts/cronbot/iranpay1.php > /dev/null 2>&1",
+        "*/1 * * * * flock -n /tmp/mz_sendmessage.lock curl -s --max-time 55 https://$domainhosts/cronbot/sendmessage.php > /dev/null 2>&1",
+        // TON and TRX are settled by reading the chain, so nothing credits a
+        // customer until these run - they are the whole gateway, not an extra
+        "*/2 * * * * flock -n /tmp/mz_ton.lock curl -s --max-time 110 https://$domainhosts/cronbot/ton.php > /dev/null 2>&1",
+        "*/2 * * * * flock -n /tmp/mz_trx.lock curl -s --max-time 110 https://$domainhosts/cronbot/trx.php > /dev/null 2>&1",
+        "*/3 * * * * flock -n /tmp/mz_plisio.lock curl -s --max-time 170 https://$domainhosts/cronbot/plisio.php > /dev/null 2>&1",
+        "*/5 * * * * flock -n /tmp/mz_payment_expire.lock curl -s --max-time 280 https://$domainhosts/cronbot/payment_expire.php > /dev/null 2>&1",
+        // --- stretched: these were the load ---
+        "*/5 * * * * flock -n /tmp/mz_notifications.lock curl -s --max-time 280 https://$domainhosts/cronbot/NoticationsService.php > /dev/null 2>&1",
+        "*/2 * * * * flock -n /tmp/mz_activeconfig.lock curl -s --max-time 110 https://$domainhosts/cronbot/activeconfig.php > /dev/null 2>&1",
+        "*/2 * * * * flock -n /tmp/mz_disableconfig.lock curl -s --max-time 110 https://$domainhosts/cronbot/disableconfig.php > /dev/null 2>&1",
+        "*/5 * * * * flock -n /tmp/mz_gift.lock curl -s --max-time 280 https://$domainhosts/cronbot/gift.php > /dev/null 2>&1",
+        "*/10 * * * * flock -n /tmp/mz_configtest.lock curl -s --max-time 550 https://$domainhosts/cronbot/configtest.php > /dev/null 2>&1",
+        // --- quarter-hourly, on different minutes so they never fire together ---
+        "3,18,33,48 * * * * flock -n /tmp/mz_statusday.lock curl -s --max-time 600 https://$domainhosts/cronbot/statusday.php > /dev/null 2>&1",
+        "7,22,37,52 * * * * flock -n /tmp/mz_on_hold.lock curl -s --max-time 600 https://$domainhosts/cronbot/on_hold.php > /dev/null 2>&1",
+        "11,26,41,56 * * * * flock -n /tmp/mz_uptime_node.lock curl -s --max-time 600 https://$domainhosts/cronbot/uptime_node.php > /dev/null 2>&1",
+        "14,29,44,59 * * * * flock -n /tmp/mz_uptime_panel.lock curl -s --max-time 600 https://$domainhosts/cronbot/uptime_panel.php > /dev/null 2>&1",
+        "9,39 * * * * flock -n /tmp/mz_expireagent.lock curl -s --max-time 1700 https://$domainhosts/cronbot/expireagent.php > /dev/null 2>&1",
     ];
+
+    // Drop the pre-flock shape of these same jobs before adding ours. Without
+    // this the two sets run side by side, each holding its own lock and neither
+    // aware of the other - which is exactly what re-broke the box after the
+    // first fix. Deliberately narrow: only lines that call one of OUR cron
+    // scripts AND have no flock are removed, so anything an admin added by hand
+    // is left alone.
+    // [A-Za-z0-9_]+ and not [A-Za-z_]+: iranpay1.php has a digit in it, and a
+    // letters-only pattern silently dropped it from the list - so the one job
+    // whose old line most needed pruning would have been the one left behind
+    pruneUnlockedBotCrons(array_map(static function ($line) {
+        preg_match('#cronbot/([A-Za-z0-9_]+\.php)#', $line, $m);
+        return $m[1] ?? '';
+    }, $cronCommands));
 
     addCronIfNotExists($cronCommands);
 
@@ -5567,7 +6386,9 @@ if (!function_exists('updateBackupCronSchedule')) {
             return $line !== '' && strpos($line, '#') !== 0;
         }));
 
-        $targetLine = "0 */$intervalHours * * * curl https://$domainhosts/cronbot/backupbot.php";
+        // guarded like every other job: a database dump is the heaviest thing
+        // this bot does, and two of them at once is what a slow disk turns into
+        $targetLine = "0 */$intervalHours * * * flock -n /tmp/mz_backupbot.lock curl -s --max-time 3000 https://$domainhosts/cronbot/backupbot.php > /dev/null 2>&1";
         $backupLines = array_values(array_filter($cronLines, static function ($line) {
             return strpos($line, 'cronbot/backupbot.php') !== false;
         }));
@@ -6136,7 +6957,32 @@ if (!function_exists('statusbtn_defs')) {
             'transfor' => ['name' => '🚚 انتقال سرویس', 'text' => $textbotlang['users']['transfer']['title'], 'style' => 'primary'],
             'change-location' => ['name' => '🌐 تغییر لوکیشن', 'text' => $textbotlang['users']['changeLocation']['title'], 'style' => 'primary'],
             'ekhtelal' => ['name' => '⚠️ ارسال گزارش اختلال', 'text' => $textbotlang['keyboard']['sendDisruptionReport'], 'style' => 'danger'],
+            // registered here rather than hardcoded onto the screen so it gets
+            // the same reorder / rename / recolour / hide treatment every other
+            // status button already has
+            'usagereport' => ['name' => '📊 گزارش مصرف', 'text' => $textbotlang['users']['status']['svcUsageReportBtn'] ?? '📊 گزارش مصرف', 'style' => 'primary'],
+            // The five buttons INSIDE گزارش مصرف. They live in this same
+            // registry so the admin edits them with the tools they already
+            // know (colour / emoji / name / hide) instead of a parallel system
+            // - but they are on a different screen, so statusbtn_layout_payload()
+            // leaves them out of the drag-to-reorder list where they would mean
+            // nothing.
+            'ur_yesterday' => ['name' => '📊 گزارش مصرف › مصرف دیروز', 'text' => $textbotlang['users']['status']['svcReportBtnYesterday'] ?? '📅 مصرف دیروز', 'style' => 'primary'],
+            'ur_2days' => ['name' => '📊 گزارش مصرف › ۲ روز پیش', 'text' => $textbotlang['users']['status']['svcReportBtn2'] ?? '📅 مصرف ۲ روز پیش', 'style' => 'primary'],
+            'ur_10days' => ['name' => '📊 گزارش مصرف › ۱۰ روز پیش', 'text' => $textbotlang['users']['status']['svcReportBtn10'] ?? '📅 مصرف ۱۰ روز پیش', 'style' => 'primary'],
+            'ur_all' => ['name' => '📊 گزارش مصرف › کل مصرف‌ها', 'text' => $textbotlang['users']['status']['svcReportBtnAll'] ?? '📈 کل مصرف‌ها', 'style' => 'success'],
+            'ur_back' => ['name' => '📊 گزارش مصرف › دکمه بازگشت', 'text' => $textbotlang['users']['status']['svcBackToInfo'] ?? '🔙 بازگشت به اطلاعات سرویس', 'style' => 'danger'],
         ];
+    }
+    // the keys that actually sit on the service screen itself - the گزارش مصرف
+    // sub-screen's buttons are registered above for editing, but reordering them
+    // against the service screen's own buttons would be meaningless
+    function statusbtn_screen_keys($textbotlang)
+    {
+        return array_values(array_filter(
+            array_keys(statusbtn_defs($textbotlang)),
+            fn($k) => strpos($k, 'ur_') !== 0
+        ));
     }
 }
 if (!function_exists('statusbtn_override')) {
@@ -6437,7 +7283,12 @@ if (!function_exists('statusbtn_layout_payload')) {
     // swaps their positions in the saved order and clears the selection
     function statusbtn_layout_payload($lang, $textbotlang, $selectedIdx = null)
     {
-        $orderedKeys = statusbtn_ordered_keys($lang, $textbotlang);
+        // only the service screen's own buttons can be reordered here - the
+        // گزارش مصرف sub-screen's rows are edited elsewhere in this same tool
+        $orderedKeys = array_values(array_filter(
+            statusbtn_ordered_keys($lang, $textbotlang),
+            fn($k) => strpos($k, 'ur_') !== 0
+        ));
         $kb = ['inline_keyboard' => []];
         foreach ($orderedKeys as $idx => $key) {
             $rendered = statusbtn_render($lang, $key, $textbotlang);
@@ -7360,6 +8211,14 @@ if (!function_exists('bt_section_meta')) {
                 'label' => '📊 وضعیت سرویس (فعال/غیرفعال)',
                 'alert' => 'این بخش پیام‌هایی که وضعیت فعال یا غیرفعال بودن سرویس کاربر رو نشون می‌دن مدیریت می‌کنه.',
             ],
+            'myservices_usagereport' => [
+                'label' => '📊 گزارش مصرف',
+                'alert' => "این بخش دو تا متن داره:\n• Alert وقتی پنل سرویس نتونه مصرف تفکیک‌شده بده (ربات موقع زدن دکمه از خود پنل می‌پرسه، پس فقط جایی میاد که واقعاً جوابی نیست).\n• خط پایان لیست لوکیشن‌ها. کپشن عکس سقف ۱۰۲۴ کاراکتر داره و هر لوکیشن حدود ۴۹ تا می‌گیره، پس اگه نودها زیاد باشن ربات سنگین‌ترین‌ها رو نگه می‌داره و بقیه رو توی این خط جمع می‌زنه. {n} = تعداد، {volume} = مجموع حجمشون.",
+            ],
+            'myservices_panelerror' => [
+                'label' => '⚠️ خطای ارتباط با پنل',
+                'alert' => 'این پیام وقتی نشون داده می‌شه که کاربر روی سرویسش می‌زنه ولی ربات نمی‌تونه از پنل استعلام بگیره - پنل خاموشه، آدرسش عوض شده، یا توکنش دیگه معتبر نیست. متنش رو طوری بنویس که کاربر بدونه تقصیر خودش نیست و بعداً دوباره امتحان کنه.',
+            ],
             'myservices_extend' => [
                 'label' => '♻️ تمدید سرویس',
                 'alert' => 'این بخش فاکتور تمدید سرویس و پیام هشدار موجودی ناکافیِ همون فاکتور رو مدیریت می‌کنه.',
@@ -7387,6 +8246,26 @@ if (!function_exists('bt_section_meta')) {
             'topupdisc_bulk' => [
                 'label' => '⚡️ عملیات سریع',
                 'alert' => 'دکمه‌ی زیر یه میان‌بره: یکجا روی همه‌ی درگاه‌های فعال این زبان تخفیف خودکار می‌ذاره - نه یه تنظیم جدا، فقط سریع‌تر می‌کنه کاری که می‌تونی تک‌تک هم انجام بدی.',
+            ],
+            'topupdisc_code' => [
+                'label' => '🎟 کد تخفیف',
+                'alert' => 'این سه پیام، مسیر وارد کردن کد تخفیف‌ان: صفحه‌ای که ازش کد می‌خواد، جوابش وقتی کد غلط باشه، و جوابش وقتی کد درست باشه.',
+            ],
+            'topupdisc_show' => [
+                'label' => '📣 اعلام تخفیف در روش پرداخت',
+                'alert' => 'این دو بلوک، بالای لیست روش‌های پرداخت به کاربر نشون داده می‌شن تا بدونه چه تخفیفی براش فعاله. پیام مستقل نیستن - داخل همون کپشن نوشته می‌شن.',
+            ],
+            'topupdisc_line_one' => [
+                'label' => '✏️ جمله‌ی تخفیف — وقتی روی یک درگاه ست شده',
+                'alert' => 'این دو جمله وقتی به کاربر نشون داده می‌شن که تخفیف روی یک درگاهِ تکی ست شده باشه (یا کد تخفیفی که مال همون درگاهه). مهم نیست کدوم درگاه - همه‌ی درگاه‌ها از همین دو جمله استفاده می‌کنن، پس اینجا اسم درگاه نمی‌بینی. یکی برای تخفیف درصدیه، یکی برای تخفیف با مبلغ ثابت.',
+            ],
+            'topupdisc_line_group' => [
+                'label' => '✏️ جمله‌ی تخفیف — وقتی روی یک دسته ست شده',
+                'alert' => 'این دو جمله وقتی نشون داده می‌شن که تخفیف روی کل یه دسته ست شده باشه (کارت به کارت / ریالی / آنلاین ارزی / آفلاین ارزی). اسم اون دسته خودش با {group} داخل جمله نوشته می‌شه، پس یه متن برای هر چهار دسته کافیه.',
+            ],
+            'topupdisc_members' => [
+                'label' => '💳 درگاه‌های این دسته',
+                'alert' => 'دکمه‌ی بالا تخفیف کل این دسته‌ست. دکمه‌های زیر هر درگاه رو جدا تنظیم می‌کنن (تخفیف خودکار و کدهای تخفیف مخصوص همون درگاه). اگه هر دو ست باشن، روی هم سوار نمی‌شن — هرکدوم به کاربر بیشتر بده همون اعمال می‌شه.',
             ],
             'topupdisc_auto_actions' => [
                 'label' => '⚙️ عملیات',
@@ -7817,7 +8696,7 @@ if (!function_exists('genbtn_list_payload')) {
         $key = genbtn_alias_to_key($alias);
         $gb_sfx = ($origin === 'u') ? '|u' : '';
         $defs = genbtn_defs($alias, $textbotlang);
-        $titles = ['su' => '🔘 دکمه‌های نام‌گذاری سرویس', 'cf' => '🔘 دکمه‌های تأیید خرید', 'ns' => '🔘 دکمه‌ی نداشتن سرویس فعال', 'te' => '🔘 دکمه‌ی پیام اتمام اکانت تست', 'sc' => '🔘 دکمه‌ی بستن (سرویس‌های من)', 'bc' => '🔘 دکمه‌ی تهیه اشتراک (شارژ کیف پول)', 'rn' => '🔘 دکمه‌های فاکتور تمدید سرویس', 'cl' => '🔘 دکمه‌های تغییر لینک اتصال'];
+        $titles = ['su' => '🔘 دکمه‌های نام‌گذاری سرویس', 'cf' => '🔘 دکمه‌های تأیید خرید', 'ns' => '🔘 دکمه‌ی نداشتن سرویس فعال', 'te' => '🔘 دکمه‌ی پیام اتمام اکانت تست', 'sc' => '🔘 دکمه‌ی بستن (سرویس‌های من)', 'bc' => '🔘 دکمه‌ی تهیه اشتراک (شارژ کیف پول)', 'rn' => '🔘 دکمه‌های فاکتور تمدید سرویس', 'cl' => '🔘 دکمه‌های تغییر لینک اتصال', 'td' => '🔘 دکمه‌های کد تخفیف شارژ'];
         $notes = [
             'su' => 'این ۲ دکمه، زیر پیام انتخاب نام سرویس (مرحله‌ی خرید) به کاربر نشون داده می‌شن.',
             'cf' => 'این ۲ دکمه، زیر صفحه‌ی تأیید نهایی خرید نشون داده می‌شن - هر سه حالت (عادی/تخفیف‌دار/حجم دلخواه) از این یکی استفاده می‌کنن، پس ویرایششون روی هر سه اثر می‌ذاره.',
@@ -7827,6 +8706,7 @@ if (!function_exists('genbtn_list_payload')) {
             'bc' => 'این ۱ دکمه، زیر پیام تایید نهاییِ شارژ کیف پول (هر روش پرداختی) نشون داده می‌شه.',
             'rn' => 'دکمه‌ی ۱ و ۲ زیر فاکتور تمدید سرویس نشون داده می‌شن (دکمه‌ی «افزایش موجودی» بینشون از تنظیمات مشترک همون دکمه میاد، جدا نیست). دکمه‌ی ۳ وقتی کاربر روی «افزایش موجودی» بزنه، زیر لیست روش‌های پرداخت میاد و با تپ روش، برمی‌گردونه به همون فاکتور تمدید.',
             'cl' => 'این ۲ دکمه، زیر پیام هشدار «تغییر لینک اتصال» (قبل از تایید نهایی) نشون داده می‌شن.',
+            'td' => 'دکمه‌ی ۱ («کد تخفیف دارم») زیر لیست روش‌های پرداختِ 💰 افزایش موجودی میاد - ولی فقط وقتی که برای این زبان حداقل یک کد تخفیف شارژ ساخته باشی، وگرنه اصلاً نشون داده نمی‌شه. دکمه‌ی ۲ زیر همون صفحه‌ی وارد کردن کد میاد. اگر کاربر یه کد رو فعال کرده باشه، دکمه‌ی ۱ دیگه بهش نشون داده نمی‌شه (چون خود کپشن تخفیف فعال رو نوشته).',
         ];
         $info = ($titles[$alias] ?? '🔘 دکمه‌ها') . "\n➖➖➖➖➖➖➖➖➖➖\n" . ($notes[$alias] ?? '') . "\n";
         $info .= "➖➖➖➖➖➖➖➖➖➖\n👁 پیش‌نمایش زنده - روی هرکدوم بزن تا ویرایشش کنی 👇";
@@ -8385,6 +9265,56 @@ if (!function_exists('topup_disc_auto_eligible')) {
         return true;
     }
 }
+if (!function_exists('topup_disc_group_user_count')) {
+    // How many codeless discounts this user has already taken anywhere in this
+    // CATEGORY - the group quota is a category quota, not a per-gateway one, so
+    // it counts every gateway in the group together. That deliberately includes
+    // uses awarded by a gateway's own auto discount: both are logged the same
+    // way (empty code), and from the customer's side they are the same thing -
+    // "a codeless discount on this category".
+    function topup_disc_group_user_count($userId, $lang, $group)
+    {
+        global $pdo;
+        $members = gateway_disc_groups()[$group] ?? [];
+        if (empty($members)) {
+            return 0;
+        }
+        $resetAt = intval(topup_disc_group_for($lang, $group)['resetAt'] ?? 0);
+        $in = implode(',', array_fill(0, count($members), '?'));
+        $sql = "SELECT COUNT(*) FROM topup_discount_use WHERE id_user = ? AND (code = '' OR code IS NULL) AND lang = ? AND gateway IN ($in)";
+        $params = array_merge([$userId, $lang], array_values($members));
+        if ($resetAt > 0) {
+            $sql .= " AND used_at > ?";
+            $params[] = (string) $resetAt;
+        }
+        $st = $pdo->prepare($sql);
+        $st->execute($params);
+        return intval($st->fetchColumn());
+    }
+}
+if (!function_exists('topup_disc_group_eligible')) {
+    // the group twin of topup_disc_auto_eligible(), same rules, category scope
+    function topup_disc_group_eligible($userId, $lang, $group, $g = null)
+    {
+        if ($g === null) {
+            $g = topup_disc_group_live($lang, $group);
+        }
+        if (!is_array($g) || empty($g['enabled'])) {
+            return false;
+        }
+        if (topup_disc_admin_restrictions_bypassed($userId)) {
+            return true;
+        }
+        $perUser = intval($g['limitPerUser'] ?? 1);
+        if ($perUser > 0 && topup_disc_group_user_count($userId, $lang, $group) >= $perUser) {
+            return false;
+        }
+        if (!empty($g['newUserOnly']) && topup_disc_user_has_any_paid_topup($userId)) {
+            return false;
+        }
+        return true;
+    }
+}
 if (!function_exists('topup_disc_user_has_any_paid_topup')) {
     // true once this user has ANY previously-completed wallet top-up (any
     // gateway) - backs the "فقط کاربران جدید" (new-users-only) restriction on
@@ -8789,9 +9719,33 @@ if (!function_exists('topup_disc_method_caption')) {
                 $eligibleAutos[$gw] = $a;
             }
         }
-        if (!empty($eligibleAutos)) {
+        // a discount set on a whole category gets ONE line naming the category,
+        // rather than the same sentence repeated for each of its gateways
+        $eligibleGroups = [];
+        foreach (array_keys(gateway_disc_groups()) as $grp) {
+            if (empty(gateway_disc_group_members($grp, $lang, $textbotlang))) {
+                continue;
+            }
+            $g = topup_disc_group_live($lang, $grp);
+            if ($g !== null && topup_disc_group_eligible($userId, $lang, $grp, $g)) {
+                $eligibleGroups[$grp] = $g;
+            }
+        }
+        if (!empty($eligibleAutos) || !empty($eligibleGroups)) {
             $autoLines = [];
             $exp = 0;
+            foreach ($eligibleGroups as $grp => $g) {
+                $perUser = intval($g['limitPerUser'] ?? 0);
+                $autoLines[] = topup_disc_render_block('users.Balance.topupDiscAutoLine', $textbotlang, [
+                    '{gateway}' => trim(strip_tags((string) gateway_group_label($grp, $textbotlang))),
+                    '{value}' => topup_disc_admin_value_label($g),
+                    '{uses}' => topup_disc_uses_text($perUser, $perUser > 0 ? topup_disc_group_user_count($userId, $lang, $grp) : 0, $textbotlang),
+                ]);
+                $e = intval($g['expiry'] ?? 0);
+                if ($e > 0 && ($exp === 0 || $e < $exp)) {
+                    $exp = $e;
+                }
+            }
             foreach ($eligibleAutos as $gw => $a) {
                 $perUser = intval($a['limitPerUser'] ?? 0);
                 $autoLines[] = topup_disc_render_block('users.Balance.topupDiscAutoLine', $textbotlang, [
@@ -8910,6 +9864,19 @@ if (!function_exists('topup_disc_caption_line')) {
                 '{amount}' => money($amount),
             ]);
         }
+        // a discount that came from a whole category says so by name, so the
+        // customer reads "درگاه‌های آنلاین ارزی ٪۲۰ تخفیف" rather than a bare
+        // percentage that gives no hint why it applies here and not elsewhere
+        $group = (string) ($disc['group'] ?? '');
+        if ($group !== '') {
+            $key = $isFixed ? 'topupDiscGroupFixedCaption' : 'topupDiscGroupPercentCaption';
+            $tpl = $textbotlang['hardcoded'][$key]
+                ?? ($isFixed ? '{value} اضافه برای هر شارژ با {group}' : 'تخفیف {value} درصدی برای {group}');
+            return strtr($tpl, [
+                '{value}' => $isFixed ? money($value) : $valueTxt,
+                '{group}' => trim(strip_tags((string) gateway_group_label($group, $textbotlang))),
+            ]);
+        }
         $key = $isFixed ? 'topupDiscFixedCaption' : 'topupDiscPercentCaption';
         $tpl = $textbotlang['hardcoded'][$key] ?? ($isFixed ? '{value} اضافه برای هر شارژ' : 'تخفیف {value} درصدی برای افزایش موجودی');
         return strtr($tpl, ['{value}' => $isFixed ? money($value) : $valueTxt]);
@@ -9005,6 +9972,54 @@ if (!function_exists('topup_disc_gw_summary')) {
     }
 }
 if (!function_exists('topup_disc_gw_list_payload')) {
+    // what is configured for a whole category, in one scannable string
+    function topup_disc_group_summary($lang, $group)
+    {
+        $g = topup_disc_group_live($lang, $group);
+        return $g === null ? '' : topup_disc_admin_value_label($g);
+    }
+    // the category screen: the discount for the whole family, then its gateways
+    function topup_disc_group_list_payload($lang, $group, $textbotlang)
+    {
+        $members = gateway_disc_group_members($group, $lang, $textbotlang);
+        $groupLabel = trim(strip_tags((string) gateway_group_label($group, $textbotlang)));
+        $g = topup_disc_group_for($lang, $group);
+        $gLive = topup_disc_group_live($lang, $group);
+
+        $info = "🎁 <b>{$groupLabel}</b>\n➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= "تخفیف <b>گروهی</b> روی همه‌ی " . count($members) . " درگاه این دسته اعمال می‌شه.\n";
+        $info .= "تخفیف <b>تک‌درگاهی</b> هم می‌تونی جدا بذاری — روی هم سوار نمی‌شن، هرکدوم به کاربر بیشتر بده همون اعمال می‌شه.\n";
+        $info .= "➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= "🎯 تخفیف گروهی: " . ($gLive !== null ? topup_disc_admin_value_label($gLive) . ' ✅' : 'خاموش') . "\n";
+        if ($gLive === null && floatval($g['value'] ?? 0) > 0) {
+            $info .= "\n⚠️ <b>مقدار داره ولی فعال نیست</b> — یا خاموشه یا مدتش تموم شده.\n";
+        }
+        if ($gLive !== null) {
+            $preview = $gLive;
+            $preview['group'] = $group;
+            $info .= "\n👁 چیزی که کاربر می‌بینه:\n<blockquote><b>"
+                . htmlspecialchars(topup_disc_caption_line($preview, $textbotlang), ENT_QUOTES) . "</b></blockquote>";
+        }
+
+        $kb = ['inline_keyboard' => []];
+        $kb['inline_keyboard'][] = [[
+            'text' => ($gLive !== null ? '✅ ' : '') . '🎯 تخفیف گروهی این دسته',
+            'callback_data' => "dsgrpauto:{$lang}:{$group}",
+            'style' => $gLive !== null ? 'success' : 'primary',
+        ]];
+        $kb['inline_keyboard'][] = [['text' => bt_section_meta('topupdisc_members')['label'], 'callback_data' => 'bt_sep|topupdisc_members']];
+        foreach ($members as $key => $label) {
+            $sum = topup_disc_gw_summary($lang, $key);
+            $kb['inline_keyboard'][] = [[
+                'text' => trim(strip_tags((string) $label)) . ($sum !== '' ? " • {$sum}" : ''),
+                'callback_data' => "topupdisc:{$lang}:{$key}",
+                'style' => ($sum !== '') ? 'success' : 'primary',
+            ]];
+        }
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "dslang:{$lang}", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'] ?? '❌ بستن', 'callback_data' => 'dsclose', 'style' => 'danger']];
+        return [$info, json_encode($kb)];
+    }
     function topup_disc_gw_list_payload($lang, $textbotlang)
     {
         $gws = topup_disc_enabled_gateways($lang, $textbotlang);
@@ -9013,19 +10028,41 @@ if (!function_exists('topup_disc_gw_list_payload')) {
         if (empty($gws)) {
             $info .= "برای این زبان هیچ درگاه فعالی وجود نداره.\nاول از 💳 درگاه‌های پرداخت یکی رو فعال کن.";
         } else {
-            $info .= "روی هر درگاه بزن تا تخفیف اون رو جدا تنظیم کنی،\n";
-            $info .= "یا از «اعمال همگانی» یکجا برای همه‌شون تنظیم کن.\n";
-            $info .= "➖➖➖➖➖➖➖➖➖➖\n👇 درگاه رو انتخاب کن:";
+            $info .= "درگاه‌های فعال این زبان بر اساس نوعشون دسته‌بندی شدن.\n";
+            $info .= "روی هر دسته بزن تا هم برای <b>کل دسته</b> تخفیف بذاری، هم برای <b>تک‌تک درگاه‌هاش</b>.\n";
+            $info .= "➖➖➖➖➖➖➖➖➖➖\n👇 دسته رو انتخاب کن:";
         }
         $kb = ['inline_keyboard' => []];
-        foreach ($gws as $key => $label) {
-            $sum = topup_disc_gw_summary($lang, $key);
-            $btn = [
-                'text' => trim(strip_tags((string) $label)) . ($sum !== '' ? " • {$sum}" : ''),
-                'callback_data' => "topupdisc:{$lang}:{$key}",
-                'style' => ($sum !== '') ? 'success' : 'primary',
-            ];
-            $kb['inline_keyboard'][] = [$btn];
+        // one row per category that has at least one live gateway. Always blue:
+        // these open a menu rather than carry a state of their own, and the
+        // summary next to the label already says what is set inside.
+        foreach (array_keys(gateway_disc_groups()) as $group) {
+            $members = gateway_disc_group_members($group, $lang, $textbotlang);
+            if (empty($members)) {
+                continue;
+            }
+            $bits = [];
+            $gSum = topup_disc_group_summary($lang, $group);
+            if ($gSum !== '') {
+                $bits[] = "گروهی {$gSum}";
+            }
+            $withOwn = 0;
+            foreach (array_keys($members) as $mk) {
+                if (topup_disc_gw_summary($lang, $mk) !== '') {
+                    $withOwn++;
+                }
+            }
+            if ($withOwn > 0) {
+                $bits[] = "{$withOwn} درگاه جدا";
+            }
+            $label = trim(strip_tags((string) gateway_group_label($group, $textbotlang)))
+                . ' (' . count($members) . ')'
+                . (empty($bits) ? '' : ' • ' . implode(' · ', $bits));
+            $kb['inline_keyboard'][] = [[
+                'text' => $label,
+                'callback_data' => "dsgrp:{$lang}:{$group}",
+                'style' => 'primary',
+            ]];
         }
         if (!empty($gws)) {
             // white divider - keeps this shortcut from blending into the
@@ -9146,7 +10183,10 @@ if (!function_exists('topup_disc_hub_payload')) {
             'callback_data' => "tpdnotif:{$lang}:{$key}",
             'style' => $tpd_nOn ? 'success' : 'primary',
         ]];
-        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "dslang:{$lang}", 'style' => 'danger']];
+        // back to the category this gateway was opened from, not past it to the
+        // category list - one screen back, the way every other level here works
+        $tpd_grp = gateway_disc_group_of($key);
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => $tpd_grp === null ? "dslang:{$lang}" : "dsgrp:{$lang}:{$tpd_grp}", 'style' => 'danger']];
         return [$info, json_encode($kb)];
     }
 }
@@ -9207,6 +10247,72 @@ if (!function_exists('topup_disc_auto_payload')) {
         $kb['inline_keyboard'][] = [['text' => '👥 ریست سهمیه‌ی استفاده‌شده', 'callback_data' => "tpdautoresetusage:{$lang}:{$key}", 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => '🔄 ریست تنظیمات به پیش‌فرض', 'callback_data' => "tpdautoreset:{$lang}:{$key}", 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "topupdisc:{$lang}:{$key}", 'style' => 'danger']];
+        return [$info, json_encode($kb)];
+    }
+}
+if (!function_exists('topup_disc_group_auto_payload')) {
+    // The category's own discount. Same screen as a gateway's auto discount,
+    // same fields, same wording - only the scope differs, so an admin who has
+    // used one already knows this one.
+    function topup_disc_group_auto_payload($lang, $group, $textbotlang)
+    {
+        require_once __DIR__ . '/jdf.php';
+        $g = topup_disc_group_for($lang, $group);
+        $members = gateway_disc_group_members($group, $lang, $textbotlang);
+        $groupLabel = trim(strip_tags((string) gateway_group_label($group, $textbotlang)));
+        $on = !empty($g['enabled']);
+        $mode = ($g['mode'] ?? 'percent') === 'fixed' ? 'fixed' : 'percent';
+        $val = floatval($g['value'] ?? 0);
+        $perUser = intval($g['limitPerUser'] ?? 1);
+        $newOnly = !empty($g['newUserOnly']);
+        $exp = intval($g['expiry'] ?? 0);
+
+        $info = "🎯 <b>تخفیف گروهی</b> — {$groupLabel}\n➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= "بدون نیاز به کد، روی هر " . count($members) . " درگاه این دسته یکجا.\n";
+        $info .= "اگه درگاهی تخفیف خودش رو هم داشته باشه، هرکدوم برای کاربر بهتر باشه همون اعمال می‌شه — جمع نمی‌شن.\n";
+        $info .= "➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= "وضعیت: " . ($on ? 'روشن ✅' : 'خاموش') . "\n";
+        $info .= "نوع: " . ($mode === 'fixed' ? 'مبلغ ثابت' : 'درصدی') . "\n";
+        $info .= "مقدار: " . topup_disc_admin_value_label($g) . "\n";
+        $info .= "انقضا: " . ($exp > 0 ? jdate('Y/m/d - H:i', $exp) : 'ندارد') . "\n";
+        $info .= "هر کاربر: " . ($perUser > 0 ? "{$perUser} بار" : 'نامحدود') . " (پیش‌فرض: ۱ بار)\n";
+        $info .= "فقط کاربران جدید: " . ($newOnly ? 'بله' : 'خیر') . "\n";
+        $info .= "درگاه‌های این دسته: " . implode('، ', array_map(fn($l) => trim(strip_tags((string) $l)), $members)) . "\n";
+        $resetAt = intval($g['resetAt'] ?? 0);
+        if ($resetAt > 0) {
+            $info .= "👥 آخرین ریست سهمیه: " . jdate('Y/m/d - H:i', $resetAt) . " (استفاده‌های قبل از این تاریخ حساب نمی‌شن)\n";
+        }
+        if ($exp > 0 && time() >= $exp) {
+            $info .= "\n⚠️ <b>مدت این تخفیف تموم شده</b> — تا تاریخش رو تمدید نکنی اعمال نمی‌شه.\n";
+        }
+        if (!$on && $val > 0) {
+            $info .= "\n⚠️ <b>مقدار ست شده ولی تخفیف خاموشه</b> — تا روشنش نکنی به کاربر چیزی اضافه نمی‌شه.\n";
+        }
+        if ($on && $val > 0) {
+            $preview = $g;
+            $preview['group'] = $group;
+            $info .= "\n👁 چیزی که کاربر می‌بینه:\n<blockquote><b>"
+                . htmlspecialchars(topup_disc_caption_line($preview, $textbotlang), ENT_QUOTES) . "</b></blockquote>";
+        }
+
+        $kb = ['inline_keyboard' => []];
+        $kb['inline_keyboard'][] = [[
+            'text' => $on ? '✅ روشن' : '❌ خاموش',
+            'callback_data' => "dsgrptog:{$lang}:{$group}",
+            'style' => $on ? 'success' : 'primary',
+        ]];
+        $kb['inline_keyboard'][] = [
+            ['text' => ($mode === 'percent' ? '✅ ' : '') . '٪ درصدی', 'callback_data' => "dsgrpmode:{$lang}:{$group}:percent", 'style' => 'primary'],
+            ['text' => ($mode === 'fixed' ? '✅ ' : '') . '💵 مبلغ ثابت', 'callback_data' => "dsgrpmode:{$lang}:{$group}:fixed", 'style' => 'primary'],
+        ];
+        $kb['inline_keyboard'][] = [['text' => '✏️ تغییر مقدار (' . topup_disc_admin_value_label($g) . ')', 'callback_data' => "dsgrpval:{$lang}:{$group}", 'style' => $val > 0 ? 'success' : 'primary']];
+        $kb['inline_keyboard'][] = [['text' => '⏳ مدت اعتبار', 'callback_data' => "dsgrpexp:{$lang}:{$group}", 'style' => $exp > 0 ? 'success' : 'primary']];
+        $kb['inline_keyboard'][] = [['text' => '👤 سهمیه هر کاربر' . ($perUser > 0 ? " ({$perUser} بار)" : ''), 'callback_data' => "dsgrplimit:{$lang}:{$group}", 'style' => $perUser > 0 ? 'success' : 'primary']];
+        $kb['inline_keyboard'][] = [['text' => ($newOnly ? '✅ ' : '') . '🆕 فقط کاربران جدید', 'callback_data' => "dsgrpnewonly:{$lang}:{$group}", 'style' => $newOnly ? 'success' : 'primary']];
+        $kb['inline_keyboard'][] = [['text' => bt_section_meta('topupdisc_auto_actions')['label'], 'callback_data' => 'bt_sep|topupdisc_auto_actions']];
+        $kb['inline_keyboard'][] = [['text' => '👥 ریست سهمیه‌ی استفاده‌شده', 'callback_data' => "dsgrpresetusage:{$lang}:{$group}", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '🔄 ریست تنظیمات به پیش‌فرض', 'callback_data' => "dsgrpreset:{$lang}:{$group}", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "dsgrp:{$lang}:{$group}", 'style' => 'danger']];
         return [$info, json_encode($kb)];
     }
 }
@@ -9311,6 +10417,81 @@ if (!function_exists('topup_disc_auto_set')) {
         $clean['resetAt'] = max(0, intval($auto['resetAt'] ?? 0));
         $m[$lang][$gatewayKey]['auto'] = $clean;
         topup_disc_save($m);
+    }
+}
+if (!function_exists('topup_disc_group_map')) {
+    // ---- discounts set on a whole CATEGORY at once ----
+    // Its own column rather than a reserved key inside topup_discounts, whose
+    // top level is iterated as {lang: {gateway: ...}} and would misread one -
+    // the same reason topup_disc_notify has its own column.
+    // Shape: {lang: {group: {enabled, mode, value, expiry, limitPerUser,
+    // newUserOnly, resetAt}}} - deliberately identical to a gateway's own auto
+    // entry, so everything that already reads one reads this too.
+    function topup_disc_group_map($fresh = false)
+    {
+        static $cache = null;
+        if ($cache !== null && !$fresh) {
+            return $cache;
+        }
+        $setting = select("setting", "*", null, null, "select");
+        $m = json_decode((string) ($setting['topup_disc_groups'] ?? ''), true);
+        $cache = is_array($m) ? $m : [];
+        return $cache;
+    }
+}
+if (!function_exists('topup_disc_group_save')) {
+    function topup_disc_group_save(array $map)
+    {
+        $json = empty($map) ? '{}' : json_encode($map, JSON_UNESCAPED_UNICODE);
+        update("setting", "topup_disc_groups", $json, null, null);
+        topup_disc_group_map(true);
+    }
+}
+if (!function_exists('topup_disc_group_for')) {
+    function topup_disc_group_for($lang, $group)
+    {
+        $m = topup_disc_group_map();
+        $a = $m[$lang][$group] ?? [];
+        return is_array($a) ? $a : [];
+    }
+}
+if (!function_exists('topup_disc_group_set')) {
+    function topup_disc_group_set($lang, $group, array $auto)
+    {
+        $m = topup_disc_group_map();
+        $m[$lang][$group] = [
+            'enabled' => !empty($auto['enabled']),
+            'mode' => (isset($auto['mode']) && $auto['mode'] === 'fixed') ? 'fixed' : 'percent',
+            'value' => max(0, floatval($auto['value'] ?? 0)),
+            'expiry' => max(0, intval($auto['expiry'] ?? 0)),
+            'limitPerUser' => max(0, intval($auto['limitPerUser'] ?? 1)),
+            'newUserOnly' => !empty($auto['newUserOnly']),
+            'resetAt' => max(0, intval($auto['resetAt'] ?? 0)),
+        ];
+        topup_disc_group_save($m);
+    }
+}
+if (!function_exists('topup_disc_group_live')) {
+    // a group discount that is switched on, has a value, and has not run out
+    function topup_disc_group_live($lang, $group)
+    {
+        $g = topup_disc_group_for($lang, $group);
+        if (empty($g['enabled']) || floatval($g['value'] ?? 0) <= 0) {
+            return null;
+        }
+        $exp = intval($g['expiry'] ?? 0);
+        if ($exp > 0 && time() >= $exp) {
+            return null;
+        }
+        return $g;
+    }
+}
+if (!function_exists('topup_disc_group_reset_usage')) {
+    function topup_disc_group_reset_usage($lang, $group)
+    {
+        $g = topup_disc_group_for($lang, $group);
+        $g['resetAt'] = time();
+        topup_disc_group_set($lang, $group, $g);
     }
 }
 if (!function_exists('topup_disc_auto_reset_usage')) {
@@ -9561,6 +10742,23 @@ if (!function_exists('topup_disc_effective')) {
             $b = topup_disc_bonus_of($auto, $amount);
             if ($b > 0) {
                 $candidates[] = ['source' => 'auto', 'bonus' => $b, 'disc' => $auto, 'code' => ''];
+            }
+        }
+        // the discount set on this gateway's whole CATEGORY. Another candidate,
+        // not another precedence tier: a gateway that has its own auto discount
+        // simply competes with the group one and the better offer wins, exactly
+        // like a code competing with an auto discount. Nothing stacks.
+        $discGroup = gateway_disc_group_of($gatewayKey);
+        if ($discGroup !== null) {
+            $gAuto = topup_disc_group_live($lang, $discGroup);
+            if ($gAuto !== null && topup_disc_group_eligible($userId, $lang, $discGroup, $gAuto)) {
+                $b = topup_disc_bonus_of($gAuto, $amount);
+                if ($b > 0) {
+                    // the group it came from travels with it, so the caption can
+                    // say "درگاه‌های آنلاین" instead of a bare percentage
+                    $gAuto['group'] = $discGroup;
+                    $candidates[] = ['source' => 'group', 'bonus' => $b, 'disc' => $gAuto, 'code' => ''];
+                }
             }
         }
         $active = topup_disc_user_active($userId);

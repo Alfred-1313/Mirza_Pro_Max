@@ -3,8 +3,7 @@
 function getuser_rebecca($username_account, $location)
 {
     $panel = select("marzban_panel", "*", "name_panel", $location, "select");
-    $panel['url_panel'] = rtrim((string) $panel['url_panel'], '/');
-    $url = $panel['url_panel'] . '/api/user/' . $username_account;
+    $url = rtrim((string) $panel['url_panel'], '/') . '/api/user/' . $username_account;
     $req = new CurlRequest($url);
     $req->setHeaders(array('accept: application/json'));
     $req->setBearerToken($panel['password_panel']);
@@ -12,11 +11,26 @@ function getuser_rebecca($username_account, $location)
     return $response;
 }
 #-----------------------------#
+// Per-node usage for one user. Verified against Rebecca API 0.3.0, which
+// answers {"usages":[{"node_id":2,"node_name":"FL","used_traffic":0}, ...]}.
+// This is what feeds the "مصرف لوکیشن" block on the service screen.
+function getusage_rebecca($username_account, $location)
+{
+    $panel = select("marzban_panel", "*", "name_panel", $location, "select");
+    // rtrim: a panel URL saved with a trailing slash would make this
+    // "host:8443//api/..." and Rebecca answers a double slash with a 301 that
+    // CurlRequest does not follow - so the call came back as empty HTML.
+    $url = rtrim((string) $panel['url_panel'], '/') . '/api/user/' . $username_account . '/usage';
+    $req = new CurlRequest($url);
+    $req->setHeaders(array('accept: application/json'));
+    $req->setBearerToken($panel['password_panel']);
+    return $req->get();
+}
+#-----------------------------#
 function ResetUserDataUsage_rebecca($username_account, $location)
 {
     $panel = select("marzban_panel", "*", "name_panel", $location, "select");
-    $panel['url_panel'] = rtrim((string) $panel['url_panel'], '/');
-    $url = $panel['url_panel'] . '/api/user/' . $username_account . '/reset';
+    $url = rtrim((string) $panel['url_panel'], '/') . '/api/user/' . $username_account . '/reset';
     $req = new CurlRequest($url);
     $req->setHeaders(array('accept: application/json'));
     $req->setBearerToken($panel['password_panel']);
@@ -26,8 +40,7 @@ function ResetUserDataUsage_rebecca($username_account, $location)
 function revoke_sub_rebecca($username_account, $location)
 {
     $panel = select("marzban_panel", "*", "name_panel", $location, "select");
-    $panel['url_panel'] = rtrim((string) $panel['url_panel'], '/');
-    $url = $panel['url_panel'] . '/api/user/' . $username_account . '/revoke_sub';
+    $url = rtrim((string) $panel['url_panel'], '/') . '/api/user/' . $username_account . '/revoke_sub';
     $req = new CurlRequest($url);
     $req->setHeaders(array('accept: application/json'));
     $req->setBearerToken($panel['password_panel']);
@@ -39,7 +52,6 @@ function adduser_rebecca($location, $data_limit, $username_ac, $timestamp, $name
 {
     $product = select('product', "*", "name_product", $name_product, "select");
     $panel = select("marzban_panel", "*", "name_panel", $location, "select");
-    $panel['url_panel'] = rtrim((string) $panel['url_panel'], '/');
     if ($product['inbounds'] != null) {
         $panel['proxies'] = $product['inbounds'];
     }
@@ -69,7 +81,7 @@ function adduser_rebecca($location, $data_limit, $username_ac, $timestamp, $name
         $data['status'] = 'active';
     }
     $payload = json_encode($data);
-    $url = $panel['url_panel'] . '/api/user';
+    $url = rtrim((string) $panel['url_panel'], '/') . '/api/user';
     $req = new CurlRequest($url);
     $req->setHeaders(array(
         'accept: application/json',
@@ -83,8 +95,7 @@ function adduser_rebecca($location, $data_limit, $username_ac, $timestamp, $name
 function Get_System_Stats_rebecca($location)
 {
     $panel = select("marzban_panel", "*", "name_panel", $location, "select");
-    $panel['url_panel'] = rtrim((string) $panel['url_panel'], '/');
-    $url = $panel['url_panel'] . '/api/system';
+    $url = rtrim((string) $panel['url_panel'], '/') . '/api/system';
     $req = new CurlRequest($url);
     $req->setHeaders(array('accept: application/json'));
     $req->setBearerToken($panel['password_panel']);
@@ -95,8 +106,7 @@ function Get_System_Stats_rebecca($location)
 function removeuser_rebecca($location, $username_account)
 {
     $panel = select("marzban_panel", "*", "name_panel", $location, "select");
-    $panel['url_panel'] = rtrim((string) $panel['url_panel'], '/');
-    $url = $panel['url_panel'] . '/api/user/' . $username_account;
+    $url = rtrim((string) $panel['url_panel'], '/') . '/api/user/' . $username_account;
     $req = new CurlRequest($url);
     $req->setHeaders(array('accept: application/json'));
     $req->setBearerToken($panel['password_panel']);
@@ -107,9 +117,8 @@ function removeuser_rebecca($location, $username_account)
 function Modifyuser_rebecca($location, $username_account, array $data)
 {
     $panel = select("marzban_panel", "*", "name_panel", $location, "select");
-    $panel['url_panel'] = rtrim((string) $panel['url_panel'], '/');
     $payload = json_encode($data);
-    $url = $panel['url_panel'] . '/api/user/' . $username_account;
+    $url = rtrim((string) $panel['url_panel'], '/') . '/api/user/' . $username_account;
     $req = new CurlRequest($url);
     $req->setHeaders(array(
         'accept: application/json',

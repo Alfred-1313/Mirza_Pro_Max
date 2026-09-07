@@ -66,6 +66,24 @@ function getuserm($username_account,$location)
     return $response;
 }
 #-----------------------------#
+// Per-node usage for one user. Marzneshin exposes the same shape as Marzban and
+// Rebecca under /api/users/{username}/usage, so panel_user_usage() reads all
+// three through one normaliser.
+// NOTE: written to Marzneshin's documented API - no Marzneshin panel is
+// configured on this shop, so this path is unverified against a live server.
+function getusagem($username_account, $location)
+{
+    $marzban_list_get = select("marzban_panel", "*", "name_panel", $location, "select");
+    $Check_token = token_panelm($marzban_list_get['code_panel']);
+    // rtrim so a panel URL stored with a trailing slash cannot produce a double
+    // slash, which some panels answer with an unfollowed 301
+    $url = rtrim((string) $marzban_list_get['url_panel'], '/') . '/api/users/' . $username_account . '/usage';
+    $req = new CurlRequest($url);
+    $req->setHeaders(array('accept: application/json'));
+    $req->setBearerToken($Check_token['access_token']);
+    return $req->get();
+}
+#-----------------------------#
 function ResetUserDataUsagem($username_account,$location)
 {
     $marzban_list_get = select("marzban_panel", "*", "name_panel", $location,"select");

@@ -20,10 +20,16 @@ $stmt->execute();
 
 while ($result = $stmt->fetch(PDO::FETCH_ASSOC)) {
     $expire_minutes = $default_expire_minutes;
-    $payer_lang = null;
+    // Every row needs the payer's language, not just card and plisio. The other
+    // gateways word their own expiry too, and topup_expire_notify() hands this
+    // straight to languagechange(), whose $lang parameter is a typed string -
+    // so leaving it null threw a TypeError that killed the whole loop before it
+    // reached the UPDATE at the bottom. That is why TON, TRX, Star Telegram and
+    // NowPayment invoices stayed Unpaid for ever while card and plisio expired
+    // normally: those two were the only methods that filled this in.
+    $payer = select('user', 'lang', 'id', $result['id_user'], 'select');
+    $payer_lang = (is_array($payer) && !empty($payer['lang'])) ? $payer['lang'] : 'fa';
     if ($result['Payment_Method'] === 'cart to cart' || $result['Payment_Method'] === 'plisio') {
-        $payer = select('user', 'lang', 'id', $result['id_user'], 'select');
-        $payer_lang = is_array($payer) && !empty($payer['lang']) ? $payer['lang'] : 'fa';
         $expireField = $result['Payment_Method'] === 'cart to cart' ? 'cardInvoiceExpireMinutes' : 'plisioInvoiceExpireMinutes';
         $expire_minutes = (int) pay_value($expireField, $payer_lang, $default_expire_minutes);
         if ($expire_minutes < 1) {
@@ -54,9 +60,14 @@ while ($result = $stmt->fetch(PDO::FETCH_ASSOC)) {
         'perfect' => $textbotlang['hardcoded']['gatewayPerfectMoney'],
         'paymentnotverify' => $textbotlang['textbot']['paymentNotVerify'],
         'Star Telegram' => $textbotlang['textbot']['starTelegram'],
-        'nowpayment' => $textbotlang['textbot']['cryptoPayment']
-        
-    ][$result['Payment_Method']];
+        'nowpayment' => $textbotlang['textbot']['cryptoPayment'],
+        'TON' => $textbotlang['textbot']['tonPayment'],
+        'TRX' => $textbotlang['textbot']['trxPayment'],
+        // ?? '' because a method with no entry here used to raise an undefined-key
+        // warning on every run of the cron - the value only feeds $textexpire,
+        // which is currently unused, so a blank name is harmless where a warning
+        // in the log was not
+    ][$result['Payment_Method']] ?? '';
     $textexpire = sprintf($textbotlang['hardcoded']['invoiceExpiredNotice'], $status_var, $result['id_order'], $result['price']);
 // sendmessage($result['id_user'], $textexpire, null, 'html');
 if ($result['Payment_Method'] === 'cart to cart') {

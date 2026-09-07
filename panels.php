@@ -13,9 +13,120 @@ require_once __DIR__ . '/mikrotik.php';
 require_once __DIR__ . '/mirza_agent.php';
 require_once __DIR__ . '/Rebecca.php';
 
+if (!function_exists('panel_usage_supported')) {
+    // ---- which panels can report where the traffic went ----
+    //
+    // Only the multi-node panels have the idea of a "location" at all: Marzban,
+    // Marzneshin and Rebecca each expose a per-user, per-node usage endpoint.
+    // Every other type this bot drives is a single server (x-ui, s-ui, hiddify,
+    // WGDashboard, alireza), a non-VPN biller (ibsng, mikrotik), a manual
+    // product with no panel behind it (Manualsale), or a proxy to another bot
+    // (mirza_agent) - none of them can say which server the bytes came from.
+    //
+    // The service screen asks this before it renders: an unsupported panel gets
+    // an empty location block and a گزارش مصرف button that explains itself
+    // instead of a screen with nothing on it.
+    function panel_usage_supported($type)
+    {
+        return in_array((string) $type, ['marzban', 'marzneshin', 'rebecca'], true);
+    }
+}
+if (!function_exists('panel_usage_really_works')) {
+    // The list above is only a first filter - it says which panel types COULD
+    // answer, from their API docs. Whether a given server actually does is a
+    // different question: a panel may be an older build, have the endpoint
+    // disabled, or answer 404. Rebecca was verified live here; the others were
+    // not, and guessing on their behalf is how a customer ends up staring at an
+    // empty report screen.
+    //
+    // So the screen asks THIS, which puts the question to the panel itself and
+    // caches the answer for the rest of the request.
+    function panel_usage_really_works($name_panel, $username, $type = null)
+    {
+        static $cache = [];
+        $key = $name_panel . '|' . $username;
+        if (isset($cache[$key])) {
+            return $cache[$key];
+        }
+        if ($type !== null && !panel_usage_supported($type)) {
+            return $cache[$key] = false;
+        }
+        $u = panel_user_usage($name_panel, $username);
+        // an error means this panel could not answer for this user - treat it
+        // exactly like a panel that has no such feature, because from the
+        // customer's side the two are the same thing
+        $cache[$key] = !empty($u['supported']) && $u['error'] === null;
+        return $cache[$key];
+    }
+}
+if (!function_exists('panel_user_usage')) {
+    // One shape for all three: ['supported' => bool, 'nodes' => [name => bytes],
+    // 'total' => bytes, 'error' => string|null]. Nodes come back sorted heaviest
+    // first, because that is the order the screen shows them in.
+    //
+    // A panel that cannot answer and a panel that answers "nothing yet" are
+    // deliberately different results - the first must not be drawn as a service
+    // that used no traffic.
+    function panel_user_usage($name_panel, $username)
+    {
+        $panel = select("marzban_panel", "*", "name_panel", $name_panel, "select");
+        if (!is_array($panel)) {
+            return ['supported' => false, 'nodes' => [], 'total' => 0, 'error' => 'Panel Not Found'];
+        }
+        $type = (string) ($panel['type'] ?? '');
+        if (!panel_usage_supported($type)) {
+            return ['supported' => false, 'nodes' => [], 'total' => 0, 'error' => null];
+        }
+        if ($type === 'rebecca') {
+            $raw = getusage_rebecca($username, $name_panel);
+        } elseif ($type === 'marzban') {
+            $raw = getusage($username, $name_panel);
+        } else {
+            $raw = getusagem($username, $name_panel);
+        }
+        if (!empty($raw['error'])) {
+            return ['supported' => true, 'nodes' => [], 'total' => 0, 'error' => (string) $raw['error']];
+        }
+        if (!empty($raw['status']) && (int) $raw['status'] >= 400) {
+            return ['supported' => true, 'nodes' => [], 'total' => 0, 'error' => 'HTTP ' . $raw['status']];
+        }
+        $body = json_decode((string) ($raw['body'] ?? ''), true);
+        if (!is_array($body)) {
+            return ['supported' => true, 'nodes' => [], 'total' => 0, 'error' => 'bad response'];
+        }
+        $nodes = [];
+        foreach ((array) ($body['usages'] ?? []) as $u) {
+            if (!is_array($u)) {
+                continue;
+            }
+            $name = trim((string) ($u['node_name'] ?? ''));
+            if ($name === '') {
+                $name = 'Node ' . ($u['node_id'] ?? '?');
+            }
+            // marzban/rebecca give used_traffic; the subscription-side shape
+            // splits it into uplink/downlink, so accept either
+            $bytes = isset($u['used_traffic'])
+                ? (int) $u['used_traffic']
+                : ((int) ($u['uplink'] ?? 0) + (int) ($u['downlink'] ?? 0));
+            if ($bytes < 0) {
+                $bytes = 0;
+            }
+            // the same node can appear twice when a panel splits up/down rows
+            $nodes[$name] = ($nodes[$name] ?? 0) + $bytes;
+        }
+        arsort($nodes);
+        return ['supported' => true, 'nodes' => $nodes, 'total' => array_sum($nodes), 'error' => null];
+    }
+}
 class ManagePanel
 {
     public $pdo, $domainhosts, $name_panel;
+    // Thin wrapper so callers keep going through $ManagePanel like every other
+    // panel operation, rather than reaching for the free function directly.
+    function UserUsage($name_panel, $username)
+    {
+        return panel_user_usage($name_panel, $username);
+    }
     function createUser($name_panel, $code_product, $usernameC, array $Data_Config)
     {
         $Output = [];

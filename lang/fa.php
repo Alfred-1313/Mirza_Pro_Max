@@ -8,6 +8,7 @@ return array (
     'groupBuyflowLabel' => '🛒 پیام‌های مراحل خرید',
     'groupServicesLabel' => '🛍 پیام‌های سرویس‌های من',
     'groupTopupLabel' => '💰 پیام‌های افزایش موجودی',
+    'groupTopupDiscLabel' => '🎁 پیام‌های تخفیف',
     'btnSettingsLabel' => '🔘 تنظیمات دکمه‌های منوی اصلی',
     'langSwitchLabel' => '🌐 تنظیمات تغییر زبان',
     'groupServicesCaption' => '🛍 <b>پیام‌های سرویس‌های من</b>
@@ -41,6 +42,19 @@ return array (
 🏬 تنظیمات فروشگاه ← 🏦 بسته‌های شارژ ← 💳 کارت به کارت</blockquote>
 
 ✅ رنگ سبز دکمه یعنی متن یا استیکر اون از قبل ست شده.',
+    'groupTopupDiscCaption' => '🎁 <b>پیام‌های تخفیف</b>
+
+کدوم پیام رو می‌خوای تنظیم کنی؟
+
+📌 این‌ها همه‌ی متن‌هایی هستن که کاربر موقع تخفیف شارژ کیف پول می‌بینه - از صفحه‌ی وارد کردن کد تا جمله‌ای که مقدار تخفیف رو اعلام می‌کنه.
+
+<blockquote>💡 این متن‌ها بین <b>همه‌ی درگاه‌ها</b> مشترکن - هر تغییری اینجا بدی، روی همه‌ی درگاه‌ها اعمال می‌شه.
+
+خودِ تخفیف (درصد، مبلغ، مدت، سهمیه) برای هر درگاه و هر دسته جداست و از این مسیر تنظیم می‌شه:
+
+🏬 تنظیمات فروشگاه ← 🏦 بسته‌های شارژ ← 🎁 تخفیف شارژ</blockquote>
+
+✅ رنگ سبز دکمه یعنی متن اون از قبل ست شده.',
     'backToListLabel' => '🔙 برگشت به لیست',
     'resetAllDone' => '🔁 همه متن‌ها، استیکرها و ری‌اکشن‌های این بخش (توی همه زبون‌ها) به حالت پیش‌فرض ربات برگشتن.',
     'home_text' => '🎨 <b>شخصی‌سازی پیام‌های ربات</b>
@@ -247,6 +261,24 @@ return array (
         'section' => 'myservices_status',
       ),
       array (
+        'label' => '⚠️ پیام «پنل در دسترس نیست»',
+        'key' => 'users.status.panelNotConnected',
+        'group' => 'myservices',
+        'section' => 'myservices_panelerror',
+      ),
+      array (
+        'label' => '📊 Alert «این پنل گزارش مصرف ندارد»',
+        'key' => 'users.status.svcUsageUnavailable',
+        'group' => 'myservices',
+        'section' => 'myservices_usagereport',
+      ),
+      array (
+        'label' => '🌐 خط «لوکیشن‌های نمایش‌داده‌نشده»',
+        'key' => 'users.status.svcLocationMore',
+        'group' => 'myservices',
+        'section' => 'myservices_usagereport',
+      ),
+      array (
         'label' => '📝 پیام «موجودی کافی نیست»',
         'key' => 'users.sell.noCredit',
         'group' => 'buyflow',
@@ -305,33 +337,73 @@ return array (
         'group' => 'topup',
         'section' => 'topup_flow',
       ),
+      // ---- 🎁 پیام‌های تخفیف ----
+      // Their own submenu rather than nine more rows in 💰: none of them is
+      // per-gateway (the same sentence is produced for every gateway - see
+      // topup_disc_caption_line, which takes the discount and not the key), so
+      // they cannot live on a gateway's own screen, but together they are one
+      // subject and belong behind one button.
       array (
         'label' => '🎁 صفحه‌ی ورود کد تخفیف + دکمه‌هایش',
         'key' => 'users.Balance.topupDiscPrompt',
-        'group' => 'topup',
-        'section' => 'topup_flow',
+        'group' => 'topupdisc',
+        'section' => 'topupdisc_code',
       ),
       array (
         'label' => '❌ پیام کد تخفیف نامعتبر',
         'key' => 'users.Balance.topupDiscInvalid',
-        'group' => 'topup',
-        'section' => 'topup_flow',
+        'group' => 'topupdisc',
+        'section' => 'topupdisc_code',
       ),
       array (
         'label' => '✅ پیام فعال شدن کد تخفیف',
         'key' => 'users.Balance.topupDiscActivated',
-        'group' => 'topup',
-        'section' => 'topup_flow',
+        'group' => 'topupdisc',
+        'section' => 'topupdisc_code',
       ),
       array (
         'label' => '🎟 نمایش تخفیف کددار در روش پرداخت',
         'key' => 'users.Balance.topupDiscActiveBlock',
-        'group' => 'topup',
-        'section' => 'topup_flow',
+        'group' => 'topupdisc',
+        'section' => 'topupdisc_show',
       ),
       array (
         'label' => '🎯 نمایش تخفیف خودکار در روش پرداخت',
         'key' => 'users.Balance.topupDiscAutoBlock',
+        'group' => 'topupdisc',
+        'section' => 'topupdisc_show',
+      ),
+      // "یک درگاه" here never names a particular gateway - every gateway uses
+      // the same sentence. What it names is where the discount was SET: on one
+      // gateway, or on a whole category. The labels say that outright, because
+      // "(یک درگاه)" read as "which gateway is this for?"
+      array (
+        'label' => '🎯 تخفیفِ ست‌شده روی یک درگاه — درصدی',
+        'key' => 'hardcoded.topupDiscPercentCaption',
+        'group' => 'topupdisc',
+        'section' => 'topupdisc_line_one',
+      ),
+      array (
+        'label' => '🎯 تخفیفِ ست‌شده روی یک درگاه — مبلغ ثابت',
+        'key' => 'hardcoded.topupDiscFixedCaption',
+        'group' => 'topupdisc',
+        'section' => 'topupdisc_line_one',
+      ),
+      array (
+        'label' => '🗂 تخفیفِ ست‌شده روی یک دسته — درصدی',
+        'key' => 'hardcoded.topupDiscGroupPercentCaption',
+        'group' => 'topupdisc',
+        'section' => 'topupdisc_line_group',
+      ),
+      array (
+        'label' => '🗂 تخفیفِ ست‌شده روی یک دسته — مبلغ ثابت',
+        'key' => 'hardcoded.topupDiscGroupFixedCaption',
+        'group' => 'topupdisc',
+        'section' => 'topupdisc_line_group',
+      ),
+      array (
+        'label' => '❌ خطای مبلغ خارج از حداقل/حداکثر',
+        'key' => 'users.Balance.amountRangeError',
         'group' => 'topup',
         'section' => 'topup_flow',
       ),
@@ -588,25 +660,25 @@ return array (
       'groupBackBtn' => '🔙 بازگشت به روش‌های پرداخت',
 
 
-      'trxInvoiceCaption' => '⚡ <b>پرداخت TRX</b>
+      'trxInvoiceCaption' => '<blockquote><b>⚡️ پرداخت TRX</b></blockquote>
 
-📊 مبلغ شبکه: TRX <code>{trx}</code>
-💰 معادل تومانی: {price} تومان (نرخ نوبیتکس)
-🔍 تقریباً ۱ TRX ≈ {rate} تومان
+📊 <b>مبلغ شبکه:</b> <b>TRX</b> <code>{trx}</code>
+💰 <b>معادل تومانی:</b> <b>{price} تومان</b> <i>(نرخ نوبیتکس)</i>
+🔍 <b>تقریباً 1 TRX ≈ {rate} تومان</b>
 
-🕐 مهلت پرداخت: <b>{minutes} دقیقه</b> (قیمت TRX مدام عوض می‌شود).
+🕐 <b>مهلت پرداخت:</b> <b>{minutes} دقیقه</b> (قیمت TRX مدام عوض می‌شود).
 
-📋 جزئیات برای کپی — دو مقدار زیر را با لمس کپی کنید.
+<blockquote>📋 <b>جزئیات برای کپی</b> — دو مقدار زیر را می‌توانید از دکمه‌های «کپی» بردارید یا روی آن لمس کنید.</blockquote>
 
-مقصد (ولت دریافت):
+<b>مقصد (ولت دریافت):</b>
 <code>{address}</code>
 
-مقدار واریز (TRX):
+<b>مقدار واریز (TRX):</b>
 <code>{trx}</code>
 
 <blockquote>⚠️ مبلغ را <b>دقیقاً</b> همین‌قدر بفرستید، تا آخرین رقم اعشار. ربات پرداخت شما را از روی همین عدد می‌شناسد؛ شبکهٔ ترون کامنت ندارد.
 
-اگر مبلغ را رند فرستادید یا زودتر می‌خواهید تأیید شود، دکمهٔ «ثبت پرداخت» را بزنید.</blockquote>',
+اگر مبلغ را رند فرستادید یا زودتر می‌خواهید تأیید شود، دکمهٔ <b>«ثبت پرداخت»</b> را بزنید.</blockquote>',
       'trxCopyAmountBtn' => 'کپی مبلغ TRX',
       'trxCopyAddressBtn' => 'کپی آدرس',
       'trxCheckBtn' => 'ثبت پرداخت',
@@ -623,23 +695,23 @@ return array (
 یا آنچه فرستادید هش نبود، یا تراکنش با فاکتور نمی‌خواند. بررسی کنید: ۶۴ کاراکتر انگلیسی و عدد باشد، تراکنش موفق بوده باشد، به همین آدرس رفته باشد، و مبلغش <b>دقیقاً</b> همان عدد فاکتور باشد.',
       'trxNotSeenYet' => '⏳ هنوز واریزی با این مبلغ روی زنجیره دیده نشد. اگر همین الان فرستادید کمی صبر کنید، یا هش تراکنش را بفرستید.',
       'trxNoAddress' => '❌ آدرس کیف پول TRX هنوز توسط مدیر تنظیم نشده است. لطفاً روش دیگری را انتخاب کنید.',
-      'tonInvoiceCaption' => '💎 <b>پرداخت TON</b>
+      'tonInvoiceCaption' => '<blockquote><b>💎 پرداخت TON</b></blockquote>
 
-📊 مبلغ شبکه: TON <code>{ton}</code>
-💰 معادل تومانی: {price} تومان (نرخ نوبیتکس)
-🔍 تقریباً ۱ TON ≈ {rate} تومان
+📊 <b>مبلغ شبکه:</b> <b>TON</b> <code>{ton}</code>
+💰 <b>معادل تومانی:</b> <b>{price} تومان</b> <i>(نرخ نوبیتکس)</i>
+🔍 <b>تقریباً 1 TON ≈ {rate} تومان</b>
 
-🕐 مهلت پرداخت: <b>{minutes} دقیقه</b> (قیمت TON مدام عوض می‌شود).
+🕐 <b>مهلت پرداخت:</b> <b>{minutes} دقیقه</b> (قیمت TON مدام عوض می‌شود).
 
-📋 <b>جزئیات برای کپی</b> — سه مقدار زیر را می‌توانید از دکمه‌های «کپی» بردارید؛ کامنت باید <b>عیناً</b> در تراکنش باشد.
+<blockquote>📋 <b>جزئیات برای کپی</b> — سه مقدار زیر را می‌توانید از دکمه‌های «کپی» بردارید یا روی آن لمس کنید؛ کامنت باید <b>عیناً</b> در تراکنش باشد.</blockquote>
 
-مقصد (ولت دریافت):
+<b>مقصد (ولت دریافت):</b>
 <code>{address}</code>
 
-مقدار واریز (TON):
+<b>مقدار واریز (TON):</b>
 <code>{ton}</code>
 
-کامنت تراکنش (عیناً همین - ممو تگ):
+<b>کامنت تراکنش (ممو / تگ):</b>
 <code>{memo}</code>
 
 <blockquote>🌐 دکمهٔ «باز کردن کیف TON» همان مقدار TON و کامنت را به‌صورت خودکار در <b>Tonkeeper</b> اضافه می‌کند.
@@ -659,15 +731,20 @@ return array (
 اگر همین الان پرداخت کردید کمی صبر کنید؛ ربات خودش هم مدام چک می‌کند و به‌محض رسیدن، کیف پول شما شارژ می‌شود.',
       'tonNoAddress' => '❌ آدرس کیف پول TON هنوز توسط مدیر تنظیم نشده است. لطفاً روش دیگری را انتخاب کنید.',
       'depositRangeOnline' => '❌ حداقل مبلغ واریزی این روش پرداخت باید 1 دلار معادل {mainbalance} تومان باشد و حداکثر مبلغ {maxbalance} تومان معادل {maxusd} دلار باشد',
-      'customAmountPromptTitleOnline' => '#️⃣ <b>مبلغ دلخواه</b>
+      'customAmountPromptTitleOnline' => '💵 مبلغ دلخواه
 
 فقط عدد به {currency} در چت بفرستید.
 
-<blockquote>مبلغ شما باید حداقل <b>1</b> دلار معادل <b>{minprice}</b> {currency} باشد تا درگاه آنلاین برای شما ارسال شود.</blockquote>
+<blockquote><b>حداقل : {min} {currency}</b>
+<b>حداکثر : {max} {currency}</b></blockquote>
+
+مثل : <b>{min}</b>
+
+<blockquote>درگاه‌های آنلاین ارزی زیر <b>۱</b> دلار فاکتور نمی‌سازند.</blockquote>
 
 در صورت اشتباه می‌توانید با دکمه‌های زیر برگردید.
 
-⬅️ عدد را بدون حرف یا کاراکتر اضافی بفرستید.',
+← عدد را بدون حرف یا کاراکتر اضافی بفرستید.',
       'depositRangePlisio' => '❌ حداقل مبلغ واریزی این روش پرداخت باید {mainbalance} و حداکثر {maxbalance} تومان باشد',
       'nowpaymentInvoiceCaption' => '
 <b>💲 جهت افزایش اعتبار کیف پول خود از طریق ارز دیجیتال روی دکمه پرداخت در انتهای پیام کلیک کنید</b>
@@ -922,15 +999,18 @@ return array (
 🕘 پس از واریز، رسید را در مرحله بعد ارسال کنید.',
       'backToMethodBtn' => '🔙 بازگشت به روش پرداخت',
       'customAmountBtn' => '✏️ مبلغ دلخواه',
-      'customAmountPromptTitle' => '#️⃣ <b>مبلغ دلخواه</b>
+      'customAmountPromptTitle' => '💵 مبلغ دلخواه
 
 فقط عدد به {currency} در چت بفرستید.
 
-مثل: 50000
+<blockquote><b>حداقل : {min} {currency}</b>
+<b>حداکثر : {max} {currency}</b></blockquote>
+
+مثل : <b>{min}</b>
 
 در صورت اشتباه می‌توانید با دکمه‌های زیر برگردید.
 
-⬅️ عدد را بدون حرف یا کاراکتر اضافی بفرستید.',
+← عدد را بدون حرف یا کاراکتر اضافی بفرستید.',
       'confirmContinueCaption' => '✅ مبلغ <b>%s</b> برای <b>%s</b> انتخاب شد.
 
 برای ادامه، دکمهٔ زیر را بزنید.',
@@ -1664,22 +1744,55 @@ n2  = نماینده با قابلیت های بیشتر',
 📅 تاریخ اتمام :  %s (%s]
 
 %s',
-      'infoFull' => '📊 وضعیت سرویس: {status}
-👤 نام سرویس: <code>{username}</code>
-{password_line}
-{note_line}
-🌍 موقعیت سرویس: {location}
-🗂 نام محصول: {product}
+      'infoFull' => '<blockquote><b>📡 QR Code سابسکریپشن</b></blockquote>
 
-🔋 ترافیک: {traffic}
-📥 حجم مصرفی: {used}
-💢 حجم باقی‌مانده: {remaining} ({percent}%)
+👤 <b>یوزر:</b> <code>{username}</code>
+📦 <b>حجم کل:</b> {traffic}
+📊 <b>حجم مصرف شده:</b> {used}
+📅 <b>انقضا:</b> {expiration}
+<b>وضعیت اشتراک:</b> {status}
 
-📅 تاریخ اتمام: {expiration} ({days})
+<blockquote><b>📶 نمودار مصرف</b></blockquote>
 
-{connection_info}
+{usage_bar}
+{usage_line}{location_block}
 
-💡 برای قطع دسترسی دیگران کافیست روی گزینه‌ی «تغییر لینک» کلیک کنید.',
+<blockquote><b>🕐 آخرین آنلاین</b></blockquote>
+
+{online_block}',
+      'svcUsageReportBtn' => '📊 گزارش مصرف',
+      'svcUnlimited' => 'نامحدود ♾️',
+      'svcNoExpire' => 'بدون انقضا ♾️',
+      'svcLocationTitle' => '🌐 مصرف لوکیشن',
+      'svcLocationMore' => '➕ و {n} لوکیشن دیگر ({volume})',
+      'svcUsageOf' => '🎛 {used} مصرف شده از {total} ({percent}%)',
+      'svcUsageOfUnlimited' => '🎛 {used} مصرف شده از {total}',
+      'svcOnlineBlock' => 'تاریخ ← {date}
+ساعت ← {time} ({ago})',
+      'svcNeverOnline' => 'متصل نشده',
+      'svcAgoNow' => 'همین الان',
+      'svcAgoMinutes' => '{n} دقیقه پیش',
+      'svcAgoHours' => '{n} ساعت پیش',
+      'svcAgoDays' => '{n} روز پیش',
+      'svcUsageMenuTitle' => '📊 <b>گزارش مصرف</b>
+
+یکی از گزینه‌های زیر را انتخاب کنید:',
+      'svcReportBtnYesterday' => '📅 مصرف دیروز',
+      'svcReportBtn2' => '📅 مصرف ۲ روز پیش',
+      'svcReportBtn10' => '📅 مصرف ۱۰ روز پیش',
+      'svcReportBtnAll' => '📈 کل مصرف‌ها',
+      'svcBackToInfo' => '🔙 بازگشت به اطلاعات سرویس',
+      'svcReportAllTitle' => '📊 گزارش کل مصرف',
+      'svcReportSummary' => '🟢 روزهای فعال: <b>{days}</b>
+💾 مجموع مصرف: <b>{total}</b>',
+      'svcReportOneDay' => '<blockquote><b>📊 مصرف {date}</b></blockquote>
+
+💾 مجموع مصرف: <b>{amount}</b>',
+      'svcReportEmpty' => '💭 در تاریخ {date} هیچ مصرفی ثبت نشده است.',
+      'svcReportNothingYet' => '💭 هنوز هیچ مصرفی برای این سرویس ثبت نشده است.',
+      'svcUsageUnavailable' => '📊 گزارش مصرف برای این سرویس در دسترس نیست.
+
+پنل این سرویس این گزارش را ارائه نمی‌دهد یا در حال حاضر پاسخ نمی‌دهد. حجم کل مصرف شما بالاتر نمایش داده شده است.',
       'summary' => '
   
  وضعیت سرویس : %s
@@ -5656,7 +5769,7 @@ nowpayments.io
 
 وقتی روشن باشه، درگاه‌های هم‌خانواده توی صفحهٔ «روش پرداخت» جمع می‌شن و مشتری اول خانواده رو می‌بینه، بعد درگاه‌های داخلش.
 
-📌 خانواده‌ای که فقط یک درگاه زندهٔ داخلش باشه جمع نمی‌شه — یه ضربهٔ اضافه برای یه دکمه ارزشی نداره.
+📌 خانواده‌ای که فقط یک درگاه زندهٔ داخلش باشه جمع نمی‌شه — یه ضربهٔ اضافه برای یه دکمه ارزشی نداره. مثلاً اگه از خانوادهٔ رمز ارز آنلاین فقط یکی از درگاه‌ها روشن باشه، همون یکی مستقیم توی لیست می‌مونه و دسته نمی‌شه. «رمز ارز آفلاین» هم چون فقط یک درگاه داره همیشه همین‌طوره.
 📐 چیدمانی که براشون گذاشتی از بین نمی‌ره؛ داخل هر خانواده همون‌طور می‌مونه.
 
 وضعیت فعلی: {state}',
@@ -5896,6 +6009,10 @@ nowpayments.io
         'online' => '🪙 درگاه‌های آنلاین ارزی',
         'offline' => '⏳ درگاه‌های آفلاین ارزی',
         'rial' => '🏧 درگاه‌های ریالی',
+        // card-to-card is a category in 🏦 بسته‌های شارژ and 🎁 تخفیف شارژ, but
+        // never a collapsible family on the customer's payment screen - see
+        // gateway_disc_groups()
+        'card' => '💳 کارت به کارت',
       ),
       'groupNotes' => array(
         'offline' => '📌 پرداخت این درگاه‌ها مستقیم به کیف پول خودت میاد، پس هر تراکنش باید دستی توسط مدیر تایید بشه.',
@@ -6166,9 +6283,14 @@ nowpayments.io
 هرچه بفرستید، عیناً همان چیزی است که کاربر می‌بیند؛ برای زیبایی بیشتر می‌توانید از HTML هم استفاده کنید.
 💎 اگر متن را با یک ایموجی پریمیوم شروع کنید، همان ابتدای کپشن ثابت می‌ماند.
 
-<b>📌 متغیر قابل استفاده</b>
-به‌جای این کد، مقدار واقعی جایگزین می‌شود:
+<b>📌 متغیرهای قابل استفاده</b>
+به‌جای این کدها، مقدار واقعی جایگزین می‌شود:
 • <code>{currency}</code> واحد پول این زبان (مثلاً تومان)
+• <code>{min}</code> حداقل مبلغ همین درگاه، با جداکنندهٔ هزارگان (مثل 100,000)
+• <code>{max}</code> حداکثر مبلغ همین درگاه
+• <code>{minprice}</code> معادل تومانی ۱ دلار (فقط درگاه‌های ارزی)
+
+💡 <code>{min}</code> و <code>{max}</code> دقیقاً همان اعدادی هستند که اگر کاربر مبلغ خارج از محدوده بفرستد، در پیام خطا هم می‌بیند — پس هیچ‌وقت با هم اختلاف پیدا نمی‌کنند.
 
 <b>📌 راهنمای فرمت‌بندی</b>
 به‌جای <code>X</code> متن دلخواه خودتان را بگذارید:
@@ -6475,7 +6597,7 @@ nowpayments.io
     'sell' => '🔐 خرید اشتراک',
     'tonPayment' => '💎 پرداخت با TON',
     'trxPayment' => '⚡ پرداخت با TRX',
-    'starTelegram' => 'Star Telegram',
+    'starTelegram' => '⭐️ پرداخت با Stars تلگرام',
     'support' => '☎️ پشتیبانی',
     'tariffList' => '💵 تعرفه اشتراک ها',
     'tariffListDesc' => 'تنظیم نشده است',
@@ -8548,6 +8670,8 @@ nowpayments.io
 مدت زمان بسته شما که در تاریخ {purchasedate} خریداری کرده بودید به اتمام رسید ، چنان چه تمایل به مصرف سرویس خود دارید از دکمه زیر استفاده کنید 🫶',
     'topupDiscPercentCaption' => 'تخفیف {value} درصدی برای افزایش موجودی',
     'topupDiscFixedCaption' => '{value} اضافه برای هر شارژ',
+    'topupDiscGroupPercentCaption' => '{group} — تخفیف {value} درصدی',
+    'topupDiscGroupFixedCaption' => '{group} — {value} اضافه برای هر شارژ',
     'topupDiscPkgPercent' => 'تخفیف {value} درصدی برای بسته {amount}',
     'topupDiscPkgFixed' => '{bonus} اضافه برای بسته {amount}',
     'volumeEndDefaultText' => 'مشتری گرامی {username}
