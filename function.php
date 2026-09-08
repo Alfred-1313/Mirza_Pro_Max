@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 require_once 'vendor/autoload.php';
 require 'config.php';
 require 'vendor/autoload.php';
@@ -788,16 +788,34 @@ function outputlink($text)
     }
 }
 /**
- * Removes the user's own main-menu tap message ("🔐 خرید اشتراک" and friends),
- * which the reply keyboard leaves behind in the chat. Shared by every ❌ بستن
- * handler so the three of them stay in step.
+ * Same field (menu_tap_id) as menu_tap_cleanup() below, but returns the id
+ * instead of deleting the message - for a ❌ بستن handler that needs to hand
+ * it to close_sticker_play() so it disappears TOGETHER with the caption and
+ * 🖼 استیکر دکمه بستن's own sticker after the timer, rather than the instant
+ * the button is tapped (which used to make the tap message vanish first and
+ * everything else catch up later).
  */
-function menu_tap_cleanup($from_id, $user)
+function menu_tap_capture($from_id, $user)
 {
     $mt = (string) ($user['menu_tap_id'] ?? '');
     if (ctype_digit($mt) && intval($mt) > 0) {
-        deletemessage($from_id, intval($mt));
         update("user", "menu_tap_id", "0", "id", $from_id);
+        return intval($mt);
+    }
+    return 0;
+}
+/**
+ * Removes the user's own main-menu tap message ("🔐 خرید اشتراک" and friends),
+ * which the reply keyboard leaves behind in the chat. gwinvclose (the invoice
+ * "give up" back button) is the only caller left that wants this deleted on
+ * the spot; every ❌ بستن handler now calls menu_tap_capture() instead so the
+ * tap message joins the deferred removal.
+ */
+function menu_tap_cleanup($from_id, $user)
+{
+    $mt = menu_tap_capture($from_id, $user);
+    if ($mt > 0) {
+        deletemessage($from_id, $mt);
     }
 }
 
@@ -1634,6 +1652,26 @@ if (!function_exists('card_invoice_copy_perrow')) {
         return ($n >= 1 && $n <= 3) ? $n : 1;
     }
 }
+if (!function_exists('card_invoice_card_sep')) {
+    // What goes BETWEEN two cards in the invoice caption. Stored in the same
+    // reserved '_layout' slot as the copy-button order, which already spans
+    // caption and buttons alike (the order it holds decides both).
+    // 'tight' = consecutive lines, 'blank' = one empty line between them.
+    function card_invoice_card_sep_mode($lang)
+    {
+        return (card_invoice_btnstyle_for($lang, '_layout')['sep'] ?? '') === 'blank' ? 'blank' : 'tight';
+    }
+    function card_invoice_card_sep($lang)
+    {
+        return card_invoice_card_sep_mode($lang) === 'blank' ? "\n\n" : "\n";
+    }
+    function card_invoice_card_sep_toggle($lang)
+    {
+        $lay = card_invoice_btnstyle_for($lang, '_layout');
+        $lay['sep'] = card_invoice_card_sep_mode($lang) === 'blank' ? 'tight' : 'blank';
+        card_invoice_btnstyle_set($lang, '_layout', $lay);
+    }
+}
 if (!function_exists('card_invoice_copy_rows')) {
     // Chunks the copy buttons into keyboard rows per the admin's 📐 چیدمان
     function card_invoice_copy_rows($lang, array $btns)
@@ -1759,6 +1797,10 @@ if (!function_exists('card_invoice_btnstyle_set')) {
         if (isset($style['order']) && is_array($style['order'])) {
             $clean['order'] = array_values(array_map('intval', $style['order']));
         }
+        // also '_layout' only: what separates two cards in the invoice caption
+        if (($style['sep'] ?? '') === 'blank') {
+            $clean['sep'] = 'blank';
+        }
         if (!isset($m[$lang]) || !is_array($m[$lang])) {
             $m[$lang] = [];
         }
@@ -1777,7 +1819,7 @@ if (!function_exists('card_invoice_render')) {
     // repeats. If neither is present, the template is used as-is (the admin
     // chose not to show card details inline at all - not this function's
     // call to prevent).
-    function card_invoice_render($template, array $cards, array $otherReplacements)
+    function card_invoice_render($template, array $cards, array $otherReplacements, $sep = "\n\n")
     {
         $posNum = strpos($template, '{card_number}');
         $posName = strpos($template, '{name_card}');
@@ -1786,6 +1828,7 @@ if (!function_exists('card_invoice_render')) {
             return strtr($template, $otherReplacements + [
                 '{card_number}' => $first['number'] ?? '',
                 '{name_card}' => $first['name'] ?? '',
+                '{card_index}' => '1',
             ]);
         }
         $blockStart = $posNum === false ? $posName : ($posName === false ? $posNum : min($posNum, $posName));
@@ -1796,14 +1839,15 @@ if (!function_exists('card_invoice_render')) {
         $lineEnd = $lineEndPos === false ? strlen($template) : $lineEndPos;
         $block = substr($template, $lineStart, $lineEnd - $lineStart);
         $rendered = [];
-        foreach ($cards as $c) {
+        foreach (array_values($cards) as $i => $c) {
             $name = trim((string) ($c['name'] ?? ''));
             $rendered[] = strtr($block, [
                 '{card_number}' => (string) ($c['number'] ?? ''),
                 '{name_card}' => $name !== '' ? $name : '—',
+                '{card_index}' => (string) ($i + 1),
             ]);
         }
-        $result = substr($template, 0, $lineStart) . implode("\n\n", $rendered) . substr($template, $lineEnd);
+        $result = substr($template, 0, $lineStart) . implode($sep, $rendered) . substr($template, $lineEnd);
         return strtr($result, $otherReplacements);
     }
 }if (!function_exists('gw_minmax_fields')) {
@@ -2829,7 +2873,7 @@ if (!function_exists('topup_card_invoice_generate')) {
         $textcart = card_invoice_render($captionTemplate, $cardList, [
             '{price}' => $valueprice,
             '{minutes}' => $expireMinutes,
-        ]);
+        ], card_invoice_card_sep($lang));
         // shown whenever the feature is currently on - even on a reissued
         // invoice, whose amount may already carry an earlier random addition
         // from when it was first created - so the exact-amount warning always
@@ -4465,6 +4509,46 @@ if (!function_exists('svc_daily_usage')) {
         return ['supported' => true, 'daily' => $daily, 'error' => null];
     }
 }
+if (!function_exists('svc_nodeusage_enabled')) {
+    // 🌐 مصرف لوکیشن, per panel. Only marzban/marzneshin/rebecca can answer at
+    // all (panel_usage_supported()); this is the admin's own switch on top of
+    // that, for a panel that CAN answer but whose node names the shop would
+    // rather not show its customers. Off means {location_block} renders empty -
+    // the same thing an unsupported panel already produces - and the extra
+    // request to the panel is skipped entirely.
+    // Shape: {panel name: '0'|'1'}; absent = on.
+    function svc_nodeusage_map($fresh = false)
+    {
+        static $cache = null;
+        if ($cache !== null && !$fresh) {
+            return $cache;
+        }
+        $setting = select("setting", "*", null, null, "select");
+        $m = json_decode((string) ($setting['svc_node_usage'] ?? ''), true);
+        return $cache = is_array($m) ? $m : [];
+    }
+    function svc_nodeusage_enabled($name_panel)
+    {
+        return (string) (svc_nodeusage_map()[(string) $name_panel] ?? '1') !== '0';
+    }
+    function svc_nodeusage_toggle($name_panel)
+    {
+        $m = svc_nodeusage_map(true);
+        $m[(string) $name_panel] = svc_nodeusage_enabled($name_panel) ? '0' : '1';
+        update("setting", "svc_node_usage", json_encode($m, JSON_UNESCAPED_UNICODE), null, null);
+        svc_nodeusage_map(true);
+    }
+    // what the customer is actually shown for this panel, in one word - the
+    // admin screen needs to tell "off by my choice" apart from "this panel type
+    // cannot do it", which look identical from the customer's side
+    function svc_nodeusage_state($name_panel, $type)
+    {
+        if (!panel_usage_supported($type)) {
+            return 'unsupported';
+        }
+        return svc_nodeusage_enabled($name_panel) ? 'on' : 'off';
+    }
+}
 if (!function_exists('svc_status_blocks')) {
     // The pieces the service caption is assembled from. Kept here rather than in
     // index.php so the same blocks can be reused by anything else that shows a
@@ -5529,7 +5613,7 @@ if (!function_exists('gateway_apply_button_style')) {
         if (empty($buttons)) {
             return array_values($rows);
         }
-        $ordered = help_layout_apply_order($order, $section['order']);
+        $ordered = help_layout_visible(help_layout_apply_order($order, $section['order']), $section);
         $out = help_layout_chunk_rows($ordered, $buttons, $section['width']);
         foreach ($extraRows as $row) {
             $out[] = $row;
@@ -5624,12 +5708,20 @@ if (!function_exists('gateway_apply_button_style')) {
         }
         return $out;
     }
+    // Which families get collapsed into one button on the customer's method
+    // screen. A family with a single live member is collapsed too: the offline
+    // family has only ever had one gateway, so the old "more than one member"
+    // rule left پرداخت مستقیم ترون sitting loose next to the categories, as if
+    // it belonged to none of them.
+    //
+    // Card-to-card is deliberately not a family here (see gateway_disc_groups):
+    // burying the most-used gateway behind a tap costs every customer a step.
     function topup_group_collapsible($rows, $cartToCartText = null)
     {
         $live = topup_group_live_keys($rows, $cartToCartText);
         $out = [];
         foreach (gateway_groups() as $group => $members) {
-            if (count(array_intersect($members, $live)) > 1) {
+            if (count(array_intersect($members, $live)) > 0) {
                 $out[] = $group;
             }
         }
@@ -5724,11 +5816,19 @@ if (!function_exists('topup_method_keyboard')) {
             // cleanup the shared one never did
             global $textbotlang;
             array_pop($rows);
-            $rows[] = [[
-                'text' => $textbotlang['bottext']['btn_close'] ?? '❌ بستن',
-                'callback_data' => 'mmclose',
-                'style' => 'danger',
-            ]];
+            // 🚫 مخفی کردن این دکمه (🎨 شخصی‌سازی) drops the row entirely -
+            // the shared 'colselist' row is popped either way, so turning this
+            // off leaves the screen with no trailing row rather than a broken one
+            if (!bt_button_hidden($lang ?? 'fa', 'bottext.btnCloseTopup')) {
+                $rows[] = [bt_button(
+                    $lang ?? 'fa',
+                    'bottext.btnCloseTopup',
+                    $textbotlang['bottext']['btnCloseTopup'] ?? ($textbotlang['bottext']['btn_close'] ?? '❌ بستن'),
+                    // ':tp' tells the shared mmclose handler which of the six
+                    // sections' own 🖼 استیکر دکمه بستن setting to use
+                    'mmclose:tp'
+                )];
+            }
         }
         // 🗂 دسته‌بندی درگاه‌ها, off unless this language turned it on. Done last
         // so the close row above is already in place and stays where it is.
@@ -6864,6 +6964,22 @@ if (!function_exists('bottext_all_item_keys')) {
         return array_values(array_unique($keys));
     }
 }
+if (!function_exists('sell_sticker_capture')) {
+    // Same field (bt_sticker_id) as sell_sticker_retire() below, but for a
+    // caller that needs the id WITHOUT deleting the message yet - the ❌ بستن
+    // handlers, which hand it to close_sticker_play() to remove together with
+    // its own sticker after 🖼 استیکر دکمه بستن's timer. The DB is cleared
+    // either way, so a second call never returns the same id twice.
+    function sell_sticker_capture($chat_id)
+    {
+        $sr_user = select("user", "*", "id", $chat_id, "select");
+        $sr_old = (int) ($sr_user['bt_sticker_id'] ?? 0);
+        if ($sr_old > 0) {
+            update("user", "bt_sticker_id", "0", "id", $chat_id);
+        }
+        return $sr_old;
+    }
+}
 if (!function_exists('sell_sticker_retire')) {
     // Takes away the sticker the current purchase screen put up. sell_screen()
     // calls it on every step; the paths that LEAVE the flow (a product is
@@ -6871,11 +6987,9 @@ if (!function_exists('sell_sticker_retire')) {
     // sticker does not end up sitting above an unrelated invoice.
     function sell_sticker_retire($chat_id)
     {
-        $sr_user = select("user", "*", "id", $chat_id, "select");
-        $sr_old = (int) ($sr_user['bt_sticker_id'] ?? 0);
+        $sr_old = sell_sticker_capture($chat_id);
         if ($sr_old > 0) {
             deletemessage($chat_id, $sr_old);
-            update("user", "bt_sticker_id", "0", "id", $chat_id);
         }
     }
 }
@@ -8160,8 +8274,8 @@ if (!function_exists('bt_section_meta')) {
                 'alert' => 'این بخش رنگ، ترتیب، عرض و ایموجی دکمه‌های پنل، دسته‌بندی و محصول رو مدیریت می‌کنه - نه متن پیام‌ها رو.',
             ],
             'usertest_related' => [
-                'label' => '📦 سایر پیام‌های اکانت تست',
-                'alert' => 'این دکمه‌ها تو رو به پیام‌های دیگه‌ای می‌برن که تو مسیر اکانت تست فرستاده می‌شن - نه همین پیامی که الان داری تنظیمش می‌کنی.',
+                'label' => '📦 سایر پیام‌ها و دکمه‌های اکانت تست',
+                'alert' => 'این دکمه‌ها تو رو به پیام‌ها و دکمه‌های دیگه‌ی مسیر اکانت تست می‌برن (لیست پنل‌ها، پایان اعتبار، نمایش کانفیگ) - نه همین پیامی که الان داری تنظیمش می‌کنی. هیچ‌کدومشون توی لیست اصلی ردیف جدا ندارن؛ راه ورودشون فقط همینجاست.',
             ],
             'usertest_current' => [
                 'label' => '⬆️ دکمه‌های بالا برای پیام‌های دیگه بود',
@@ -8207,6 +8321,18 @@ if (!function_exists('bt_section_meta')) {
                 'label' => '⚙️ عملیات',
                 'alert' => 'دکمه‌های بالاتر فقط پیش‌نمایشن - روشون بزن تا ویرایش بشن. دکمه‌های پایین (ریست/بازگشت/بستن) کار واقعی انجام می‌دن.',
             ],
+            'genbtn_visibility' => [
+                'label' => '👁 نمایش و پنهان کردن',
+                'alert' => 'با دکمه‌ی پایین می‌تونی این دکمه رو کلاً از جلوی چشم کاربر برداری. پنهان که بشه، اصلاً ساخته نمی‌شه - نه اینکه غیرفعال بشه.',
+            ],
+            'genbtn_detail_actions' => [
+                'label' => '⚙️ عملیات',
+                'alert' => 'دکمه‌ی 🔁 ریست، این دکمه رو کامل به حالت پیش‌فرض برمی‌گردونه (متن، رنگ، ایموجی، جای دکمه، و اگه استیکر بستن داره اونم). 🔙 بازگشت و ❌ بستن هم فقط از این صفحه خارج می‌شن و چیزی رو تغییر نمی‌دن.',
+            ],
+            'genbtn_closesticker' => [
+                'label' => '🖼 استیکر دکمه بستن',
+                'alert' => 'وقتی کاربر روی ❌ بستنِ همین بخش می‌زنه، این استیکر فرستاده می‌شه و بعد از مدت تعیین‌شده، صفحه و استیکرِ خودِ صفحه و این استیکر با هم پاک می‌شن. این تنظیم فقط مال همین بخشه و دکمه‌ی 🔁 ریست این دکمه، اینو هم به پیش‌فرض برمی‌گردونه.',
+            ],
             'myservices_status' => [
                 'label' => '📊 وضعیت سرویس (فعال/غیرفعال)',
                 'alert' => 'این بخش پیام‌هایی که وضعیت فعال یا غیرفعال بودن سرویس کاربر رو نشون می‌دن مدیریت می‌کنه.',
@@ -8244,8 +8370,24 @@ if (!function_exists('bt_section_meta')) {
                 'alert' => 'این بخش کپشن دکمه‌ی «🔗 لینک اشتراک» رو مدیریت می‌کنه - یکی برای حالت QR (بیشتر پنل‌ها)، یکی برای حالت فایل (پنل‌های WireGuard).',
             ],
             'topupdisc_bulk' => [
-                'label' => '⚡️ عملیات سریع',
-                'alert' => 'دکمه‌ی زیر یه میان‌بره: یکجا روی همه‌ی درگاه‌های فعال این زبان تخفیف خودکار می‌ذاره - نه یه تنظیم جدا، فقط سریع‌تر می‌کنه کاری که می‌تونی تک‌تک هم انجام بدی.',
+                'label' => '⚡️ اعمال همگانی',
+                'alert' => 'دکمه‌ی زیر یه دسته نیست، بالاتر از همه‌ی دسته‌هاست: هم تخفیف خودکار داره هم کد تخفیف، و روی هر درگاه فعال این زبان کار می‌کنه. با روشن کردنش، تخفیف دسته‌ها و تخفیف تک‌تک درگاه‌ها خاموش می‌شن تا فقط همین یکی اعمال بشه.',
+            ],
+            'langsw_when' => [
+                'label' => '⏱ کِی نشون داده بشه',
+                'alert' => 'منوی انتخاب زبان یا خودکار به کاربر نشون داده می‌شه یا اصلاً نه. اگه روشنش کنی، انتخاب کن که فقط بار اولی که کاربر وارد ربات می‌شه بیاد، یا هر بار که /start می‌زنه.',
+            ],
+            'langsw_langs' => [
+                'label' => '🌍 زبان‌های فروشگاه',
+                'alert' => 'زبان‌هایی که ربات پشتیبانی می‌کنه. هم توی منوی انتخاب زبان همین‌ها نشون داده می‌شن، هم اگه قانون پایین صفحه روشن باشه، فقط همین‌ها می‌تونن از ربات استفاده کنن. حداقل یکی باید روشن بمونه.',
+            ],
+            'langsw_look' => [
+                'label' => '🎨 ظاهر صفحه‌ی انتخاب زبان',
+                'alert' => 'متن بالای صفحه‌ی انتخاب زبان و ظاهر خود دکمه‌ها (چیدمان، رنگ، ایموجی، تغییر نام) - همون چهار ابزاری که بقیه‌ی دکمه‌های ربات هم دارن.',
+            ],
+            'langsw_access' => [
+                'label' => '🚦 چه کسانی سرویس بگیرن',
+                'alert' => 'با روشن کردن این گزینه، هر کاربری که زبانش جزو زبان‌های فروشگاه نباشه یه پیام رد می‌گیره و هیچ بخشی از ربات براش کار نمی‌کنه. مدیرها هیچ‌وقت بسته نمی‌شن تا کسی خودشو بیرون ربات جا نذاره.',
             ],
             'topupdisc_code' => [
                 'label' => '🎟 کد تخفیف',
@@ -8258,6 +8400,10 @@ if (!function_exists('bt_section_meta')) {
             'topupdisc_line_one' => [
                 'label' => '✏️ جمله‌ی تخفیف — وقتی روی یک درگاه ست شده',
                 'alert' => 'این دو جمله وقتی به کاربر نشون داده می‌شن که تخفیف روی یک درگاهِ تکی ست شده باشه (یا کد تخفیفی که مال همون درگاهه). مهم نیست کدوم درگاه - همه‌ی درگاه‌ها از همین دو جمله استفاده می‌کنن، پس اینجا اسم درگاه نمی‌بینی. یکی برای تخفیف درصدیه، یکی برای تخفیف با مبلغ ثابت.',
+            ],
+            'topupdisc_line_all' => [
+                'label' => '✏️ جمله‌ی تخفیف — وقتی همگانی ست شده',
+                'alert' => 'این دو جمله وقتی نشون داده می‌شن که تخفیف از بخش «اعمال همگانی» ست شده باشه، یعنی روی همه‌ی درگاه‌ها. چون دسته‌ای در کار نیست، متغیر {group} اینجا معنی نداره و توش استفاده نمی‌شه.',
             ],
             'topupdisc_line_group' => [
                 'label' => '✏️ جمله‌ی تخفیف — وقتی روی یک دسته ست شده',
@@ -8305,7 +8451,35 @@ if (!function_exists('bt_section_meta')) {
             ],
             'home_usertest' => [
                 'label' => '🔑 اکانت تست',
-                'alert' => 'این بخش پیام‌های مسیر اکانت تست (تنظیم یوزرنیم و پیام پایان اعتبار) رو مدیریت می‌کنه.',
+                'alert' => 'همه‌ی پیام‌ها و دکمه‌های مسیر اکانت تست از داخل همین یه دکمه تنظیم می‌شن: درخواست یوزرنیم، دکمه‌ی بستن لیست پنل‌ها، پیام پایان اعتبار و نحوه‌ی نمایش کانفیگ.',
+            ],
+            'home_account' => [
+                'label' => '👤 حساب کاربری',
+                'alert' => 'این بخش کپشن صفحه‌ی «👤 حساب کاربری» و دکمه‌ی بستنش رو مدیریت می‌کنه.',
+            ],
+            'home_help' => [
+                'label' => '📚 آموزش',
+                'alert' => 'این بخش پیام‌های بخش «📚 آموزش» و ظاهر دکمه‌های دسته‌بندی و آموزش‌ها رو مدیریت می‌کنه.',
+            ],
+            'account_main' => [
+                'label' => '👤 صفحه‌ی حساب کاربری',
+                'alert' => 'کپشن صفحه‌ی حساب کاربری و دکمه‌ی ❌ بستنِ زیرش - همون صفحه‌ای که موجودی و تعداد سرویس کاربر رو نشون می‌ده.',
+            ],
+            'help_screens' => [
+                'label' => '📝 متن صفحه‌های آموزش',
+                'alert' => 'کپشن دو صفحه‌ی بخش آموزش (لیست دسته‌بندی‌ها و لیست آموزش‌ها) و پیامی که وقتی آموزش خاموشه نشون داده می‌شه.',
+            ],
+            'help_buttons' => [
+                'label' => '🔘 دکمه‌های بخش آموزش',
+                'alert' => 'دکمه‌ی ❌ بستنِ لیست دسته‌بندی آموزش‌ها - متن و رنگش از اینجا تنظیم می‌شه.',
+            ],
+            'help_style' => [
+                'label' => '🎨 ظاهر دکمه‌های آموزش',
+                'alert' => 'ترتیب، عرض، رنگ، ایموجی و نمایش/مخفی‌بودن دکمه‌های دسته‌بندی و آموزش‌ها - نه متن پیام‌ها.',
+            ],
+            'home_other' => [
+                'label' => '💬 سایر پیام‌ها',
+                'alert' => 'پیام‌هایی که هنوز به هیچ بخشی تعلق ندارن و جای مشخصی براشون تعریف نشده. اگه اینجا چیزی دیدی که فکر می‌کنی باید توی یکی از بخش‌های بالا باشه، بگو تا منتقلش کنم.',
             ],
             'home_tools' => [
                 'label' => '⚙️ ابزارها و تنظیمات جانبی',
@@ -8352,6 +8526,17 @@ if (!function_exists('genbtn_alias_map')) {
             // own-key trick again - the 🎁 code-entry screen owns both its
             // "کد تخفیف دارم" row on the method screen and its own back button
             'td' => 'users.Balance.topupDiscPrompt',
+            // the two purchase-flow back buttons and five ❌ بستن buttons - each
+            // one already IS a bottext.items key (bt_btnitem_keys()), so unlike
+            // every alias above there is no "owning caption" to borrow: the key
+            // is the button itself.
+            'rc' => 'users.sell.backToPreviousBtn',
+            'rp' => 'users.sell.backToPanelListBtn',
+            'bu' => 'bottext.btnCloseBuy',
+            'tp' => 'bottext.btnCloseTopup',
+            'ac' => 'bottext.btnCloseAccount',
+            'ts' => 'bottext.btnCloseTest',
+            'he' => 'bottext.btnCloseHelp',
         ];
     }
 }
@@ -8360,6 +8545,13 @@ if (!function_exists('genbtn_alias_to_key')) {
     {
         $m = genbtn_alias_map();
         return $m[$alias] ?? null;
+    }
+    // the reverse lookup - bt_btnitem_keys() items reach their own alias by
+    // key, not the other way around
+    function genbtn_key_to_alias($key)
+    {
+        $alias = array_search($key, genbtn_alias_map(), true);
+        return $alias !== false ? $alias : '';
     }
 }
 if (!function_exists('genbtn_defs')) {
@@ -8431,6 +8623,31 @@ if (!function_exists('genbtn_defs')) {
                 1 => ['name' => '🔴 دکمه بازگشت به منوی قبل', 'text' => '🔙 بازگشت به منوی قبل', 'style' => 'danger', 'callback_data' => 'none'],
             ];
         }
+        // the seven bt_btnitem_keys() buttons - 'callback_data' is 'none' like
+        // 'cf'/'rn'/'cl' above, because each one is rendered from more than one
+        // call site with its own real callback (bt_button() supplies that at
+        // render time); this copy is only ever shown on the inert preview row.
+        if ($alias === 'rc') {
+            return [0 => ['name' => '🔙 بازگشت به لیست دسته‌بندی (زیر لیست محصولات)', 'text' => $textbotlang['users']['sell']['backToPreviousBtn'], 'style' => 'danger', 'callback_data' => 'none']];
+        }
+        if ($alias === 'rp') {
+            return [0 => ['name' => '🔙 بازگشت به لیست پنل‌ها (زیر لیست دسته‌بندی)', 'text' => $textbotlang['users']['sell']['backToPanelListBtn'], 'style' => 'danger', 'callback_data' => 'none']];
+        }
+        if ($alias === 'bu') {
+            return [0 => ['name' => '❌ دکمه بستن (خرید اشتراک)', 'text' => $textbotlang['bottext']['btnCloseBuy'], 'style' => 'danger', 'callback_data' => 'none']];
+        }
+        if ($alias === 'tp') {
+            return [0 => ['name' => '❌ دکمه بستن (افزایش موجودی)', 'text' => $textbotlang['bottext']['btnCloseTopup'], 'style' => 'danger', 'callback_data' => 'none']];
+        }
+        if ($alias === 'ac') {
+            return [0 => ['name' => '❌ دکمه بستن (حساب کاربری)', 'text' => $textbotlang['bottext']['btnCloseAccount'], 'style' => 'danger', 'callback_data' => 'none']];
+        }
+        if ($alias === 'ts') {
+            return [0 => ['name' => '❌ دکمه بستن (اکانت تست)', 'text' => $textbotlang['bottext']['btnCloseTest'], 'style' => 'danger', 'callback_data' => 'none']];
+        }
+        if ($alias === 'he') {
+            return [0 => ['name' => '❌ دکمه بستن (آموزش)', 'text' => $textbotlang['bottext']['btnCloseHelp'], 'style' => 'danger', 'callback_data' => 'none']];
+        }
         return [];
     }
 }
@@ -8459,7 +8676,7 @@ if (!function_exists('genbtn_set_text')) {
 if (!function_exists('genbtn_set_style')) {
     // one combined setter, mirroring volumepct_tier_set_style()'s shape:
     // pass null to leave a field untouched, '' to clear an emoji/icon field
-    function genbtn_set_style($lang, $key, $idx, $style = null, $emoji = null, $emojiIcon = null, $pos = null, $simple = null)
+    function genbtn_set_style($lang, $key, $idx, $style = null, $emoji = null, $emojiIcon = null, $pos = null, $simple = null, $hidden = null)
     {
         $setting = select("setting", "*", null, null, "select");
         $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
@@ -8490,6 +8707,13 @@ if (!function_exists('genbtn_set_style')) {
         }
         if ($simple !== null) {
             $be[$lang][$key][$idx]['simple'] = (bool) $simple;
+        }
+        if ($hidden !== null) {
+            if ($hidden) {
+                $be[$lang][$key][$idx]['hidden'] = true;
+            } else {
+                unset($be[$lang][$key][$idx]['hidden']);
+            }
         }
         if (empty($be[$lang][$key][$idx])) {
             unset($be[$lang][$key][$idx]);
@@ -8733,7 +8957,21 @@ if (!function_exists('genbtn_list_payload')) {
     }
 }
 if (!function_exists('genbtn_detail_payload')) {
-    function genbtn_detail_payload($alias, $lang, $idx, $textbotlang, $origin = '')
+    // The close_sticker key this screen owns, or '' when this button doesn't
+    // close anything (most of them navigate or confirm instead). 'sc' is the
+    // one alias whose genbtn key is the caption it lives on rather than a key
+    // close_sticker knows, so it is translated here.
+    function genbtn_close_sticker_key($alias, $key, $idx)
+    {
+        if ($idx !== 0 || !function_exists('close_sticker_keys')) {
+            return '';
+        }
+        $csKey = ($alias === 'sc') ? 'servclose' : $key;
+        return in_array($csKey, close_sticker_keys(), true) ? $csKey : '';
+    }
+    // $csNote: the "🖼 استیکر دکمه بستن" change that just happened, shown inside
+    // this screen's own caption quote instead of on a separate settings screen.
+    function genbtn_detail_payload($alias, $lang, $idx, $textbotlang, $origin = '', $csNote = '')
     {
         $key = genbtn_alias_to_key($alias);
         $gb_sfx = ($origin === 'u') ? '|u' : '';
@@ -8748,7 +8986,21 @@ if (!function_exists('genbtn_detail_payload')) {
         $curSimple = !empty($ov['simple']);
         $hasEmoji = !empty($ov['emoji']) || !empty($ov['emojiIcon']);
         $previewBtn = genbtn_render($d, $ov, 'none');
-        $info = "🔘 <b>ویرایش {$d['name']}</b>\n➖➖➖➖➖➖➖➖➖➖\n👁 پیش‌نمایش زنده 👇";
+        // hidden is only offered for the seven bt_btnitem_keys() buttons (see
+        // the toggle row below) - marking the preview keeps the state visible
+        // without having to scroll to that row
+        $gb_hidden = !empty($ov['hidden']);
+        if ($gb_hidden) {
+            $previewBtn['text'] = '🚫 ' . $previewBtn['text'];
+        }
+        $csKey = genbtn_close_sticker_key($alias, $key, $idx);
+        $info = "🔘 <b>ویرایش {$d['name']}</b>\n➖➖➖➖➖➖➖➖➖➖\n";
+        if ($csKey !== '') {
+            $info .= close_sticker_caption_block($csKey, $csNote);
+        }
+        $info .= $gb_hidden
+            ? "🚫 <b>این دکمه الان مخفیه</b> - کاربر اصلاً نمی‌بینتش.\n"
+            : "👁 پیش‌نمایش زنده 👇";
         $kb = ['inline_keyboard' => []];
         $kb['inline_keyboard'][] = [$previewBtn];
         $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش متن', 'callback_data' => "gbtn|text|{$lang}|{$alias}|{$idx}{$gb_sfx}", 'style' => 'primary']];
@@ -8763,8 +9015,57 @@ if (!function_exists('genbtn_detail_payload')) {
             ['text' => ($curPos === 'right' ? '✅ ' : '') . '➡️ راست', 'callback_data' => "gbtn|pos|{$lang}|{$alias}|{$idx}|right{$gb_sfx}", 'style' => 'primary'],
             ['text' => ($curPos === 'left' ? '✅ ' : '') . '⬅️ چپ', 'callback_data' => "gbtn|pos|{$lang}|{$alias}|{$idx}|left{$gb_sfx}", 'style' => 'primary'],
         ];
+        // 🖼 استیکر دکمه بستن - only the six ❌ بستن buttons close_sticker_keys()
+        // knows about get these rows (servclose/سرویس‌های من, plus the five
+        // bt_btnitem_keys() close buttons); every other alias/idx opens or
+        // navigates something, it doesn't close anything. They used to be one
+        // row opening a settings screen of their own - two screens for one
+        // button - so they now sit right here under a white divider instead.
+        if ($csKey !== '') {
+            $sc_alias = close_sticker_key_to_alias($csKey);
+            $sc_cs = close_sticker_settings($csKey);
+            $kb['inline_keyboard'][] = [['text' => bt_section_meta('genbtn_closesticker')['label'], 'callback_data' => 'bt_sep|genbtn_closesticker']];
+            $kb['inline_keyboard'][] = [[
+                'text' => $sc_cs['enabled'] ? '✅ استیکر بستن: روشن' : '❌ استیکر بستن: خاموش',
+                'callback_data' => "clst2tog:{$lang}:{$sc_alias}",
+                'style' => $sc_cs['enabled'] ? 'success' : 'danger',
+            ]];
+            if ($sc_cs['enabled']) {
+                $kb['inline_keyboard'][] = [[
+                    'text' => '🖼 تغییر استیکر: ' . ($sc_cs['file_id'] === close_sticker_default_file_id() ? 'پیش‌فرض' : 'سفارشی'),
+                    'callback_data' => "clst2set:{$lang}:{$sc_alias}",
+                    'style' => 'primary',
+                ]];
+                $kb['inline_keyboard'][] = [[
+                    'text' => "⏱ مدت نمایش: {$sc_cs['duration']} ثانیه",
+                    'callback_data' => "clst2time:{$lang}:{$sc_alias}",
+                    'style' => 'primary',
+                ]];
+            }
+        }
+        // 👁/🚫 - only the seven bt_btnitem_keys() buttons. The other eight
+        // aliases are confirm/pay/cancel buttons whose flows have no other way
+        // forward; hiding one of those would break the screen it lives on, so
+        // the toggle is not offered there at all.
+        if (function_exists('bt_btnitem_keys') && in_array($key, bt_btnitem_keys(), true)) {
+            $kb['inline_keyboard'][] = [['text' => bt_section_meta('genbtn_visibility')['label'], 'callback_data' => 'bt_sep|genbtn_visibility']];
+            $kb['inline_keyboard'][] = [[
+                'text' => $gb_hidden ? '👁 نمایش دادن این دکمه' : '🚫 مخفی کردن این دکمه',
+                'callback_data' => "gbtn|hide|{$lang}|{$alias}|{$idx}",
+                'style' => $gb_hidden ? 'success' : 'danger',
+            ]];
+        }
+        $kb['inline_keyboard'][] = [['text' => bt_section_meta('genbtn_detail_actions')['label'], 'callback_data' => 'bt_sep|genbtn_detail_actions']];
         $kb['inline_keyboard'][] = [['text' => '🔁 ریست این دکمه', 'callback_data' => "gbtn|rst|{$lang}|{$alias}|{$idx}{$gb_sfx}", 'style' => 'danger']];
-        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "gbtn|list|{$lang}|{$alias}{$gb_sfx}", 'style' => 'danger']];
+        // the seven bt_btnitem_keys() buttons return to their own real screen
+        // (a bt_group|... or bt_edit|... target) instead of genbtn's generic
+        // "list of buttons under this alias" screen - none of them share their
+        // alias with a sibling button, so that list would only ever hold this
+        // one row and lead nowhere useful
+        $backCb = (function_exists('bt_btnitem_keys') && in_array($key, bt_btnitem_keys(), true) && function_exists('bt_btnitem_back_cb'))
+            ? bt_btnitem_back_cb($key, $lang)
+            : "gbtn|list|{$lang}|{$alias}{$gb_sfx}";
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => $backCb, 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
         return [$info, json_encode($kb)];
     }
@@ -9199,7 +9500,7 @@ if (!function_exists('topup_disc_notify_payload')) {
         ]];
         $kb['inline_keyboard'][] = [['text' => '🕒 تغییر بازه (' . $cfg['everyHours'] . ' ساعت)', 'callback_data' => "tpdnevery:{$lang}:{$key}"]];
         $kb['inline_keyboard'][] = [['text' => '📤 ارسال گزارش همین الان', 'callback_data' => "tpdnnow:{$lang}:{$key}"]];
-        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "topupdisc:{$lang}:{$key}"]];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => topup_disc_key_back_cb($lang, $key)]];
         return [$info, json_encode($kb)];
     }
 }
@@ -9275,7 +9576,8 @@ if (!function_exists('topup_disc_group_user_count')) {
     function topup_disc_group_user_count($userId, $lang, $group)
     {
         global $pdo;
-        $members = gateway_disc_groups()[$group] ?? [];
+        // 'all' covers every gateway there is - not a category in the map
+        $members = ($group === 'all') ? gateway_all_keys() : (gateway_disc_groups()[$group] ?? []);
         if (empty($members)) {
             return 0;
         }
@@ -9654,6 +9956,12 @@ if (!function_exists('topup_disc_live_autos')) {
 if (!function_exists('topup_disc_gateway_label')) {
     function topup_disc_gateway_label($gatewayKey, $textbotlang)
     {
+        // a '@'-prefixed key names a scope, not a gateway - the code screens
+        // pass whichever they are editing
+        $scope = topup_disc_scope_of_key($gatewayKey);
+        if ($scope !== null) {
+            return topup_disc_scope_label($scope, $textbotlang);
+        }
         $reg = function_exists('gateway_registry') ? gateway_registry($textbotlang) : [];
         $label = $reg[$gatewayKey] ?? $gatewayKey;
         return trim(strip_tags((string) $label));
@@ -9722,8 +10030,8 @@ if (!function_exists('topup_disc_method_caption')) {
         // a discount set on a whole category gets ONE line naming the category,
         // rather than the same sentence repeated for each of its gateways
         $eligibleGroups = [];
-        foreach (array_keys(gateway_disc_groups()) as $grp) {
-            if (empty(gateway_disc_group_members($grp, $lang, $textbotlang))) {
+        foreach (topup_disc_scopes() as $grp) {
+            if (empty(topup_disc_scope_members($grp, $lang, $textbotlang))) {
                 continue;
             }
             $g = topup_disc_group_live($lang, $grp);
@@ -9737,7 +10045,7 @@ if (!function_exists('topup_disc_method_caption')) {
             foreach ($eligibleGroups as $grp => $g) {
                 $perUser = intval($g['limitPerUser'] ?? 0);
                 $autoLines[] = topup_disc_render_block('users.Balance.topupDiscAutoLine', $textbotlang, [
-                    '{gateway}' => trim(strip_tags((string) gateway_group_label($grp, $textbotlang))),
+                    '{gateway}' => topup_disc_scope_label($grp, $textbotlang),
                     '{value}' => topup_disc_admin_value_label($g),
                     '{uses}' => topup_disc_uses_text($perUser, $perUser > 0 ? topup_disc_group_user_count($userId, $lang, $grp) : 0, $textbotlang),
                 ]);
@@ -9813,7 +10121,10 @@ if (!function_exists('topup_disc_method_keyboard')) {
             // topup_method_keyboard() always leaves as the last row
             $rows = $kb['inline_keyboard'];
             $last = end($rows);
-            $closeAt = (is_array($last) && count($last) === 1 && in_array($last[0]['callback_data'] ?? '', ['mmclose', 'colselist'], true))
+            // 'mmclose' now carries a ':xx' section suffix (see close_sticker_keys()),
+            // so this is a prefix check rather than an exact match
+            $lastCb = (string) ($last[0]['callback_data'] ?? '');
+            $closeAt = (is_array($last) && count($last) === 1 && (strpos($lastCb, 'mmclose') === 0 || $lastCb === 'colselist'))
                 ? count($rows) - 1 : count($rows);
             array_splice($rows, $closeAt, 0, [$row]);
             $kb['inline_keyboard'] = array_values($rows);
@@ -9868,13 +10179,23 @@ if (!function_exists('topup_disc_caption_line')) {
         // customer reads "درگاه‌های آنلاین ارزی ٪۲۰ تخفیف" rather than a bare
         // percentage that gives no hint why it applies here and not elsewhere
         $group = (string) ($disc['group'] ?? '');
+        if ($group === 'all') {
+            // a discount that covers every gateway has nothing to name - saying
+            // "درگاه‌های همه" reads worse than simply not naming a category
+            $key = $isFixed ? 'topupDiscAllFixedCaption' : 'topupDiscAllPercentCaption';
+            $tpl = $textbotlang['hardcoded'][$key]
+                ?? ($isFixed ? '{value} اضافه روی هر شارژ' : 'تخفیف {value} درصدی روی همه‌ی روش‌های پرداخت');
+            return strtr($tpl, ['{value}' => $isFixed ? money($value) : $valueTxt]);
+        }
         if ($group !== '') {
             $key = $isFixed ? 'topupDiscGroupFixedCaption' : 'topupDiscGroupPercentCaption';
             $tpl = $textbotlang['hardcoded'][$key]
                 ?? ($isFixed ? '{value} اضافه برای هر شارژ با {group}' : 'تخفیف {value} درصدی برای {group}');
             return strtr($tpl, [
                 '{value}' => $isFixed ? money($value) : $valueTxt,
-                '{group}' => trim(strip_tags((string) gateway_group_label($group, $textbotlang))),
+                // scope-aware: gateway_group_label() would answer for 'all'
+                // with the online label, since it falls back to that key
+                '{group}' => topup_disc_scope_label($group, $textbotlang),
             ]);
         }
         $key = $isFixed ? 'topupDiscFixedCaption' : 'topupDiscPercentCaption';
@@ -9978,19 +10299,37 @@ if (!function_exists('topup_disc_gw_list_payload')) {
         $g = topup_disc_group_live($lang, $group);
         return $g === null ? '' : topup_disc_admin_value_label($g);
     }
+    // Only the discount itself, for a button label - no code counts, no
+    // gateway counts. topup_disc_gw_summary() stays the fuller string the
+    // caption reports use.
+    function topup_disc_gw_value_summary($lang, $key)
+    {
+        $auto = topup_disc_auto_for($lang, $key);
+        $live = !empty($auto['enabled']) && floatval($auto['value'] ?? 0) > 0
+            && (intval($auto['expiry'] ?? 0) === 0 || time() < intval($auto['expiry']));
+        return $live ? topup_disc_admin_value_label($auto) : '';
+    }
     // the category screen: the discount for the whole family, then its gateways
     function topup_disc_group_list_payload($lang, $group, $textbotlang)
     {
-        $members = gateway_disc_group_members($group, $lang, $textbotlang);
-        $groupLabel = trim(strip_tags((string) gateway_group_label($group, $textbotlang)));
+        $members = topup_disc_scope_members($group, $lang, $textbotlang);
+        $groupLabel = topup_disc_scope_label($group, $textbotlang);
+        $isAll = ($group === 'all');
         $g = topup_disc_group_for($lang, $group);
         $gLive = topup_disc_group_live($lang, $group);
+        $scopeKey = topup_disc_scope_key($group);
 
         $info = "🎁 <b>{$groupLabel}</b>\n➖➖➖➖➖➖➖➖➖➖\n";
-        $info .= "تخفیف <b>گروهی</b> روی همه‌ی " . count($members) . " درگاه این دسته اعمال می‌شه.\n";
-        $info .= "تخفیف <b>تک‌درگاهی</b> هم می‌تونی جدا بذاری — روی هم سوار نمی‌شن، هرکدوم به کاربر بیشتر بده همون اعمال می‌شه.\n";
+        if ($isAll) {
+            $info .= "هرچی اینجا تنظیم کنی روی <b>هر " . count($members) . " درگاه فعال</b> این زبان اعمال می‌شه.\n";
+            $info .= "با روشن کردنش، تخفیف دسته‌ها و تخفیف تک‌تک درگاه‌ها <b>خاموش</b> می‌شن تا همین یکی اعمال بشه.\n";
+        } else {
+            $info .= "تخفیف <b>گروهی</b> روی همه‌ی " . count($members) . " درگاه این دسته اعمال می‌شه.\n";
+            $info .= "تخفیف <b>تک‌درگاهی</b> هم می‌تونی جدا بذاری — روی هم سوار نمی‌شن، هرکدوم به کاربر بیشتر بده همون اعمال می‌شه.\n";
+        }
         $info .= "➖➖➖➖➖➖➖➖➖➖\n";
-        $info .= "🎯 تخفیف گروهی: " . ($gLive !== null ? topup_disc_admin_value_label($gLive) . ' ✅' : 'خاموش') . "\n";
+        $info .= "🎯 تخفیف خودکار: " . ($gLive !== null ? topup_disc_admin_value_label($gLive) . ' ✅' : 'خاموش') . "\n";
+        $info .= "🎟 کدهای تخفیف: " . count(topup_disc_codes_for($lang, $scopeKey)) . "\n";
         if ($gLive === null && floatval($g['value'] ?? 0) > 0) {
             $info .= "\n⚠️ <b>مقدار داره ولی فعال نیست</b> — یا خاموشه یا مدتش تموم شده.\n";
         }
@@ -10002,19 +10341,53 @@ if (!function_exists('topup_disc_gw_list_payload')) {
         }
 
         $kb = ['inline_keyboard' => []];
+        // blue throughout: the label says the discount, the caption above says
+        // what is set - a green row said only "something here is configured"
         $kb['inline_keyboard'][] = [[
-            'text' => ($gLive !== null ? '✅ ' : '') . '🎯 تخفیف گروهی این دسته',
+            'text' => ($isAll ? '🎯 تخفیف خودکار همگانی' : '🎯 تخفیف گروهی این دسته')
+                . ($gLive !== null ? ' • ' . topup_disc_admin_value_label($gLive) : ''),
             'callback_data' => "dsgrpauto:{$lang}:{$group}",
-            'style' => $gLive !== null ? 'success' : 'primary',
+            'style' => 'primary',
         ]];
-        $kb['inline_keyboard'][] = [['text' => bt_section_meta('topupdisc_members')['label'], 'callback_data' => 'bt_sep|topupdisc_members']];
-        foreach ($members as $key => $label) {
-            $sum = topup_disc_gw_summary($lang, $key);
+        // the same code list every gateway has, attached to this scope instead:
+        // one code that works on every gateway the scope covers
+        foreach (topup_disc_codes_for($lang, $scopeKey) as $i => $c) {
+            $st = topup_disc_code_status($c);
+            $used = topup_disc_code_used_count($c['code']);
+            $lim = intval($c['limitTotal'] ?? 0);
+            $label = "{$c['code']} · " . topup_disc_admin_value_label($c) . ' · ' . ($lim > 0 ? "{$used}/{$lim}" : (string) $used);
+            if ($st !== 'active') {
+                $label .= ' · ' . topup_disc_admin_status_label($st);
+            }
             $kb['inline_keyboard'][] = [[
-                'text' => trim(strip_tags((string) $label)) . ($sum !== '' ? " • {$sum}" : ''),
-                'callback_data' => "topupdisc:{$lang}:{$key}",
-                'style' => ($sum !== '') ? 'success' : 'primary',
+                'text' => $label,
+                'callback_data' => "tpdopen:{$lang}:{$scopeKey}:{$i}",
+                'style' => 'primary',
             ]];
+        }
+        $kb['inline_keyboard'][] = [['text' => '➕ افزودن کد تخفیف', 'callback_data' => "tpdadd:{$lang}:{$scopeKey}", 'style' => 'primary']];
+        $memberReport = [];
+        if (!$isAll) {
+            $kb['inline_keyboard'][] = [['text' => bt_section_meta('topupdisc_members')['label'], 'callback_data' => 'bt_sep|topupdisc_members']];
+            foreach ($members as $key => $label) {
+                $v = topup_disc_gw_value_summary($lang, $key);
+                $kb['inline_keyboard'][] = [[
+                    'text' => trim(strip_tags((string) $label)) . ($v !== '' ? " • {$v} تکی" : ''),
+                    'callback_data' => topup_disc_key_back_cb($lang, $key),
+                    'style' => 'primary',
+                ]];
+                $full = topup_disc_gw_summary($lang, $key);
+                if ($full !== '') {
+                    $memberReport[] = '• ' . trim(strip_tags((string) $label)) . ": <b>{$full}</b>";
+                }
+            }
+        }
+        if (!empty($memberReport)) {
+            $info .= "\n\n<blockquote>💳 <b>تخفیف تکی درگاه‌ها</b>\n" . implode("\n", $memberReport) . '</blockquote>';
+        }
+        if ($isAll) {
+            $info .= "\n\n<blockquote>💳 <b>درگاه‌هایی که شامل می‌شن</b>\n"
+                . implode('، ', array_map(fn($l) => trim(strip_tags((string) $l)), $members)) . '</blockquote>';
         }
         $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "dslang:{$lang}", 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'] ?? '❌ بستن', 'callback_data' => 'dsclose', 'style' => 'danger']];
@@ -10033,44 +10406,83 @@ if (!function_exists('topup_disc_gw_list_payload')) {
             $info .= "➖➖➖➖➖➖➖➖➖➖\n👇 دسته رو انتخاب کن:";
         }
         $kb = ['inline_keyboard' => []];
-        // one row per category that has at least one live gateway. Always blue:
-        // these open a menu rather than carry a state of their own, and the
-        // summary next to the label already says what is set inside.
+        // One row per category that has at least one live gateway. Always blue,
+        // never a count: the label carries only the discount itself and whether
+        // it is a group one or a single-gateway one, and the quote under the
+        // caption spells out what is set where.
+        $report = [];
         foreach (array_keys(gateway_disc_groups()) as $group) {
             $members = gateway_disc_group_members($group, $lang, $textbotlang);
             if (empty($members)) {
                 continue;
             }
+            $groupLabel = trim(strip_tags((string) gateway_group_label($group, $textbotlang)));
             $bits = [];
             $gSum = topup_disc_group_summary($lang, $group);
             if ($gSum !== '') {
-                $bits[] = "گروهی {$gSum}";
+                $bits[] = "{$gSum} گروهی";
             }
-            $withOwn = 0;
-            foreach (array_keys($members) as $mk) {
-                if (topup_disc_gw_summary($lang, $mk) !== '') {
-                    $withOwn++;
+            // the per-gateway ones: one number when they all agree, otherwise
+            // just the fact that some gateway here has its own
+            $ownVals = [];
+            $ownNames = [];
+            foreach ($members as $mk => $mLabel) {
+                $v = topup_disc_gw_value_summary($lang, $mk);
+                if ($v !== '') {
+                    $ownVals[$v] = true;
+                }
+                // the report may say more than the label does - a gateway with
+                // only discount codes has no value to show next to its name.
+                // A one-gateway category drops the name: it would otherwise
+                // read "کارت به کارت: کارت به کارت (۱ کد)".
+                $full = topup_disc_gw_summary($lang, $mk);
+                if ($full !== '') {
+                    $ownNames[] = count($members) === 1
+                        ? $full
+                        : trim(strip_tags((string) $mLabel)) . " ({$full})";
                 }
             }
-            if ($withOwn > 0) {
-                $bits[] = "{$withOwn} درگاه جدا";
+            if (count($ownVals) === 1) {
+                $bits[] = array_key_first($ownVals) . ' تکی';
+            } elseif (count($ownVals) > 1) {
+                $bits[] = 'تکی';
             }
-            $label = trim(strip_tags((string) gateway_group_label($group, $textbotlang)))
-                . ' (' . count($members) . ')'
-                . (empty($bits) ? '' : ' • ' . implode(' · ', $bits));
             $kb['inline_keyboard'][] = [[
-                'text' => $label,
+                'text' => $groupLabel . (empty($bits) ? '' : ' • ' . implode(' · ', $bits)),
                 'callback_data' => "dsgrp:{$lang}:{$group}",
                 'style' => 'primary',
             ]];
+            if ($gSum !== '') {
+                $report[] = "• {$groupLabel}: <b>{$gSum}</b> روی کل دسته";
+            }
+            if (!empty($ownNames)) {
+                $report[] = "• {$groupLabel}: " . implode('، ', $ownNames);
+            }
         }
         if (!empty($gws)) {
-            // white divider - keeps this shortcut from blending into the
-            // navigation row below it (both used to be the same red 'danger'
-            // style, even though tapping one bulk-applies to every gateway
-            // and the other just leaves the screen)
+            // white divider - the row below is not another category but the
+            // one that overrides all of them
             $kb['inline_keyboard'][] = [['text' => bt_section_meta('topupdisc_bulk')['label'], 'callback_data' => 'bt_sep|topupdisc_bulk']];
-            $kb['inline_keyboard'][] = [['text' => '⚡️ اعمال همگانی روی همه درگاه‌ها', 'callback_data' => "dsbulk:{$lang}", 'style' => 'primary']];
+            $allSum = topup_disc_group_summary($lang, 'all');
+            $allCodes = count(topup_disc_codes_for($lang, topup_disc_scope_key('all')));
+            $allBits = [];
+            if ($allSum !== '') {
+                $allBits[] = "{$allSum} همگانی";
+            }
+            if ($allCodes > 0) {
+                $allBits[] = "{$allCodes} کد";
+            }
+            $kb['inline_keyboard'][] = [[
+                'text' => topup_disc_scope_label('all', $textbotlang) . (empty($allBits) ? '' : ' • ' . implode(' · ', $allBits)),
+                'callback_data' => "dsgrp:{$lang}:all",
+                'style' => 'primary',
+            ]];
+            if ($allSum !== '') {
+                $report[] = '• ' . topup_disc_scope_label('all', $textbotlang) . ": <b>{$allSum}</b> روی همه‌ی درگاه‌ها";
+            }
+        }
+        if (!empty($report)) {
+            $info .= "\n\n<blockquote>🎯 <b>تخفیف‌های فعال</b>\n" . implode("\n", $report) . '</blockquote>';
         }
         $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به بسته‌های شارژ', 'callback_data' => "topuplang:{$lang}", 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'] ?? '❌ بستن', 'callback_data' => 'dsclose', 'style' => 'danger']];
@@ -10246,7 +10658,7 @@ if (!function_exists('topup_disc_auto_payload')) {
         $kb['inline_keyboard'][] = [['text' => bt_section_meta('topupdisc_auto_actions')['label'], 'callback_data' => 'bt_sep|topupdisc_auto_actions']];
         $kb['inline_keyboard'][] = [['text' => '👥 ریست سهمیه‌ی استفاده‌شده', 'callback_data' => "tpdautoresetusage:{$lang}:{$key}", 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => '🔄 ریست تنظیمات به پیش‌فرض', 'callback_data' => "tpdautoreset:{$lang}:{$key}", 'style' => 'danger']];
-        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "topupdisc:{$lang}:{$key}", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => topup_disc_key_back_cb($lang, $key), 'style' => 'danger']];
         return [$info, json_encode($kb)];
     }
 }
@@ -10258,8 +10670,8 @@ if (!function_exists('topup_disc_group_auto_payload')) {
     {
         require_once __DIR__ . '/jdf.php';
         $g = topup_disc_group_for($lang, $group);
-        $members = gateway_disc_group_members($group, $lang, $textbotlang);
-        $groupLabel = trim(strip_tags((string) gateway_group_label($group, $textbotlang)));
+        $members = topup_disc_scope_members($group, $lang, $textbotlang);
+        $groupLabel = topup_disc_scope_label($group, $textbotlang);
         $on = !empty($g['enabled']);
         $mode = ($g['mode'] ?? 'percent') === 'fixed' ? 'fixed' : 'percent';
         $val = floatval($g['value'] ?? 0);
@@ -10366,7 +10778,7 @@ if (!function_exists('topup_disc_code_payload')) {
         $kb['inline_keyboard'][] = [['text' => '⏳ مدت اعتبار', 'callback_data' => "tpdexp:{$lang}:{$key}:{$idx}", 'style' => $exp > 0 ? 'success' : 'primary']];
         $kb['inline_keyboard'][] = [['text' => ($newOnly ? '✅ ' : '') . '🆕 فقط کاربران جدید', 'callback_data' => "tpdnewonly:{$lang}:{$key}:{$idx}", 'style' => $newOnly ? 'success' : 'primary']];
         $kb['inline_keyboard'][] = [['text' => '🗑 حذف این کد', 'callback_data' => "tpddel:{$lang}:{$key}:{$idx}", 'style' => 'danger']];
-        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "topupdisc:{$lang}:{$key}", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => topup_disc_key_back_cb($lang, $key), 'style' => 'danger']];
         return [$info, json_encode($kb)];
     }
 }
@@ -10448,27 +10860,73 @@ if (!function_exists('topup_disc_group_save')) {
     }
 }
 if (!function_exists('topup_disc_group_for')) {
+    // A scope's row holds {auto: {...}, codes: [...]}. Rows written before
+    // scoped codes existed are the bare auto array - read those as-is rather
+    // than migrating, so an already-configured category keeps working.
     function topup_disc_group_for($lang, $group)
     {
         $m = topup_disc_group_map();
-        $a = $m[$lang][$group] ?? [];
-        return is_array($a) ? $a : [];
+        $row = $m[$lang][$group] ?? [];
+        if (!is_array($row)) {
+            return [];
+        }
+        if (array_key_exists('auto', $row)) {
+            return is_array($row['auto']) ? $row['auto'] : [];
+        }
+        // legacy flat shape: the row IS the auto discount
+        unset($row['codes']);
+        return $row;
     }
 }
 if (!function_exists('topup_disc_group_set')) {
     function topup_disc_group_set($lang, $group, array $auto)
     {
         $m = topup_disc_group_map();
+        // whatever codes this scope already had survive an auto-discount edit
+        $codes = topup_disc_codes_for($lang, topup_disc_scope_key($group));
         $m[$lang][$group] = [
-            'enabled' => !empty($auto['enabled']),
-            'mode' => (isset($auto['mode']) && $auto['mode'] === 'fixed') ? 'fixed' : 'percent',
-            'value' => max(0, floatval($auto['value'] ?? 0)),
-            'expiry' => max(0, intval($auto['expiry'] ?? 0)),
-            'limitPerUser' => max(0, intval($auto['limitPerUser'] ?? 1)),
-            'newUserOnly' => !empty($auto['newUserOnly']),
-            'resetAt' => max(0, intval($auto['resetAt'] ?? 0)),
+            'auto' => [
+                'enabled' => !empty($auto['enabled']),
+                'mode' => (isset($auto['mode']) && $auto['mode'] === 'fixed') ? 'fixed' : 'percent',
+                'value' => max(0, floatval($auto['value'] ?? 0)),
+                'expiry' => max(0, intval($auto['expiry'] ?? 0)),
+                'limitPerUser' => max(0, intval($auto['limitPerUser'] ?? 1)),
+                'newUserOnly' => !empty($auto['newUserOnly']),
+                'resetAt' => max(0, intval($auto['resetAt'] ?? 0)),
+            ],
+            'codes' => $codes,
         ];
         topup_disc_group_save($m);
+    }
+}
+if (!function_exists('topup_disc_scope_disable_others')) {
+    // "اعمال همگانی" is meant to be the one discount in force: switching it on
+    // turns off every category discount and every gateway's own, so what the
+    // customer gets is the bulk one rather than whichever happened to be
+    // larger. Returns how many were switched off, for the confirmation line.
+    function topup_disc_scope_disable_others($lang, $keepScope)
+    {
+        $n = 0;
+        foreach (array_keys(gateway_disc_groups()) as $g) {
+            if ($g === $keepScope) {
+                continue;
+            }
+            $a = topup_disc_group_for($lang, $g);
+            if (!empty($a['enabled'])) {
+                $a['enabled'] = false;
+                topup_disc_group_set($lang, $g, $a);
+                $n++;
+            }
+        }
+        foreach (array_keys(topup_disc_map()[$lang] ?? []) as $gw) {
+            $a = topup_disc_auto_for($lang, $gw);
+            if (!empty($a['enabled'])) {
+                $a['enabled'] = false;
+                topup_disc_auto_set($lang, $gw, $a);
+                $n++;
+            }
+        }
+        return $n;
     }
 }
 if (!function_exists('topup_disc_group_live')) {
@@ -10509,9 +10967,69 @@ if (!function_exists('topup_disc_auto_reset_usage')) {
         topup_disc_auto_set($lang, $gatewayKey, $auto);
     }
 }
+if (!function_exists('topup_disc_scope_of_key')) {
+    // A "key" in this whole family is normally a gateway. Prefixed with '@' it
+    // is a SCOPE instead: one of the four categories, or 'all' for every
+    // gateway at once. No gateway key contains '@', so the two can never be
+    // confused - which matters because 'card' is both a gateway and a category.
+    //
+    // Everything downstream (the code list screen, add/edit/remove, the status
+    // rules, the redemption check) works on that key without caring which kind
+    // it is; only the two storage accessors below and the label do.
+    function topup_disc_scope_of_key($key)
+    {
+        $key = (string) $key;
+        return (strlen($key) > 1 && $key[0] === '@') ? substr($key, 1) : null;
+    }
+    // Where a code screen's "back" goes: to the gateway's own discount screen,
+    // or to the scope's. One place, so every code screen agrees.
+    function topup_disc_key_back_cb($lang, $key)
+    {
+        $scope = topup_disc_scope_of_key($key);
+        return $scope !== null ? "dsgrp:{$lang}:{$scope}" : "topupdisc:{$lang}:{$key}";
+    }
+    // ...and the screen itself, for the handlers that re-render after an edit
+    function topup_disc_key_screen($lang, $key, $textbotlang)
+    {
+        $scope = topup_disc_scope_of_key($key);
+        return $scope !== null
+            ? topup_disc_group_list_payload($lang, $scope, $textbotlang)
+            : topup_disc_hub_payload($lang, $key, $textbotlang);
+    }
+    function topup_disc_scope_key($scope)
+    {
+        return '@' . $scope;
+    }
+    // every scope a discount can be attached to, in display order
+    function topup_disc_scopes()
+    {
+        return array_merge(array_keys(gateway_disc_groups()), ['all']);
+    }
+    // the gateways a scope covers, filtered to what this language can see
+    function topup_disc_scope_members($scope, $lang, $textbotlang)
+    {
+        if ($scope === 'all') {
+            return topup_disc_enabled_gateways($lang, $textbotlang);
+        }
+        return gateway_disc_group_members($scope, $lang, $textbotlang);
+    }
+    function topup_disc_scope_label($scope, $textbotlang)
+    {
+        if ($scope === 'all') {
+            return '⚡️ همه‌ی درگاه‌ها';
+        }
+        return trim(strip_tags((string) gateway_group_label($scope, $textbotlang)));
+    }
+}
 if (!function_exists('topup_disc_codes_for')) {
     function topup_disc_codes_for($lang, $gatewayKey)
     {
+        $scope = topup_disc_scope_of_key($gatewayKey);
+        if ($scope !== null) {
+            $m = topup_disc_group_map();
+            $c = $m[$lang][$scope]['codes'] ?? [];
+            return is_array($c) ? array_values($c) : [];
+        }
         $m = topup_disc_map();
         $c = $m[$lang][$gatewayKey]['codes'] ?? [];
         return is_array($c) ? array_values($c) : [];
@@ -10520,7 +11038,6 @@ if (!function_exists('topup_disc_codes_for')) {
 if (!function_exists('topup_disc_codes_set')) {
     function topup_disc_codes_set($lang, $gatewayKey, array $codes)
     {
-        $m = topup_disc_map();
         $clean = [];
         foreach ($codes as $c) {
             $code = trim((string) ($c['code'] ?? ''));
@@ -10539,6 +11056,14 @@ if (!function_exists('topup_disc_codes_set')) {
                 'reported' => !empty($c['reported']),
             ];
         }
+        $scope = topup_disc_scope_of_key($gatewayKey);
+        if ($scope !== null) {
+            $m = topup_disc_group_map();
+            $m[$lang][$scope]['codes'] = $clean;
+            topup_disc_group_save($m);
+            return;
+        }
+        $m = topup_disc_map();
         $m[$lang][$gatewayKey]['codes'] = $clean;
         topup_disc_save($m);
     }
@@ -10658,7 +11183,38 @@ if (!function_exists('topup_disc_find_code')) {
                 }
             }
         }
+        // codes attached to a category, or to every gateway at once. 'gateway'
+        // carries the '@'-prefixed scope key so the rest of the flow - which
+        // only ever stores and compares that field - needs no special case.
+        foreach (topup_disc_group_map() as $lang => $byScope) {
+            foreach ((array) $byScope as $scope => $row) {
+                foreach ((array) ($row['codes'] ?? []) as $i => $c) {
+                    if (strcasecmp(trim((string) ($c['code'] ?? '')), $typed) === 0) {
+                        return [
+                            'lang' => $lang,
+                            'gateway' => topup_disc_scope_key($scope),
+                            'scope' => $scope,
+                            'index' => $i,
+                            'code' => $c,
+                        ];
+                    }
+                }
+            }
+        }
         return null;
+    }
+    // Does an activated code apply on this gateway? A per-gateway code only on
+    // its own; a scoped one on every gateway the scope covers.
+    function topup_disc_code_covers($activeGateway, $gatewayKey)
+    {
+        $scope = topup_disc_scope_of_key($activeGateway);
+        if ($scope === null) {
+            return (string) $activeGateway === (string) $gatewayKey;
+        }
+        if ($scope === 'all') {
+            return true;
+        }
+        return in_array($gatewayKey, gateway_disc_groups()[$scope] ?? [], true);
     }
 }
 if (!function_exists('topup_disc_user_active')) {
@@ -10744,17 +11300,20 @@ if (!function_exists('topup_disc_effective')) {
                 $candidates[] = ['source' => 'auto', 'bonus' => $b, 'disc' => $auto, 'code' => ''];
             }
         }
-        // the discount set on this gateway's whole CATEGORY. Another candidate,
-        // not another precedence tier: a gateway that has its own auto discount
-        // simply competes with the group one and the better offer wins, exactly
-        // like a code competing with an auto discount. Nothing stacks.
-        $discGroup = gateway_disc_group_of($gatewayKey);
-        if ($discGroup !== null) {
+        // the discount set on this gateway's whole CATEGORY, and the one set on
+        // every gateway at once. Both are candidates, not precedence tiers: a
+        // gateway that has its own auto discount simply competes with them and
+        // the better offer wins, exactly like a code competing with an auto
+        // discount. Nothing stacks.
+        foreach ([gateway_disc_group_of($gatewayKey), 'all'] as $discGroup) {
+            if ($discGroup === null) {
+                continue;
+            }
             $gAuto = topup_disc_group_live($lang, $discGroup);
             if ($gAuto !== null && topup_disc_group_eligible($userId, $lang, $discGroup, $gAuto)) {
                 $b = topup_disc_bonus_of($gAuto, $amount);
                 if ($b > 0) {
-                    // the group it came from travels with it, so the caption can
+                    // the scope it came from travels with it, so the caption can
                     // say "درگاه‌های آنلاین" instead of a bare percentage
                     $gAuto['group'] = $discGroup;
                     $candidates[] = ['source' => 'group', 'bonus' => $b, 'disc' => $gAuto, 'code' => ''];
@@ -10762,7 +11321,7 @@ if (!function_exists('topup_disc_effective')) {
             }
         }
         $active = topup_disc_user_active($userId);
-        if ($active && (string) $active['gateway'] === (string) $gatewayKey && (string) $active['lang'] === (string) $lang) {
+        if ($active && topup_disc_code_covers($active['gateway'] ?? '', $gatewayKey) && (string) $active['lang'] === (string) $lang) {
             $found = topup_disc_find_code($active['code']);
             if ($found !== null && topup_disc_code_status($found['code']) === 'active') {
                 $perUser = intval($found['code']['limitPerUser'] ?? 1);
@@ -11764,6 +12323,335 @@ if (!function_exists('help_layout_save')) {
         update("setting", "help_layout", json_encode($data, JSON_UNESCAPED_UNICODE), null, null);
     }
 }
+if (!function_exists('bt_button')) {
+    // A few registry items are not messages but BUTTON LABELS - the two back
+    // buttons of the purchase flow and the ❌ بستن of each section. They are
+    // genbtn items now (name, colour, emoji, position, reset - the exact tool
+    // set su/cf/sc/... already have), not captions with a "کپشن" to edit, so
+    // this renders them the same way genbtn_render() does: $label is only the
+    // FACTORY DEFAULT text, an override in button_edit[lang][key][0] (name,
+    // colour, emoji, ...) wins whenever one exists.
+    function bt_button($lang, $key, $label, $callback, $default = 'danger')
+    {
+        if (!function_exists('genbtn_render') || !function_exists('genbtn_override')) {
+            return ['text' => $label, 'callback_data' => $callback, 'style' => $default];
+        }
+        $ov = genbtn_override($lang, $key, 0);
+        return genbtn_render(['text' => $label, 'style' => $default], $ov, $callback);
+    }
+    // "should this button be on the screen at all?" - kept separate from
+    // bt_button() so every call site stays explicit about DROPPING THE WHOLE
+    // ROW rather than rendering an empty/broken button; a row with a null in
+    // it is not something Telegram accepts.
+    function bt_button_hidden($lang, $key)
+    {
+        if (!function_exists('genbtn_override')) {
+            return false;
+        }
+        $ov = genbtn_override($lang, $key, 0);
+        return !empty($ov['hidden']);
+    }
+    // the registry items that are button labels rather than messages
+    function bt_btnitem_keys()
+    {
+        return [
+            'users.sell.backToPreviousBtn',
+            'users.sell.backToPanelListBtn',
+            'bottext.btnCloseBuy',
+            'bottext.btnCloseTopup',
+            'bottext.btnCloseAccount',
+            'bottext.btnCloseTest',
+            'bottext.btnCloseHelp',
+        ];
+    }
+    // where each of the seven's own "🎨 ظاهر دکمه" screen (genbtn_detail_payload,
+    // reached through genbtn_key_to_alias()) goes back to - their real owning
+    // screen, since none of them share their genbtn alias with a sibling button
+    // for genbtn's own "list" screen to usefully return to.
+    function bt_btnitem_back_cb($key, $lang)
+    {
+        if ($key === 'bottext.btnCloseTest') {
+            // lives inside 🔑 تنظیم اکانت تست, not a bt_group screen of its own
+            return "bt_edit|{$lang}|users.usertest.selectUsernamePrompt";
+        }
+        $groups = [
+            'users.sell.backToPreviousBtn' => 'buyflow',
+            'users.sell.backToPanelListBtn' => 'buyflow',
+            'bottext.btnCloseBuy' => 'buyflow',
+            'bottext.btnCloseTopup' => 'topup',
+            'bottext.btnCloseAccount' => 'account',
+            'bottext.btnCloseHelp' => 'help',
+        ];
+        $group = $groups[$key] ?? '';
+        return $group !== '' ? "bt_group|{$lang}|{$group}" : "btact|back|{$lang}";
+    }
+}
+if (!function_exists('close_sticker_default_file_id')) {
+    // The shop's own choice of "closing" sticker, given once as the starting
+    // point - shipped as the day-one default so a fresh shop shows something
+    // rather than nothing; 🎨 شخصی‌سازی can change it or turn it off entirely.
+    function close_sticker_default_file_id()
+    {
+        return 'CAACAgIAAxkBAAJyXmqfzCu-JQ_peUcwxB9kxRP7mb9gAAJJAgACVp29CiqXDJ0IUyEOPQQ';
+    }
+    // one place for the factory duration, so the reader, the writer and the
+    // "is this customized?" check can never drift apart on this number
+    function close_sticker_default_duration()
+    {
+        return 1;
+    }
+}
+if (!function_exists('close_sticker_keys')) {
+    // The six ❌ بستن screens that were already individually editable (label +
+    // colour) in 🎨 شخصی‌سازی before this - each gets its OWN sticker+timer now,
+    // not one shared setting for all six. The five bottext.* keys are the
+    // existing bt_btnitem_keys() minus the two back buttons (a back button
+    // navigates, it doesn't close anything, so it gets no sticker); 'servclose'
+    // (🛍 سرویس‌های من) is edited through the older genbtn system instead and
+    // is not a bottext.* key at all, so it is spelled out here as its own
+    // literal store key.
+    function close_sticker_keys()
+    {
+        return [
+            'bottext.btnCloseBuy',
+            'bottext.btnCloseTopup',
+            'bottext.btnCloseAccount',
+            'bottext.btnCloseTest',
+            'bottext.btnCloseHelp',
+            'servclose',
+        ];
+    }
+    // short 2-letter codes for callback_data (64-byte cap) - the same reason
+    // genbtn_alias_map() exists for the older button-editor family
+    function close_sticker_alias_map()
+    {
+        return [
+            'bu' => 'bottext.btnCloseBuy',
+            'tp' => 'bottext.btnCloseTopup',
+            'ac' => 'bottext.btnCloseAccount',
+            'te' => 'bottext.btnCloseTest',
+            'he' => 'bottext.btnCloseHelp',
+            'sv' => 'servclose',
+        ];
+    }
+    function close_sticker_key_to_alias($key)
+    {
+        return array_search($key, close_sticker_alias_map(), true) ?: '';
+    }
+    function close_sticker_alias_to_key($alias)
+    {
+        return close_sticker_alias_map()[$alias] ?? null;
+    }
+    // which genbtn screen this key's settings live on. 'servclose' has no
+    // registry key of its own, so it cannot go through genbtn_key_to_alias().
+    function close_sticker_genbtn_alias($key)
+    {
+        return $key === 'servclose' ? 'sc' : genbtn_key_to_alias($key);
+    }
+}
+if (!function_exists('close_sticker_settings')) {
+    // Reads ONE key's sticker+timer out of the shared close_sticker JSON blob
+    // (shaped {key: {enabled, file_id, duration}, ...}) - independent of every
+    // other key, so customizing خرید اشتراک's sticker never touches افزایش
+    // موجودی's.
+    function close_sticker_settings($key, $fresh = false)
+    {
+        static $cache = [];
+        if (isset($cache[$key]) && !$fresh) {
+            return $cache[$key];
+        }
+        $setting = select("setting", "*", null, null, "select");
+        $all = json_decode((string) ($setting['close_sticker'] ?? ''), true);
+        if (!is_array($all)) {
+            $all = [];
+        }
+        $cs = is_array($all[$key] ?? null) ? $all[$key] : [];
+        $duration = isset($cs['duration']) ? (int) $cs['duration'] : close_sticker_default_duration();
+        $cache[$key] = [
+            // never configured for this key = on, with the shop's own default
+            // sticker - every key starts out identical until customized apart
+            'enabled' => array_key_exists('enabled', $cs) ? ($cs['enabled'] === '1') : true,
+            'file_id' => array_key_exists('file_id', $cs) ? (string) $cs['file_id'] : close_sticker_default_file_id(),
+            // capped 1-10: close_sticker_play() blocks the request for this
+            // whole duration (see its own docblock), so a stray large number
+            // cannot turn every ❌ بستن tap into a long hang
+            'duration' => max(1, min(10, $duration > 0 ? $duration : close_sticker_default_duration())),
+        ];
+        return $cache[$key];
+    }
+    function close_sticker_save($key, array $patch)
+    {
+        $cur = close_sticker_settings($key, true);
+        $next = array_merge($cur, $patch);
+        $setting = select("setting", "*", null, null, "select");
+        $all = json_decode((string) ($setting['close_sticker'] ?? ''), true);
+        if (!is_array($all)) {
+            $all = [];
+        }
+        $all[$key] = [
+            'enabled' => $next['enabled'] ? '1' : '0',
+            'file_id' => (string) $next['file_id'],
+            'duration' => (string) max(1, min(10, (int) $next['duration'])),
+        ];
+        update("setting", "close_sticker", json_encode($all, JSON_UNESCAPED_UNICODE), null, null);
+        close_sticker_settings($key, true);
+    }
+    // The sticker/timer state as a Telegram quote, shown inside the button's own
+    // edit caption. $note is the "just changed" line and sits in the same quote,
+    // so the confirmation and the state it produced read as one block.
+    function close_sticker_caption_block($key, $note = '')
+    {
+        $cs = close_sticker_settings($key);
+        $lines = [];
+        if ($note !== '') {
+            $lines[] = $note;
+        }
+        if ($cs['enabled']) {
+            $lines[] = "🖼 استیکر دکمه بستن: <b>روشن</b>";
+            $lines[] = "⏱ مدت نمایش: <b>{$cs['duration']} ثانیه</b>";
+            $lines[] = "🎁 استیکر: <b>" . ($cs['file_id'] === close_sticker_default_file_id() ? 'پیش‌فرض' : 'سفارشی') . "</b>";
+            $lines[] = "بعد از این مدت، خودِ صفحه و استیکرش و این استیکر با هم پاک می‌شن.";
+        } else {
+            $lines[] = "🖼 استیکر دکمه بستن: <b>خاموش</b>";
+            $lines[] = "با زدن ❌ بستن، صفحه فوراً پاک می‌شه، بدون هیچ استیکری.";
+        }
+        return "<blockquote>" . implode("\n", $lines) . "</blockquote>\n";
+    }
+}
+if (!function_exists('close_sticker_play')) {
+    // The ❌ بستن screen and this sticker disappear TOGETHER, after the
+    // sticker's own timer - not the screen instantly and the sticker later.
+    // $key picks which of the six sections' own settings to use (see
+    // close_sticker_keys()). $alsoDelete is every message id the caller wants
+    // removed at that same moment: the caption itself, and whatever sticker
+    // was already sitting with it (menu-tap sticker, buy-flow sticker, ...) -
+    // the caller reads those out (sell_sticker_capture() and the equivalent
+    // inline reads for menu_sticker_id / Processing_value_tow /
+    // topup_range_msg_id) but must NOT delete them itself; this function is
+    // what deletes them, in the same breath as its own sticker.
+    //
+    // Off for this key, or no sticker configured: $alsoDelete goes right
+    // away, exactly the instant-close behaviour the bot had before this
+    // feature existed - a section that has it turned off must not end up
+    // with its screens lingering for no reason.
+    //
+    // This is the same synchronous send → sleep() → continue shape 🎰 گردونه
+    // شانس already uses for its dice roll (index.php) - not a new pattern in
+    // this codebase. duration is capped at 10s in close_sticker_settings(),
+    // so this can never hold a PHP-FPM worker for more than that on any
+    // single ❌ بستن tap.
+    function close_sticker_play($chat_id, $key, array $alsoDelete = [])
+    {
+        $alsoDelete = array_values(array_unique(array_filter(array_map('intval', $alsoDelete), function ($id) {
+            return $id > 0;
+        })));
+        $cs = close_sticker_settings($key);
+        if (!$cs['enabled'] || trim($cs['file_id']) === '') {
+            foreach ($alsoDelete as $mid) {
+                deletemessage($chat_id, $mid);
+            }
+            return;
+        }
+        $res = telegram('sendSticker', [
+            'chat_id' => $chat_id,
+            'sticker' => $cs['file_id'],
+        ]);
+        $stickerMid = (int) ($res['result']['message_id'] ?? 0);
+        sleep($cs['duration']);
+        foreach ($alsoDelete as $mid) {
+            deletemessage($chat_id, $mid);
+        }
+        if ($stickerMid > 0) {
+            deletemessage($chat_id, $stickerMid);
+        }
+    }
+}
+if (!function_exists('lang_switch_settings')) {
+    // One reader for setting.lang_switch, so the admin screen, the picker and
+    // the "who may use this bot" rule can never disagree about what is on.
+    // Shape: {enabled, mode: once|always, langs: [..], blockOthers: '0'|'1'}
+    function lang_switch_settings($fresh = false)
+    {
+        static $cache = null;
+        if ($cache !== null && !$fresh) {
+            return $cache;
+        }
+        $setting = select("setting", "*", null, null, "select");
+        $ls = json_decode((string) ($setting['lang_switch'] ?? ''), true);
+        if (!is_array($ls)) {
+            $ls = [];
+        }
+        $all = ['fa', 'en', 'ru', 'zh', 'tk'];
+        $langs = (is_array($ls['langs'] ?? null) && !empty($ls['langs']))
+            ? array_values(array_intersect($all, $ls['langs']))
+            : $all;
+        if (empty($langs)) {
+            $langs = $all;
+        }
+        $cache = [
+            'enabled' => (($ls['enabled'] ?? '0') === '1'),
+            'mode' => (($ls['mode'] ?? 'once') === 'always') ? 'always' : 'once',
+            'langs' => $langs,
+            'blockOthers' => (($ls['blockOthers'] ?? '0') === '1'),
+        ];
+        return $cache;
+    }
+    function lang_switch_enabled_langs()
+    {
+        return lang_switch_settings()['langs'];
+    }
+    function lang_switch_save(array $patch)
+    {
+        $cur = lang_switch_settings(true);
+        $next = array_merge($cur, $patch);
+        update("setting", "lang_switch", json_encode([
+            'enabled' => $next['enabled'] ? '1' : '0',
+            'mode' => $next['mode'] === 'always' ? 'always' : 'once',
+            'langs' => array_values($next['langs']),
+            'blockOthers' => $next['blockOthers'] ? '1' : '0',
+        ], JSON_UNESCAPED_UNICODE), null, null);
+        lang_switch_settings(true);
+    }
+}
+if (!function_exists('lang_switch_blocked_count')) {
+    // How many of the bot's real users the rule refuses as configured right
+    // now. One grouped count, only ever called from the admin screen.
+    function lang_switch_blocked_count()
+    {
+        global $pdo;
+        $blocked = 0;
+        $total = 0;
+        foreach ($pdo->query("SELECT lang, COUNT(*) c FROM user GROUP BY lang")->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $c = (int) $r['c'];
+            $total += $c;
+            if (!lang_is_served($r['lang'] ?? '')) {
+                $blocked += $c;
+            }
+        }
+        return ['blocked' => $blocked, 'total' => $total];
+    }
+}
+if (!function_exists('lang_is_served')) {
+    // "May this user use the bot at all?" - false only when the shop has turned
+    // the rule on AND the user's language is not one it serves. Admins are never
+    // refused: locking the owner out of their own bot over a language setting is
+    // not a state anyone could recover from inside Telegram.
+    function lang_is_served($userLang, $isAdmin = false)
+    {
+        if ($isAdmin) {
+            return true;
+        }
+        $ls = lang_switch_settings();
+        if (!$ls['blockOthers']) {
+            return true;
+        }
+        $l = trim((string) $userLang);
+        if ($l === '') {
+            return true;
+        }
+        return in_array($l, $ls['langs'], true);
+    }
+}
 if (!function_exists('help_layout_section')) {
     // returns the {order, width, emoji, emojiIcon, emojiSimple, color,
     // rename} block for one language + kind. emoji = plain-text emoji per
@@ -11784,7 +12672,37 @@ if (!function_exists('help_layout_section')) {
             'emojiSimple' => !empty($sec['emojiSimple']),
             'color' => is_array($sec['color'] ?? null) ? $sec['color'] : [],
             'rename' => is_array($sec['rename'] ?? null) ? $sec['rename'] : [],
+            // {key => true} for the buttons the admin has switched off in
+            // 📐 چیدمان. A hide is a display choice only: the item itself stays
+            // exactly as it is in the database, and its own on/off switch
+            // (a panel's status, a gateway's toggle) is untouched.
+            'hidden' => is_array($sec['hidden'] ?? null) ? $sec['hidden'] : [],
         ];
+    }
+}
+if (!function_exists('help_layout_visible')) {
+    // drops the keys the admin hid, for the customer-facing keyboards only -
+    // every admin screen keeps listing them (marked 🚫) or there would be no way
+    // back to visible.
+    //
+    // If EVERY item ends up hidden the hide list is ignored instead of shipping
+    // a keyboard with nothing on it. The editor already refuses to hide the last
+    // visible button, so this only catches the case where the items themselves
+    // changed underneath a saved list (a panel deleted, a gateway switched off).
+    function help_layout_visible(array $orderedKeys, array $section)
+    {
+        $hidden = $section['hidden'] ?? [];
+        if (!is_array($hidden) || empty($hidden)) {
+            return $orderedKeys;
+        }
+        $out = [];
+        foreach ($orderedKeys as $key) {
+            if (!empty($hidden[(string) $key])) {
+                continue;
+            }
+            $out[] = $key;
+        }
+        return empty($out) ? $orderedKeys : $out;
     }
 }
 if (!function_exists('help_layout_emoji_prefix')) {
@@ -11861,6 +12779,24 @@ if (!function_exists('help_layout_items')) {
     {
         if ($kind === 'panel' || $kind === 'product' || $kind === 'category') {
             return help_layout_items_commerce($lang, $kind);
+        }
+        if ($kind === 'langpick') {
+            // The five buttons on the language picker - the screen the bot shows
+            // before the user has a language at all. Keyed by language code so a
+            // rename never orphans the styling saved for it.
+            //
+            // Only the languages the shop actually offers are listed, the same
+            // way 'gateway' lists only live gateways: styling a button nobody
+            // will ever see is noise. The picker itself filters the same list.
+            $lp_names = ['fa' => '🇮🇷 فارسی', 'en' => '🇬🇧 English', 'ru' => '🇷🇺 Русский', 'zh' => '🇨🇳 中文', 'tk' => '🇹🇲 Türkmençe'];
+            $lp_section = help_layout_section($lang, 'langpick');
+            $out = [];
+            foreach (lang_switch_enabled_langs() as $code) {
+                if (isset($lp_names[$code])) {
+                    $out[$code] = $lp_section['rename'][$code] ?? $lp_names[$code];
+                }
+            }
+            return $out;
         }
         if ($kind === 'gateway') {
             // only called from admin.php's btnstyle_* screens, so gateway_registry()

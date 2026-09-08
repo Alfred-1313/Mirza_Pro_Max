@@ -10,6 +10,11 @@ Pick the text you want to change.
 🟢 means it is already customized.
 Current language: <b>{lang}</b>',
                 'btn_close' => '❌ Close',
+                'btnCloseBuy' => '❌ Close',
+                'btnCloseTopup' => '❌ Close',
+                'btnCloseAccount' => '❌ Close',
+                'btnCloseTest' => '❌ Close',
+                'btnCloseHelp' => '❌ Close',
                 'reset_hint' => '♻️ To restore this text to its default, send <b>0</b>.',
                 'msg_reset_done' => '✅ This text has been restored to its default.',
                 'msg_session' => '⛔️ Session expired. Please open it again.',
@@ -813,6 +818,8 @@ You can now use the bot ✔️',
                 'help' => [
                         'btninlinebuy' => '📚 View usage tutorial ',
                         'disablehelp' => 'Dear user, the tutorial section is currently disabled. 😔',
+                        'categoryCaption' => '📌 Select a category',
+                        'listCaption' => 'Choose an option',
                 ],
                 'lottery' => [
                         'winnerNotice' => '🎁 Lottery result 

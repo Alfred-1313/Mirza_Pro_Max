@@ -10,6 +10,11 @@ return [
 🟢 表示已自定义。
 当前语言：<b>{lang}</b>',
                 'btn_close' => '❌ 关闭',
+                'btnCloseBuy' => '❌ 关闭',
+                'btnCloseTopup' => '❌ 关闭',
+                'btnCloseAccount' => '❌ 关闭',
+                'btnCloseTest' => '❌ 关闭',
+                'btnCloseHelp' => '❌ 关闭',
                 'reset_hint' => '♻️ 如需将此文本恢复为默认，请发送 <b>0</b>。',
                 'msg_reset_done' => '✅ 此文本已恢复为默认。',
                 'msg_session' => '⛔️ 会话已过期，请重新打开。',
@@ -813,6 +818,8 @@ https://t.me/%s?start=%s',
                 'help' => [
                         'btninlinebuy' => '📚 查看使用教程 ',
                         'disablehelp' => '尊敬的用户，教程部分目前已停用。😔',
+                        'categoryCaption' => '📌 请选择一个分类',
+                        'listCaption' => '请选择一个选项',
                 ],
                 'lottery' => [
                         'winnerNotice' => '🎁 抽奖结果 

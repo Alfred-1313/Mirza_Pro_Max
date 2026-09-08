@@ -142,7 +142,13 @@ try {
         'uptime_node' => false,
         'uptime_panel' => false,
     ));
-    $keyboardmain = '{"keyboard":[[{"text":"text_sell"},{"text":"text_extend"}],[{"text":"text_usertest"},{"text":"text_wheel_luck","hidden":true}],[{"text":"text_Purchased_services"},{"text":"accountwallet"}],[{"text":"addbalance"}],[{"text":"text_affiliates"},{"text":"text_Tariff_list"}],[{"text":"text_support"},{"text":"text_help"}],[{"text":"text_change_language","hidden":true}]]}';
+    // A fresh install starts with six buttons on - buy, test account, my
+    // services, account, top-up and help. Everything else, language selection
+    // included, ships hidden and is turned on from
+    // 🎨 شخصی‌سازی ← 🔘 تنظیمات دکمه‌های منوی اصلی when the shop wants it.
+    // The row layout still lists them all, so turning one on is a single tap
+    // and it lands back in its usual place.
+    $keyboardmain = '{"keyboard":[[{"text":"text_sell"},{"text":"text_extend","hidden":true}],[{"text":"text_usertest"},{"text":"text_wheel_luck","hidden":true}],[{"text":"text_Purchased_services"},{"text":"accountwallet"}],[{"text":"addbalance"}],[{"text":"text_affiliates","hidden":true},{"text":"text_Tariff_list","hidden":true}],[{"text":"text_support","hidden":true},{"text":"text_help"}],[{"text":"text_change_language","hidden":true}]]}';
     $tableExists = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$tableExists) {
         $stmt = $pdo->prepare("CREATE TABLE $tableName (
@@ -1415,6 +1421,8 @@ addFieldToTable("channels", "icon_emoji", null, "VARCHAR(100)");
 addFieldToTable("channels", "emoji_pos", null, "VARCHAR(10)");
 addFieldToTable("channels", "hidden", null, "VARCHAR(5)");
 addFieldToTable("setting", "channelButtonsOrder", null, "TEXT");
+addFieldToTable("setting", "close_sticker", '{}', "TEXT");
+addFieldToTable("setting", "svc_node_usage", '{}', "TEXT");
 try {
     $result = $pdo->query("SHOW TABLES LIKE 'reagent_report'");
     $table_exists = ($result->rowCount() > 0);

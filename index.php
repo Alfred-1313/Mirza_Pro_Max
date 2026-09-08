@@ -39,7 +39,11 @@ $setting = select("setting", "*");
 $ManagePanel = new ManagePanel();
 $keyboard_check = json_decode($setting['keyboardmain'], true);
 if (is_array($keyboard_check) && preg_match('/[\x{600}-\x{6FF}\x{FB50}-\x{FDFF}]/u', $keyboard_check['keyboard'][0][0]['text'])) {
-    $keyboardmain = '{"keyboard":[[{"text":"text_sell"},{"text":"text_extend"}],[{"text":"text_usertest"},{"text":"text_wheel_luck"}],[{"text":"text_Purchased_services"},{"text":"accountwallet"}],[{"text":"addbalance"}],[{"text":"text_affiliates"},{"text":"text_Tariff_list"}],[{"text":"text_support"},{"text":"text_help"}]]}';
+    // Same starting layout table.php installs - six on, the rest hidden. This
+    // one repairs a legacy keyboard whose first cell still held a translated
+    // label instead of a text_ key; it used to rebuild the menu with every
+    // button switched on, language selection included.
+    $keyboardmain = '{"keyboard":[[{"text":"text_sell"},{"text":"text_extend","hidden":true}],[{"text":"text_usertest"},{"text":"text_wheel_luck","hidden":true}],[{"text":"text_Purchased_services"},{"text":"accountwallet"}],[{"text":"addbalance"}],[{"text":"text_affiliates","hidden":true},{"text":"text_Tariff_list","hidden":true}],[{"text":"text_support","hidden":true},{"text":"text_help"}],[{"text":"text_change_language","hidden":true}]]}';
     update("setting", "keyboardmain", $keyboardmain, null, null);
 }
 
@@ -188,6 +192,23 @@ if ($user['register'] == "none") {
 }
 if (!in_array($user['agent'], ["n", "n2", "f"]))
     update("user", "agent", "f", "id", $from_id);
+#-----------language gate------------#
+// The shop can choose to serve only the languages it has enabled. Placed with
+// the block check, before any feature runs, so a refused user gets one message
+// and nothing else - and placed AFTER the language picker's own setlang
+// handler stays reachable, so switching to a served language is the way out.
+if (!lang_is_served($user['lang'] ?? '', in_array($from_id, $admin_ids))
+    && strpos((string) $datain, 'setlang:') !== 0) {
+    $langBlockText = bottext_resolve_key('bottext.langBlockedMsg');
+    if (trim((string) $langBlockText) === '') {
+        $langBlockText = $textbotlang['bottext']['langBlockedMsg'] ?? '⛔️';
+    }
+    // the picker comes with it, so the user can move to a language that is
+    // served instead of being told "no" with no way forward
+    list(, $langBlockKb) = language_picker_payload();
+    sendmessage($from_id, $langBlockText, $langBlockKb, 'HTML');
+    return;
+}
 #-----------User_Status------------#
 if ($user['User_Status'] == "block" && !in_array($from_id, $admin_ids)) {
     $textblock = sprintf($textbotlang['users']['block']['descriptions'], $user['description_blocking']);
@@ -575,17 +596,36 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     } else {
         sendmessage($from_id, $textbotlang['users']['sell']['service_sell'], $keyboard_json, 'html');
     }
-} elseif ($datain == "mmclose") {
+} elseif (preg_match('/^mmclose(?::([a-z]{2}))?$/', $datain, $mm_alias_m)) {
     // shared ❌ بستن for the main-menu screens (اکانت تست / حساب کاربری /
-    // افزایش موجودی / آموزش): drop the screen, the sticker that came with
-    // it, and any half-finished step behind it
-    deletemessage($from_id, $message_id);
+    // افزایش موجودی / آموزش) - four different sections behind one callback,
+    // so the ':xx' suffix says which section's OWN 🖼 استیکر دکمه بستن setting
+    // applies (each is customized independently now). Nothing is deleted here
+    // directly: the caption and whatever sticker came with it are handed to
+    // close_sticker_play(), which removes them together with that section's
+    // own sticker once its timer runs out (or right away if that section has
+    // it off) - see its docblock.
+    $mm_key = close_sticker_alias_to_key($mm_alias_m[1] ?? '') ?? 'bottext.btnCloseAccount';
+    $mm_toDelete = [(int) $message_id];
     if (ctype_digit((string) ($user['menu_sticker_id'] ?? '')) && intval($user['menu_sticker_id']) > 0) {
-        deletemessage($from_id, intval($user['menu_sticker_id']));
+        $mm_toDelete[] = intval($user['menu_sticker_id']);
         update("user", "menu_sticker_id", "0", "id", $from_id);
     }
-    menu_tap_cleanup($from_id, $user);
+    // the category screen falls back to this close when 🖥 نمایش انتخاب پنل is
+    // off, so a purchase-flow sticker can be on screen here too
+    $mm_sellSticker = sell_sticker_capture($from_id);
+    if ($mm_sellSticker > 0) {
+        $mm_toDelete[] = $mm_sellSticker;
+    }
+    // the reply-keyboard tap message ("🔑 اکانت تست" etc, sent as the user's
+    // OWN message) joins the same deferred removal - it used to vanish the
+    // instant بستن was tapped, ahead of everything else
+    $mm_tap = menu_tap_capture($from_id, $user);
+    if ($mm_tap > 0) {
+        $mm_toDelete[] = $mm_tap;
+    }
     step('home', $from_id);
+    close_sticker_play($from_id, $mm_key, $mm_toDelete);
 } elseif ($datain == "gwinvclose") {
     // An invoice's own way out. Same cleanup as the shared close, plus the
     // main menu back on screen: someone who gives up on a payment should
@@ -610,33 +650,51 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         'show_alert' => true,
     ]);
 } elseif ($datain == "topup_range_close") {
-    // ❌ under the "حداقل/حداکثر مبلغ" notice: drop the notice and end the
-    // top-up session, the same way the shared main-menu close does
-    deletemessage($from_id, $message_id);
+    // ❌ under the "حداقل/حداکثر مبلغ" notice - same deferred-together removal
+    // as every other ❌ بستن, using 💰 افزایش موجودی's own sticker setting since
+    // this notice belongs to that same flow; end the top-up session right
+    // away, the notice itself goes with close_sticker_play()
     update("user", "topup_range_msg_id", "0", "id", $from_id);
     step('home', $from_id);
+    close_sticker_play($from_id, 'bottext.btnCloseTopup', [(int) $message_id]);
 } elseif ($datain == "sellclose") {
-    // closes the panel picker and removes the buy-button sticker that was
-    // sent with it. Processing_value_tow is the right field to read here:
-    // keyboard.php stashes the text_sell sticker id there on the tap that
-    // opened this screen, and 'sellclose' is not in the sticker map so
+    // closes the panel picker and takes the buy-button sticker that was sent
+    // with it along with it. Processing_value_tow is the right field to read
+    // here: keyboard.php stashes the text_sell sticker id there on the tap
+    // that opened this screen, and 'sellclose' is not in the sticker map so
     // nothing has overwritten it since.
-    deletemessage($from_id, $message_id);
+    $sc_toDelete = [(int) $message_id];
     if (ctype_digit((string) ($user['Processing_value_tow'] ?? '')) && intval($user['Processing_value_tow']) > 0) {
-        deletemessage($from_id, intval($user['Processing_value_tow']));
+        $sc_toDelete[] = intval($user['Processing_value_tow']);
         update("user", "Processing_value_tow", "", "id", $from_id);
     }
-    menu_tap_cleanup($from_id, $user);
+    // ...and the sticker a screen INSIDE the flow put up, which lives in its
+    // own field (bt_sticker_id).
+    $sc_sellSticker = sell_sticker_capture($from_id);
+    if ($sc_sellSticker > 0) {
+        $sc_toDelete[] = $sc_sellSticker;
+    }
+    // same deferred removal for the reply-keyboard tap message - see mmclose
+    $sc_tap = menu_tap_capture($from_id, $user);
+    if ($sc_tap > 0) {
+        $sc_toDelete[] = $sc_tap;
+    }
     step('home', $from_id);
+    close_sticker_play($from_id, 'bottext.btnCloseBuy', $sc_toDelete);
 } elseif ($datain == "servclose") {
     // closes the list the same way every other ❌ بستن in the bot does, and
     // takes the main-menu sticker that was sent alongside it with it
-    deletemessage($from_id, $message_id);
+    $sv_toDelete = [(int) $message_id];
     if (ctype_digit((string) ($user['menu_sticker_id'] ?? '')) && intval($user['menu_sticker_id']) > 0) {
-        deletemessage($from_id, intval($user['menu_sticker_id']));
+        $sv_toDelete[] = intval($user['menu_sticker_id']);
         update("user", "menu_sticker_id", "0", "id", $from_id);
     }
-    menu_tap_cleanup($from_id, $user);
+    // same deferred removal for the reply-keyboard tap message - see mmclose
+    $sv_tap = menu_tap_capture($from_id, $user);
+    if ($sv_tap > 0) {
+        $sv_toDelete[] = $sv_tap;
+    }
+    close_sticker_play($from_id, 'servclose', $sv_toDelete);
 } elseif ($datain == 'next_page') {
     $numpage = select("invoice", "id_user", "id_user", $from_id, "count");
     $page = $user['pagenumber'];
@@ -1347,7 +1405,12 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         // an unsupported panel simply renders without the block instead of
         // paying for a request that cannot work.
         $svc_lang = $user['lang'] ?? 'fa';
-        $svc_usage = panel_user_usage($nameloc['Service_location'], $DataUserOut['username']);
+        // the admin can also switch the block off for a panel that CAN answer
+        // (🌐 مصرف لوکیشن on the service-status screen) - then it renders empty,
+        // exactly like an unsupported panel, and the request is never made
+        $svc_usage = svc_nodeusage_enabled($nameloc['Service_location'])
+            ? panel_user_usage($nameloc['Service_location'], $DataUserOut['username'])
+            : ['supported' => false, 'nodes' => [], 'total' => 0, 'error' => null];
         $svc_blocks = svc_status_blocks($DataUserOut, $svc_usage, $svc_lang, $textbotlang);
         // Both the old placeholders and the new ones are filled: an admin who
         // has already written their own template keeps working exactly as
@@ -3241,9 +3304,16 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             sendmessage($from_id, $textbotlang['users']['usertest']['limitwarning'], $keyboard_buy, 'html');
             return;
         }
+        // any sticker still up from an abandoned run goes first, so only this
+        // screen's own is on the books
+        sell_sticker_retire($from_id);
         $usertestLocationMsg = sendmessage($from_id, $textbotlang['textbot']['selectLocation'], $list_marzban_usertest, 'html');
         if (!empty($usertestLocationMsg['_sticker_message_id'])) {
-            update("user", "Processing_value_tow", (string) $usertestLocationMsg['_sticker_message_id'], "id", $from_id);
+            // the dedicated sticker column, not Processing_value_tow: that field
+            // is re-purposed a few steps later in this very flow (it takes the
+            // username-prompt message id), and ❌ بستن never cleared it - so the
+            // caption went and this sticker stayed behind in the chat.
+            update("user", "bt_sticker_id", (string) $usertestLocationMsg['_sticker_message_id'], "id", $from_id);
         }
     }
 }
@@ -3292,14 +3362,12 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         $location = $panel['code_panel'];
     } else {
         if (isset($dataget[1])) {
-            // a panel was just picked from the list - clean up any message stashed in
-            // Processing_value_tow (e.g. a sticker sent alongside the panel list), same
-            // as the regular purchase flow's location_ handler does
-            if (ctype_digit((string) $user['Processing_value_tow'])) {
-                deletemessage($from_id, (int) $user['Processing_value_tow']);
-                update("user", "Processing_value_tow", "", "id", $from_id);
-                $user['Processing_value_tow'] = "";
-            }
+            // a panel was just picked from the list - take away the sticker that
+            // came with it, the same way the purchase flow's location_ handler
+            // does. It lives in the dedicated column now, so this no longer has
+            // to guess whether the number in Processing_value_tow is a message
+            // id or one of the other things that field carries.
+            sell_sticker_retire($from_id);
             $location = $dataget[1];
         } else {
             if ($user['step'] != "createusertest") {
@@ -3478,10 +3546,14 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         return;
     }
     if ($setting['categoryhelp'] == "1") {
+        // its own key, defaulting to the exact sentence this screen has always
+        // shown - it used to borrow the purchase flow's category caption, so
+        // rewording the shop's silently reworded the tutorial menu too
+        $help_cat_caption = $textbotlang['users']['help']['categoryCaption'] ?? $textbotlang['users']['sell']['selectCategoryShort'];
         if ($datain == "helpbtns") {
-            Editmessagetext($from_id, $message_id, $textbotlang['users']['sell']['selectCategoryShort'], $json_list_helpـcategory, 'HTML');
+            Editmessagetext($from_id, $message_id, $help_cat_caption, $json_list_helpـcategory, 'HTML');
         } else {
-            sendmessage($from_id, $textbotlang['users']['sell']['selectCategoryShort'], $json_list_helpـcategory, 'HTML');
+            sendmessage($from_id, $help_cat_caption, $json_list_helpـcategory, 'HTML');
         }
     } else {
         $helplist = select("help", "*", null, null, "fetchAll");
@@ -3494,7 +3566,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         // apply the admin's per-language tutorial order/width/emoji (📐
         // چیدمان / 🎭 ایموجی under 🎨 نمایش دسته‌بندی و آموزش‌ها)
         $help_tut_section = help_layout_section($user['lang'], 'tutorials');
-        $help_tut_ordered = help_layout_apply_order(array_keys($help_tut_buttons), $help_tut_section['order']);
+        $help_tut_ordered = help_layout_visible(help_layout_apply_order(array_keys($help_tut_buttons), $help_tut_section['order']), $help_tut_section);
         foreach ($help_tut_ordered as $help_tut_key) {
             $help_tut_emoji = $help_tut_section['emoji'][$help_tut_key] ?? '';
             if ($help_tut_emoji !== '') {
@@ -3515,10 +3587,13 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
             ['text' => $textbotlang['users']['backmenu'], 'callback_data' => "backuser"],
         ];
         $json_list_help = json_encode($helpidos);
+        // same story as the category caption above: users.selectoption is shared
+        // with a dozen unrelated screens, so the tutorial list gets its own key
+        $help_list_caption = $textbotlang['users']['help']['listCaption'] ?? $textbotlang['users']['selectoption'];
         if ($datain == "helpbtns") {
-            Editmessagetext($from_id, $message_id, $textbotlang['users']['selectoption'], $json_list_help, 'HTML');
+            Editmessagetext($from_id, $message_id, $help_list_caption, $json_list_help, 'HTML');
         } else {
-            sendmessage($from_id, $textbotlang['users']['selectoption'], $json_list_help, 'HTML');
+            sendmessage($from_id, $help_list_caption, $json_list_help, 'HTML');
         }
     }
 } elseif (preg_match('/^helpctgoryـ(.*)/', $datain, $dataget)) {
@@ -3530,7 +3605,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         $help_tut_buttons[(string) $result['id']] = ['text' => $help_resolved['name'], 'callback_data' => "helpos_{$result['id']}"];
     }
     $help_tut_section = help_layout_section($user['lang'], 'tutorials');
-    $help_tut_ordered = help_layout_apply_order(array_keys($help_tut_buttons), $help_tut_section['order']);
+    $help_tut_ordered = help_layout_visible(help_layout_apply_order(array_keys($help_tut_buttons), $help_tut_section['order']), $help_tut_section);
     foreach ($help_tut_ordered as $help_tut_key) {
         $help_tut_emoji = $help_tut_section['emoji'][$help_tut_key] ?? '';
         if ($help_tut_emoji !== '') {
@@ -3546,7 +3621,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         ['text' => $textbotlang['users']['backmenu'], 'callback_data' => "helpbtns"],
     ];
     $json_list_help = json_encode($helpidos);
-    Editmessagetext($from_id, $message_id, $textbotlang['users']['selectoption'], $json_list_help, 'HTML');
+    Editmessagetext($from_id, $message_id, $textbotlang['users']['help']['listCaption'] ?? $textbotlang['users']['selectoption'], $json_list_help, 'HTML');
 } elseif (preg_match('/^helpos_(.*)/', $datain, $dataget)) {
     deletemessage($from_id, $message_id);
     $helpid = $dataget[1];

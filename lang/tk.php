@@ -1790,6 +1790,8 @@ Indi botdan peýdalanyp bilersiňiz ✔️',
     array (
       'btninlinebuy' => '📚 Ulanyş gollanmasyny görmek',
       'disablehelp' => 'Hormatly ulanyjy, gollanma bölümi häzirlikçe öçürilen. 😔',
+      'categoryCaption' => '📌 Bir topary saýlaň',
+      'listCaption' => 'Bir görnüşi saýlaň',
     ),
     'lottery' => 
     array (
@@ -8021,6 +8023,11 @@ Ulanyjy ady : @%s',
 
 Häzirki dil: <b>{lang}</b>',
     'btn_close' => '❌ Ýapmak',
+    'btnCloseBuy' => '❌ Ýapmak',
+    'btnCloseTopup' => '❌ Ýapmak',
+    'btnCloseAccount' => '❌ Ýapmak',
+    'btnCloseTest' => '❌ Ýapmak',
+    'btnCloseHelp' => '❌ Ýapmak',
     'reset_hint' => '♻️ Bu teksti başlangyç ýagdaýyna gaýtarmak üçin <b>0</b> sanyny iberiň.',
     'msg_reset_done' => '✅ Bu tekst başlangyç ýagdaýyna gaýtaryldy.',
     'msg_session' => '⛔️ Otyrylyşyň möhleti gutardy. Gaýtadan giriň.',

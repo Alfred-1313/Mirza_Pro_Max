@@ -9,8 +9,23 @@ return array (
     'groupServicesLabel' => '🛍 پیام‌های سرویس‌های من',
     'groupTopupLabel' => '💰 پیام‌های افزایش موجودی',
     'groupTopupDiscLabel' => '🎁 پیام‌های تخفیف',
+    'groupAccountLabel' => '👤 پیام و دکمه‌های حساب کاربری',
+    'groupHelpLabel' => '📚 پیام و دکمه‌های آموزش',
     'btnSettingsLabel' => '🔘 تنظیمات دکمه‌های منوی اصلی',
     'langSwitchLabel' => '🌐 تنظیمات تغییر زبان',
+    'langPickerCaption' => '═══════════════════════
+       🌍 WELCOME
+═══════════════════════
+
+{lines}
+
+━━━━━━━━━━━━━━━━━━━━━━━
+👇 Tap to continue:',
+    'langBlockedMsg' => '⛔️ فعلاً به این زبان سرویس داده نمی‌شود
+⛔️ No service in this language right now
+
+👇 یکی از زبان‌های زیر را انتخاب کنید
+👇 Please choose one of the languages below',
     'groupServicesCaption' => '🛍 <b>پیام‌های سرویس‌های من</b>
 
 کدوم پیام رو می‌خوای تنظیم کنی؟
@@ -55,6 +70,26 @@ return array (
 🏬 تنظیمات فروشگاه ← 🏦 بسته‌های شارژ ← 🎁 تخفیف شارژ</blockquote>
 
 ✅ رنگ سبز دکمه یعنی متن اون از قبل ست شده.',
+    'groupAccountCaption' => '👤 <b>حساب کاربری</b>
+
+کدوم مورد رو می‌خوای تنظیم کنی؟
+
+📌 این همون صفحه‌ایه که کاربر با زدن دکمه‌ی «👤 حساب کاربری» می‌بینه - نام کاربری، آیدی، تعداد سرویس و موجودیش.
+
+📌 دکمه‌ی ❌ بستنِ همین صفحه هم اینجاست: متن و رنگش جدا از بقیه‌ی بخش‌هاست، پس هرچی اینجا بذاری فقط روی همین صفحه اثر داره.
+
+✅ رنگ سبز دکمه یعنی متن یا استیکر اون از قبل ست شده.',
+    'groupHelpCaption' => '📚 <b>پیام و دکمه‌های آموزش</b>
+
+کدوم مورد رو می‌خوای تنظیم کنی؟
+
+📌 بخش آموزش دو تا صفحه داره: اول لیست دسته‌بندی‌ها (اگه دسته‌بندی آموزش روشن باشه)، بعد لیست خود آموزش‌ها. هرکدوم کپشن جدا خودشو داره.
+
+📌 خودِ آموزش‌ها (اضافه‌کردن، ویرایش، حذف) اینجا نیستن - از دکمه‌ی 📚 آموزش توی پنل ادمین مدیریت می‌شن. اینجا فقط متن و ظاهرشونه.
+
+<blockquote>💡 دو دکمه‌ی پایین (زیر تیتر 🎨) همون صفحه‌های تنظیم ظاهرن که از مسیر 📚 آموزش ← 🎨 نمایش هم باز می‌شن؛ برای همین دکمه‌ی بازگشتشون به منوی آموزش برمی‌گرده، نه به اینجا.</blockquote>
+
+✅ رنگ سبز دکمه یعنی متن یا استیکر اون از قبل ست شده.',
     'backToListLabel' => '🔙 برگشت به لیست',
     'resetAllDone' => '🔁 همه متن‌ها، استیکرها و ری‌اکشن‌های این بخش (توی همه زبون‌ها) به حالت پیش‌فرض ربات برگشتن.',
     'home_text' => '🎨 <b>شخصی‌سازی پیام‌های ربات</b>
@@ -70,6 +105,13 @@ return array (
 
 زبان فعلی: <b>{lang}</b>',
     'btn_close' => '❌ بستن',
+    // one per section, so a shop can word each ❌ بستن for the screen it sits
+    // on; they all start as the shared label above
+    'btnCloseBuy' => '❌ بستن',
+    'btnCloseTopup' => '❌ بستن',
+    'btnCloseAccount' => '❌ بستن',
+    'btnCloseTest' => '❌ بستن',
+    'btnCloseHelp' => '❌ بستن',
     'reset_hint' => '♻️ برای بازگردانی این متن به حالت پیش‌فرض، عدد <b>0</b> را ارسال کن.',
     'msg_reset_done' => '✅ این متن به حالت پیش‌فرض بازگردانده شد.',
     'msg_session' => '⛔️ نشست منقضی شده. دوباره وارد شوید.',
@@ -214,7 +256,33 @@ return array (
         'group' => 'buyflow',
         'section' => 'panel',
       ),
-      25 => 
+      // String key on purpose: this run of the list carries explicit numeric
+      // indexes, so an unkeyed entry here takes the next integer (25) and the
+      // "25 =>" below then overwrites it - the item vanishes with no error.
+      // A string key cannot collide, and PHP keeps insertion order, so this
+      // still renders between the product captions where it belongs.
+      'sell_backbtn' =>
+      array (
+        'label' => '🔙 بازگشت به لیست دسته بندی',
+        'key' => 'users.sell.backToPreviousBtn',
+        'group' => 'buyflow',
+        'section' => 'panel',
+      ),
+      'sell_backpanelbtn' =>
+      array (
+        'label' => '🔙 بازگشت به لیست پنل‌ها',
+        'key' => 'users.sell.backToPanelListBtn',
+        'group' => 'buyflow',
+        'section' => 'panel',
+      ),
+      'sell_closebtn' =>
+      array (
+        'label' => '❌ دکمه بستن (خرید اشتراک)',
+        'key' => 'bottext.btnCloseBuy',
+        'group' => 'buyflow',
+        'section' => 'panel',
+      ),
+      25 =>
       array (
         'label' => '🔑 تنظیم اکانت تست',
         'key' => 'users.usertest.selectUsernamePrompt',
@@ -343,6 +411,72 @@ return array (
       // topup_disc_caption_line, which takes the discount and not the key), so
       // they cannot live on a gateway's own screen, but together they are one
       // subject and belong behind one button.
+      // ---- 👤 حساب کاربری ----
+      // One screen, so one group: the caption and the ❌ بستن under it were two
+      // loose rows on the home list before, with nothing saying they belonged
+      // together. String keys, because this array mixes explicit numeric
+      // indexes with unkeyed entries and an unkeyed one lands on the next free
+      // integer - where the next explicit index silently overwrites it.
+      'account_caption' =>
+      array (
+        'label' => '👤 کپشن حساب کاربری',
+        'key' => 'users.account.infoSimple',
+        'group' => 'account',
+        'section' => 'account_main',
+      ),
+      'account_closebtn' =>
+      array (
+        'label' => '❌ دکمه بستن (حساب کاربری)',
+        'key' => 'bottext.btnCloseAccount',
+        'group' => 'account',
+        'section' => 'account_main',
+      ),
+      // ---- 📚 آموزش ----
+      'help_cat_caption' =>
+      array (
+        'label' => '📚 کپشن لیست دسته‌بندی آموزش‌ها',
+        'key' => 'users.help.categoryCaption',
+        'group' => 'help',
+        'section' => 'help_screens',
+      ),
+      'help_list_caption' =>
+      array (
+        'label' => '📄 کپشن لیست آموزش‌ها',
+        'key' => 'users.help.listCaption',
+        'group' => 'help',
+        'section' => 'help_screens',
+      ),
+      'help_disabled_msg' =>
+      array (
+        'label' => '🚫 پیام غیرفعال بودن بخش آموزش',
+        'key' => 'users.help.disablehelp',
+        'group' => 'help',
+        'section' => 'help_screens',
+      ),
+      'help_closebtn' =>
+      array (
+        'label' => '❌ دکمه بستن (آموزش)',
+        'key' => 'bottext.btnCloseHelp',
+        'group' => 'help',
+        'section' => 'help_buttons',
+      ),
+      // the test-account list's own ❌ بستن. No group: it belongs with the rest
+      // of the test-account settings, which are a home-list section already.
+      'test_closebtn' =>
+      array (
+        'label' => '❌ دکمه بستن (اکانت تست)',
+        'key' => 'bottext.btnCloseTest',
+      ),
+      // reached from 🌐 تنظیمات تغییر زبان کاربر, which owns everything about
+      // the picker; no 'group' so they get no second entry point of their own
+      array (
+        'label' => '🌍 کپشن صفحه‌ی انتخاب زبان',
+        'key' => 'bottext.langPickerCaption',
+      ),
+      array (
+        'label' => '⛔️ پیام رد کاربر با زبان پشتیبانی‌نشده',
+        'key' => 'bottext.langBlockedMsg',
+      ),
       array (
         'label' => '🎁 صفحه‌ی ورود کد تخفیف + دکمه‌هایش',
         'key' => 'users.Balance.topupDiscPrompt',
@@ -402,8 +536,26 @@ return array (
         'section' => 'topupdisc_line_group',
       ),
       array (
+        'label' => '⚡️ تخفیفِ همگانی (همه‌ی درگاه‌ها) — درصدی',
+        'key' => 'hardcoded.topupDiscAllPercentCaption',
+        'group' => 'topupdisc',
+        'section' => 'topupdisc_line_all',
+      ),
+      array (
+        'label' => '⚡️ تخفیفِ همگانی (همه‌ی درگاه‌ها) — مبلغ ثابت',
+        'key' => 'hardcoded.topupDiscAllFixedCaption',
+        'group' => 'topupdisc',
+        'section' => 'topupdisc_line_all',
+      ),
+      array (
         'label' => '❌ خطای مبلغ خارج از حداقل/حداکثر',
         'key' => 'users.Balance.amountRangeError',
+        'group' => 'topup',
+        'section' => 'topup_flow',
+      ),
+      array (
+        'label' => '❌ دکمه بستن (افزایش موجودی)',
+        'key' => 'bottext.btnCloseTopup',
         'group' => 'topup',
         'section' => 'topup_flow',
       ),
@@ -992,11 +1144,11 @@ return array (
       'topupDiscExpiryNone' => 'بدون محدودیت زمانی',
       'pkgPromptTitle' => '#️⃣ <b>مبلغ واریز</b>
 
-مبلغ را از دکمه‌ها انتخاب کنید یا گزینهٔ <b>مبلغ دلخواه</b> را بزنید.
+یکی از مبلغ‌های زیر را انتخاب کنید.
 
-<b>مبالغ پیشنهادی مطابق پلن‌های بالای همین مرحله است.</b>
+<blockquote>✏️ مبلغ دیگری می‌خواهید؟ دکمهٔ <b>مبلغ دلخواه</b> را بزنید و عدد را بفرستید.</blockquote>
 
-🕘 پس از واریز، رسید را در مرحله بعد ارسال کنید.',
+⬅️ بعد از انتخاب، مرحلهٔ پرداخت باز می‌شود.',
       'backToMethodBtn' => '🔙 بازگشت به روش پرداخت',
       'customAmountBtn' => '✏️ مبلغ دلخواه',
       'customAmountPromptTitle' => '💵 مبلغ دلخواه
@@ -1416,6 +1568,11 @@ n2  = نماینده با قابلیت های بیشتر',
     array (
       'btninlinebuy' => '📚 مشاهده آموزش استفاده ',
       'disablehelp' => 'کاربر گرامی بخش آموزش درحال حاضر غیرفعال است. 😔',
+      // the two tutorial screens' own captions. Their defaults are byte-for-byte
+      // the sentences these screens already showed (users.sell.selectCategoryShort
+      // and users.selectoption), which they used to borrow from other flows.
+      'categoryCaption' => '📌 یک دسته را انتخاب نمایید',
+      'listCaption' => 'یک گزینه را انتخاب کنید',
     ),
     'lottery' => 
     array (
@@ -1533,7 +1690,7 @@ n2  = نماینده با قابلیت های بیشتر',
       'selectCategoryShort' => '📌 یک دسته را انتخاب نمایید',
       'selectCategory' => '📌 دسته بندی خود را انتخاب نمایید!',
       'backToPanelListBtn' => "🔙 بازگشت به لیست پنل‌ها",
-      'backToPreviousBtn' => '🔙 بازگشت به منوی قبل',
+      'backToPreviousBtn' => '🔙 بازگشت به لیست دسته بندی',
       'panelUnavailable' => '❌ این پنل در دسترس نیست لطفا از پنل دیگری خرید را انجام دهید.',
       'restartProcess' => '❌ لطفا مراحل خرید را مجددا انجام دهید',
       'creating' => '♻️ در حال ساختن سرویس شما...',
@@ -2137,12 +2294,18 @@ n2',
       'layoutCaption' => '📐 <b>چیدمان</b>
 
 روی یکی بزن تا انتخاب بشه، بعد روی مقصد بزن تا جاشون عوض بشه.
-🔲 تمام‌عرض / کنار هم رو هم می‌تونی تنظیم کنی.',
+🔲 تمام‌عرض / کنار هم رو هم می‌تونی تنظیم کنی.
+
+🚫 با دکمه‌ی «مخفی کردن» هر دکمه‌ای رو می‌تونی از دید کاربر برداری - خودش پاک نمی‌شه و هر وقت خواستی برمی‌گرده.
+🚫 دکمه‌های مخفی اینجا با علامت 🚫 نشون داده می‌شن؛ کاربر اصلاً نمی‌بینتشون.',
       'emojiCaption' => '🎭 <b>ایموجی</b>
 
 روی هرکدوم بزن تا ایموجیش رو تنظیم کنی.',
       'layoutEmpty' => 'چیزی برای این بخش وجود نداره',
       'toggleWidthBtn' => '🔲 تمام‌عرض / کنار هم',
+      'hideBtn' => '🚫 مخفی کردن این دکمه',
+      'showBtn' => '👁 نمایش دادن این دکمه',
+      'hideLastAlert' => 'حداقل یک دکمه باید بمونه - اگه این یکی رو هم مخفی کنی، صفحه برای کاربر خالی می‌شه.',
       'resetLayoutBtn' => '🔄 ریست چیدمان',
       'resetEmojiBtn' => '🔄 ریست همه ایموجی‌ها',
       'askEmojiForItem' => '🎭 ایموجی رو برای «%s» بفرست
@@ -6077,7 +6240,9 @@ nowpayments.io
 <b>🔹 اطلاعات کارت</b>
 • <code>{card_number}</code> شماره کارت
 • <code>{name_card}</code> نام صاحب کارت
-اگر برای این زبان چند کارت ثبت شده باشد، خطی که این دو کد داخلش هستند به‌طور خودکار برای هر کارت تکرار می‌شود؛ کافیست این دو کد را فقط یک‌بار در کپشن بگذارید.
+• <code>{card_index}</code> شماره ردیف کارت (۱، ۲، ۳ …)
+اگر برای این زبان چند کارت ثبت شده باشد، خطی که این کدها داخلش هستند به‌طور خودکار برای هر کارت تکرار می‌شود؛ کافیست آن‌ها را فقط یک‌بار در کپشن بگذارید.
+فاصله‌ی بین کارت‌ها (چسبیده یا یک خط خالی) از دکمه‌ی «📏 فاصله بین کارت‌ها» در همین صفحه تنظیم می‌شود.
 
 <b>🔹 اطلاعات فاکتور</b>
 • <code>{price}</code> مبلغ واریزی
@@ -6489,13 +6654,13 @@ nowpayments.io
     'botOff' => '❌ ربات خاموش است، لطفا دقایقی دیگر مراجعه کنید',
     'cart' => '<b>فاکتور ایجاد شد</b>
 
-مشتری گرامی، مبلغ <b>{price} تومان</b> را به حساب زیر واریز کنید:
+مشتری گرامی، مبلغ <b>{price} تومان</b> را به یکی از حساب‌های زیر واریز کنید:
 
-<b>{name_card} | {card_number}</b>
+{card_index}) <b>{name_card} | {card_number}</b>
 
 <b>پس از واریز، تصویر فیش را همین‌جا ارسال کنید.</b>
 
-این شمارهٔ کارت تا <b>{minutes}</b> دقیقه فقط برای همین فاکتور معتبر است؛ معمولاً تا حدود 5 دقیقه بعد رسید بررسی می‌شود.',
+این شماره‌کارت‌ها تا <b>{minutes}</b> دقیقه فقط برای همین فاکتور معتبرند؛ معمولاً تا حدود 5 دقیقه بعد رسید بررسی می‌شود.',
     'cartAuto' => 'برای تایید فوری لطفا دقیقاً مبلغ زیر واریز شود. در غیر این صورت تایید پرداخت شما ممکن است با تاخیر مواجه شود.⚠️
             برای افزایش موجودی، مبلغ <code>{price}</code>  ریال  را به شماره‌ی حساب زیر واریز کنید 👇🏻
 
@@ -6597,7 +6762,7 @@ nowpayments.io
     'sell' => '🔐 خرید اشتراک',
     'tonPayment' => '💎 پرداخت با TON',
     'trxPayment' => '⚡ پرداخت با TRX',
-    'starTelegram' => '⭐️ پرداخت با Stars تلگرام',
+    'starTelegram' => '⭐️ پرداخت با استارز',
     'support' => '☎️ پشتیبانی',
     'tariffList' => '💵 تعرفه اشتراک ها',
     'tariffListDesc' => 'تنظیم نشده است',
@@ -6864,6 +7029,15 @@ nowpayments.io
     'miniAppNameSaved' => '✏️ نام با موفقیت تنظیم شد',
     'miniAppBrandingReset' => '♻️ برندینگ به حالت پیش‌فرض بازگشت',
     'miniAppNameTooLong' => 'نام نباید بیشتر از ۴۰ کاراکتر باشه',
+    'miniAppNameEmpty' => 'نام نمی‌تونه خالی باشه — یه متن بفرست یا از «♻️ بازنشانی برندینگ» استفاده کن.',
+    'miniAppNotInstalled' => '⚠️ <b>مینی‌اپ روی این سرور نصب نیست.</b>
+
+پوشه‌ی <code>app/</code> وجود نداره، پس روشن کردنش کاری نمی‌کنه و برندینگی هم که اینجا ذخیره کنی جایی نمایش داده نمی‌شه.
+
+هر وقت مینی‌اپ رو نصب کردی، همین تنظیمات دوباره فعال می‌شن.',
+    'miniAppNotInstalledAlert' => 'مینی‌اپ نصب نیست - اول باید نصبش کنی',
+    'miniAppLogoFailed' => '❌ لوگو ذخیره نشد. مینی‌اپ نصب نیست یا پوشه‌ی app/assets قابل نوشتن نیست.',
+    'miniAppVersionMissing' => 'نصب نشده',
     'firstPurchaseBtn' => 'خرید اول',
     'firstPurchaseCommission' => '🎉 پورسانت فقط برای خرید اول',
     'firstPurchaseWheel' => '🎲 گردونه شانس خرید اول',
@@ -8672,6 +8846,8 @@ nowpayments.io
     'topupDiscFixedCaption' => '{value} اضافه برای هر شارژ',
     'topupDiscGroupPercentCaption' => '{group} — تخفیف {value} درصدی',
     'topupDiscGroupFixedCaption' => '{group} — {value} اضافه برای هر شارژ',
+    'topupDiscAllPercentCaption' => '🎉 تخفیف {value} درصدی روی همه‌ی روش‌های پرداخت',
+    'topupDiscAllFixedCaption' => '🎉 {value} اضافه روی هر شارژ، با هر روش پرداخت',
     'topupDiscPkgPercent' => 'تخفیف {value} درصدی برای بسته {amount}',
     'topupDiscPkgFixed' => '{bonus} اضافه برای بسته {amount}',
     'volumeEndDefaultText' => 'مشتری گرامی {username}

@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 #----------------[  admin section  ]------------------#
 $textadmin = ["panel", "/panel", $textbotlang['Admin']['panelAdmin']];
 $text_panel_admin_login_template = sprintf($textbotlang['Admin']['report']['aboutBot'], $version);
@@ -393,6 +393,15 @@ if (!function_exists('split_leading_emoji')) {
 if (!function_exists('bottext_item_menu_payload')) {
     function bottext_item_menu_payload($bt_key, $bt_lang, $textbotlang, $backOverride = null)
     {
+        // The two purchase-flow back buttons and five ❌ بستن buttons are BUTTON
+        // LABELS, not messages - there is no caption to edit here, so they get
+        // genbtn's own screen (name/colour/emoji/position/reset - the same tool
+        // every other standalone button in this bot already has), not this
+        // function's "📋 کپشن پیش‌فرض / ✏️ ویرایش کپشن" wording, which used to
+        // describe them as if they were.
+        if (function_exists('bt_btnitem_keys') && in_array($bt_key, bt_btnitem_keys(), true) && function_exists('genbtn_key_to_alias')) {
+            return genbtn_detail_payload(genbtn_key_to_alias($bt_key), $bt_lang, 0, $textbotlang, '');
+        }
         $bt_label = $bt_key;
         $bt_item_group = '';
         if ($bt_key === 'users.unknownMsg') {
@@ -457,7 +466,7 @@ if (!function_exists('bottext_item_menu_payload')) {
             $bt_extra_note = "\nℹ️ این پیام وقتی نشون داده می‌شه که کاربر داخل «🛍 سرویس‌های من» هیچ سرویس فعالی نداشته باشه.\n";
         }
         if ($bt_key === 'users.status.infoFull') {
-            $bt_extra_note = "\nℹ️ این پیام وقتی نشون داده می‌شه که کاربر روی یکی از سرویس‌هاش (داخل «🛍 سرویس‌های من») بزنه - وضعیت کامل همون سرویس رو نشون می‌ده.\n🖼 این صفحه حالا با QR سابسکریپشن به‌صورت عکس فرستاده می‌شه، پس متنش کپشن عکسه (سقف ۱۰۲۴ کاراکتر).\n📊 «{location_block}» فقط روی پنل‌های چندنودی (marzban / marzneshin / rebecca) پر می‌شه؛ بقیه‌ی پنل‌ها اون تیکه رو خالی می‌بینن و دکمه‌ی «گزارش مصرف»شون فقط توضیح می‌ده.\n💡 دکمه‌های زیرش (تا ۱۴ تا، بسته به نوع پنل و تنظیمات فقط بعضی‌هاشون واقعاً نشون داده می‌شن) از دکمه‌ی پایین همین صفحه قابل ویرایشن.\n";
+            $bt_extra_note = "\nℹ️ این پیام وقتی نشون داده می‌شه که کاربر روی یکی از سرویس‌هاش (داخل «🛍 سرویس‌های من») بزنه - وضعیت کامل همون سرویس رو نشون می‌ده.\n🖼 این صفحه حالا با QR سابسکریپشن به‌صورت عکس فرستاده می‌شه، پس متنش کپشن عکسه (سقف ۱۰۲۴ کاراکتر).\n📊 «{location_block}» یعنی «هر لوکیشن چقدر مصرف شده» و فقط سه نوع پنل این رو به تفکیک برمی‌گردونن: <b>rebecca</b>، <b>marzban</b>، <b>marzneshin</b>. بقیه (x-ui، s-ui، hiddify، WGDashboard، alireza، ibsng، mikrotik، فروش دستی، mirza agent) تک‌سرورن و اون تیکه رو خالی می‌بینن.\n🎯 این بلوک هرجای متن بذاریش همون‌جا میاد و تیتر «🌐 مصرف لوکیشن» هم داخل خودشه - پس اگه خالی باشه، تیتر بی‌محتوا هم جا نمی‌مونه.\n🌐 با دکمه‌ی «فیلتر مصرف لوکیشن» پایین، می‌تونی برای هر پنل جدا خاموشش کنی تا خالی بمونه.\n💡 دکمه‌های زیرش (تا ۱۴ تا، بسته به نوع پنل و تنظیمات فقط بعضی‌هاشون واقعاً نشون داده می‌شن) از دکمه‌ی پایین همین صفحه قابل ویرایشن.\n";
         }
         if ($bt_key === 'users.sell.service_sell') {
             $bt_extra_note = "\nℹ️ این پیام وقتی نشون داده می‌شه که کاربر داخل «🛍 سرویس‌های من» حداقل یک سرویس فعال داشته باشه - زیرش لیست سرویس‌هاش (که خودکار ساخته می‌شه) و یه دکمه‌ی «بستن» میاد.\n💡 هم متن این پیام، هم دکمه‌ی بستنش (رنگ/اسم/ایموجی) رو می‌تونی از پایین تنظیم کنی.\n";
@@ -507,6 +516,23 @@ if (!function_exists('bottext_item_menu_payload')) {
         if ($bt_key === 'users.status.subscriptionFile') {
             $bt_extra_note = "\nℹ️ این پیام فقط برای پنل‌های نوع WireGuard وقتی نشون داده می‌شه که کاربر روی «🔗 لینک اشتراک» بزنه - به‌جای عکس QR، یه فایل کانفیگ فرستاده می‌شه.\n";
         }
+        if ($bt_key === 'users.account.infoSimple') {
+            $bt_extra_note = "\nℹ️ کپشن صفحه‌ی 👤 حساب کاربریه.\n"
+                . "💡 این متن با <code>%s</code> کار می‌کنه نه اسم متغیر - ترتیبشون رو عوض نکن.\n"
+                . "💡 دکمه‌ی ❌ بستنِ همین صفحه هم توی همین منوئه، درست زیر همین مورد.\n";
+        }
+        if ($bt_key === 'users.help.categoryCaption') {
+            $bt_extra_note = "\nℹ️ کپشن اولین صفحه‌ی بخش 📚 آموزشه - همون‌جایی که لیست دسته‌بندی آموزش‌ها نشون داده می‌شه.\n"
+                . "💡 این صفحه فقط وقتی میاد که «دسته‌بندی آموزش» روشن باشه؛ وگرنه کاربر مستقیم لیست آموزش‌ها رو می‌بینه.\n"
+                . "💡 قبلاً این کپشن با کپشن دسته‌بندیِ خرید یکی بود؛ حالا جداست و تغییرش روی خرید اثر نمی‌ذاره.\n";
+        }
+        if ($bt_key === 'users.help.listCaption') {
+            $bt_extra_note = "\nℹ️ کپشن صفحه‌ی لیست آموزش‌هاست - چه وقتی از دسته‌بندی وارد شده باشه، چه وقتی دسته‌بندی خاموشه.\n"
+                . "💡 قبلاً از متن عمومی «یک گزینه را انتخاب کنید» استفاده می‌شد که ده جای دیگه هم به کار می‌رفت؛ حالا مستقله.\n";
+        }
+        if ($bt_key === 'users.help.disablehelp') {
+            $bt_extra_note = "\nℹ️ این پیام وقتی نشون داده می‌شه که دکمه‌ی آموزش از «🔘 تنظیمات دکمه‌های منوی اصلی» خاموش شده باشه ولی کاربر بازم بزنتش.\n";
+        }
         // the four discount sentences: "یک درگاه" is about where the discount
         // was SET, not about which gateway the text belongs to - that reading
         // is the first thing an admin asks on these screens
@@ -518,6 +544,10 @@ if (!function_exists('bottext_item_menu_payload')) {
         if (in_array($bt_key, ['hardcoded.topupDiscGroupPercentCaption', 'hardcoded.topupDiscGroupFixedCaption'], true)) {
             $bt_extra_note = "\nℹ️ این جمله وقتی نشون داده می‌شه که تخفیف روی <b>کل یه دسته</b> ست شده باشه - کارت به کارت، ریالی، آنلاین ارزی یا آفلاین ارزی.\n"
                 . "💡 اسم دسته خودش با <code>{group}</code> داخل جمله نوشته می‌شه، پس همین یه متن برای هر چهار دسته کافیه.\n";
+        }
+        if (in_array($bt_key, ['hardcoded.topupDiscAllPercentCaption', 'hardcoded.topupDiscAllFixedCaption'], true)) {
+            $bt_extra_note = "\nℹ️ این جمله وقتی نشون داده می‌شه که تخفیف از بخش <b>⚡️ اعمال همگانی</b> ست شده باشه، یعنی روی <b>همه‌ی درگاه‌ها</b>.\n"
+                . "💡 چون دسته‌ای در کار نیست، <code>{group}</code> اینجا معنی نداره - فقط <code>{value}</code> رو می‌تونی استفاده کنی.\n";
         }
         foreach (($textbotlang['bottext']['items'] ?? []) as $bt_it) {
             if (($bt_it['key'] ?? '') === $bt_key) {
@@ -646,6 +676,13 @@ if (!function_exists('bottext_item_menu_payload')) {
             // clear the next rows are OTHER messages in the test-account flow,
             // not more controls for the prompt this screen is already editing
             $kb['inline_keyboard'][] = [['text' => bt_section_meta('usertest_related')['label'], 'callback_data' => 'bt_sep|usertest_related']];
+            // first in the flow: the panel list the customer sees before this
+            // prompt. It is the only way in - it has no row on the home list.
+            $kb['inline_keyboard'][] = [['text' => '❌ دکمه بستن لیست پنل‌ها', 'callback_data' => "bt_edit|{$bt_lang}|bottext.btnCloseTest", 'style' => 'primary']];
+            // it sent the customer here from the home list before, where it read
+            // as a child of whatever section was last on screen; its own back
+            // button already pointed at this screen
+            $kb['inline_keyboard'][] = [['text' => '📦 پیام بعد از دریافت اکانت تست', 'callback_data' => "bt_edit|{$bt_lang}|textbot.afterText", 'style' => 'primary']];
             $kb['inline_keyboard'][] = [['text' => '⏰ پیام اتمام اکانت تست', 'callback_data' => "bt_edit|{$bt_lang}|textbot.testExpired", 'style' => 'primary']];
             $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌ی پیام اتمام اکانت تست', 'callback_data' => "gbtn|list|{$bt_lang}|te|u", 'style' => 'primary']];
             $kb['inline_keyboard'][] = [['text' => '📌 نحوه‌ی نمایش کانفیگ', 'callback_data' => "cfgdeliv|list|{$bt_lang}|u", 'style' => 'primary']];
@@ -663,6 +700,7 @@ if (!function_exists('bottext_item_menu_payload')) {
             $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه بستن', 'callback_data' => "gbtn|list|{$bt_lang}|sc", 'style' => 'primary']];
         } elseif ($bt_key === 'users.status.infoFull') {
             $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های صفحه‌ی وضعیت', 'callback_data' => "statusbtn|list|{$bt_lang}", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '🌐 فیلتر مصرف لوکیشن (پنل‌ها)', 'callback_data' => "svcnu|list|{$bt_lang}", 'style' => svcnu_any_off() ? 'success' : 'primary']];
         } elseif ($bt_key === 'users.Balance.chargeSuccess') {
             $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه تهیه اشتراک', 'callback_data' => "gbtn|list|{$bt_lang}|bc", 'style' => 'primary']];
             $kb['inline_keyboard'][] = [['text' => '🎁 ویرایش متن بلوک تخفیف', 'callback_data' => "bt_edit|{$bt_lang}|users.Balance.chargeSuccessDiscount", 'style' => 'primary']];
@@ -702,11 +740,17 @@ if (!function_exists('bottext_item_menu_payload')) {
             $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "cfgdeliv|list|{$bt_lang}|b", 'style' => 'danger']];
         } elseif ($bt_key === 'users.status.infoFull') {
             $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "bt_group|{$bt_lang}|myservices", 'style' => 'danger']];
+        } elseif (in_array($bt_key, ['bottext.langPickerCaption', 'bottext.langBlockedMsg'], true)) {
+            // both belong to the language screen and are only reachable from it
+            $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => 'bt_langswitch', 'style' => 'danger']];
         } elseif ($bt_key === 'users.Balance.chargeSuccessDiscount') {
             $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "bt_edit|{$bt_lang}|users.Balance.chargeSuccess", 'style' => 'danger']];
         } elseif ($bt_key === 'textbot.afterText') {
             $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "bt_edit|{$bt_lang}|users.usertest.selectUsernamePrompt", 'style' => 'danger']];
         } elseif ($bt_key === 'textbot.testExpired') {
+            // bottext.btnCloseTest used to need the same case here, but it now
+            // short-circuits to genbtn_detail_payload() at the top of this
+            // function, which computes its own back target (bt_btnitem_back_cb())
             $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "bt_edit|{$bt_lang}|users.usertest.selectUsernamePrompt", 'style' => 'danger']];
         }
         $kb['inline_keyboard'][] = [['text' => '🔙 برگشت به لیست', 'callback_data' => "btact|back|{$bt_lang}", 'style' => 'danger']];
@@ -763,6 +807,15 @@ if (!function_exists('bt_inline_block_keys')) {
             'hardcoded.topupDiscGroupFixedCaption',
             // a line inside the service-status caption
             'users.status.svcLocationMore',
+            // button labels: there is no message to attach a sticker to, and
+            // their own colour row takes the place of one
+            'users.sell.backToPreviousBtn',
+            'users.sell.backToPanelListBtn',
+            'bottext.btnCloseBuy',
+            'bottext.btnCloseTopup',
+            'bottext.btnCloseAccount',
+            'bottext.btnCloseTest',
+            'bottext.btnCloseHelp',
             // alerts: answerCallbackQuery carries text and nothing else
             'users.status.svcUsageUnavailable',
             'users.extend.insufficientBalanceAlert',
@@ -919,33 +972,179 @@ if (!function_exists('layout_editor_payload')) {
 }
 
 if (!function_exists('lang_switch_settings_payload')) {
+    // 🌐 تنظیمات تغییر زبان کاربر - everything about the language picker on one
+    // screen, grouped under white dividers instead of one flat list: when it
+    // shows, which languages it offers, how it looks, and who the bot serves.
     function lang_switch_settings_payload()
     {
-        $setting = select("setting", "*", null, null, "select");
-        $ls = json_decode((string) ($setting['lang_switch'] ?? ''), true);
-        if (!is_array($ls)) {
-            $ls = [];
-        }
-        $lsw_enabled = (($ls['enabled'] ?? '0') === '1');
-        $lsw_mode = (($ls['mode'] ?? 'once') === 'always') ? 'always' : 'once';
-        $lsw_langs = (is_array($ls['langs'] ?? null) && !empty($ls['langs'])) ? $ls['langs'] : ['fa', 'en', 'ru', 'zh', 'tk'];
+        $ls = lang_switch_settings(true);
         $lsw_names = ['fa' => '🇮🇷 فارسی', 'en' => '🇬🇧 English', 'ru' => '🇷🇺 Русский', 'zh' => '🇨🇳 中文', 'tk' => '🇹🇲 Türkmençe'];
         $kb = ['inline_keyboard' => []];
-        $kb['inline_keyboard'][] = [['text' => $lsw_enabled ? '⚡ وضعیت: ✅ روشن' : '⚡ وضعیت: ❌ خاموش', 'callback_data' => 'lsw_toggle']];
-        $kb['inline_keyboard'][] = [
-            ['text' => '🆕 فقط بار اول' . ($lsw_mode === 'once' ? ' ✅' : ''), 'callback_data' => 'lsw_mode-once'],
-            ['text' => '🔁 هر بار /start' . ($lsw_mode === 'always' ? ' ✅' : ''), 'callback_data' => 'lsw_mode-always'],
-        ];
-        foreach ($lsw_names as $lsw_code => $lsw_label) {
-            $lsw_on = in_array($lsw_code, $lsw_langs, true);
-            $kb['inline_keyboard'][] = [['text' => ($lsw_on ? '✅ ' : '⬜ ') . $lsw_label, 'callback_data' => "lsw_lang-{$lsw_code}"]];
+
+        $kb['inline_keyboard'][] = [['text' => bt_section_meta('langsw_when')['label'], 'callback_data' => 'bt_sep|langsw_when']];
+        $kb['inline_keyboard'][] = [[
+            'text' => $ls['enabled'] ? '✅ نمایش خودکار منوی زبان: روشن' : '❌ نمایش خودکار منوی زبان: خاموش',
+            'callback_data' => 'lsw_toggle',
+            'style' => $ls['enabled'] ? 'success' : 'danger',
+        ]];
+        if ($ls['enabled']) {
+            $kb['inline_keyboard'][] = [
+                ['text' => ($ls['mode'] === 'once' ? '✅ ' : '') . '🆕 فقط بار اول', 'callback_data' => 'lsw_mode-once', 'style' => 'primary'],
+                ['text' => ($ls['mode'] === 'always' ? '✅ ' : '') . '🔁 هر بار /start', 'callback_data' => 'lsw_mode-always', 'style' => 'primary'],
+            ];
         }
+
+        $kb['inline_keyboard'][] = [['text' => bt_section_meta('langsw_langs')['label'], 'callback_data' => 'bt_sep|langsw_langs']];
+        foreach ($lsw_names as $lsw_code => $lsw_label) {
+            $lsw_on = in_array($lsw_code, $ls['langs'], true);
+            // ✅/❌ like every other toggle in the bot. The empty ⬜ read as an
+            // unticked checkbox waiting to be filled rather than as "off".
+            $kb['inline_keyboard'][] = [[
+                'text' => ($lsw_on ? '✅ ' : '❌ ') . $lsw_label,
+                'callback_data' => "lsw_lang-{$lsw_code}",
+                'style' => $lsw_on ? 'success' : 'danger',
+            ]];
+        }
+
+        $kb['inline_keyboard'][] = [['text' => bt_section_meta('langsw_look')['label'], 'callback_data' => 'bt_sep|langsw_look']];
+        $kb['inline_keyboard'][] = [
+            ['text' => '📋 کپشن پیش‌فرض', 'callback_data' => 'btact|rsttext|fa|bottext.langPickerCaption'],
+            ['text' => '✏️ ویرایش کپشن', 'callback_data' => 'btact|text|fa|bottext.langPickerCaption', 'style' => 'primary'],
+        ];
+        // the same four tools every other button family has, on the picker's
+        // own buttons - they were hardcoded two-per-row with no styling at all
+        $kb['inline_keyboard'][] = [['text' => '🔘 ظاهر دکمه‌های انتخاب زبان', 'callback_data' => 'btnstyle_kindhub:langpick:fa', 'style' => 'primary']];
+
+        $kb['inline_keyboard'][] = [['text' => bt_section_meta('langsw_access')['label'], 'callback_data' => 'bt_sep|langsw_access']];
+        $kb['inline_keyboard'][] = [[
+            'text' => ($ls['blockOthers'] ? '✅ ' : '❌ ') . '🚫 فقط زبان‌های انتخاب‌شده سرویس بگیرن',
+            'callback_data' => 'lsw_blockothers',
+            'style' => $ls['blockOthers'] ? 'success' : 'danger',
+        ]];
+        if ($ls['blockOthers']) {
+            $kb['inline_keyboard'][] = [
+                ['text' => '📋 پیش‌فرض', 'callback_data' => 'btact|rsttext|fa|bottext.langBlockedMsg'],
+                ['text' => '✏️ ویرایش پیام رد', 'callback_data' => 'btact|text|fa|bottext.langBlockedMsg', 'style' => 'primary'],
+            ];
+        }
+
         $kb['inline_keyboard'][] = [['text' => '🔙 برگشت به لیست', 'callback_data' => 'btact|back|fa', 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
         return json_encode($kb);
     }
+    // what the screen says above those buttons, with a live preview of the
+    // picker exactly as a user would receive it
+    function lang_switch_settings_caption($textbotlang)
+    {
+        $ls = lang_switch_settings();
+        $names = ['fa' => '🇮🇷 فارسی', 'en' => '🇬🇧 English', 'ru' => '🇷🇺 Русский', 'zh' => '🇨🇳 中文', 'tk' => '🇹🇲 Türkmençe'];
+        $on = [];
+        foreach ($ls['langs'] as $c) {
+            $on[] = $names[$c] ?? $c;
+        }
+        $cap = "🌐 <b>تنظیمات تغییر زبان کاربر</b>\n➖➖➖➖➖➖➖➖➖➖\n";
+        $cap .= "نمایش خودکار: " . ($ls['enabled']
+            ? ('روشن ✅ — ' . ($ls['mode'] === 'always' ? 'هر بار /start' : 'فقط بار اول'))
+            : 'خاموش') . "\n";
+        $cap .= "زبان‌های فعال: " . (empty($on) ? '—' : implode('، ', $on)) . "\n";
+        $cap .= "سرویس‌دهی به بقیه‌ی زبان‌ها: " . ($ls['blockOthers'] ? '<b>بسته</b> ⛔️' : 'باز') . "\n";
+        if ($ls['blockOthers']) {
+            $cap .= "\n⚠️ کاربری که زبانش جزو لیست بالا نباشه، پیام رد می‌گیره و هیچ بخشی از ربات براش کار نمی‌کنه. مدیرها هیچ‌وقت بسته نمی‌شن.\n";
+        }
+        // How many real users this refuses, right now. Without it an admin can
+        // untick their own shop's language and lock out every customer with no
+        // signal at all - which is exactly what happened once.
+        $lsw_blocked = lang_switch_blocked_count();
+        if ($lsw_blocked['blocked'] > 0) {
+            $cap .= "\n🚨 <b>همین الان " . number_format($lsw_blocked['blocked']) . " کاربر از "
+                . number_format($lsw_blocked['total']) . " کاربر ربات مسدودن</b> — زبانشون توی لیست بالا نیست.\n";
+        } elseif ($ls['blockOthers']) {
+            $cap .= "\n✅ همه‌ی " . number_format($lsw_blocked['total']) . " کاربر فعلی ربات، زبانشون توی لیست هست.\n";
+        }
+        if (!$ls['enabled']) {
+            $cap .= "\nℹ️ منوی انتخاب زبان خودکار نشون داده نمی‌شه؛ کاربر فقط از دکمه‌ی «🌏 تغییر زبان» توی منوی اصلی می‌تونه عوضش کنه (اگه اون دکمه روشن باشه).\n";
+        }
+        list($prevCap) = language_picker_payload();
+        $cap .= "\n👁 <b>چیزی که کاربر می‌بینه:</b>\n" . topup_packages_caption_preview_quote($prevCap);
+        return $cap;
+    }
 }
 
+if (!function_exists('svcnu_payload')) {
+    // 🌐 فیلتر مصرف لوکیشن: one row per panel the shop actually has. A panel
+    // whose TYPE cannot report per-node usage gets no switch at all - there is
+    // nothing to turn off there, and offering one would suggest the shop could
+    // make it work by tapping.
+    function svcnu_any_off()
+    {
+        foreach ((array) select("marzban_panel", "*", null, null, "fetchAll") as $p) {
+            if (panel_usage_supported($p['type'] ?? '') && !svc_nodeusage_enabled($p['name_panel'] ?? '')) {
+                return true;
+            }
+        }
+        return false;
+    }
+    // panel names are free text and often Persian; rawurlencoded they can blow
+    // the 64-byte callback_data cap on their own, and a list index would point
+    // at the wrong panel once one is added or removed. A short digest of the
+    // name is stable and fixed-width.
+    function svcnu_hash($name)
+    {
+        return substr(md5((string) $name), 0, 8);
+    }
+    function svcnu_panel_by_hash($h)
+    {
+        foreach ((array) select("marzban_panel", "*", null, null, "fetchAll") as $p) {
+            if (svcnu_hash($p['name_panel'] ?? '') === $h) {
+                return $p;
+            }
+        }
+        return null;
+    }
+    function svcnu_payload($lang)
+    {
+        $panels = (array) select("marzban_panel", "*", null, null, "fetchAll");
+        $kb = ['inline_keyboard' => []];
+        $cap = "🌐 <b>فیلتر مصرف لوکیشن</b>\n➖➖➖➖➖➖➖➖➖➖\n";
+        $cap .= "این فیلتر تعیین می‌کنه بلوک «{location_block}» توی صفحه‌ی وضعیت سرویس، برای هر پنل پر بشه یا خالی بمونه.\n\n";
+        $cap .= "<blockquote>فقط این سه نوع پنل مصرف هر لوکیشن رو به تفکیک برمی‌گردونن: <b>rebecca</b>، <b>marzban</b>، <b>marzneshin</b>.\nبقیه‌ی پنل‌ها (x-ui، s-ui، hiddify، WGDashboard، alireza، ibsng، mikrotik، فروش دستی، mirza agent) تک‌سرورن و اصلاً همچین چیزی ندارن - اون‌ها همیشه خالی می‌مونن.</blockquote>\n\n";
+        $cap .= "خاموش که بشه، اون تیکه از کپشن (همراه تیتر خودش) کاملاً خالی می‌شه و ربات هم دیگه برای گرفتنش به پنل درخواست نمی‌زنه.\n";
+        $off = [];
+        foreach ($panels as $p) {
+            $name = (string) ($p['name_panel'] ?? '');
+            $type = (string) ($p['type'] ?? '');
+            $state = svc_nodeusage_state($name, $type);
+            if ($state === 'unsupported') {
+                $off[] = $name . ' (' . ($type !== '' ? $type : '—') . ')';
+                continue;
+            }
+            $on = $state === 'on';
+            $kb['inline_keyboard'][] = [[
+                'text' => ($on ? '✅ ' : '❌ ') . $name . ' (' . $type . ')',
+                'callback_data' => "svcnu|tog|{$lang}|" . svcnu_hash($name),
+                'style' => $on ? 'success' : 'danger',
+            ]];
+        }
+        if (empty($kb['inline_keyboard'])) {
+            $cap .= "\n⚠️ هیچ‌کدوم از پنل‌های این فروشگاه از این قابلیت پشتیبانی نمی‌کنن، پس چیزی برای تنظیم نیست.\n";
+        }
+        if (!empty($off)) {
+            $cap .= "\n🚫 بدون این قابلیت: " . implode('، ', $off) . "\n";
+        }
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "bt_edit|{$lang}|users.status.infoFull", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
+        return [$cap, json_encode($kb)];
+    }
+}
+if (!function_exists('close_sticker_screen')) {
+    // 🖼 استیکر دکمه بستن lives on the ❌ بستن button's own edit screen, not on a
+    // settings screen of its own - one button, one screen. Every clst2* handler
+    // re-renders that screen, with $note carried into its caption quote.
+    function close_sticker_screen($lang, $key, $textbotlang, $note = '')
+    {
+        return genbtn_detail_payload(close_sticker_genbtn_alias($key), $lang, 0, $textbotlang, '', $note);
+    }
+}
 if (!function_exists('rename_editor_payload')) {
     function rename_editor_payload($textbotlang, $selected = null)
     {
@@ -1563,29 +1762,50 @@ if (!function_exists('topup_hub_payload')) {
     function topup_hub_live_members($group, $lang)
     {
         $out = [];
-        foreach (gateway_group_members($group, $lang) as $k) {
+        // the category list, not the layout families: this section groups
+        // card-to-card and the single offline gateway too
+        foreach (gateway_disc_groups()[$group] ?? [] as $k) {
+            if (!gateway_applicable_for_lang($k, $lang)) {
+                continue;
+            }
             if (gateway_allowed_for_lang($k, $lang) && gateway_globally_on($k)) {
                 $out[] = $k;
             }
         }
         return $out;
     }
+    // "کارت به کارت: ۳ بسته" for every gateway of this family that has any,
+    // as a quote under the screen. Buttons stay blue - what is configured is
+    // reported here instead of colouring the row.
+    function topup_hub_group_report($lang, $members, $textbotlang)
+    {
+        $registry = gateway_registry($textbotlang);
+        $lines = [];
+        foreach ($members as $key) {
+            $n = count(topup_packages_for($lang, $key));
+            if ($n > 0) {
+                $lines[] = '• ' . trim(strip_tags((string) ($registry[$key] ?? $key))) . ": <b>{$n} بسته</b>";
+            }
+        }
+        return empty($lines) ? '' : "\n\n<blockquote>📦 <b>بسته‌های تعریف‌شده</b>\n" . implode("\n", $lines) . '</blockquote>';
+    }
     function topup_hub_group_payload($lang, $group, $textbotlang)
     {
         $registry = gateway_registry($textbotlang);
+        $members = topup_hub_live_members($group, $lang);
         $rows = [];
-        foreach (topup_hub_live_members($group, $lang) as $key) {
-            $btn = ['text' => $registry[$key] ?? $key, 'callback_data' => "topupset:{$lang}:{$key}"];
-            if (count(topup_packages_for($lang, $key)) > 0) {
-                $btn['style'] = 'success';
-            }
-            $rows[] = [$btn];
+        foreach ($members as $key) {
+            // always blue, like every other row in this section: green used to
+            // mean "has packages", which the quote under the caption now says
+            // by name and by count
+            $rows[] = [['text' => $registry[$key] ?? $key, 'callback_data' => "topupset:{$lang}:{$key}", 'style' => 'primary']];
         }
         $rows[] = [['text' => $textbotlang['Admin']['TopupPkg']['backToPrevBtn'], 'callback_data' => "topuplang:{$lang}", 'style' => 'danger']];
         $cap = strtr($textbotlang['Admin']['TopupPkg']['hubGroupCaption'], [
             '{group}' => gateway_group_label($group, $textbotlang),
             '{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang,
         ]);
+        $cap .= topup_hub_group_report($lang, $members, $textbotlang);
         return [$cap, json_encode(['inline_keyboard' => $rows])];
     }
     function topup_hub_payload($lang, $textbotlang)
@@ -1600,59 +1820,33 @@ if (!function_exists('topup_hub_payload')) {
             ];
         }
         $kb['inline_keyboard'][] = $tabs;
-        // only gateways a real user of this language would actually see at
-        // checkout right now - matches 💎 مالی's own effective-status logic
-        // (per-language allow-list AND the separate global switch both on)
-        // grouped into the same families as 💎 مالی and 🎨 → 💳 درگاه‌ها, drawn at
-        // the position of each family's first live member. A family with only
-        // one live gateway is NOT collapsed: hiding a single row behind a tap
-        // would cost a step and show nothing extra.
-        $shownGroups = [];
-        foreach (gateway_registry($textbotlang) as $key => $label) {
-            if (!gateway_applicable_for_lang($key, $lang)) {
-                continue;
-            }
-            if (!gateway_allowed_for_lang($key, $lang) || !gateway_globally_on($key)) {
-                continue;
-            }
-            $group = gateway_group_of($key);
-            $liveInGroup = $group === null ? [] : topup_hub_live_members($group, $lang);
-            if ($group !== null && count($liveInGroup) > 1) {
-                if (isset($shownGroups[$group])) {
-                    continue;
+        // Every live gateway sits inside its category - the same four this
+        // section's discount hub uses, so card-to-card and the single offline
+        // gateway are categories too rather than loose rows next to them.
+        // A category is drawn once, at the position of its first live member.
+        foreach (array_keys(gateway_disc_groups()) as $group) {
+            $liveInGroup = [];
+            foreach (gateway_disc_groups()[$group] as $key) {
+                if (gateway_applicable_for_lang($key, $lang)
+                    && gateway_allowed_for_lang($key, $lang) && gateway_globally_on($key)) {
+                    $liveInGroup[] = $key;
                 }
-                $shownGroups[$group] = true;
-                // always blue: this row opens a menu, it does not carry a state
-                // of its own. Green here read as "this family is configured"
-                // when it only ever meant "one of the gateways inside is".
-                $kb['inline_keyboard'][] = [[
-                    'text' => gateway_group_label($group, $textbotlang) . ' (' . count($liveInGroup) . ')',
-                    'callback_data' => "topupgrp:{$lang}:{$group}",
-                    'style' => 'primary',
-                ]];
+            }
+            if (empty($liveInGroup)) {
                 continue;
             }
-            $btn = ['text' => $label, 'callback_data' => "topupset:{$lang}:{$key}"];
-            if (count(topup_packages_for($lang, $key)) > 0) {
-                $btn['style'] = 'success';
-            }
-            $kb['inline_keyboard'][] = [$btn];
+            // no count, no green: this row opens a menu. What is configured
+            // inside is reported as a quote under the caption.
+            $kb['inline_keyboard'][] = [[
+                'text' => gateway_group_label($group, $textbotlang),
+                'callback_data' => "topupgrp:{$lang}:{$group}",
+                'style' => 'primary',
+            ]];
         }
         // 🎨 ظاهر نمایش درگاه ها moved to 🎨 شخصی‌سازی پیام‌های ربات →
         // 💰 پیام‌های افزایش موجودی, alongside the other top-up appearance and
         // message settings - this hub keeps only the packages and the discount
-        $tp_dsAny = false;
-        foreach (topup_disc_enabled_gateways($lang, $textbotlang) as $tp_dsK => $tp_dsL) {
-            if (topup_disc_gw_summary($lang, $tp_dsK) !== '') {
-                $tp_dsAny = true;
-                break;
-            }
-        }
-        $tp_dsBtn = ['text' => '🎁 تخفیف شارژ', 'callback_data' => "dslang:{$lang}"];
-        if ($tp_dsAny) {
-            $tp_dsBtn['style'] = 'success';
-        }
-        $kb['inline_keyboard'][] = [$tp_dsBtn];
+        $kb['inline_keyboard'][] = [['text' => '🎁 تخفیف شارژ', 'callback_data' => "dslang:{$lang}", 'style' => 'primary']];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'topup_close', 'style' => 'danger']];
         return json_encode($kb);
     }
@@ -1661,10 +1855,35 @@ if (!function_exists('topup_hub_caption')) {
     function topup_hub_caption($lang, $textbotlang)
     {
         $t = $textbotlang['Admin']['TopupPkg'];
-        return strtr($t['hubCaption'], [
+        $cap = strtr($t['hubCaption'], [
             '{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang,
             '{currency}' => currency_get(currency_for_lang($lang))['title'] ?? currency_for_lang($lang),
         ]);
+        // no row on this screen turns green any more, so what has actually been
+        // defined is reported here - by category, with the gateway names
+        $tp_rep = [];
+        foreach (array_keys(gateway_disc_groups()) as $tp_g) {
+            $tp_members = topup_hub_live_members($tp_g, $lang);
+            $tp_bits = [];
+            foreach ($tp_members as $tp_k) {
+                $tp_n = count(topup_packages_for($lang, $tp_k));
+                if ($tp_n === 0) {
+                    continue;
+                }
+                // a category with one gateway would otherwise print its name
+                // twice - "کارت به کارت: کارت به کارت (3)"
+                $tp_bits[] = count($tp_members) === 1
+                    ? "<b>{$tp_n} بسته</b>"
+                    : trim(strip_tags((string) (gateway_registry($textbotlang)[$tp_k] ?? $tp_k))) . " ({$tp_n})";
+            }
+            if (!empty($tp_bits)) {
+                $tp_rep[] = '• ' . trim(strip_tags((string) gateway_group_label($tp_g, $textbotlang))) . ': ' . implode('، ', $tp_bits);
+            }
+        }
+        if (!empty($tp_rep)) {
+            $cap .= "\n\n<blockquote>📦 <b>بسته‌های تعریف‌شده</b>\n" . implode("\n", $tp_rep) . '</blockquote>';
+        }
+        return $cap;
     }
 }
 if (!function_exists('topup_packages_payload')) {
@@ -1707,12 +1926,10 @@ if (!function_exists('topup_packages_payload')) {
         // the admin's own way out - the "🔙 بازگشت به روش پرداخت" row above is a
         // preview of the CUSTOMER's button (it opens that button's styling), so
         // this screen had no actual back button of its own
-        // back to the family this gateway was opened through, when it has one
-        // with more than a single live member - otherwise straight to the hub
-        $tpHubGroup = gateway_group_of($key);
-        $tpHubBack = ($tpHubGroup !== null && count(topup_hub_live_members($tpHubGroup, $lang)) > 1)
-            ? "topupgrp:{$lang}:{$tpHubGroup}"
-            : "topuplang:{$lang}";
+        // back to the category this gateway was opened through - every gateway
+        // now has one, so this is always one step back rather than a jump out
+        $tpHubGroup = gateway_disc_group_of($key);
+        $tpHubBack = $tpHubGroup !== null ? "topupgrp:{$lang}:{$tpHubGroup}" : "topuplang:{$lang}";
         $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبلی', 'callback_data' => $tpHubBack, 'style' => 'danger']];
         return json_encode($kb);
     }
@@ -3026,6 +3243,13 @@ if (!function_exists('topup_gw_edit_payload')) {
             }
         }
         if ($key === 'card') {
+            // when the shop has more than one card, the {name_card}/{card_number}
+            // line repeats once per card - this is what goes between two of them
+            $rows[] = [[
+                'text' => '📏 فاصله بین کارت‌ها: ' . (card_invoice_card_sep_mode($lang) === 'blank' ? 'یک خط خالی' : 'چسبیده'),
+                'callback_data' => "cardsep:{$lang}",
+                'style' => card_invoice_card_sep_mode($lang) === 'blank' ? 'success' : 'primary',
+            ]];
             // the exact-amount warning belongs to card-to-card's own invoice,
             // so it lives here rather than loose in the 💰 list
             $rn_key = 'textbot.cardRandomAmountNotice';
@@ -3857,6 +4081,45 @@ if (!function_exists('panel_delusertest_submenu_keyboard')) {
         return ['inline_keyboard' => [[$offBtn], [$setBtn], [$back]]];
     }
 }
+if (!function_exists('miniapp_installed')) {
+    // The mini app is a separate bundle dropped into app/. Everything on these
+    // screens - the toggle, the branding, the version line - assumed it was
+    // always there, so on a bot without it the version read logged a warning on
+    // every single admin login and the logo "saved" into a directory that does
+    // not exist.
+    function miniapp_dir()
+    {
+        return __DIR__ . '/app';
+    }
+    function miniapp_installed()
+    {
+        return is_dir(miniapp_dir());
+    }
+    // its version, or '' when there is nothing to read. Absolute path: the old
+    // relative 'app/version' resolved against the web server's working
+    // directory rather than the bot's own.
+    function miniapp_version($textbotlang = null)
+    {
+        $f = miniapp_dir() . '/version';
+        if (!is_file($f) || !is_readable($f)) {
+            return is_array($textbotlang)
+                ? ($textbotlang['keyboard']['miniAppVersionMissing'] ?? '-')
+                : '-';
+        }
+        $v = trim((string) file_get_contents($f));
+        return $v !== '' ? $v : '-';
+    }
+    // the logo is only really set when the file is actually on disk - the flag
+    // alone said "set" for a logo whose write had silently failed
+    function miniapp_logo_path()
+    {
+        return miniapp_dir() . '/assets/bot_logo.jpg';
+    }
+    function miniapp_has_logo($setting)
+    {
+        return (($setting['miniapp_bot_logo'] ?? '0') === '1') && is_file(miniapp_logo_path());
+    }
+}
 if (!function_exists('miniapp_toggle_keyboard')) {
     function miniapp_toggle_keyboard($setting, $textbotlang)
     {
@@ -3875,6 +4138,9 @@ if (!function_exists('miniapp_toggle_caption')) {
     {
         $isOn = (($setting['miniapp_status'] ?? 'offminiapp') === 'onminiapp');
         $caption = $textbotlang['keyboard']['miniAppToggleTitle'];
+        if (!miniapp_installed()) {
+            return $caption . "\n\n" . $textbotlang['keyboard']['miniAppNotInstalled'];
+        }
         if ($isOn) {
             $caption .= "\n\n<blockquote>" . $miniAppInstructionText . "</blockquote>";
         }
@@ -3893,13 +4159,20 @@ if (!function_exists('miniapp_hub_keyboard')) {
 if (!function_exists('miniapp_hub_caption')) {
     function miniapp_hub_caption($textbotlang)
     {
-        return $textbotlang['keyboard']['miniAppHubTitle'];
+        $cap = $textbotlang['keyboard']['miniAppHubTitle'];
+        // said "manage it with the buttons below" on a bot that has no mini app
+        // at all - the buttons stay, so the branding can be prepared in advance,
+        // but the screen no longer pretends anything is running
+        if (!miniapp_installed()) {
+            $cap .= "\n\n" . $textbotlang['keyboard']['miniAppNotInstalled'];
+        }
+        return $cap;
     }
 }
 if (!function_exists('miniapp_branding_keyboard')) {
     function miniapp_branding_keyboard($setting, $textbotlang)
     {
-        $hasLogo = ($setting['miniapp_bot_logo'] ?? '0') === '1';
+        $hasLogo = miniapp_has_logo($setting);
         $hasName = !empty($setting['miniapp_bot_name']);
         $buttons = [
             [['text' => $textbotlang['keyboard']['miniAppSetLogoBtn'], 'callback_data' => 'miniappSetLogo']],
@@ -3916,8 +4189,14 @@ if (!function_exists('miniapp_branding_caption')) {
     function miniapp_branding_caption($setting, $textbotlang)
     {
         $name = !empty($setting['miniapp_bot_name']) ? $setting['miniapp_bot_name'] : $textbotlang['keyboard']['miniAppBrandingLogoDefault'];
-        $logo = (($setting['miniapp_bot_logo'] ?? '0') === '1') ? $textbotlang['keyboard']['miniAppBrandingLogoSet'] : $textbotlang['keyboard']['miniAppBrandingLogoDefault'];
-        return sprintf($textbotlang['keyboard']['miniAppBrandingTitle'], htmlspecialchars((string) $name, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'), $logo);
+        // the file, not the flag: a write that silently failed left the flag on
+        // and this screen reported a logo that was never stored
+        $logo = miniapp_has_logo($setting) ? $textbotlang['keyboard']['miniAppBrandingLogoSet'] : $textbotlang['keyboard']['miniAppBrandingLogoDefault'];
+        $cap = sprintf($textbotlang['keyboard']['miniAppBrandingTitle'], htmlspecialchars((string) $name, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'), $logo);
+        if (!miniapp_installed()) {
+            $cap .= "\n\n" . $textbotlang['keyboard']['miniAppNotInstalled'];
+        }
+        return $cap;
     }
 }
 if (!function_exists('panel_delusertest_caption')) {
@@ -4133,9 +4412,17 @@ if (!function_exists('btnstyle_kindhub_payload')) {
                 'style' => topup_group_methods_on($lang) ? 'success' : 'primary',
             ]];
         }
-        // gateway styling is reached from 🎨 → 💰 پیام‌های افزایش موجودی now
-        // (moved off the 🏦 بسته‌های شارژ hub), so its back has to land there
-        $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['backToHubBtn'], 'callback_data' => $kind === 'gateway' ? "bt_group|{$lang}|topup" : "bt_group|{$lang}|buyflow"]];
+        // each kind goes back where it was opened from: gateway styling is
+        // reached from 🎨 → 💰, the language picker's from 🌐 تنظیمات تغییر زبان,
+        // and the rest from 🛒 پیام‌های مراحل خرید
+        if ($kind === 'langpick') {
+            $back = 'bt_langswitch';
+        } elseif ($kind === 'gateway') {
+            $back = "bt_group|{$lang}|topup";
+        } else {
+            $back = "bt_group|{$lang}|buyflow";
+        }
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['backToHubBtn'], 'callback_data' => $back]];
         return json_encode($kb);
     }
 }
@@ -4243,7 +4530,9 @@ if (!function_exists('help_rename_editor_payload')) {
                 $emo = help_layout_emoji_prefix($key, $section);
                 $color = help_layout_effective_color($section, $key, $kind);
                 $isRenamed = isset($section['rename'][$key]) && $section['rename'][$key] !== '';
-                $name = $emo['prefix'] . ($items[$key] ?? $key) . ($isRenamed ? ' ✏️' : '');
+                // 🚫 = hidden from customers (set in 📐 چیدمان) - shown here too,
+                // or renaming a button nobody can see looks like a broken rename
+                $name = (!empty($section['hidden'][(string) $key]) ? '🚫 ' : '') . $emo['prefix'] . ($items[$key] ?? $key) . ($isRenamed ? ' ✏️' : '');
                 $btn = ['text' => $name, 'callback_data' => "help_ren_pick:{$kind}:{$lang}:{$idx}"];
                 if ($emo['icon'] !== '') {
                     $btn['icon_custom_emoji_id'] = $emo['icon'];
@@ -4284,7 +4573,9 @@ if (!function_exists('help_layout_editor_payload')) {
             foreach ($orderedKeys as $idx => $key) {
                 $emo = help_layout_emoji_prefix($key, $section);
                 $color = help_layout_effective_color($section, $key, $kind);
-                $name = $emo['prefix'] . ($items[$key] ?? $key);
+                // hidden items keep their row here (this is the only screen that
+                // can bring them back) and say so
+                $name = (!empty($section['hidden'][(string) $key]) ? '🚫 ' : '') . $emo['prefix'] . ($items[$key] ?? $key);
                 $isSel = ($selectedIdx !== null && (string) $selectedIdx === (string) $idx);
                 if ($isSel) {
                     $btn = ['text' => '🔵 ' . $name, 'callback_data' => "help_lay_cancel:{$kind}:{$lang}"];
@@ -4307,6 +4598,15 @@ if (!function_exists('help_layout_editor_payload')) {
             }
             if ($selectedIdx !== null) {
                 $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['toggleWidthBtn'], 'callback_data' => "help_lay_width:{$kind}:{$lang}:{$selectedIdx}"]];
+                // show/hide for the selected item: a display switch, not a
+                // delete - the item and its own on/off state are untouched
+                $help_sel_key = $orderedKeys[$selectedIdx] ?? null;
+                $help_sel_hidden = ($help_sel_key !== null && !empty($section['hidden'][(string) $help_sel_key]));
+                $kb['inline_keyboard'][] = [[
+                    'text' => $help_sel_hidden ? $textbotlang['Admin']['Help']['showBtn'] : $textbotlang['Admin']['Help']['hideBtn'],
+                    'callback_data' => "help_lay_hide:{$kind}:{$lang}:{$selectedIdx}",
+                    'style' => $help_sel_hidden ? 'success' : 'danger',
+                ]];
             }
         }
         $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['resetLayoutBtn'], 'callback_data' => "help_lay_reset:{$kind}:{$lang}"]];
@@ -4348,7 +4648,7 @@ if (!function_exists('help_color_editor_payload')) {
             foreach ($orderedKeys as $idx => $key) {
                 $emo = help_layout_emoji_prefix($key, $section);
                 $effective = help_layout_effective_color($section, $key, $kind);
-                $name = $emo['prefix'] . ($items[$key] ?? $key) . ' ' . $styleEmoji[$effective];
+                $name = (!empty($section['hidden'][(string) $key]) ? '🚫 ' : '') . $emo['prefix'] . ($items[$key] ?? $key) . ' ' . $styleEmoji[$effective];
                 $btn = ['text' => $name, 'callback_data' => "help_col_pick:{$kind}:{$lang}:{$idx}"];
                 if ($emo['icon'] !== '') {
                     $btn['icon_custom_emoji_id'] = $emo['icon'];
@@ -4387,7 +4687,7 @@ if (!function_exists('help_emoji_editor_payload')) {
             foreach ($orderedKeys as $idx => $key) {
                 $emo = help_layout_emoji_prefix($key, $section);
                 $color = help_layout_effective_color($section, $key, $kind);
-                $name = $emo['prefix'] . ($items[$key] ?? $key);
+                $name = (!empty($section['hidden'][(string) $key]) ? '🚫 ' : '') . $emo['prefix'] . ($items[$key] ?? $key);
                 $btn = ['text' => $name, 'callback_data' => "help_emo_pick:{$kind}:{$lang}:{$idx}"];
                 if ($emo['icon'] !== '') {
                     $btn['icon_custom_emoji_id'] = $emo['icon'];
@@ -4858,37 +5158,25 @@ if ($text == "🌐 تنظیمات تغییر زبان" && $adminrulecheck['rule'
     sendmessage($from_id, "🌐 <b>تنظیمات تغییر زبان کاربر</b>\n\n1️⃣ روشن/خاموش بودن نمایش خودکار منوی انتخاب زبان\n2️⃣ نمایش فقط بار اول یا هر بار که کاربر /start می‌زنه\n3️⃣ زبان‌هایی که توی منوی انتخاب نشون داده می‌شن (حداقل یکی باید روشن بمونه)\n\nروی هر مورد بزن تا تنظیمش کنی 👇", $lsw_kb, 'HTML');
     return;
 }
+// all four write through lang_switch_save(), so the stored shape stays one
+// thing rather than four hand-rolled json_encode calls that could drift
 if ($datain == "lsw_toggle" && $adminrulecheck['rule'] == "administrator") {
-    $lsw_setting = select("setting", "*", null, null, "select");
-    $lsw_data = json_decode((string) ($lsw_setting['lang_switch'] ?? ''), true);
-    if (!is_array($lsw_data)) {
-        $lsw_data = [];
-    }
-    $lsw_data['enabled'] = ((($lsw_data['enabled'] ?? '0') === '1') ? '0' : '1');
-    update("setting", "lang_switch", json_encode($lsw_data, JSON_UNESCAPED_UNICODE), null, null);
-    $lsw_kb = lang_switch_settings_payload();
-    Editmessagetext($from_id, $message_id, "🌐 <b>تنظیمات تغییر زبان کاربر</b>\n\n1️⃣ روشن/خاموش بودن نمایش خودکار منوی انتخاب زبان\n2️⃣ نمایش فقط بار اول یا هر بار که کاربر /start می‌زنه\n3️⃣ زبان‌هایی که توی منوی انتخاب نشون داده می‌شن (حداقل یکی باید روشن بمونه)\n\nروی هر مورد بزن تا تنظیمش کنی 👇", $lsw_kb, 'HTML');
+    lang_switch_save(['enabled' => !lang_switch_settings()['enabled']]);
+    Editmessagetext($from_id, $message_id, lang_switch_settings_caption($textbotlang), lang_switch_settings_payload(), 'HTML');
     return;
 }
 if (preg_match('/^lsw_mode-(once|always)$/', $datain, $lsw_match) && $adminrulecheck['rule'] == "administrator") {
-    $lsw_setting = select("setting", "*", null, null, "select");
-    $lsw_data = json_decode((string) ($lsw_setting['lang_switch'] ?? ''), true);
-    if (!is_array($lsw_data)) {
-        $lsw_data = [];
-    }
-    $lsw_data['mode'] = $lsw_match[1];
-    update("setting", "lang_switch", json_encode($lsw_data, JSON_UNESCAPED_UNICODE), null, null);
-    $lsw_kb = lang_switch_settings_payload();
-    Editmessagetext($from_id, $message_id, "🌐 <b>تنظیمات تغییر زبان کاربر</b>\n\n1️⃣ روشن/خاموش بودن نمایش خودکار منوی انتخاب زبان\n2️⃣ نمایش فقط بار اول یا هر بار که کاربر /start می‌زنه\n3️⃣ زبان‌هایی که توی منوی انتخاب نشون داده می‌شن (حداقل یکی باید روشن بمونه)\n\nروی هر مورد بزن تا تنظیمش کنی 👇", $lsw_kb, 'HTML');
+    lang_switch_save(['mode' => $lsw_match[1]]);
+    Editmessagetext($from_id, $message_id, lang_switch_settings_caption($textbotlang), lang_switch_settings_payload(), 'HTML');
+    return;
+}
+if ($datain == "lsw_blockothers" && $adminrulecheck['rule'] == "administrator") {
+    lang_switch_save(['blockOthers' => !lang_switch_settings()['blockOthers']]);
+    Editmessagetext($from_id, $message_id, lang_switch_settings_caption($textbotlang), lang_switch_settings_payload(), 'HTML');
     return;
 }
 if (preg_match('/^lsw_lang-(fa|en|ru|zh|tk)$/', $datain, $lsw_match) && $adminrulecheck['rule'] == "administrator") {
-    $lsw_setting = select("setting", "*", null, null, "select");
-    $lsw_data = json_decode((string) ($lsw_setting['lang_switch'] ?? ''), true);
-    if (!is_array($lsw_data)) {
-        $lsw_data = [];
-    }
-    $lsw_langs = (is_array($lsw_data['langs'] ?? null) && !empty($lsw_data['langs'])) ? $lsw_data['langs'] : ['fa', 'en', 'ru', 'zh', 'tk'];
+    $lsw_langs = lang_switch_settings()['langs'];
     $lsw_code = $lsw_match[1];
     $lsw_warn = '';
     if (in_array($lsw_code, $lsw_langs, true)) {
@@ -4900,10 +5188,115 @@ if (preg_match('/^lsw_lang-(fa|en|ru|zh|tk)$/', $datain, $lsw_match) && $adminru
     } else {
         $lsw_langs[] = $lsw_code;
     }
-    $lsw_data['langs'] = $lsw_langs;
-    update("setting", "lang_switch", json_encode($lsw_data, JSON_UNESCAPED_UNICODE), null, null);
-    $lsw_kb = lang_switch_settings_payload();
-    Editmessagetext($from_id, $message_id, $lsw_warn . "🌐 <b>تنظیمات تغییر زبان کاربر</b>\n\n1️⃣ روشن/خاموش بودن نمایش خودکار منوی انتخاب زبان\n2️⃣ نمایش فقط بار اول یا هر بار که کاربر /start می‌زنه\n3️⃣ زبان‌هایی که توی منوی انتخاب نشون داده می‌شن (حداقل یکی باید روشن بمونه)\n\nروی هر مورد بزن تا تنظیمش کنی 👇", $lsw_kb, 'HTML');
+    lang_switch_save(['langs' => $lsw_langs]);
+    Editmessagetext($from_id, $message_id, $lsw_warn . lang_switch_settings_caption($textbotlang), lang_switch_settings_payload(), 'HTML');
+    return;
+}
+
+//----------------[  🌐 فیلتر مصرف لوکیشن, per panel  ]----------------
+if (preg_match('/^svcnu\|list\|([a-z]{2})$/', $datain, $nu_m) && $adminrulecheck['rule'] == "administrator") {
+    list($nu_txt, $nu_kb) = svcnu_payload($nu_m[1]);
+    Editmessagetext($from_id, $message_id, $nu_txt, $nu_kb, 'HTML');
+    return;
+}
+if (preg_match('/^svcnu\|tog\|([a-z]{2})\|([0-9a-f]{8})$/', $datain, $nu_m) && $adminrulecheck['rule'] == "administrator") {
+    $nu_panel = svcnu_panel_by_hash($nu_m[2]);
+    // the panel was renamed or deleted while this screen sat open
+    if ($nu_panel === null || !panel_usage_supported($nu_panel['type'] ?? '')) {
+        list($nu_txt, $nu_kb) = svcnu_payload($nu_m[1]);
+        Editmessagetext($from_id, $message_id, $nu_txt, $nu_kb, 'HTML');
+        return;
+    }
+    svc_nodeusage_toggle($nu_panel['name_panel']);
+    list($nu_txt, $nu_kb) = svcnu_payload($nu_m[1]);
+    Editmessagetext($from_id, $message_id, $nu_txt, $nu_kb, 'HTML');
+    return;
+}
+
+//----------------[  close-button sticker (🖼 استیکر دکمه بستن), per section  ]----------------
+if (preg_match('/^clst2tog:([a-z]{2}):([a-z]{2})$/', $datain, $cs_m) && $adminrulecheck['rule'] == "administrator") {
+    $cs_key = close_sticker_alias_to_key($cs_m[2]);
+    if ($cs_key === null) {
+        return;
+    }
+    $cs_on = !close_sticker_settings($cs_key)['enabled'];
+    close_sticker_save($cs_key, ['enabled' => $cs_on]);
+    list($cs_txt, $cs_kb) = close_sticker_screen($cs_m[1], $cs_key, $textbotlang, $cs_on ? '✅ استیکر روشن شد' : '❌ استیکر خاموش شد');
+    Editmessagetext($from_id, $message_id, $cs_txt, $cs_kb, 'HTML');
+    return;
+}
+if (preg_match('/^clst2set:([a-z]{2}):([a-z]{2})$/', $datain, $cs_m) && $adminrulecheck['rule'] == "administrator") {
+    $cs_key = close_sticker_alias_to_key($cs_m[2]);
+    if ($cs_key === null) {
+        return;
+    }
+    savedata("clear", "bt_msgid", $message_id);
+    step("closestickerwait2:{$cs_m[1]}:{$cs_m[2]}", $from_id);
+    $cs_kb = json_encode(['inline_keyboard' => [
+        [['text' => '❌ انصراف', 'callback_data' => "clst2cancel:{$cs_m[1]}:{$cs_m[2]}"]],
+    ]]);
+    Editmessagetext($from_id, $message_id, "🖼 استیکر جدید رو بفرست (هر نوع استیکری، معمولی یا پریمیوم) 🎁\n\nبرای انصراف، از دکمه‌ی پایین استفاده کن 👇", $cs_kb, 'HTML');
+    return;
+}
+if (preg_match('/^clst2time:([a-z]{2}):([a-z]{2})$/', $datain, $cs_m) && $adminrulecheck['rule'] == "administrator") {
+    $cs_key = close_sticker_alias_to_key($cs_m[2]);
+    if ($cs_key === null) {
+        return;
+    }
+    savedata("clear", "bt_msgid", $message_id);
+    step("closestickertime2:{$cs_m[1]}:{$cs_m[2]}", $from_id);
+    $cs_kb = json_encode(['inline_keyboard' => [
+        [['text' => '❌ انصراف', 'callback_data' => "clst2cancel:{$cs_m[1]}:{$cs_m[2]}"]],
+    ]]);
+    Editmessagetext($from_id, $message_id, "⏱ مدت نمایش استیکر رو به ثانیه بفرست (یک عدد بین ۱ تا ۱۰)\n\n⚠️ تا این مدت، صفحه رو صفحه‌ی کاربر می‌مونه و جواب ربات همون‌قدر دیرتر می‌رسه - عدد بزرگ نذار.\n\nبرای انصراف، از دکمه‌ی پایین استفاده کن 👇", $cs_kb, 'HTML');
+    return;
+}
+if (preg_match('/^clst2cancel:([a-z]{2}):([a-z]{2})$/', $datain, $cs_m) && $adminrulecheck['rule'] == "administrator") {
+    $cs_key = close_sticker_alias_to_key($cs_m[2]);
+    if ($cs_key === null) {
+        return;
+    }
+    step('home', $from_id);
+    list($cs_txt, $cs_kb) = close_sticker_screen($cs_m[1], $cs_key, $textbotlang);
+    Editmessagetext($from_id, $message_id, $cs_txt, $cs_kb, 'HTML');
+    return;
+}
+if (preg_match('/^closestickerwait2:([a-z]{2}):([a-z]{2})$/', (string) $user['step'], $cs_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+    $cs_key = close_sticker_alias_to_key($cs_m[2]);
+    $cs_fileid = $update['message']['sticker']['file_id'] ?? '';
+    if ($cs_key === null || $cs_fileid === '') {
+        sendmessage($from_id, "⚠️ لطفاً یه استیکر بفرست (هر نوع استیکری قابل قبوله) 😅", $backadmin, 'HTML');
+        return;
+    }
+    close_sticker_save($cs_key, ['file_id' => $cs_fileid]);
+    step('home', $from_id);
+    $cs_msgid = intval(json_decode((string) ($user['Processing_value'] ?? ''), true)['bt_msgid'] ?? 0);
+    list($cs_done, $cs_kb) = close_sticker_screen($cs_m[1], $cs_key, $textbotlang, '✅ استیکر جدید ذخیره شد');
+    deletemessage($from_id, $message_id);
+    if ($cs_msgid > 0) {
+        Editmessagetext($from_id, $cs_msgid, $cs_done, $cs_kb, 'HTML');
+    } else {
+        sendmessage($from_id, $cs_done, $cs_kb, 'HTML');
+    }
+    return;
+}
+if (preg_match('/^closestickertime2:([a-z]{2}):([a-z]{2})$/', (string) $user['step'], $cs_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+    $cs_key = close_sticker_alias_to_key($cs_m[2]);
+    $cs_text = trim((string) $text);
+    if ($cs_key === null || !ctype_digit($cs_text) || (int) $cs_text < 1 || (int) $cs_text > 10) {
+        sendmessage($from_id, "⚠️ یه عدد بین ۱ تا ۱۰ بفرست 😅", $backadmin, 'HTML');
+        return;
+    }
+    close_sticker_save($cs_key, ['duration' => (int) $cs_text]);
+    step('home', $from_id);
+    $cs_msgid = intval(json_decode((string) ($user['Processing_value'] ?? ''), true)['bt_msgid'] ?? 0);
+    list($cs_done, $cs_kb) = close_sticker_screen($cs_m[1], $cs_key, $textbotlang, "✅ مدت نمایش روی {$cs_text} ثانیه ذخیره شد");
+    deletemessage($from_id, $message_id);
+    if ($cs_msgid > 0) {
+        Editmessagetext($from_id, $cs_msgid, $cs_done, $cs_kb, 'HTML');
+    } else {
+        sendmessage($from_id, $cs_done, $cs_kb, 'HTML');
+    }
     return;
 }
 
@@ -5565,6 +5958,22 @@ if (preg_match('/^btact\|text\|([a-z]{2})\|(.+)$/', $datain, $btm) && $adminrule
         'hardcoded.topupDiscGroupFixedCaption' => "• مبلغی که به شارژ اضافه می‌شه: <code>{value}</code>\n"
             . "• نام دسته (مثلاً کارت به کارت): <code>{group}</code>\n"
             . "\n💡 این جمله وقتی نشون داده می‌شه که تخفیف روی <b>کل یک دسته</b> ست شده باشه.",
+        'hardcoded.topupDiscAllPercentCaption' => "• درصد تخفیف: <code>{value}</code>\n"
+            . "\n💡 این جمله برای تخفیف <b>اعمال همگانی</b> است (همه‌ی درگاه‌ها). دسته‌ای در کار نیست، پس <code>{group}</code> اینجا کار نمی‌کنه.",
+        'hardcoded.topupDiscAllFixedCaption' => "• مبلغی که به شارژ اضافه می‌شه: <code>{value}</code>\n"
+            . "\n💡 این جمله برای تخفیف <b>اعمال همگانی</b> است (همه‌ی درگاه‌ها). دسته‌ای در کار نیست، پس <code>{group}</code> اینجا کار نمی‌کنه.",
+        'bottext.langPickerCaption' => "• خطوط «زبان خود را انتخاب کنید»، یکی به ازای هر زبان فعال: <code>{lines}</code>\n"
+            . "\n💡 این صفحه قبل از اینکه کاربر زبانی داشته باشه نشون داده می‌شه، برای همین متنش چندزبانه‌ست. اگه <code>{lines}</code> رو برداری، کاربر خارجی‌زبان هیچ راهنمایی به زبان خودش نمی‌بینه.\n"
+            . "💡 ظاهر خود دکمه‌ها (چیدمان، رنگ، ایموجی، نام) از همون صفحه‌ی 🌐 تنظیمات تغییر زبان کاربر تنظیم می‌شه.",
+        'users.account.infoSimple' => "این پیام با <code>%s</code> کار می‌کنه، به همین ترتیب:\n"
+            . "• اول: نام کاربری تلگرام\n"
+            . "• دوم: آیدی عددی\n"
+            . "• سوم: تعداد سرویس‌های فعال\n"
+            . "• چهارم: موجودی کیف پول\n"
+            . "\n⚠️ تعداد و ترتیب <code>%s</code>ها را عوض نکنید، وگرنه مقدارها جابه‌جا نمایش داده می‌شوند.",
+        'bottext.langBlockedMsg' => "این پیام متغیری نداره.\n"
+            . "\n💡 فقط وقتی فرستاده می‌شه که «🚫 فقط زبان‌های انتخاب‌شده سرویس بگیرن» روشن باشه و زبان کاربر جزو زبان‌های فروشگاه نباشه.\n"
+            . "💡 همراهش دکمه‌های انتخاب زبان هم فرستاده می‌شه تا کاربر بتونه به یه زبان پشتیبانی‌شده سوییچ کنه؛ متن رو طوری بنویس که این رو بهش بگه.",
         'users.Balance.amountRangeError' => "این پیام با <code>%s</code> کار می‌کند نه با نام متغیر:\n"
             . "• اولین <code>%s</code> حداقل مبلغ است\n"
             . "• دومین <code>%s</code> حداکثر مبلغ\n"
@@ -5776,12 +6185,12 @@ if (preg_match('/^gbtn\|list\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl)(?:\|(u))?$/'
     Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|open\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|open\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], (int) $gb_m[3], $textbotlang, $gb_m[4] ?? '');
     Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|text\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|text\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     savedata("clear", "bt_msgid", $message_id);
     $gb_o = $gb_m[4] ?? '';
     $gb_sfx = ($gb_o !== '') ? "|{$gb_o}" : '';
@@ -5792,14 +6201,14 @@ if (preg_match('/^gbtn\|text\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl)\|([01])(?:\|
     Editmessagetext($from_id, $message_id, "✏️ متن جدید دکمه رو بفرست ✍️", $gb_cancel_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|style\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl)\|([01])\|(primary|success|danger)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|style\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he)\|([01])\|(primary|success|danger)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     genbtn_set_style($gb_m[1], $gb_key, (int) $gb_m[3], $gb_m[4]);
     list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], (int) $gb_m[3], $textbotlang, $gb_m[5] ?? '');
     Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|emoji\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|emoji\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     $gb_o = $gb_m[4] ?? '';
     $gb_sfx = ($gb_o !== '') ? "|{$gb_o}" : '';
     step("gbtnemo-{$gb_m[1]}-{$gb_m[2]}-{$gb_m[3]}" . (($gb_o !== '') ? "-{$gb_o}" : ''), $from_id);
@@ -5812,7 +6221,7 @@ if (preg_match('/^gbtn\|emoji\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl)\|([01])(?:\
     Editmessagetext($from_id, $message_id, $gb_prompt, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|simple\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|simple\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     $gb_ov = genbtn_override($gb_m[1], $gb_key, (int) $gb_m[3]);
     genbtn_set_style($gb_m[1], $gb_key, (int) $gb_m[3], null, null, null, null, empty($gb_ov['simple']));
@@ -5820,16 +6229,49 @@ if (preg_match('/^gbtn\|simple\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl)\|([01])(?:
     Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|pos\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl)\|([01])\|(left|right)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|pos\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he)\|([01])\|(left|right)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     genbtn_set_style($gb_m[1], $gb_key, (int) $gb_m[3], null, null, null, $gb_m[4], null);
     list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], (int) $gb_m[3], $textbotlang, $gb_m[5] ?? '');
     Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|rst\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+// 👁/🚫 نمایش و پنهان کردن - deliberately NOT the full alias list: only the
+// seven bt_btnitem_keys() buttons (the two purchase-flow back buttons and the
+// five ❌ بستن). The other eight aliases are confirm/pay/cancel buttons their
+// screens have no alternative path around, so hiding one would strand the
+// customer - this pattern is what stops that from being reachable at all.
+if (preg_match('/^gbtn\|hide\|([a-z]{2})\|(rc|rp|bu|tp|ac|ts|he)\|([01])$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+    $gb_key = genbtn_alias_to_key($gb_m[2]);
+    if ($gb_key === null || !in_array($gb_key, bt_btnitem_keys(), true)) {
+        return;
+    }
+    $gb_ov = genbtn_override($gb_m[1], $gb_key, (int) $gb_m[3]);
+    $gb_nowHidden = empty($gb_ov['hidden']);
+    genbtn_set_style($gb_m[1], $gb_key, (int) $gb_m[3], null, null, null, null, null, $gb_nowHidden);
+    if ($gb_nowHidden) {
+        // hiding a close/back button takes away the only way OFF that screen -
+        // say so once, on the tap that does it, rather than leaving the shop to
+        // discover it from a customer
+        telegram('answerCallbackQuery', [
+            'callback_query_id' => $callback_query_id,
+            'text' => '🚫 این دکمه دیگه به کاربر نشون داده نمی‌شه. اگه تنها راه بستن/برگشت اون صفحه بوده، کاربر باید از منوی اصلی یا /start بیرون بیاد.',
+            'show_alert' => true,
+        ]);
+    }
+    list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], (int) $gb_m[3], $textbotlang, '');
+    Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
+    return;
+}
+if (preg_match('/^gbtn\|rst\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     genbtn_reset($gb_m[1], $gb_key, (int) $gb_m[3]);
+    // 🖼 استیکر دکمه بستن sits on this same screen now, so "ریست این دکمه" has to
+    // take it back to factory too - otherwise the screen is only half reset
+    $gb_csKey = genbtn_close_sticker_key($gb_m[2], $gb_key, (int) $gb_m[3]);
+    if ($gb_csKey !== '') {
+        close_sticker_save($gb_csKey, ['enabled' => true, 'file_id' => close_sticker_default_file_id(), 'duration' => close_sticker_default_duration()]);
+    }
     list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], (int) $gb_m[3], $textbotlang, $gb_m[4] ?? '');
     Editmessagetext($from_id, $message_id, "🔁 این دکمه به پیش‌فرض برگشت.\n\n" . $gb_text, $gb_kb, 'HTML');
     return;
@@ -5841,7 +6283,7 @@ if (preg_match('/^gbtn\|rstall\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl)(?:\|(u))?$
     Editmessagetext($from_id, $message_id, "🔁 همه دکمه‌ها به پیش‌فرض برگشتن.\n\n" . $gb_text, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtntxt-([a-z]{2})-(su|cf|ns|te|sc|bc|rn|cl)-([01])(?:-(u))?$/', (string) $user['step'], $gb_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtntxt-([a-z]{2})-(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he)-([01])(?:-(u))?$/', (string) $user['step'], $gb_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     $gb_newtext = trim((string) $text);
     if ($gb_newtext === '' || mb_strlen($gb_newtext) > 64) {
@@ -5861,7 +6303,7 @@ if (preg_match('/^gbtntxt-([a-z]{2})-(su|cf|ns|te|sc|bc|rn|cl)-([01])(?:-(u))?$/
     }
     return;
 }
-if (preg_match('/^gbtnemo-([a-z]{2})-(su|cf|ns|te|sc|bc|rn|cl)-([01])(?:-(u))?$/', (string) $user['step'], $gb_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtnemo-([a-z]{2})-(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he)-([01])(?:-(u))?$/', (string) $user['step'], $gb_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     $gb_idx = (int) $gb_m[3];
     $gb_icon_id = '';
@@ -6347,7 +6789,7 @@ if (preg_match('/^statusbtnemo-([a-z]{2})-(.+)$/', (string) $user['step'], $sb_m
     sendmessage($from_id, $sb_msg . "\n\n" . $sb_text, $sb_kb, 'HTML');
     return;
 }
-if (preg_match('/^tpdaddc-([a-z]{2})-([a-z0-9_]+)$/', (string) $user['step'], $td_m) && $datain == '' && $adminrulecheck['rule'] == "administrator" && !topup_disc_is_nav_text($text, $textbotlang)) {
+if (preg_match('/^tpdaddc-([a-z]{2})-([a-z0-9_@]+)$/', (string) $user['step'], $td_m) && $datain == '' && $adminrulecheck['rule'] == "administrator" && !topup_disc_is_nav_text($text, $textbotlang)) {
     $td_code = trim((string) $text);
     if (!preg_match('/^[A-Za-z0-9_-]{2,32}$/', $td_code)) {
         sendmessage($from_id, "⚠️ فقط حروف انگلیسی، عدد، خط تیره و آندرلاین — بین ۲ تا ۳۲ کاراکتر 😅", $backadmin, 'HTML');
@@ -6449,7 +6891,7 @@ if (preg_match('/^tpbpname-([a-z]{2})-([a-z0-9_]+)$/', (string) $user['step'], $
     }
     return;
 }
-if (preg_match('/^tpdnhours-([a-z]{2})-([a-z0-9_]+)$/', (string) $user['step'], $td_m) && $datain == '' && $adminrulecheck['rule'] == "administrator" && !topup_disc_is_nav_text($text, $textbotlang)) {
+if (preg_match('/^tpdnhours-([a-z]{2})-([a-z0-9_@]+)$/', (string) $user['step'], $td_m) && $datain == '' && $adminrulecheck['rule'] == "administrator" && !topup_disc_is_nav_text($text, $textbotlang)) {
     $td_raw = trim((string) $text);
     if (!ctype_digit($td_raw) || intval($td_raw) < 1) {
         sendmessage($from_id, "⚠️ لطفاً یه عدد بزرگ‌تر از صفر بفرست 😅", $backadmin, 'HTML');
@@ -6569,7 +7011,14 @@ if (preg_match('/^dsgrp(val|exp|limit)v-([a-z]{2})-([a-z0-9_]+)$/', (string) $us
         // typing a real value is the admin saying they want it live - the same
         // rule the per-gateway screen follows, for the same reason
         if (floatval($td_raw) > 0) {
+            $td_wasOff = empty($td_g['enabled']);
             $td_g['enabled'] = true;
+            // ...and turning the bulk one on clears the field, same as its own
+            // on/off button does
+            if ($td_group === 'all' && $td_wasOff) {
+                topup_disc_group_set($td_lang, $td_group, $td_g);
+                topup_disc_scope_disable_others($td_lang, 'all');
+            }
         }
     } elseif ($td_what === 'exp') {
         $td_days = intval($td_raw);
@@ -6590,7 +7039,7 @@ if (preg_match('/^dsgrp(val|exp|limit)v-([a-z]{2})-([a-z0-9_]+)$/', (string) $us
     }
     return;
 }
-if (preg_match('/^tpdfld-(val|limit|user|exp)-([a-z]{2})-([a-z0-9_]+)-(\d+)$/', (string) $user['step'], $td_m) && $datain == '' && $adminrulecheck['rule'] == "administrator" && !topup_disc_is_nav_text($text, $textbotlang)) {
+if (preg_match('/^tpdfld-(val|limit|user|exp)-([a-z]{2})-([a-z0-9_@]+)-(\d+)$/', (string) $user['step'], $td_m) && $datain == '' && $adminrulecheck['rule'] == "administrator" && !topup_disc_is_nav_text($text, $textbotlang)) {
     $td_what = $td_m[1];
     $td_lang = $td_m[2];
     $td_key = $td_m[3];
@@ -6811,7 +7260,7 @@ if (in_array($text, $textadmin) || $datain == "admin") {    if ($datain == "admi
         sendmessage($from_id, $textbotlang['Admin']['activeBotText'], $active_panell, 'HTML');
         return;
     }
-    $version_mini_app = file_get_contents('app/version');
+    $version_mini_app = miniapp_version($textbotlang);
     activecron();
     $text_admin = sprintf($text_panel_admin_login_template, $version, $version_mini_app);
     sendmessage($from_id, $text_admin, $keyboardadmin, 'HTML');
@@ -6831,7 +7280,7 @@ if (in_array($text, $textadmin) || $datain == "admin") {    if ($datain == "admi
         sendmessage($from_id, $textbotlang['Admin']['activeBotText'], $active_panell, 'HTML');
         return;
     }
-    $version_mini_app = file_get_contents('app/version');
+    $version_mini_app = miniapp_version($textbotlang);
     $text_admin = sprintf($text_panel_admin_login_template, $version, $version_mini_app);
     sendmessage($from_id, $text_admin, $keyboardadmin, 'HTML');
     step('home', $from_id);
@@ -10345,7 +10794,9 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     gw_cards_set($gw_m[1], $gw_cards);
     step("home", $from_id);
     Editmessagetext($from_id, (int) $gw_m[2], gateway_cards_caption($gw_m[1], $textbotlang), gateway_cards_payload($gw_m[1], $textbotlang), 'HTML');} elseif ($datain == "dsclose" && $adminrulecheck['rule'] == "administrator") {
+    // same close convention as bt_close: remove the screen and say so
     deletemessage($from_id, $message_id);
+    sendmessage($from_id, $textbotlang['bottext']['msg_closed'], null, 'HTML');
 } elseif (preg_match('/^dslang:([a-z]{2})$/', $datain, $ds_m) && $adminrulecheck['rule'] == "administrator") {
     topup_disc_map(true);
     list($ds_text, $ds_kb) = topup_disc_gw_list_payload($ds_m[1], $textbotlang);
@@ -10393,12 +10844,14 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
 } elseif ($text == $textbotlang['keyboard']['topupPackages'] && $adminrulecheck['rule'] == "administrator") {
     sendmessage($from_id, topup_hub_caption('fa', $textbotlang), topup_hub_payload('fa', $textbotlang), 'HTML');
 } elseif ($datain == "topup_close" && $adminrulecheck['rule'] == "administrator") {
+    // same close convention as bt_close: remove the screen and say so
     deletemessage($from_id, $message_id);
+    sendmessage($from_id, $textbotlang['bottext']['msg_closed'], null, 'HTML');
 } elseif (preg_match('/^topuplang:([a-z]{2})$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     topup_packages_map(true);
     Editmessagetext($from_id, $message_id, topup_hub_caption($tp_m[1], $textbotlang), topup_hub_payload($tp_m[1], $textbotlang), 'HTML');
 } elseif (preg_match('/^topupgrp:([a-z]{2}):([a-z0-9_]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
-    if (!isset(gateway_groups()[$tp_m[2]])) {
+    if (!isset(gateway_disc_groups()[$tp_m[2]])) {
         return;
     }
     topup_packages_map(true);
@@ -10622,6 +11075,10 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     // 🏦 بسته‌های شارژ where the same flows also live
     update("user", "tp_edit_origin", "topup", "id", $from_id);
     list($tp_cap, $tp_kb) = topup_gw_edit_payload($tp_m[1], $tp_m[2], $textbotlang);
+    Editmessagetext($from_id, $message_id, $tp_cap, $tp_kb, 'HTML');
+} elseif (preg_match('/^cardsep:([a-z]{2})$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
+    card_invoice_card_sep_toggle($tp_m[1]);
+    list($tp_cap, $tp_kb) = topup_gw_edit_payload($tp_m[1], 'card', $textbotlang);
     Editmessagetext($from_id, $message_id, $tp_cap, $tp_kb, 'HTML');
 } elseif (preg_match('/^topupcustomcap:([a-z]{2}):([a-z0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     $tp_cancelKb = json_encode(['inline_keyboard' => [
@@ -11288,6 +11745,17 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     Editmessagetext($from_id, $message_id, miniapp_toggle_caption($setting, $textbotlang, $miniAppInstructionText), miniapp_toggle_keyboard($setting, $textbotlang));
 } elseif ($datain == "miniappToggle" && $adminrulecheck['rule'] == "administrator") {
     $miniapp_new_status = (($setting['miniapp_status'] ?? 'offminiapp') === 'onminiapp') ? 'offminiapp' : 'onminiapp';
+    // switching it on with no app/ directory changed a value nothing reads and
+    // showed a green ✅ for something that cannot run - say so instead
+    if ($miniapp_new_status === 'onminiapp' && !miniapp_installed()) {
+        telegram('answerCallbackQuery', [
+            'callback_query_id' => $callback_query_id,
+            'text' => $textbotlang['keyboard']['miniAppNotInstalledAlert'],
+            'show_alert' => true,
+            'cache_time' => 2,
+        ]);
+        return;
+    }
     update("setting", "miniapp_status", $miniapp_new_status);
     $setting = select("setting", "*", null, null, "select");
     Editmessagetext($from_id, $message_id, miniapp_toggle_caption($setting, $textbotlang, $miniAppInstructionText), miniapp_toggle_keyboard($setting, $textbotlang));
@@ -11304,7 +11772,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
 } elseif ($datain == "miniappResetBranding" && $adminrulecheck['rule'] == "administrator") {
     update("setting", "miniapp_bot_logo", "0");
     update("setting", "miniapp_bot_name", "");
-    $miniappLogoPathReset = __DIR__ . "/app/assets/bot_logo.jpg";
+    $miniappLogoPathReset = miniapp_logo_path();
     if (file_exists($miniappLogoPathReset)) {
         unlink($miniappLogoPathReset);
     }
@@ -11315,22 +11783,42 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
         sendmessage($from_id, $textbotlang['Admin']['managepanel']['invalidImage'], $backadmin, 'HTML');
         return;
     }
+    // Every step of this used to be unchecked: a failed lookup left the admin
+    // silently stuck on this step, a failed download wrote an empty file, and a
+    // write into a directory that does not exist still reported success and
+    // still set the "logo is set" flag.
+    $miniappLogoOk = false;
     $response = getFileddire($photoid);
-    if ($response['ok']) {
-        $filePath = $response['result']['file_path'];
-        $fileUrl = "https://api.telegram.org/file/bot$APIKEY/$filePath";
-        $fileContent = file_get_contents($fileUrl);
-        file_put_contents(__DIR__ . "/app/assets/bot_logo.jpg", $fileContent);
-        update("setting", "miniapp_bot_logo", "1");
-        sendmessage($from_id, $textbotlang['keyboard']['miniAppLogoSaved'], $setting_panel, 'HTML');
-        step("home", $from_id);
+    if (!empty($response['ok']) && !empty($response['result']['file_path'])) {
+        $fileUrl = "https://api.telegram.org/file/bot$APIKEY/" . $response['result']['file_path'];
+        $fileContent = @file_get_contents($fileUrl);
+        if (is_string($fileContent) && $fileContent !== '') {
+            $miniappLogoDir = dirname(miniapp_logo_path());
+            if (is_dir($miniappLogoDir) || @mkdir($miniappLogoDir, 0755, true)) {
+                $miniappLogoOk = (@file_put_contents(miniapp_logo_path(), $fileContent) !== false);
+            }
+        }
     }
+    step("home", $from_id);
+    if (!$miniappLogoOk) {
+        sendmessage($from_id, $textbotlang['keyboard']['miniAppLogoFailed'], $setting_panel, 'HTML');
+        return;
+    }
+    update("setting", "miniapp_bot_logo", "1");
+    sendmessage($from_id, $textbotlang['keyboard']['miniAppLogoSaved'], $setting_panel, 'HTML');
 } elseif ($user['step'] == "miniapp_setname" && $adminrulecheck['rule'] == "administrator") {
-    if (mb_strlen((string) $text) > 40) {
+    $miniappName = trim((string) $text);
+    // an empty name was accepted and stored, which read as "default" on the
+    // branding screen with no way to tell it from never having set one
+    if ($miniappName === '') {
+        sendmessage($from_id, $textbotlang['keyboard']['miniAppNameEmpty'], $backadmin, 'HTML');
+        return;
+    }
+    if (mb_strlen($miniappName) > 40) {
         sendmessage($from_id, $textbotlang['keyboard']['miniAppNameTooLong'], $backadmin, 'HTML');
         return;
     }
-    update("setting", "miniapp_bot_name", $text);
+    update("setting", "miniapp_bot_name", $miniappName);
     sendmessage($from_id, $textbotlang['keyboard']['miniAppNameSaved'], $setting_panel, 'HTML');
     step("home", $from_id);
 } elseif ($text == $textbotlang['keyboard']['supportSection'] && $adminrulecheck['rule'] == "administrator") {
@@ -18160,7 +18648,7 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     // on the bottext home list - it controls the end-user language-picker
     // menu, a different concern from main-menu button appearance
     $lsw_kb = lang_switch_settings_payload();
-    Editmessagetext($from_id, $message_id, "🌐 <b>تنظیمات تغییر زبان کاربر</b>\n\n1️⃣ روشن/خاموش بودن نمایش خودکار منوی انتخاب زبان\n2️⃣ نمایش فقط بار اول یا هر بار که کاربر /start می‌زنه\n3️⃣ زبان‌هایی که توی منوی انتخاب نشون داده می‌شن (حداقل یکی باید روشن بمونه)\n\nروی هر مورد بزن تا تنظیمش کنی 👇", $lsw_kb, 'HTML');
+    Editmessagetext($from_id, $message_id, lang_switch_settings_caption($textbotlang), $lsw_kb, 'HTML');
 } elseif ($datain == "btnset_open:color" && $adminrulecheck['rule'] == "administrator") {
     $btnset_kb = btnset_color_hub_payload($textbotlang);
     Editmessagetext($from_id, $message_id, "🎨 <b>بخش رنگ‌بندی دکمه‌های منوی اصلی</b>\n\nنوع کیبورد رو انتخاب کن 👇", $btnset_kb, 'HTML');
@@ -18185,7 +18673,7 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     Editmessagetext($from_id, $message_id, "✏️ <b>نام و نمایش دکمه‌های منو</b>\n\n🔹 روی یه دکمه بزن تا انتخاب بشه 🔵\n🔹 بعد «✏️ تغییر نام» برای عوض کردن اسمش، یا «👁 پنهان / نمایش» برای مخفی/آشکار کردنش رو بزن\n🚫 = دکمه‌ی پنهان", $rn_kb, 'HTML');
 } elseif ($datain == "btnset_open:langswitch" && $adminrulecheck['rule'] == "administrator") {
     $lsw_kb = lang_switch_settings_payload();
-    Editmessagetext($from_id, $message_id, "🌐 <b>تنظیمات تغییر زبان کاربر</b>\n\n1️⃣ روشن/خاموش بودن نمایش خودکار منوی انتخاب زبان\n2️⃣ نمایش فقط بار اول یا هر بار که کاربر /start می‌زنه\n3️⃣ زبان‌هایی که توی منوی انتخاب نشون داده می‌شن (حداقل یکی باید روشن بمونه)\n\nروی هر مورد بزن تا تنظیمش کنی 👇", $lsw_kb, 'HTML');
+    Editmessagetext($from_id, $message_id, lang_switch_settings_caption($textbotlang), $lsw_kb, 'HTML');
 } elseif ($datain == "displayhub_close" && $adminrulecheck['rule'] == "administrator") {
     deletemessage($from_id, $message_id);
 } elseif ($datain == "displayhub_back" && $adminrulecheck['rule'] == "administrator") {
@@ -18291,10 +18779,12 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     list($td_text, $td_kb) = topup_disc_notify_payload($td_m[1], $td_m[2], $textbotlang);
     Editmessagetext($from_id, $message_id, $td_text, $td_kb, 'HTML');
 } elseif ($datain == "tpdclose" && $adminrulecheck['rule'] == "administrator") {
-    // same shape as the bot's other close buttons: drop the step and remove
-    // the message entirely rather than navigating anywhere
+    // drop the step, remove the message, and confirm - the bot's own close
+    // convention (bt_close). Without the confirmation the screen just vanished
+    // and there was no way to tell a close from a button that did nothing.
     step('home', $from_id);
     deletemessage($from_id, $message_id);
+    sendmessage($from_id, $textbotlang['bottext']['msg_closed'], null, 'HTML');
 } elseif (preg_match('/^tpbp:([a-z]{2}):([a-z0-9_]+)$/', $datain, $bp_m) && $adminrulecheck['rule'] == "administrator") {
     list($bp_text, $bp_kb) = topup_backpkg_payload($bp_m[1], $bp_m[2], $textbotlang);
     Editmessagetext($from_id, $message_id, $bp_text, $bp_kb, 'HTML');
@@ -18314,19 +18804,19 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     $bp_kb = json_encode(['inline_keyboard' => [[['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "tpbp:{$bp_m[1]}:{$bp_m[2]}"]], [['text' => '❌ بستن', 'callback_data' => "tpdclose", 'style' => 'danger']]]]);
     Editmessagetext($from_id, $message_id, "✏️ نام جدید دکمه رو بفرست ✍️", $bp_kb, 'HTML');
 } elseif (preg_match('/^topupdisc:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
-    list($td_text, $td_kb) = topup_disc_hub_payload($td_m[1], $td_m[2], $textbotlang);
+    list($td_text, $td_kb) = topup_disc_key_screen($td_m[1], $td_m[2], $textbotlang);
     Editmessagetext($from_id, $message_id, $td_text, $td_kb, 'HTML');
 } elseif (preg_match('/^tpdadmintest:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
     $td_setting = select("setting", "*", null, null, "select");
     $td_new = (($td_setting['topup_disc_admin_selftest'] ?? '0') === '1') ? '0' : '1';
     update("setting", "topup_disc_admin_selftest", $td_new, null, null);
-    list($td_text, $td_kb) = topup_disc_hub_payload($td_m[1], $td_m[2], $textbotlang);
+    list($td_text, $td_kb) = topup_disc_key_screen($td_m[1], $td_m[2], $textbotlang);
     Editmessagetext($from_id, $message_id, $td_text, $td_kb, 'HTML');
 } elseif (preg_match('/^tpdauto:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
     list($td_text, $td_kb) = topup_disc_auto_payload($td_m[1], $td_m[2], $textbotlang);
     Editmessagetext($from_id, $message_id, $td_text, $td_kb, 'HTML');
 } elseif (preg_match('/^dsgrp:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
-    if (!isset(gateway_disc_groups()[$td_m[2]])) {
+    if (!in_array($td_m[2], topup_disc_scopes(), true)) {
         return;
     }
     topup_disc_map(true);
@@ -18334,17 +18824,27 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     list($td_text, $td_kb) = topup_disc_group_list_payload($td_m[1], $td_m[2], $textbotlang);
     Editmessagetext($from_id, $message_id, $td_text, $td_kb, 'HTML');
 } elseif (preg_match('/^dsgrpauto:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
-    if (!isset(gateway_disc_groups()[$td_m[2]])) {
+    if (!in_array($td_m[2], topup_disc_scopes(), true)) {
         return;
     }
     list($td_text, $td_kb) = topup_disc_group_auto_payload($td_m[1], $td_m[2], $textbotlang);
     Editmessagetext($from_id, $message_id, $td_text, $td_kb, 'HTML');
 } elseif (preg_match('/^dsgrptog:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
     $td_g = topup_disc_group_for($td_m[1], $td_m[2]);
-    $td_g['enabled'] = empty($td_g['enabled']);
+    $td_wasOff = empty($td_g['enabled']);
+    $td_g['enabled'] = $td_wasOff;
     topup_disc_group_set($td_m[1], $td_m[2], $td_g);
+    // switching the bulk discount on is meant to make it THE discount - so
+    // every category and gateway discount is switched off with it
+    $td_note = '';
+    if ($td_m[2] === 'all' && $td_wasOff) {
+        $td_off = topup_disc_scope_disable_others($td_m[1], 'all');
+        if ($td_off > 0) {
+            $td_note = "🔻 {$td_off} تخفیف دیگه خاموش شد تا فقط تخفیف همگانی اعمال بشه.\n\n";
+        }
+    }
     list($td_text, $td_kb) = topup_disc_group_auto_payload($td_m[1], $td_m[2], $textbotlang);
-    Editmessagetext($from_id, $message_id, $td_text, $td_kb, 'HTML');
+    Editmessagetext($from_id, $message_id, $td_note . $td_text, $td_kb, 'HTML');
 } elseif (preg_match('/^dsgrpnewonly:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
     $td_g = topup_disc_group_for($td_m[1], $td_m[2]);
     $td_g['newUserOnly'] = empty($td_g['newUserOnly']);
@@ -18436,25 +18936,29 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     step("tpdautolimitv-{$td_m[1]}-{$td_m[2]}", $from_id);
     $td_kb = json_encode(['inline_keyboard' => [[['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "tpdauto:{$td_m[1]}:{$td_m[2]}"]], [['text' => '❌ بستن', 'callback_data' => "tpdclose", 'style' => 'danger']]]]);
     Editmessagetext($from_id, $message_id, "👤 هر کاربر چند بار بتونه از تخفیف خودکار این درگاه استفاده کنه؟ (۰ = نامحدود)", $td_kb, 'HTML');
-} elseif (preg_match('/^tpdadd:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^tpdadd:([a-z]{2}):([a-z0-9_@]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
     savedata("clear", "bt_msgid", $message_id);
     step("tpdaddc-{$td_m[1]}-{$td_m[2]}", $from_id);
-    $td_kb = json_encode(['inline_keyboard' => [[['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "topupdisc:{$td_m[1]}:{$td_m[2]}"]], [['text' => '❌ بستن', 'callback_data' => "tpdclose", 'style' => 'danger']]]]);
+    // the key here can be a gateway OR a scope (@rial / @all); the literal
+    // "topupdisc:..." this used to build has no handler for a scope key, so
+    // this button did nothing at all when the code was being added to a
+    // category. topup_disc_key_back_cb() answers for both.
+    $td_kb = json_encode(['inline_keyboard' => [[['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => topup_disc_key_back_cb($td_m[1], $td_m[2])]], [['text' => '❌ بستن', 'callback_data' => "tpdclose", 'style' => 'danger']]]]);
     Editmessagetext($from_id, $message_id, "🎟 کد تخفیف رو بفرست (فقط حروف انگلیسی و عدد، مثلاً <code>SUMMER20</code>)", $td_kb, 'HTML');
-} elseif (preg_match('/^tpdopen:([a-z]{2}):([a-z0-9_]+):(\d+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^tpdopen:([a-z]{2}):([a-z0-9_@]+):(\d+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
     list($td_text, $td_kb) = topup_disc_code_payload($td_m[1], $td_m[2], (int) $td_m[3], $textbotlang);
     Editmessagetext($from_id, $message_id, $td_text, $td_kb, 'HTML');
-} elseif (preg_match('/^tpdtog:([a-z]{2}):([a-z0-9_]+):(\d+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^tpdtog:([a-z]{2}):([a-z0-9_@]+):(\d+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
     $td_c = topup_disc_code_get($td_m[1], $td_m[2], (int) $td_m[3]);
     topup_disc_code_update($td_m[1], $td_m[2], (int) $td_m[3], ['enabled' => empty($td_c['enabled'])]);
     list($td_text, $td_kb) = topup_disc_code_payload($td_m[1], $td_m[2], (int) $td_m[3], $textbotlang);
     Editmessagetext($from_id, $message_id, $td_text, $td_kb, 'HTML');
-} elseif (preg_match('/^tpdnewonly:([a-z]{2}):([a-z0-9_]+):(\d+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^tpdnewonly:([a-z]{2}):([a-z0-9_@]+):(\d+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
     $td_c = topup_disc_code_get($td_m[1], $td_m[2], (int) $td_m[3]);
     topup_disc_code_update($td_m[1], $td_m[2], (int) $td_m[3], ['newUserOnly' => empty($td_c['newUserOnly'])]);
     list($td_text, $td_kb) = topup_disc_code_payload($td_m[1], $td_m[2], (int) $td_m[3], $textbotlang);
     Editmessagetext($from_id, $message_id, $td_text, $td_kb, 'HTML');
-} elseif (preg_match('/^tpdmode:([a-z]{2}):([a-z0-9_]+):(\d+):(percent|fixed)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^tpdmode:([a-z]{2}):([a-z0-9_@]+):(\d+):(percent|fixed)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
     // same clamp as the auto discount's mode switch above
     $td_upd = ['mode' => $td_m[4]];
     $td_cur = topup_disc_code_get($td_m[1], $td_m[2], (int) $td_m[3]);
@@ -18464,7 +18968,7 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     topup_disc_code_update($td_m[1], $td_m[2], (int) $td_m[3], $td_upd);
     list($td_text, $td_kb) = topup_disc_code_payload($td_m[1], $td_m[2], (int) $td_m[3], $textbotlang);
     Editmessagetext($from_id, $message_id, $td_text, $td_kb, 'HTML');
-} elseif (preg_match('/^tpd(val|limit|user|exp):([a-z]{2}):([a-z0-9_]+):(\d+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^tpd(val|limit|user|exp):([a-z]{2}):([a-z0-9_@]+):(\d+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
     $td_what = $td_m[1];
     savedata("clear", "bt_msgid", $message_id);
     step("tpdfld-{$td_what}-{$td_m[2]}-{$td_m[3]}-{$td_m[4]}", $from_id);
@@ -18477,16 +18981,16 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     ];
     $td_kb = json_encode(['inline_keyboard' => [[['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "tpdopen:{$td_m[2]}:{$td_m[3]}:{$td_m[4]}"]], [['text' => '❌ بستن', 'callback_data' => "tpdclose", 'style' => 'danger']]]]);
     Editmessagetext($from_id, $message_id, $td_hints[$td_what], $td_kb, 'HTML');
-} elseif (preg_match('/^tpddel:([a-z]{2}):([a-z0-9_]+):(\d+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^tpddel:([a-z]{2}):([a-z0-9_@]+):(\d+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
     $td_c = topup_disc_code_get($td_m[1], $td_m[2], (int) $td_m[3]);
     $td_kb = json_encode(['inline_keyboard' => [
         [['text' => '🗑 بله، حذف کن', 'callback_data' => "tpddelok:{$td_m[1]}:{$td_m[2]}:{$td_m[3]}", 'style' => 'danger']],
         [['text' => '🔙 انصراف', 'callback_data' => "tpdopen:{$td_m[1]}:{$td_m[2]}:{$td_m[3]}"]],
     ]]);
     Editmessagetext($from_id, $message_id, "🗑 کد <code>" . htmlspecialchars((string) ($td_c['code'] ?? ''), ENT_QUOTES) . "</code> حذف بشه؟\n\nآمار استفاده‌ش توی گزارش‌ها می‌مونه.", $td_kb, 'HTML');
-} elseif (preg_match('/^tpddelok:([a-z]{2}):([a-z0-9_]+):(\d+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^tpddelok:([a-z]{2}):([a-z0-9_@]+):(\d+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
     topup_disc_code_remove($td_m[1], $td_m[2], (int) $td_m[3]);
-    list($td_text, $td_kb) = topup_disc_hub_payload($td_m[1], $td_m[2], $textbotlang);
+    list($td_text, $td_kb) = topup_disc_key_screen($td_m[1], $td_m[2], $textbotlang);
     Editmessagetext($from_id, $message_id, "🗑 کد حذف شد.\n\n" . $td_text, $td_kb, 'HTML');
 } elseif (preg_match('/^langscope_tog:(panel|product|category):(.+):([01]{5})$/', $datain, $ls_m) && $adminrulecheck['rule'] == "administrator") {
     // pure re-render of the picker with the new in-progress selection - nothing
@@ -19721,12 +20225,12 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     $help_kb = help_disp_tut_hub_payload($help_lang, $textbotlang);
     $help_caption = strtr($textbotlang['Admin']['Help']['tutSubCaption'], ['{lang}' => $textbotlang['bottext']['langs'][$help_lang]]);
     Editmessagetext($from_id, $message_id, $help_caption, $help_kb, 'HTML');
-} elseif (preg_match('/^help_col:(categories|tutorials|panel|product|category|gateway):(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^help_col:(categories|tutorials|panel|product|category|gateway|langpick):(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
     $help_kind = $help_m[1];
     $help_lang = $help_m[2];
     $help_kb = help_color_editor_payload($help_lang, $help_kind, $textbotlang);
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['colorCaption'], $help_kb, 'HTML');
-} elseif (preg_match('/^help_col_pick:(categories|tutorials|panel|product|category|gateway):(fa|en|ru|zh|tk):(\d+)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^help_col_pick:(categories|tutorials|panel|product|category|gateway|langpick):(fa|en|ru|zh|tk):(\d+)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
     $help_kind = $help_m[1];
     $help_lang = $help_m[2];
     $help_idx = (int) $help_m[3];
@@ -19751,23 +20255,23 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     }
     $help_kb = help_color_editor_payload($help_lang, $help_kind, $textbotlang);
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['colorCaption'], $help_kb, 'HTML');
-} elseif (preg_match('/^help_lay:(categories|tutorials|panel|product|category|gateway):(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^help_lay:(categories|tutorials|panel|product|category|gateway|langpick):(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
     $help_kind = $help_m[1];
     $help_lang = $help_m[2];
     $help_kb = help_layout_editor_payload($help_lang, $help_kind, $textbotlang, null);
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['layoutCaption'], $help_kb, 'HTML');
-} elseif (preg_match('/^help_lay_pick:(categories|tutorials|panel|product|category|gateway):(fa|en|ru|zh|tk):(\d+)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^help_lay_pick:(categories|tutorials|panel|product|category|gateway|langpick):(fa|en|ru|zh|tk):(\d+)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
     $help_kind = $help_m[1];
     $help_lang = $help_m[2];
     $help_sel = (int) $help_m[3];
     $help_kb = help_layout_editor_payload($help_lang, $help_kind, $textbotlang, $help_sel);
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['layoutCaption'], $help_kb, 'HTML');
-} elseif (preg_match('/^help_lay_cancel:(categories|tutorials|panel|product|category|gateway):(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^help_lay_cancel:(categories|tutorials|panel|product|category|gateway|langpick):(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
     $help_kind = $help_m[1];
     $help_lang = $help_m[2];
     $help_kb = help_layout_editor_payload($help_lang, $help_kind, $textbotlang, null);
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['layoutCaption'], $help_kb, 'HTML');
-} elseif (preg_match('/^help_lay_swap:(categories|tutorials|panel|product|category|gateway):(fa|en|ru|zh|tk):(\d+):(\d+)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^help_lay_swap:(categories|tutorials|panel|product|category|gateway|langpick):(fa|en|ru|zh|tk):(\d+):(\d+)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
     $help_kind = $help_m[1];
     $help_lang = $help_m[2];
     $help_idx1 = (int) $help_m[3];
@@ -19790,7 +20294,7 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     }
     $help_kb = help_layout_editor_payload($help_lang, $help_kind, $textbotlang, null);
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['layoutCaption'], $help_kb, 'HTML');
-} elseif (preg_match('/^help_lay_width:(categories|tutorials|panel|product|category|gateway):(fa|en|ru|zh|tk):(\d+)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^help_lay_width:(categories|tutorials|panel|product|category|gateway|langpick):(fa|en|ru|zh|tk):(\d+)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
     $help_kind = $help_m[1];
     $help_lang = $help_m[2];
     $help_idx = (int) $help_m[3];
@@ -19839,19 +20343,59 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     }
     $help_kb = help_layout_editor_payload($help_lang, $help_kind, $textbotlang, null);
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['layoutCaption'], $help_kb, 'HTML');
-} elseif (preg_match('/^help_lay_reset:(categories|tutorials|panel|product|category|gateway):(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^help_lay_hide:(categories|tutorials|panel|product|category|gateway|langpick):(fa|en|ru|zh|tk):(\d+)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
+    // 🚫 مخفی / 👁 نمایش for one button. Display only: the item itself, its
+    // database row and its own on/off switch are never touched.
+    $help_kind = $help_m[1];
+    $help_lang = $help_m[2];
+    $help_idx = (int) $help_m[3];
+    $help_items = help_layout_items($help_lang, $help_kind);
+    $help_section = help_layout_section($help_lang, $help_kind);
+    $help_ordered = help_layout_apply_order(array_keys($help_items), $help_section['order']);
+    $help_key = $help_ordered[$help_idx] ?? null;
+    if ($help_key !== null) {
+        $help_hidden = $help_section['hidden'];
+        if (!empty($help_hidden[(string) $help_key])) {
+            unset($help_hidden[(string) $help_key]);
+        } else {
+            // refuse the last visible one: a keyboard with nothing on it is a
+            // dead screen for the customer, and there is no undo from there
+            $help_visible = 0;
+            foreach ($help_ordered as $help_k) {
+                if (empty($help_hidden[(string) $help_k])) {
+                    $help_visible++;
+                }
+            }
+            if ($help_visible <= 1) {
+                telegram('answerCallbackQuery', [
+                    'callback_query_id' => $callback_query_id,
+                    'text' => $textbotlang['Admin']['Help']['hideLastAlert'],
+                    'show_alert' => true,
+                ]);
+                return;
+            }
+            $help_hidden[(string) $help_key] = true;
+        }
+        $help_section['hidden'] = $help_hidden;
+        help_layout_set_section($help_lang, $help_kind, $help_section);
+    }
+    $help_kb = help_layout_editor_payload($help_lang, $help_kind, $textbotlang, $help_idx);
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['layoutCaption'], $help_kb, 'HTML');
+} elseif (preg_match('/^help_lay_reset:(categories|tutorials|panel|product|category|gateway|langpick):(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
     $help_kind = $help_m[1];
     $help_lang = $help_m[2];
     $help_section = help_layout_section($help_lang, $help_kind);
-    help_layout_set_section($help_lang, $help_kind, ['order' => [], 'width' => [], 'emoji' => $help_section['emoji'], 'emojiIcon' => $help_section['emojiIcon'], 'emojiSimple' => $help_section['emojiSimple'], 'color' => $help_section['color'], 'rename' => $help_section['rename']]);
+    // hidden goes with order and width: all three are 📐 چیدمان, so this one
+    // button puts every button back on screen in its original place
+    help_layout_set_section($help_lang, $help_kind, ['order' => [], 'width' => [], 'hidden' => [], 'emoji' => $help_section['emoji'], 'emojiIcon' => $help_section['emojiIcon'], 'emojiSimple' => $help_section['emojiSimple'], 'color' => $help_section['color'], 'rename' => $help_section['rename']]);
     $help_kb = help_layout_editor_payload($help_lang, $help_kind, $textbotlang, null);
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['layoutCaption'], $help_kb, 'HTML');
-} elseif (preg_match('/^help_emo:(categories|tutorials|panel|product|category|gateway):(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^help_emo:(categories|tutorials|panel|product|category|gateway|langpick):(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
     $help_kind = $help_m[1];
     $help_lang = $help_m[2];
     $help_kb = help_emoji_editor_payload($help_lang, $help_kind, $textbotlang);
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['emojiCaption'], $help_kb, 'HTML');
-} elseif (preg_match('/^help_emo_pick:(categories|tutorials|panel|product|category|gateway):(fa|en|ru|zh|tk):(\d+)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^help_emo_pick:(categories|tutorials|panel|product|category|gateway|langpick):(fa|en|ru|zh|tk):(\d+)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
     $help_kind = $help_m[1];
     $help_lang = $help_m[2];
     $help_idx = (int) $help_m[3];
@@ -19865,14 +20409,14 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
         sendmessage($from_id, sprintf($textbotlang['Admin']['Help']['askEmojiForItem'], $help_item_name), $backadmin, 'HTML');
         step('help_emo_input', $from_id);
     }
-} elseif (preg_match('/^help_emo_reset:(categories|tutorials|panel|product|category|gateway):(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^help_emo_reset:(categories|tutorials|panel|product|category|gateway|langpick):(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
     $help_kind = $help_m[1];
     $help_lang = $help_m[2];
     $help_section = help_layout_section($help_lang, $help_kind);
-    help_layout_set_section($help_lang, $help_kind, ['order' => $help_section['order'], 'width' => $help_section['width'], 'emoji' => [], 'emojiIcon' => [], 'emojiSimple' => $help_section['emojiSimple'], 'color' => $help_section['color'], 'rename' => $help_section['rename']]);
+    help_layout_set_section($help_lang, $help_kind, ['order' => $help_section['order'], 'width' => $help_section['width'], 'hidden' => $help_section['hidden'], 'emoji' => [], 'emojiIcon' => [], 'emojiSimple' => $help_section['emojiSimple'], 'color' => $help_section['color'], 'rename' => $help_section['rename']]);
     $help_kb = help_emoji_editor_payload($help_lang, $help_kind, $textbotlang);
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['emojiCaption'], $help_kb, 'HTML');
-} elseif (preg_match('/^help_emo_simple:(categories|tutorials|panel|product|category|gateway):(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^help_emo_simple:(categories|tutorials|panel|product|category|gateway|langpick):(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
     $help_kind = $help_m[1];
     $help_lang = $help_m[2];
     $help_section = help_layout_section($help_lang, $help_kind);
@@ -19880,12 +20424,12 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     help_layout_set_section($help_lang, $help_kind, $help_section);
     $help_kb = help_emoji_editor_payload($help_lang, $help_kind, $textbotlang);
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['emojiCaption'], $help_kb, 'HTML');
-} elseif (preg_match('/^help_ren:(categories|tutorials|panel|product|category|gateway):(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^help_ren:(categories|tutorials|panel|product|category|gateway|langpick):(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
     $help_kind = $help_m[1];
     $help_lang = $help_m[2];
     $help_kb = help_rename_editor_payload($help_lang, $help_kind, $textbotlang);
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['BtnStyle']['renameCaption'], $help_kb, 'HTML');
-} elseif (preg_match('/^help_ren_pick:(categories|tutorials|panel|product|category|gateway):(fa|en|ru|zh|tk):(\d+)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^help_ren_pick:(categories|tutorials|panel|product|category|gateway|langpick):(fa|en|ru|zh|tk):(\d+)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
     $help_kind = $help_m[1];
     $help_lang = $help_m[2];
     $help_idx = (int) $help_m[3];
@@ -19899,11 +20443,11 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
         sendmessage($from_id, sprintf($textbotlang['Admin']['BtnStyle']['askRenameForItem'], $help_item_name), $backadmin, 'HTML');
         step('help_ren_input', $from_id);
     }
-} elseif (preg_match('/^help_ren_reset:(categories|tutorials|panel|product|category|gateway):(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^help_ren_reset:(categories|tutorials|panel|product|category|gateway|langpick):(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
     $help_kind = $help_m[1];
     $help_lang = $help_m[2];
     $help_section = help_layout_section($help_lang, $help_kind);
-    help_layout_set_section($help_lang, $help_kind, ['order' => $help_section['order'], 'width' => $help_section['width'], 'emoji' => $help_section['emoji'], 'emojiIcon' => $help_section['emojiIcon'], 'emojiSimple' => $help_section['emojiSimple'], 'color' => $help_section['color'], 'rename' => []]);
+    help_layout_set_section($help_lang, $help_kind, ['order' => $help_section['order'], 'width' => $help_section['width'], 'hidden' => $help_section['hidden'], 'emoji' => $help_section['emoji'], 'emojiIcon' => $help_section['emojiIcon'], 'emojiSimple' => $help_section['emojiSimple'], 'color' => $help_section['color'], 'rename' => []]);
     $help_kb = help_rename_editor_payload($help_lang, $help_kind, $textbotlang);
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['BtnStyle']['renameCaption'], $help_kb, 'HTML');
 } elseif ($text == $textbotlang['Admin']['BtnStyle']['hubBtn'] && $adminrulecheck['rule'] == "administrator") {
@@ -19997,7 +20541,7 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
         topup_group_btnstyle_set($gg_m[1], $gg_group, $gg_style);
     }
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['BtnStyle']['renameCaption'], topup_group_rename_payload($gg_m[1], $textbotlang), 'HTML');
-} elseif (preg_match('/^btnstyle_kindhub:(panel|product|category|gateway):(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^btnstyle_kindhub:(panel|product|category|gateway|langpick):(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
     $help_kind = $help_m[1];
     $help_lang = $help_m[2];
     $help_kb = btnstyle_kindhub_payload($help_kind, $help_lang, $textbotlang);

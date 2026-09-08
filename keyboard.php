@@ -280,11 +280,16 @@ if (!function_exists('build_main_keyboard')) {
 }
 $keyboard = build_main_keyboard();
 
+$kp_accountRows = [
+    [['text' => $textbotlang['textbot']['addBalance'], 'callback_data' => "Add_Balance"]],
+];
+// 🚫 مخفی کردن این دکمه (🎨 شخصی‌سازی) drops the whole row - a row holding
+// nothing is not something Telegram accepts
+if (!bt_button_hidden($users['lang'] ?? 'fa', 'bottext.btnCloseAccount')) {
+    $kp_accountRows[] = [bt_button($users['lang'] ?? 'fa', 'bottext.btnCloseAccount', $textbotlang['bottext']['btnCloseAccount'] ?? $textbotlang['bottext']['btn_close'], 'mmclose:ac')];
+}
 $keyboardPanel = json_encode([
-    'inline_keyboard' => [
-        [['text' => $textbotlang['textbot']['addBalance'], 'callback_data' => "Add_Balance"]],
-        [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => "mmclose", 'style' => 'danger']],
-    ],
+    'inline_keyboard' => $kp_accountRows,
     'resize_keyboard' => true
 ]);
 if ($adminrulecheck['rule'] == "administrator") {
@@ -783,7 +788,7 @@ while ($result = $stmt->fetch(PDO::FETCH_ASSOC)) {
 // under 🎨 نمایش دسته‌بندی و آموزش‌ها), keyed by the base (fa) category
 // string — see help_layout_items()'s docblock for why
 $help_cat_section = help_layout_section($help_cat_disp_lang, 'categories');
-$help_cat_ordered = help_layout_apply_order(array_keys($help_cat_buttons_byfa), $help_cat_section['order']);
+$help_cat_ordered = help_layout_visible(help_layout_apply_order(array_keys($help_cat_buttons_byfa), $help_cat_section['order']), $help_cat_section);
 foreach ($help_cat_ordered as $help_cat_fa_key) {
     $help_cat_emoji = $help_cat_section['emoji'][$help_cat_fa_key] ?? '';
     if ($help_cat_emoji !== '') {
@@ -800,9 +805,11 @@ if ($setting['linkappstatus'] == "1") {
         ['text' => $textbotlang['keyboard']['appDownloadLink'], 'callback_data' => "linkappdownlod"],
     ];
 }
-$helpcwtgory['inline_keyboard'][] = [
-    ['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => "mmclose", 'style' => 'danger'],
-];
+if (!bt_button_hidden($help_cat_disp_lang, 'bottext.btnCloseHelp')) {
+    $helpcwtgory['inline_keyboard'][] = [
+        bt_button($help_cat_disp_lang, 'bottext.btnCloseHelp', $textbotlang['bottext']['btnCloseHelp'] ?? $textbotlang['bottext']['btn_close'], 'mmclose:he'),
+    ];
+}
 $json_list_helpـcategory = json_encode($helpcwtgory);
 
 
@@ -870,16 +877,18 @@ while ($result = $stmt->fetch(PDO::FETCH_ASSOC)) {
     }
     $lp_buttons[$lp_key] = $lp_btn;
 }
-$lp_ordered = help_layout_apply_order(array_keys($lp_buttons), $lp_section['order']);
+$lp_ordered = help_layout_visible(help_layout_apply_order(array_keys($lp_buttons), $lp_section['order']), $lp_section);
 $list_marzban_panel_users['inline_keyboard'] = array_merge($list_marzban_panel_users['inline_keyboard'], help_layout_chunk_rows($lp_ordered, $lp_buttons, $lp_section['width']));
 $statusnote = false;
 if ($setting['statusnamecustom'] == 'onnamecustom')
     $statusnote = true;
 if ($setting['statusnoteforf'] == "0" && $users['agent'] == "f")
     $statusnote = false;
-$list_marzban_panel_users['inline_keyboard'][] = [
-    ['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => "sellclose", 'style' => 'danger'],
-];
+if (!bt_button_hidden($lp_userlang, 'bottext.btnCloseBuy')) {
+    $list_marzban_panel_users['inline_keyboard'][] = [
+        bt_button($lp_userlang, 'bottext.btnCloseBuy', $textbotlang['bottext']['btnCloseBuy'] ?? $textbotlang['bottext']['btn_close'], 'sellclose'),
+    ];
+}
 $list_marzban_panel_user = json_encode($list_marzban_panel_users);
 
 
@@ -944,16 +953,40 @@ $stmt = $pdo->prepare("SELECT * FROM marzban_panel WHERE TestAccount = 'ONTestAc
 $stmt->bindValue(':agent', $users['agent'], PDO::PARAM_STR);
 $stmt->execute();
 $list_marzban_panel_usertest = ['inline_keyboard' => []];
+// the same per-language panel styling the purchase list uses (order, width,
+// emoji, colour, rename - set in 🎨 شخصی‌سازی نمایش دکمه‌ها ← پنل‌ها). These are
+// the same panels under a different callback, so a colour the admin picked
+// once applied on the buy screen and nowhere else until now.
+$ut_section = help_layout_section($users['lang'] ?? 'fa', 'panel');
+$ut_buttons = [];
 while ($result = $stmt->fetch(PDO::FETCH_ASSOC)) {
     if ($result['hide_user'] != null and in_array($from_id, json_decode($result['hide_user'], true)))
         continue;
+    $ut_key = (string) $result['code_panel'];
+    $ut_name = $ut_section['rename'][$ut_key] ?? $result['name_panel'];
+    $ut_emo = help_layout_emoji_prefix($ut_key, $ut_section);
+    $ut_btn = ['text' => $ut_emo['prefix'] . $ut_name, 'callback_data' => "locationtest_{$ut_key}"];
+    if ($ut_emo['icon'] !== '') {
+        $ut_btn['icon_custom_emoji_id'] = $ut_emo['icon'];
+    }
+    $ut_color = $ut_section['color'][$ut_key] ?? '';
+    if ($ut_color !== '' && in_array($ut_color, ['primary', 'success', 'danger'], true)) {
+        $ut_btn['style'] = $ut_color;
+    }
+    $ut_buttons[$ut_key] = $ut_btn;
+}
+$ut_ordered = help_layout_visible(help_layout_apply_order(array_keys($ut_buttons), $ut_section['order']), $ut_section);
+$list_marzban_panel_usertest['inline_keyboard'] = array_merge(
+    $list_marzban_panel_usertest['inline_keyboard'],
+    help_layout_chunk_rows($ut_ordered, $ut_buttons, $ut_section['width'])
+);
+// its own close button, separate from the purchase flow's: this list is the
+// test-account journey, so wording it there should not reword the shop's
+if (!bt_button_hidden($users['lang'] ?? 'fa', 'bottext.btnCloseTest')) {
     $list_marzban_panel_usertest['inline_keyboard'][] = [
-        ['text' => $result['name_panel'], 'callback_data' => "locationtest_{$result['code_panel']}"]
+        bt_button($users['lang'] ?? 'fa', 'bottext.btnCloseTest', $textbotlang['bottext']['btnCloseTest'] ?? $textbotlang['bottext']['btn_close'], 'mmclose:te'),
     ];
 }
-$list_marzban_panel_usertest['inline_keyboard'][] = [
-    ['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => "mmclose", 'style' => 'danger'],
-];
 $list_marzban_usertest = json_encode($list_marzban_panel_usertest);
 
 
@@ -1812,7 +1845,7 @@ function KeyboardProduct($location, $query, $pricediscount, $datakeyboard, $stat
         }
         $kp_buttons[$kp_key] = $kp_btn;
     }
-    $kp_ordered = help_layout_apply_order(array_keys($kp_buttons), $kp_section['order']);
+    $kp_ordered = help_layout_visible(help_layout_apply_order(array_keys($kp_buttons), $kp_section['order']), $kp_section);
     $product['inline_keyboard'] = array_merge($product['inline_keyboard'], help_layout_chunk_rows($kp_ordered, $kp_buttons, $kp_section['width']));
     if ($statuscustom)
         $product['inline_keyboard'][] = [['text' => $textbotlang['users']['customSellVolume']['title'], 'callback_data' => $customvolume]];
@@ -1821,9 +1854,13 @@ function KeyboardProduct($location, $query, $pricediscount, $datakeyboard, $stat
     // specifically returns to whichever step preceded the product list, and its
     // own caption+sticker are retired automatically by Editmessagetext()/
     // deletemessage() the moment the target screen replaces this one
-    $product['inline_keyboard'][] = [
-        ['text' => $textbotlang['users']['sell']['backToPreviousBtn'], 'callback_data' => $backuser],
-    ];
+    // red by default like every other "go back" in the bot, and recolourable
+    // from 🎨 شخصی‌سازی like every other button item
+    if (!bt_button_hidden($kp_userlang, 'users.sell.backToPreviousBtn')) {
+        $product['inline_keyboard'][] = [
+            bt_button($kp_userlang, 'users.sell.backToPreviousBtn', $textbotlang['users']['sell']['backToPreviousBtn'], $backuser),
+        ];
+    }
     return json_encode($product);
 }
 function KeyboardCategory($location, $agent, $backuser = "backuser")
@@ -1863,7 +1900,7 @@ function KeyboardCategory($location, $agent, $backuser = "backuser")
         }
         $lc_buttons[$lc_key] = $lc_btn;
     }
-    $lc_ordered = help_layout_apply_order(array_keys($lc_buttons), $lc_section['order']);
+    $lc_ordered = help_layout_visible(help_layout_apply_order(array_keys($lc_buttons), $lc_section['order']), $lc_section);
     $list_category['inline_keyboard'] = array_merge($list_category['inline_keyboard'], help_layout_chunk_rows($lc_ordered, $lc_buttons, $lc_section['width']));
     // $backuser has always been accepted here but was silently dropped - every
     // sibling picker (KeyboardProduct, keyboardTimeCategory) renders it as a row.
@@ -1872,17 +1909,15 @@ function KeyboardCategory($location, $agent, $backuser = "backuser")
     // matching every other screen this session that got the same treatment.
     $lc_panelshow = (select("setting", "statuspanelshow", null, null, "select")['statuspanelshow'] ?? 'onpanelshow') == 'onpanelshow';
     if ($lc_panelshow) {
-        $list_category['inline_keyboard'][] = [[
-            'text' => $textbotlang['users']['sell']['backToPanelListBtn'],
-            'callback_data' => $backuser,
-            'style' => 'danger',
-        ]];
-    } else {
-        $list_category['inline_keyboard'][] = [[
-            'text' => $textbotlang['bottext']['btn_close'],
-            'callback_data' => 'mmclose',
-            'style' => 'danger',
-        ]];
+        if (!bt_button_hidden($ls_userlang, 'users.sell.backToPanelListBtn')) {
+            $list_category['inline_keyboard'][] = [
+                bt_button($ls_userlang, 'users.sell.backToPanelListBtn', $textbotlang['users']['sell']['backToPanelListBtn'], $backuser),
+            ];
+        }
+    } elseif (!bt_button_hidden($ls_userlang, 'bottext.btnCloseBuy')) {
+        $list_category['inline_keyboard'][] = [
+            bt_button($ls_userlang, 'bottext.btnCloseBuy', $textbotlang['bottext']['btnCloseBuy'] ?? $textbotlang['bottext']['btn_close'], 'mmclose:bu'),
+        ];
     }
     return json_encode($list_category);
 }
@@ -2145,15 +2180,16 @@ if (!function_exists('language_button_labels')) {
 }
 
 if (!function_exists('language_picker_payload')) {
+    // The screen the bot shows before the user has a language. Its caption is
+    // admin-editable (bottext.langPickerCaption) and its buttons carry the same
+    // order/width/colour/emoji/rename styling every other button family has -
+    // both were hardcoded here until now.
+    //
+    // Styling is always read from the 'fa' scope: this is one global screen
+    // shown to a user whose language is not yet known, so there is no per-
+    // language variant of it to store.
     function language_picker_payload()
     {
-        global $setting;
-        $lsw = json_decode((string) ($setting['lang_switch'] ?? ''), true);
-        $lsw_all = ['fa', 'en', 'ru', 'zh', 'tk'];
-        $lsw_langs = (is_array($lsw['langs'] ?? null) && !empty($lsw['langs'])) ? array_values(array_intersect($lsw_all, $lsw['langs'])) : $lsw_all;
-        if (empty($lsw_langs)) {
-            $lsw_langs = $lsw_all;
-        }
         $lsw_meta = [
             'fa' => ['label' => '🇮🇷 فارسی', 'line' => '🌐 لطفاً زبان خود را انتخاب کنید'],
             'en' => ['label' => '🇬🇧 English', 'line' => '🌐 Please select your language'],
@@ -2161,20 +2197,54 @@ if (!function_exists('language_picker_payload')) {
             'zh' => ['label' => '🇨🇳 中文', 'line' => '🌐 请选择您的语言'],
             'tk' => ['label' => '🇹🇲 Türkmençe', 'line' => '🌐 Haýyş edýäris, diliňizi saýlaň'],
         ];
+        $lp_section = help_layout_section('fa', 'langpick');
         $lsw_lines = [];
-        $lsw_buttons = [];
-        foreach ($lsw_langs as $lsw_code) {
-            if (!isset($lsw_meta[$lsw_code])) {
+        $lp_buttons = [];
+        foreach (lang_switch_enabled_langs() as $code) {
+            if (!isset($lsw_meta[$code])) {
                 continue;
             }
-            $lsw_lines[] = $lsw_meta[$lsw_code]['line'];
-            $lsw_buttons[] = ['text' => $lsw_meta[$lsw_code]['label'], 'callback_data' => "setlang:{$lsw_code}"];
+            $lsw_lines[] = $lsw_meta[$code]['line'];
+            $name = $lp_section['rename'][$code] ?? $lsw_meta[$code]['label'];
+            $emo = help_layout_emoji_prefix($code, $lp_section);
+            $btn = ['text' => $emo['prefix'] . $name, 'callback_data' => "setlang:{$code}"];
+            if ($emo['icon'] !== '') {
+                $btn['icon_custom_emoji_id'] = $emo['icon'];
+            }
+            $color = $lp_section['color'][$code] ?? '';
+            if ($color !== '' && in_array($color, ['primary', 'success', 'danger'], true)) {
+                $btn['style'] = $color;
+            }
+            $lp_buttons[$code] = $btn;
         }
-        $lsw_caption = "═══════════════════════\n       🌍 WELCOME\n═══════════════════════\n\n"
-            . implode("\n", $lsw_lines)
-            . "\n\n━━━━━━━━━━━━━━━━━━━━━━━\n👇 Tap to continue:";
-        $lsw_rows = array_chunk($lsw_buttons, 2);
-        return [$lsw_caption, json_encode(['inline_keyboard' => $lsw_rows])];
+        $lsw_caption = strtr(lang_picker_caption(), ['{lines}' => implode("\n", $lsw_lines)]);
+        $lp_ordered = help_layout_visible(help_layout_apply_order(array_keys($lp_buttons), $lp_section['order']), $lp_section);
+        // two per row was hardcoded; the width map decides now, defaulting to
+        // 'half' so an untouched shop looks exactly as it did. The map speaks
+        // 'half'/'full', not a column count - a number here silently means
+        // 'full' and puts every language on its own row.
+        $lp_width = $lp_section['width'];
+        foreach (array_keys($lp_buttons) as $code) {
+            if (!isset($lp_width[$code])) {
+                $lp_width[$code] = 'half';
+            }
+        }
+        return [$lsw_caption, json_encode(['inline_keyboard' => help_layout_chunk_rows($lp_ordered, $lp_buttons, $lp_width)])];
+    }
+    // the caption template, override-aware. {lines} is replaced with one
+    // "please choose" line per language the shop offers.
+    function lang_picker_caption()
+    {
+        $v = function_exists('bottext_resolve_key') ? trim((string) bottext_resolve_key('bottext.langPickerCaption')) : '';
+        global $textbotlang;
+        if ($v === '') {
+            $v = (string) ($textbotlang['bottext']['langPickerCaption'] ?? '');
+        }
+        // the exact frame this screen has always had, kept byte-for-byte -
+        // only the middle became a placeholder so it stays admin-editable
+        return $v !== ''
+            ? $v
+            : "═══════════════════════\n       🌍 WELCOME\n═══════════════════════\n\n{lines}\n\n━━━━━━━━━━━━━━━━━━━━━━━\n👇 Tap to continue:";
     }
 }
 
@@ -2217,7 +2287,15 @@ function keyboard_list_text($lang, $groupFilter = null)
     // home-list row, which gave it two different entry points and made its
     // "back" button ambiguous (it could only point to one of them). Now there
     // is exactly one way in, so "back" is always correct.
-    $bt_skip_keys = ['textbot.sell', 'textbot.purchasedServices', 'textbot.extend', 'textbot.userTest', 'textbot.accountWallet', 'textbot.addBalance', 'textbot.tariffList', 'textbot.support', 'textbot.help', 'textbot.affiliates', 'textbot.discount', 'textbot.wheelLuck', 'textbot.faq', 'textbot.testExpired', 'textbot.afterPay', 'textbot.preInvoice', 'textbot.getConfigHintBuy', 'textbot.getConfigHintTest', 'users.status.infoFull', 'users.Balance.sendReceipt', 'users.Balance.chargeSuccess', 'users.Balance.chargeSuccessDiscount'];
+    $bt_skip_keys = ['textbot.sell', 'textbot.purchasedServices', 'textbot.extend', 'textbot.userTest', 'textbot.accountWallet', 'textbot.addBalance', 'textbot.tariffList', 'textbot.support', 'textbot.help', 'textbot.affiliates', 'textbot.discount', 'textbot.wheelLuck', 'textbot.faq', 'textbot.testExpired',
+        // same reason as textbot.testExpired above: they live inside
+        // 🔑 تنظیم اکانت تست now, and a second row here would give them two ways
+        // in and an ambiguous "back" - textbot.afterText's own back button has
+        // pointed at that screen all along, while its only row was out here
+        'bottext.btnCloseTest', 'textbot.afterText', 'textbot.afterPay', 'textbot.preInvoice', 'textbot.getConfigHintBuy', 'textbot.getConfigHintTest', 'users.status.infoFull', 'users.Balance.sendReceipt', 'users.Balance.chargeSuccess', 'users.Balance.chargeSuccessDiscount',
+        // owned by 🌐 تنظیمات تغییر زبان کاربر, which edits them in place - a
+        // second row here would make their back button ambiguous
+        'bottext.langPickerCaption', 'bottext.langBlockedMsg'];
     $bt_can_react_keys = ['users.text_start', 'textbot.faqDesc', 'textbot.tariffListDesc', 'textbot.rules', 'users.unknownMsg'];
     $bt_list_setting = select("setting", "*", null, null, "select");
     $bt_list_edit = json_decode((string) ($bt_list_setting['text_edit'] ?? ''), true);
@@ -2383,6 +2461,15 @@ function keyboard_list_text($lang, $groupFilter = null)
             // the customer picks from, moved off the 🏦 بسته‌های شارژ hub
             $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['gatewaysBtn'], 'callback_data' => "btnstyle_kindhub:gateway:{$lang}", 'style' => 'primary']];
         }
+        if ($groupFilter === 'help') {
+            // the appearance of the tutorial buttons themselves (order, width,
+            // colour, emoji, and now show/hide). These two hubs already existed
+            // under 📚 آموزش in the admin panel - this is a second way in, from
+            // the screen that owns the rest of this section's look.
+            $keyboard_text['inline_keyboard'][] = [['text' => bt_section_meta('help_style')['label'], 'callback_data' => 'bt_sep|help_style']];
+            $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['categoriesBtn'], 'callback_data' => "help_disp_cat:{$lang}", 'style' => 'primary']];
+            $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['tutorialsBtn'], 'callback_data' => "help_disp_tut:{$lang}", 'style' => 'primary']];
+        }
         $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['resetAllLabel'], 'callback_data' => "bt_group_resetall|$lang|$groupFilter", 'style' => 'danger']];
         // a submenu of another group needs one step back to its parent - the
         // shared "برگشت به لیست" row below jumps all the way out to the home list
@@ -2395,6 +2482,8 @@ function keyboard_list_text($lang, $groupFilter = null)
             'myservices' => 'groupServicesCaption',
             'topup' => 'groupTopupCaption',
             'topupdisc' => 'groupTopupDiscCaption',
+            'account' => 'groupAccountCaption',
+            'help' => 'groupHelpCaption',
         ][$groupFilter] ?? 'groupBuyflowCaption';
         $bt_caption_tpl = $bt_tab_texts['bottext'][$bt_captionKey] ?? $textbotlang['bottext'][$bt_captionKey];
         $bt_caption = strtr($bt_caption_tpl, ['{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang]);
@@ -2410,13 +2499,22 @@ function keyboard_list_text($lang, $groupFilter = null)
     $bt_home_sections = [
         // users.back sits next to the welcome text on purpose: they are the two
         // messages the main-menu keyboard arrives with
-        'home_general' => ['users.text_start', 'users.back', 'textbot.faqDesc', 'textbot.tariffListDesc', 'textbot.rules'],
+        // textbot.channel joins them: it is an independent bot message like the
+        // rest of this section, and with nowhere of its own it used to fall
+        // through to the bottom of the screen, under whatever heading happened
+        // to be last
+        'home_general' => ['users.text_start', 'users.back', 'textbot.faqDesc', 'textbot.tariffListDesc', 'textbot.rules', 'textbot.channel'],
         // preInvoice/afterPay used to be listed directly here; they now live
         // inside the 🛒 پیام‌های مراحل خرید group itself (section
         // 'preinvoice_afterpay') - this divider now only leads into the two
         // ready-made submenus below, so its item list stays empty
         'home_purchase' => [],
         'home_usertest' => ['users.usertest.selectUsernamePrompt'],
+        // two screens that had nothing of their own here: the account page's
+        // caption and close button used to fall through to the ungrouped
+        // leftovers at the bottom, and the tutorial section had no row at all
+        'home_account' => [],
+        'home_help' => [],
     ];
     $bt_home_sectioned_keys = array_merge(...array_values($bt_home_sections));
     foreach ($bt_home_sections as $bt_sec_key => $bt_sec_items) {
@@ -2474,16 +2572,49 @@ function keyboard_list_text($lang, $groupFilter = null)
                 $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['groupTopupLabel'], 'callback_data' => "bt_group|$lang|topup", 'style' => 'primary']];
             }
         }
+        // 👤 حساب کاربری and 📚 آموزش: one row each into their own submenu,
+        // answering for their children exactly like the rows above do
+        foreach (['home_account' => ['account', 'groupAccountLabel'], 'home_help' => ['help', 'groupHelpLabel']] as $bt_sec_owner => $bt_sec_group) {
+            if ($bt_sec_key !== $bt_sec_owner || empty($bt_grouped[$bt_sec_group[0]])) {
+                continue;
+            }
+            $bt_sub_custom = false;
+            foreach ($bt_grouped[$bt_sec_group[0]] as $bt_g) {
+                list(, $bt_g_style) = $bt_decorate($bt_g['key'], $bt_g['label']);
+                if ($bt_g_style !== '') {
+                    $bt_sub_custom = true;
+                    break;
+                }
+            }
+            $keyboard_text['inline_keyboard'][] = [[
+                'text' => $textbotlang['bottext'][$bt_sec_group[1]],
+                'callback_data' => "bt_group|$lang|{$bt_sec_group[0]}",
+                'style' => $bt_sub_custom ? 'success' : 'primary',
+            ]];
+        }
     }
-    // anything ungrouped that isn't in one of the sections above still needs
-    // to render somewhere, or a future item silently vanishes from this screen
+    // Anything ungrouped that isn't in one of the sections above still needs to
+    // render somewhere, or a future item silently vanishes from this screen.
+    //
+    // It gets a heading of its own now. Without one these rows simply continued
+    // the LAST section drawn, so an unrelated message read as a child of
+    // whichever heading happened to be last - which is exactly what
+    // "📦 پیام بعد از دریافت اکانت تست" looked like under 📚 آموزش. The heading
+    // is drawn only when something lands under it, so a tidy registry shows no
+    // empty label.
+    $bt_leftovers = [];
     foreach ($keyboard_list_text as $data) {
         if (in_array($data['key'], $bt_skip_keys, true) || !empty($data['group']) || (isset($data['label']) && mb_strpos($data['label'], 'دکمه:') === 0) || in_array($data['key'], $bt_home_sectioned_keys, true)) {
             continue;
         }
         list($bt_label, $bt_style) = $bt_decorate($data['key'], $data['label']);
-        $bt_btn = ['text' => $bt_label, 'callback_data' => "bt_edit|$lang|{$data['key']}", 'style' => ($bt_style !== '' ? $bt_style : 'primary')];
-        $keyboard_text['inline_keyboard'][] = [$bt_btn];
+        $bt_leftovers[] = ['text' => $bt_label, 'callback_data' => "bt_edit|$lang|{$data['key']}", 'style' => ($bt_style !== '' ? $bt_style : 'primary')];
+    }
+    if (!empty($bt_leftovers)) {
+        $keyboard_text['inline_keyboard'][] = [['text' => bt_section_meta('home_other')['label'], 'callback_data' => 'bt_sep|home_other']];
+        foreach ($bt_leftovers as $bt_btn) {
+            $keyboard_text['inline_keyboard'][] = [$bt_btn];
+        }
     }
     // relocated here from its old home under ⚙️ تنظیمات عمومی so both sticker
     // systems live under one umbrella - this hub controls the main-menu
@@ -2494,6 +2625,10 @@ function keyboard_list_text($lang, $groupFilter = null)
     // promoted out of the button-settings hub into its own direct row - it
     // controls the end-user language-picker menu, unrelated to button appearance
     $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['langSwitchLabel'], 'callback_data' => 'bt_langswitch', 'style' => 'primary']];
+    // 🖼 استیکر دکمه بستن moved from here into each section's own ❌ بستن item
+    // (خرید اشتراک, افزایش موجودی, ...) - it is per-section now, not one
+    // shared bot-wide switch, so a single row here would no longer mean
+    // anything coherent.
     // the warning tiers live in their own column and have no bottext key, so this
     // row does its own check instead of going through $bt_decorate. It asks
     // "is anything customized?", NOT "does a threshold exist?" - a bare threshold
