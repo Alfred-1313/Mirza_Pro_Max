@@ -3243,13 +3243,6 @@ if (!function_exists('topup_gw_edit_payload')) {
             }
         }
         if ($key === 'card') {
-            // when the shop has more than one card, the {name_card}/{card_number}
-            // line repeats once per card - this is what goes between two of them
-            $rows[] = [[
-                'text' => '📏 فاصله بین کارت‌ها: ' . (card_invoice_card_sep_mode($lang) === 'blank' ? 'یک خط خالی' : 'چسبیده'),
-                'callback_data' => "cardsep:{$lang}",
-                'style' => card_invoice_card_sep_mode($lang) === 'blank' ? 'success' : 'primary',
-            ]];
             // the exact-amount warning belongs to card-to-card's own invoice,
             // so it lives here rather than loose in the 💰 list
             $rn_key = 'textbot.cardRandomAmountNotice';
@@ -11075,10 +11068,6 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     // 🏦 بسته‌های شارژ where the same flows also live
     update("user", "tp_edit_origin", "topup", "id", $from_id);
     list($tp_cap, $tp_kb) = topup_gw_edit_payload($tp_m[1], $tp_m[2], $textbotlang);
-    Editmessagetext($from_id, $message_id, $tp_cap, $tp_kb, 'HTML');
-} elseif (preg_match('/^cardsep:([a-z]{2})$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
-    card_invoice_card_sep_toggle($tp_m[1]);
-    list($tp_cap, $tp_kb) = topup_gw_edit_payload($tp_m[1], 'card', $textbotlang);
     Editmessagetext($from_id, $message_id, $tp_cap, $tp_kb, 'HTML');
 } elseif (preg_match('/^topupcustomcap:([a-z]{2}):([a-z0-9]+)$/', $datain, $tp_m) && $adminrulecheck['rule'] == "administrator") {
     $tp_cancelKb = json_encode(['inline_keyboard' => [

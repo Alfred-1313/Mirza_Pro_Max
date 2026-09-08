@@ -1652,26 +1652,6 @@ if (!function_exists('card_invoice_copy_perrow')) {
         return ($n >= 1 && $n <= 3) ? $n : 1;
     }
 }
-if (!function_exists('card_invoice_card_sep')) {
-    // What goes BETWEEN two cards in the invoice caption. Stored in the same
-    // reserved '_layout' slot as the copy-button order, which already spans
-    // caption and buttons alike (the order it holds decides both).
-    // 'tight' = consecutive lines, 'blank' = one empty line between them.
-    function card_invoice_card_sep_mode($lang)
-    {
-        return (card_invoice_btnstyle_for($lang, '_layout')['sep'] ?? '') === 'blank' ? 'blank' : 'tight';
-    }
-    function card_invoice_card_sep($lang)
-    {
-        return card_invoice_card_sep_mode($lang) === 'blank' ? "\n\n" : "\n";
-    }
-    function card_invoice_card_sep_toggle($lang)
-    {
-        $lay = card_invoice_btnstyle_for($lang, '_layout');
-        $lay['sep'] = card_invoice_card_sep_mode($lang) === 'blank' ? 'tight' : 'blank';
-        card_invoice_btnstyle_set($lang, '_layout', $lay);
-    }
-}
 if (!function_exists('card_invoice_copy_rows')) {
     // Chunks the copy buttons into keyboard rows per the admin's 📐 چیدمان
     function card_invoice_copy_rows($lang, array $btns)
@@ -1797,10 +1777,6 @@ if (!function_exists('card_invoice_btnstyle_set')) {
         if (isset($style['order']) && is_array($style['order'])) {
             $clean['order'] = array_values(array_map('intval', $style['order']));
         }
-        // also '_layout' only: what separates two cards in the invoice caption
-        if (($style['sep'] ?? '') === 'blank') {
-            $clean['sep'] = 'blank';
-        }
         if (!isset($m[$lang]) || !is_array($m[$lang])) {
             $m[$lang] = [];
         }
@@ -1819,8 +1795,48 @@ if (!function_exists('card_invoice_render')) {
     // repeats. If neither is present, the template is used as-is (the admin
     // chose not to show card details inline at all - not this function's
     // call to prevent).
-    function card_invoice_render($template, array $cards, array $otherReplacements, $sep = "\n\n")
+    // {name_card2} / {card_number2} - the admin addresses one specific card, so
+    // they can lay the cards out by hand (one per line, blank line between,
+    // whatever they want) instead of the template repeating a block for them.
+    // A line naming a card the shop does not have is removed whole: a shop that
+    // drops from two cards to one must not leave a stray " | " behind.
+    function card_invoice_indexed_render($template, array $cards)
     {
+        if (!preg_match('/\{(?:name_card|card_number)[1-9][0-9]*\}/', $template)) {
+            return $template;
+        }
+        $out = [];
+        foreach (explode("\n", $template) as $line) {
+            if (!preg_match_all('/\{(name_card|card_number)([1-9][0-9]*)\}/', $line, $mm, PREG_SET_ORDER)) {
+                $out[] = $line;
+                continue;
+            }
+            $repl = [];
+            $missing = false;
+            foreach ($mm as $m) {
+                $c = $cards[(int) $m[2] - 1] ?? null;
+                if ($c === null) {
+                    $missing = true;
+                    break;
+                }
+                $name = trim((string) ($c['name'] ?? ''));
+                $repl[$m[0]] = $m[1] === 'name_card'
+                    ? ($name !== '' ? $name : '—')
+                    : (string) ($c['number'] ?? '');
+            }
+            if ($missing) {
+                continue;
+            }
+            $out[] = strtr($line, $repl);
+        }
+        return implode("\n", $out);
+    }
+    function card_invoice_render($template, array $cards, array $otherReplacements)
+    {
+        $cards = array_values($cards);
+        // the numbered form is resolved first; whatever is left can still use
+        // the older repeating {name_card}/{card_number} block below
+        $template = card_invoice_indexed_render($template, $cards);
         $posNum = strpos($template, '{card_number}');
         $posName = strpos($template, '{name_card}');
         if (($posNum === false && $posName === false) || empty($cards)) {
@@ -1828,7 +1844,6 @@ if (!function_exists('card_invoice_render')) {
             return strtr($template, $otherReplacements + [
                 '{card_number}' => $first['number'] ?? '',
                 '{name_card}' => $first['name'] ?? '',
-                '{card_index}' => '1',
             ]);
         }
         $blockStart = $posNum === false ? $posName : ($posName === false ? $posNum : min($posNum, $posName));
@@ -1839,15 +1854,14 @@ if (!function_exists('card_invoice_render')) {
         $lineEnd = $lineEndPos === false ? strlen($template) : $lineEndPos;
         $block = substr($template, $lineStart, $lineEnd - $lineStart);
         $rendered = [];
-        foreach (array_values($cards) as $i => $c) {
+        foreach ($cards as $c) {
             $name = trim((string) ($c['name'] ?? ''));
             $rendered[] = strtr($block, [
                 '{card_number}' => (string) ($c['number'] ?? ''),
                 '{name_card}' => $name !== '' ? $name : '—',
-                '{card_index}' => (string) ($i + 1),
             ]);
         }
-        $result = substr($template, 0, $lineStart) . implode($sep, $rendered) . substr($template, $lineEnd);
+        $result = substr($template, 0, $lineStart) . implode("\n\n", $rendered) . substr($template, $lineEnd);
         return strtr($result, $otherReplacements);
     }
 }if (!function_exists('gw_minmax_fields')) {
@@ -2873,7 +2887,7 @@ if (!function_exists('topup_card_invoice_generate')) {
         $textcart = card_invoice_render($captionTemplate, $cardList, [
             '{price}' => $valueprice,
             '{minutes}' => $expireMinutes,
-        ], card_invoice_card_sep($lang));
+        ]);
         // shown whenever the feature is currently on - even on a reissued
         // invoice, whose amount may already carry an earlier random addition
         // from when it was first created - so the exact-amount warning always
