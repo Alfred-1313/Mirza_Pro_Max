@@ -3614,6 +3614,10 @@ if (!function_exists('trx_invoice_build')) {
             '{rate}' => number_format($rate, 0),
             '{minutes}' => topup_expire_minutes($lang, 'trx'),
             '{address}' => $addr,
+            // which chain the money has to travel on. One place to say it, so
+            // the day a USDT-on-Tron gateway sits beside this one the two
+            // cannot end up naming the same network differently.
+            '{network}' => $b['trxNetworkLabel'],
         ]);
         $copy = function ($which, $label, $value) use ($lang) {
             $btn = topup_styled_button($label, topup_invoice_btnstyle_for($lang, 'trx', $which), '', topup_invoice_btnstyle_default_color($which, 'trx'));

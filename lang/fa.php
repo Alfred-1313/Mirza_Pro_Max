@@ -816,8 +816,10 @@ return array (
       'groupBackBtn' => '🔙 بازگشت به روش‌های پرداخت',
 
 
+      'trxNetworkLabel' => 'TRON (شبکهٔ ترون)',
       'trxInvoiceCaption' => '<blockquote><b>⚡️ پرداخت TRX</b></blockquote>
 
+🌐 <b>شبکه:</b> <b>{network}</b>
 📊 <b>مبلغ شبکه:</b> <b>TRX</b> <code>{trx}</code>
 💰 <b>معادل تومانی:</b> <b>{price} تومان</b> <i>(نرخ نوبیتکس)</i>
 🔍 <b>تقریباً 1 TRX ≈ {rate} تومان</b>
@@ -832,7 +834,9 @@ return array (
 <b>مقدار واریز (TRX):</b>
 <code>{trx}</code>
 
-<blockquote>⚠️ مبلغ را <b>دقیقاً</b> همین‌قدر بفرستید، تا آخرین رقم اعشار. ربات پرداخت شما را از روی همین عدد می‌شناسد؛ شبکهٔ ترون کامنت ندارد.
+<blockquote>⚠️ فقط روی شبکهٔ <b>{network}</b> بفرستید؛ اگر روی شبکهٔ دیگری بفرستید پول برنمی‌گردد.
+
+⚠️ مبلغ را <b>دقیقاً</b> همین‌قدر بفرستید، تا آخرین رقم اعشار. ربات پرداخت شما را از روی همین عدد می‌شناسد؛ شبکهٔ ترون کامنت ندارد.
 
 اگر مبلغ را رند فرستادید یا زودتر می‌خواهید تأیید شود، دکمهٔ <b>«ثبت پرداخت»</b> را بزنید.</blockquote>',
       'trxCopyAmountBtn' => 'کپی مبلغ TRX',
@@ -6496,6 +6500,24 @@ nowpayments.io
       'editInvoiceCaptionBtn' => '✏️ ویرایش کپشن فاکتور',
       'defaultInvoiceCaptionBtn' => '📋 پیش‌فرض (فاکتور)',
       'askInvoiceCaption' => '✏️ متن جدید کپشن فاکتور رو برای همین درگاه بفرست',
+      'invPlaceholders' => array(
+        'trx' => '<b>📌 کدهای قابل استفاده</b>
+• <code>{network}</code> نام شبکه (TRON) — اگر کاربر روی شبکهٔ اشتباه بفرستد پولش برنمی‌گردد، پس بهتره توی متن بمونه
+• <code>{trx}</code> مقدار دقیق TRX
+• <code>{address}</code> آدرس ولت مقصد
+• <code>{price}</code> معادل تومانی
+• <code>{rate}</code> نرخ هر TRX به تومان
+• <code>{minutes}</code> مهلت پرداخت (دقیقه)
+• <code>{order}</code> کد سفارش',
+        'ton' => '<b>📌 کدهای قابل استفاده</b>
+• <code>{ton}</code> مقدار دقیق TON
+• <code>{address}</code> آدرس ولت مقصد
+• <code>{memo}</code> ممو/کامنت تراکنش — بدون این، پرداخت شناسایی نمی‌شود
+• <code>{price}</code> معادل تومانی
+• <code>{rate}</code> نرخ هر TON به تومان
+• <code>{minutes}</code> مهلت پرداخت (دقیقه)
+• <code>{order}</code> کد سفارش',
+      ),
       'editExpCaptionBtn' => '✏️ ویرایش متن فاکتور منقضی',
       'defaultExpCaptionBtn' => '📋 پیش‌فرض (منقضی)',
       'askExpCaption' => '✏️ متن جدید فاکتور منقضی رو برای همین درگاه بفرست

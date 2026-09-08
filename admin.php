@@ -2970,12 +2970,24 @@ if (!function_exists('topup_gwcap_kinds')) {
         }
         topup_invoice_expired_caption_set($lang, $key, $text);
     }
+    // the codes an invoice caption may use, per gateway. Without this the prompt
+    // asked for new wording and left the admin to guess which {..} the gateway
+    // actually fills - a caption written with the wrong one ships the literal
+    // token to the customer.
+    function topup_gwcap_placeholders($kind, $key, $textbotlang)
+    {
+        if ($kind !== 'inv') {
+            return '';
+        }
+        $lists = $textbotlang['Admin']['TopupPkg']['invPlaceholders'] ?? [];
+        return isset($lists[$key]) ? "\n\n" . $lists[$key] : '';
+    }
     // the prompt each kind shows when the admin is asked for the new wording,
     // and the label its preview carries
-    function topup_gwcap_prompt($kind, $textbotlang)
+    function topup_gwcap_prompt($kind, $textbotlang, $key = '')
     {
         $t = $textbotlang['Admin']['TopupPkg'];
-        return [
+        $prompt = [
             'range' => $t['askRangeCaption'],
             'notnumber' => $t['askNotNumber'],
             'notseen' => $t['askNotSeen'],
@@ -2986,6 +2998,7 @@ if (!function_exists('topup_gwcap_kinds')) {
             'inv' => $t['askInvoiceCaption'],
             'exp' => $t['askExpCaption'],
         ][$kind] ?? $t['askCaption'];
+        return $prompt . topup_gwcap_placeholders($kind, $key, $textbotlang);
     }
 }
 if (!function_exists('topup_invoice_grid_rows')) {
@@ -10500,7 +10513,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     $gc_cancelKb = json_encode(['inline_keyboard' => [
         [['text' => $textbotlang['Admin']['TopupPkg']['closeCaptionPromptBtn'], 'callback_data' => "gwcapcancel:{$gc_m[1]}:{$gc_m[2]}:{$gc_m[3]}:{$message_id}", 'style' => 'danger']],
     ]]);
-    $gc_prompt = sendmessage($from_id, topup_gwcap_prompt($gc_m[1], $textbotlang), $gc_cancelKb, 'HTML');
+    $gc_prompt = sendmessage($from_id, topup_gwcap_prompt($gc_m[1], $textbotlang, $gc_m[3]), $gc_cancelKb, 'HTML');
     step("gwcapedit:{$gc_m[1]}:{$gc_m[2]}:{$gc_m[3]}:{$message_id}:" . (int) ($gc_prompt['result']['message_id'] ?? 0), $from_id);
 } elseif (preg_match('/^gwcapcancel:(range|notnumber|inv|exp|paidalert|notseen|noaddress|askhash|hashbad):([a-z]{2}):([a-z0-9]+):([0-9]+)$/', $datain, $gc_m) && $adminrulecheck['rule'] == "administrator") {
     step('home', $from_id);
