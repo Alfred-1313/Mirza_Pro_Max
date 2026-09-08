@@ -1101,6 +1101,22 @@ if (!function_exists('lang_switch_settings_payload')) {
     }
 }
 
+if (!function_exists('gwfld_cancel_kb')) {
+    // The ❌ on a "send me the new value" prompt. Without one the only way out
+    // was to send something, so an admin who opened it by mistake had to type a
+    // value to escape. Carries the settings screen's own message id, so
+    // cancelling can redraw that screen where it stands.
+    function gwfld_cancel_kb($lang, $key, $index, $screenId, $textbotlang)
+    {
+        return json_encode(['inline_keyboard' => [
+            [[
+                'text' => $textbotlang['Admin']['TopupPkg']['closeCaptionPromptBtn'],
+                'callback_data' => "gwfldcancel:{$lang}:{$key}:{$index}:{$screenId}",
+                'style' => 'danger',
+            ]],
+        ]]);
+    }
+}
 if (!function_exists('close_sticker_screen')) {
     // 🖼 استیکر دکمه بستن lives on the ❌ بستن button's own edit screen, not on a
     // settings screen of its own - one button, one screen. Every clst2* handler
@@ -10395,24 +10411,31 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
         return;
     }
     $gw_t = $textbotlang['Admin']['GatewayLang'];
+    $gw_cancelKb = gwfld_cancel_kb($gw_m[1], $gw_m[2], $gw_m[3], (int) $message_id, $textbotlang);
     if (gw_field_scope($gw_field) === 'global') {
         $gw_cur = (string) getPaySettingValue($gw_field['field']);
         $gw_prompt = sendmessage($from_id, strtr($gw_t['askValueGlobal'], [
             '{field}' => $gw_t[$gw_field['label']],
             '{current}' => $gw_cur === '' ? $gw_t['notSet'] : $gw_cur,
-        ]), null, 'HTML');
+        ]), $gw_cancelKb, 'HTML');
     } else {
         $gw_prompt = sendmessage($from_id, strtr($gw_t['askValue'], [
             '{field}' => $gw_t[$gw_field['label']],
             '{lang}' => $textbotlang['bottext']['langs'][$gw_m[1]] ?? $gw_m[1],
             '{global}' => (string) pay_value($gw_field['field'], null, $gw_t['notSet']),
-        ]), null, 'HTML');
+        ]), $gw_cancelKb, 'HTML');
     }
     $gw_promptId = (int) ($gw_prompt['result']['message_id'] ?? 0);
     // both the settings-screen id and the prompt's own id travel in the step:
     // the screen gets edited in place afterwards, the prompt gets deleted
     // instead of piling up under the admin's own reply
     step("gwfld:{$gw_m[1]}:{$gw_m[2]}:{$gw_m[3]}:{$message_id}:{$gw_promptId}", $from_id);
+} elseif (preg_match('/^gwfldcancel:([a-z]{2}):([a-z0-9]+):([0-9]{1,2}):([0-9]+)$/', $datain, $gw_m) && $adminrulecheck['rule'] == "administrator") {
+    // the prompt is its own message, so it goes; the settings screen it was
+    // opened from is redrawn where it stands, with nothing changed
+    step('home', $from_id);
+    deletemessage($from_id, $message_id);
+    Editmessagetext($from_id, (int) $gw_m[4], gateway_settings_caption($gw_m[1], $gw_m[2], $textbotlang), gateway_settings_payload($gw_m[1], $gw_m[2], $textbotlang), 'HTML');
 } elseif (preg_match('/^gwfld:([a-z]{2}):([a-z0-9]+):([0-9]{1,2}):([0-9]+):([0-9]+)$/', (string) $user['step'], $gw_m) && $datain == '') {
     $gw_field = gateway_field_by_index($gw_m[2], (int) $gw_m[3]);
     $gw_t = $textbotlang['Admin']['GatewayLang'];
@@ -10427,11 +10450,12 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
         } elseif ($gw_val === '0') {
             gw_pay_override_set($gw_field['field'], $gw_m[1], '');
         } elseif ($gw_field['type'] === 'money' && !money_valid($gw_val, currency_for_lang($gw_m[1]))) {
-            Editmessagetext($from_id, (int) $gw_m[5], $gw_t['invalidMoney'], null, 'HTML');
+            // the prompt is re-armed, so it keeps its way out too
+            Editmessagetext($from_id, (int) $gw_m[5], $gw_t['invalidMoney'], gwfld_cancel_kb($gw_m[1], $gw_m[2], $gw_m[3], (int) $gw_m[4], $textbotlang), 'HTML');
             step("gwfld:{$gw_m[1]}:{$gw_m[2]}:{$gw_m[3]}:{$gw_m[4]}:{$gw_m[5]}", $from_id);
             return;
         } elseif ($gw_field['type'] === 'number' && (!ctype_digit($gw_val) || (int) $gw_val < 1)) {
-            Editmessagetext($from_id, (int) $gw_m[5], $gw_t['invalidNumber'], null, 'HTML');
+            Editmessagetext($from_id, (int) $gw_m[5], $gw_t['invalidNumber'], gwfld_cancel_kb($gw_m[1], $gw_m[2], $gw_m[3], (int) $gw_m[4], $textbotlang), 'HTML');
             step("gwfld:{$gw_m[1]}:{$gw_m[2]}:{$gw_m[3]}:{$gw_m[4]}:{$gw_m[5]}", $from_id);
             return;
         } else {
