@@ -359,6 +359,7 @@ include __DIR__ . '/inc/layout_head.php';
                                     'Currency Rial tow' => $textbotlang['panel']['userMethodRial2'],
                                     'Currency Rial 3' => $textbotlang['panel']['userMethodRial3'],
                                     'arze digital offline' => $textbotlang['panel']['userMethodCrypto'],
+                                    'USDT-BEP20' => 'USDT (BEP20)',
                                 ];
                                 $payStatusMap = [
                                     'paid' => ['tag-ok', $textbotlang['panel']['userStatusSuccess']],

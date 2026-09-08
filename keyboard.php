@@ -510,6 +510,11 @@ if (intval(getPaySettingValue('statustrx')) == 1) {
         ['text' => $textbotlang['textbot']['trxPayment'], 'callback_data' => "trx"]
     ];
 }
+if (intval(getPaySettingValue('statususdtbep')) == 1) {
+    $step_payment['inline_keyboard'][] = [
+        ['text' => $textbotlang['textbot']['usdtbepPayment'], 'callback_data' => "usdtbep"]
+    ];
+}
 // keep only the gateways this user's language is allowed to see (set in
 // 💎 Financial -> gateways per language); an unrestricted language keeps all
 $step_payment['inline_keyboard'] = gateway_filter_rows(

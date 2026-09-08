@@ -1458,6 +1458,8 @@ if (!function_exists('gateway_globally_on')) {
                 return (string) getPaySettingValue('statuston') === '1';
             case 'trx':
                 return (string) getPaySettingValue('statustrx') === '1';
+            case 'usdtbep':
+                return (string) getPaySettingValue('statususdtbep') === '1';
         }
         return false;
     }
@@ -1481,6 +1483,7 @@ if (!function_exists('gateway_globally_set')) {
             'startelegrams' => ['statusstar', '1', '0'],
             'ton' => ['statuston', '1', '0'],
             'trx' => ['statustrx', '1', '0'],
+            'usdtbep' => ['statususdtbep', '1', '0'],
         ];
         if (!isset($map[$key])) {
             return;
@@ -2807,13 +2810,13 @@ if (!function_exists('topup_gw_customizables')) {
             // the two gateways paid into the shop's own wallet: their customer
             // can ask "has it arrived yet", and they are the only ones that
             // need a wallet configured behind them
-            if ($key === 'ton' || $key === 'trx') {
+            if ($key === 'ton' || $key === 'trx' || $key === 'usdtbep') {
                 $has[] = 'notseen';
                 $has[] = 'noaddress';
             }
-            if ($key === 'trx') {
-                // and only TRX ever asks for a transaction hash, or has to
-                // say that one was wrong
+            if ($key === 'trx' || $key === 'usdtbep') {
+                // the two that ask for a transaction hash when the customer says
+                // they have already paid, and have to say when one was wrong
                 $has[] = 'askhash';
                 $has[] = 'hashbad';
             }
@@ -2845,16 +2848,16 @@ if (!function_exists('topup_gwcap_kinds')) {
             return $b['errorprice'];
         }
         if ($kind === 'notseen') {
-            return $key === 'trx' ? $b['trxNotSeenYet'] : $b['tonNotSeenYet'];
+            return ['trx' => $b['trxNotSeenYet'], 'usdtbep' => $b['usdtbepNotSeenYet']][$key] ?? $b['tonNotSeenYet'];
         }
         if ($kind === 'noaddress') {
-            return $key === 'trx' ? $b['trxNoAddress'] : $b['tonNoAddress'];
+            return ['trx' => $b['trxNoAddress'], 'usdtbep' => $b['usdtbepNoAddress']][$key] ?? $b['tonNoAddress'];
         }
         if ($kind === 'askhash') {
-            return $b['trxAskHash'];
+            return $key === 'usdtbep' ? $b['usdtbepAskHash'] : $b['trxAskHash'];
         }
         if ($kind === 'hashbad') {
-            return $b['trxHashInvalid'];
+            return $key === 'usdtbep' ? $b['usdtbepHashInvalid'] : $b['trxHashInvalid'];
         }
         if ($kind === 'paidalert') {
             return $b['topupPaidAlert'];
@@ -2870,6 +2873,7 @@ if (!function_exists('topup_gwcap_kinds')) {
                 'startelegrams' => $b['starInvoiceCaption'],
                 'ton' => $b['tonInvoiceCaption'],
                 'trx' => $b['trxInvoiceCaption'],
+                'usdtbep' => $b['usdtbepInvoiceCaption'],
             ][$key] ?? '';
         }
         return [
@@ -7649,7 +7653,8 @@ if (in_array($text, $textadmin) || $datain == "admin") {    if ($datain == "admi
                 'Currency Rial 2' => $textbotlang['textbot']['iranPay3'],
                 'Currency Rial 3' => $textbotlang['textbot']['iranPay1'],
                 'paymentnotverify' => $textbotlang['textbot']['paymentNotVerify'],
-                'Star Telegram' => $textbotlang['textbot']['starTelegram']
+                'Star Telegram' => $textbotlang['textbot']['starTelegram'],
+                'USDT-BEP20' => $textbotlang['textbot']['usdtbepPayment']
 
             ][$tracepay['Payment_Method']];
             $paycount .= sprintf($textbotlang['Admin']['report']['gatewayRow'], $status_var, $tracepay['countpay'], $tracepay['sumpay']);

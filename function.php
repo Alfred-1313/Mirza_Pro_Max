@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 require_once 'vendor/autoload.php';
 require 'config.php';
 require 'vendor/autoload.php';
@@ -1958,6 +1958,10 @@ if (!function_exists('gw_field_registry')) {
                 ['field' => 'walletaddresstrx', 'type' => 'text', 'label' => 'trxWalletLabel'],
                 ['field' => 'trxInvoiceExpireMinutes', 'type' => 'number', 'label' => 'invoiceExpireLabel'],
             ],
+            'usdtbep' => [
+                ['field' => 'walletaddressusdtbep', 'type' => 'text', 'label' => 'usdtbepWalletLabel'],
+                ['field' => 'usdtbepInvoiceExpireMinutes', 'type' => 'number', 'label' => 'invoiceExpireLabel'],
+            ],
             'iranpay1' => [
                 ['field' => 'marchent_floypay', 'type' => 'text', 'label' => 'merchantLabel', 'scope' => 'global'],
             ],
@@ -2096,6 +2100,7 @@ if (!function_exists('gateway_registry')) {
             'nowpayment' => $textbotlang['textbot']['cryptoPayment'],
             'ton' => $textbotlang['textbot']['tonPayment'],
             'trx' => $textbotlang['textbot']['trxPayment'],
+            'usdtbep' => $textbotlang['textbot']['usdtbepPayment'],
             'digitaltron' => $textbotlang['textbot']['nowPaymentTron'],
             'iranpay1' => $textbotlang['textbot']['iranPay2'],
             'iranpay2' => $textbotlang['textbot']['iranPay3'],
@@ -2120,7 +2125,7 @@ if (!function_exists('gateway_groups')) {
             // TON is paid into the shop's own wallet, but cronbot/ton.php
             // settles it off the public chain with no admin in the loop -
             // which is what this family means
-            'online' => ['plisio', 'nowpayment', 'startelegrams', 'ton', 'trx'],
+            'online' => ['plisio', 'nowpayment', 'startelegrams', 'ton', 'trx', 'usdtbep'],
             // paid straight to the bot's own wallet, so an admin has to confirm
             // each one by hand - a different workflow, hence its own group
             'offline' => ['digitaltron'],
@@ -2217,7 +2222,7 @@ if (!function_exists('gateway_all_keys')) {
     // (card-to-card is keyed by name because it can render as a url button).
     function gateway_all_keys()
     {
-        return ['card', 'plisio', 'nowpayment', 'ton', 'trx', 'digitaltron', 'iranpay1', 'iranpay2',
+        return ['card', 'plisio', 'nowpayment', 'ton', 'trx', 'usdtbep', 'digitaltron', 'iranpay1', 'iranpay2',
             'iranpay3', 'aqayepardakht', 'zarinpal', 'paymentnotverify', 'startelegrams'];
     }
 }
@@ -3660,6 +3665,329 @@ if (!function_exists('trx_invoice_build')) {
         ];
     }
 }
+if (!function_exists('usdtbep_rpc')) {
+    // ---- USDT on BNB Smart Chain (BEP20) ----
+    //
+    // Same shape as the TRX gateway above: one wallet, and the invoice is named
+    // by its amount because a token transfer carries no note either.
+    //
+    // Two things are NOT like TRX and both are load-bearing:
+    //
+    //   1. BEP20 USDT has 18 decimals, so the on-chain figure for anything over
+    //      ~9.2 USDT is larger than PHP_INT_MAX. Every amount here is therefore
+    //      kept in MICRO-USDT (6 decimals, exactly like TRX's sun) and the
+    //      on-chain value is divided down with bcmath before it is ever cast to
+    //      int. Never work in wei.
+    //   2. BSC's public dataseed nodes refuse eth_getLogs outright, and
+    //      Etherscan's free tier does not cover this chain at all. publicnode
+    //      does serve it, keylessly, which is why it is first in the list.
+    function usdtbep_endpoints()
+    {
+        return [
+            'https://bsc-rpc.publicnode.com',
+            'https://bsc.meowrpc.com',
+            'https://bsc-dataseed.binance.org',
+        ];
+    }
+    function usdtbep_contract()
+    {
+        return '0x55d398326f99059ff775485246999027b3197955';
+    }
+    // keccak256("Transfer(address,address,uint256)")
+    function usdtbep_transfer_topic()
+    {
+        return '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+    }
+    // 18 on-chain decimals, 12 of which are dropped to reach micro-USDT
+    function usdtbep_wei_per_micro()
+    {
+        return '1000000000000';
+    }
+    // One JSON-RPC call, tried against each endpoint in turn. Returns the
+    // decoded 'result', or null when every endpoint failed - which callers must
+    // treat as "could not look", never as "nothing arrived".
+    function usdtbep_rpc($method, array $params)
+    {
+        $body = json_encode(['jsonrpc' => '2.0', 'id' => 1, 'method' => $method, 'params' => $params]);
+        foreach (usdtbep_endpoints() as $url) {
+            $raw = @file_get_contents($url, false, stream_context_create([
+                'http' => [
+                    'method' => 'POST',
+                    'header' => "Content-Type: application/json\r\n",
+                    'content' => $body,
+                    'timeout' => 20,
+                    'ignore_errors' => true,
+                ],
+            ]));
+            if ($raw === false) {
+                continue;
+            }
+            $j = json_decode($raw, true);
+            if (is_array($j) && array_key_exists('result', $j) && !isset($j['error'])) {
+                return $j['result'];
+            }
+        }
+        return null;
+    }
+    // hex string -> decimal string. bcmath, because these values do not fit an
+    // int (see the note above).
+    function usdtbep_hex_to_dec($hex)
+    {
+        $hex = ltrim(strtolower((string) $hex), 'x');
+        $hex = ltrim(preg_replace('/^0x/', '', $hex), '0');
+        if ($hex === '' || !ctype_xdigit($hex)) {
+            return '0';
+        }
+        $dec = '0';
+        foreach (str_split($hex) as $c) {
+            $dec = bcadd(bcmul($dec, '16'), (string) hexdec($c));
+        }
+        return $dec;
+    }
+    // the shop's own BSC wallet for this language
+    function topup_usdtbep_address($lang)
+    {
+        return trim((string) pay_value('walletaddressusdtbep', $lang, ''));
+    }
+    function usdtbep_address_valid($addr)
+    {
+        return preg_match('/^0x[a-fA-F0-9]{40}$/', (string) $addr) === 1;
+    }
+    // a wallet as a 32-byte topic, which is how eth_getLogs matches a recipient
+    function usdtbep_address_topic($addr)
+    {
+        return '0x' . str_pad(strtolower(substr((string) $addr, 2)), 64, '0', STR_PAD_LEFT);
+    }
+    // Nobitex already quotes Tether in the same call that fetches TRX's price
+    // (see nobitex_rates_toman), so this costs nothing extra.
+    function topup_usdtbep_rate_toman()
+    {
+        return nobitex_rate_toman('usdt');
+    }
+    // A figure in micro-USDT no other open invoice is waiting for. Rounded UP to
+    // the nearest 0.001 USDT before the unique tail - finer than TRX's 0.01,
+    // because a hundredth of a Tether is worth far more than a hundredth of a
+    // TRX and the customer should not be asked for meaningful extra.
+    function usdtbep_unique_micro($base)
+    {
+        global $pdo;
+        $floor = (int) (ceil($base / 1000) * 1000);
+        $open = $pdo->query("SELECT dec_not_confirmed FROM Payment_report WHERE Payment_Method = 'USDT-BEP20' AND payment_Status = 'Unpaid'")
+            ->fetchAll(PDO::FETCH_COLUMN);
+        $taken = array_flip(array_map('intval', (array) $open));
+        for ($i = 0; $i < 60; $i++) {
+            $candidate = $floor + random_int(1, 999);
+            if (!isset($taken[$candidate])) {
+                return $candidate;
+            }
+        }
+        // sixty collisions means thousands of open invoices at once; step past
+        // the block rather than hand back a duplicate
+        return $floor + 1000 + random_int(1, 999);
+    }
+    function usdtbep_micro_to_text($micro)
+    {
+        return rtrim(rtrim(number_format($micro / 1000000, 6, '.', ''), '0'), '.');
+    }
+}
+if (!function_exists('usdtbep_incoming_transfers')) {
+    // Incoming USDT transfers into the shop's wallet, as [micro => timestamp_ms].
+    // null means the lookup failed, which is not the same as nothing arrived.
+    //
+    // $sinceTs is a unix timestamp; the block window is derived from it because
+    // eth_getLogs speaks blocks, not time. BSC produces a block every ~0.45s, so
+    // the span is capped at 6000 blocks (~45 minutes) - comfortably longer than
+    // any invoice lives, and short enough that the node will serve it.
+    function usdtbep_incoming_transfers($address, $sinceTs = 0, $maxSpan = 6000)
+    {
+        if (!usdtbep_address_valid($address)) {
+            return null;
+        }
+        $headHex = usdtbep_rpc('eth_blockNumber', []);
+        if (!is_string($headHex)) {
+            return null;
+        }
+        $head = (int) usdtbep_hex_to_dec($headHex);
+        if ($head <= 0) {
+            return null;
+        }
+        $span = (int) $maxSpan;
+        if ($sinceTs > 0) {
+            // 0.45s a block, plus a margin, then clamped
+            $need = (int) ceil((time() - $sinceTs) / 0.45) + 400;
+            $span = max(200, min($span, $need));
+        }
+        $from = max(0, $head - $span);
+        $logs = usdtbep_rpc('eth_getLogs', [[
+            'fromBlock' => '0x' . dechex($from),
+            'toBlock' => '0x' . dechex($head),
+            'address' => usdtbep_contract(),
+            'topics' => [usdtbep_transfer_topic(), null, usdtbep_address_topic($address)],
+        ]]);
+        if (!is_array($logs)) {
+            return null;
+        }
+        // A transfer's time comes from its block, and each block costs a call.
+        // eth_getLogs answers in ascending block order, so walking it BACKWARDS
+        // resolves the newest blocks first - which are the only ones a freshly
+        // issued invoice can match anyway - and the cap keeps a wallet with a
+        // lot of traffic from turning one tap into a hundred round trips.
+        // Anything past the cap is left at 0, which fails closed: never settled
+        // by mistake, and the exact-amount rule still has to agree first.
+        $maxBlockLookups = 30;
+        $blockTimes = [];
+        $out = [];
+        foreach (array_reverse($logs) as $log) {
+            if (!is_array($log) || !empty($log['removed'])) {
+                continue;
+            }
+            $micro = (int) bcdiv(usdtbep_hex_to_dec($log['data'] ?? '0x0'), usdtbep_wei_per_micro(), 0);
+            if ($micro < 1) {
+                continue;
+            }
+            $bh = (string) ($log['blockNumber'] ?? '');
+            if (!array_key_exists($bh, $blockTimes)) {
+                if (count($blockTimes) >= $maxBlockLookups) {
+                    $blockTimes[$bh] = 0;
+                } else {
+                    $blk = usdtbep_rpc('eth_getBlockByNumber', [$bh, false]);
+                    $blockTimes[$bh] = is_array($blk) && isset($blk['timestamp'])
+                        ? ((int) usdtbep_hex_to_dec($blk['timestamp'])) * 1000
+                        : 0;
+                }
+            }
+            $ts = $blockTimes[$bh];
+            if (!isset($out[$micro]) || $ts > $out[$micro]) {
+                $out[$micro] = $ts;
+            }
+        }
+        return $out;
+    }
+    // Same rule as TRX: the amount is the invoice's name, so it has to match
+    // exactly, and the transfer has to be newer than the invoice.
+    function usdtbep_payment_settled(array $row, $incoming)
+    {
+        if (!is_array($incoming)) {
+            return false;
+        }
+        $want = (int) $row['dec_not_confirmed'];
+        if ($want < 1 || !isset($incoming[$want])) {
+            return false;
+        }
+        $issuedMs = strtotime((string) $row['time']) * 1000;
+        // a minute of slack for clock differences between this box and the chain
+        return $issuedMs <= 0 || $incoming[$want] >= ($issuedMs - 60000);
+    }
+    // The other way in: the customer hands over the transaction hash. True only
+    // for a successful transaction carrying a USDT Transfer of exactly this
+    // invoice's figure into this shop's wallet.
+    function usdtbep_verify_hash(array $row, $hash, $address)
+    {
+        $hash = strtolower(trim((string) $hash));
+        if (!preg_match('/^0x[a-f0-9]{64}$/', $hash) || !usdtbep_address_valid($address)) {
+            return false;
+        }
+        $rc = usdtbep_rpc('eth_getTransactionReceipt', [$hash]);
+        if (!is_array($rc) || ($rc['status'] ?? '') !== '0x1' || !is_array($rc['logs'] ?? null)) {
+            return false;
+        }
+        $want = (int) $row['dec_not_confirmed'];
+        $mine = strtolower((string) $address);
+        foreach ($rc['logs'] as $log) {
+            if (strtolower((string) ($log['address'] ?? '')) !== usdtbep_contract()) {
+                continue;
+            }
+            if (strtolower((string) ($log['topics'][0] ?? '')) !== usdtbep_transfer_topic()) {
+                continue;
+            }
+            $to = '0x' . substr(strtolower((string) ($log['topics'][2] ?? '')), 26);
+            if ($to !== $mine) {
+                continue;
+            }
+            $micro = (int) bcdiv(usdtbep_hex_to_dec($log['data'] ?? '0x0'), usdtbep_wei_per_micro(), 0);
+            if ($micro === $want) {
+                return true;
+            }
+        }
+        return false;
+    }
+}
+if (!function_exists('usdtbep_invoice_build')) {
+    // Same contract as the other builders. Never execute this in a test: it
+    // reads the live Nobitex price. Source-verify only.
+    function usdtbep_invoice_build($from_id, $lang, $amount, $idInvoice, $textbotlang, array $setting)
+    {
+        global $pdo;
+        $addr = topup_usdtbep_address($lang);
+        if (!usdtbep_address_valid($addr)) {
+            return ['error' => 'noaddress'];
+        }
+        $rate = topup_usdtbep_rate_toman();
+        if ($rate <= 0) {
+            return ['error' => 'rate'];
+        }
+        $micro = usdtbep_unique_micro((int) round(($amount / $rate) * 1000000));
+        if ($micro < 1) {
+            return ['error' => 'toolow'];
+        }
+        $amountText = usdtbep_micro_to_text($micro);
+        $randomString = bin2hex(random_bytes(5));
+        $dateacc = date('Y/m/d H:i:s');
+        // dec_not_confirmed holds the exact figure the watcher waits for - the
+        // same column plisio uses for its txn id
+        $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice,dec_not_confirmed) VALUES (?,?,?,?,?,?,?,?)");
+        $stmt->execute([$from_id, $randomString, $dateacc, $amount, "Unpaid", "USDT-BEP20", $idInvoice, $micro]);
+        $b = $textbotlang['users']['Balance'];
+        $text = strtr(topup_invoice_caption_for($lang, 'usdtbep', $b['usdtbepInvoiceCaption']), [
+            '{order}' => $randomString,
+            '{usdt}' => $amountText,
+            '{price}' => number_format($amount, 0),
+            '{rate}' => number_format($rate, 0),
+            '{minutes}' => topup_expire_minutes($lang, 'usdtbep'),
+            '{address}' => $addr,
+            '{network}' => $b['usdtbepNetworkLabel'],
+        ]);
+        $copy = function ($which, $label, $value) use ($lang) {
+            $btn = topup_styled_button($label, topup_invoice_btnstyle_for($lang, 'usdtbep', $which), '', topup_invoice_btnstyle_default_color($which, 'usdtbep'));
+            unset($btn['callback_data']);
+            $btn['copy_text'] = ['text' => $value];
+            return $btn;
+        };
+        $plain = function ($which, $label, $cb) use ($lang) {
+            return topup_styled_button($label, topup_invoice_btnstyle_for($lang, 'usdtbep', $which), $cb, topup_invoice_btnstyle_default_color($which, 'usdtbep'));
+        };
+        $made = [
+            'copyamt' => $copy('copyamt', $b['usdtbepCopyAmountBtn'], $amountText),
+            'copyaddr' => $copy('copyaddr', $b['usdtbepCopyAddressBtn'], $addr),
+            'check' => $plain('check', $b['usdtbepCheckBtn'], "usdtbepcheck:{$randomString}"),
+            'backmethod' => $plain('backmethod', $b['tonBackMethodBtn'], 'topup_back_methods'),
+            'back' => $plain('back', $b['tonBackBtn'], 'gwinvclose'),
+        ];
+        if (topup_invoice_layout_touched($lang, 'usdtbep')) {
+            $rows = [];
+            $ordered = [];
+            foreach (topup_invoice_ordered_keys($lang, 'usdtbep') as $w) {
+                $ordered[] = $made[$w];
+            }
+            foreach (array_chunk($ordered, max(1, topup_invoice_layout_perrow($lang, 'usdtbep'))) as $chunk) {
+                $rows[] = $chunk;
+            }
+        } else {
+            $rows = [
+                [$made['copyamt'], $made['copyaddr']],
+                [$made['check']],
+                [$made['backmethod']],
+                [$made['back']],
+            ];
+        }
+        return [
+            'error' => null,
+            'text' => $text,
+            'keyboard' => json_encode(['inline_keyboard' => $rows]),
+            'randomString' => $randomString,
+        ];
+    }
+}
 if (!function_exists('trx_incoming_transfers')) {
     // Plain TRX transfers into the shop's wallet, as [sun => timestamp_ms].
     // Token transfers are skipped - the wallet is a magnet for TRC10 spam with
@@ -4014,6 +4342,7 @@ if (!function_exists('topup_usd_rate')) {
             'startelegrams' => 'star',
             'ton' => 'ton',
             'trx' => 'trx',
+            'usdtbep' => 'usdtbep',
             'digitaltron' => 'digitaltron',
             'zarinpal' => 'zarinpal',
             'aqayepardakht' => 'aqayepardakht',
@@ -4850,7 +5179,7 @@ if (!function_exists('topup_invoice_layout_get')) {
         if ($key === 'ton') {
             return ['pay', 'copymemo', 'copyamt', 'copyaddr', 'check', 'backmethod', 'back'];
         }
-        if ($key === 'trx') {
+        if ($key === 'trx' || $key === 'usdtbep') {
             return ['copyamt', 'copyaddr', 'check', 'backmethod', 'back'];
         }
         // card-to-card arranges its own copy buttons on its own screen, which
@@ -4920,6 +5249,19 @@ if (!function_exists('topup_invoice_btnstyle_items')) {
                 'paid' => $b['paidInvoiceBtn'],
             ];
         }
+        if ($key === 'usdtbep') {
+            // same shape as TRX, for the same reason: no deep link every BSC
+            // wallet honours, so the amount and the address are copied instead
+            return [
+                'copyamt' => $b['usdtbepCopyAmountBtn'],
+                'copyaddr' => $b['usdtbepCopyAddressBtn'],
+                'check' => $b['usdtbepCheckBtn'],
+                'backmethod' => $b['tonBackMethodBtn'],
+                'back' => $b['tonBackBtn'],
+                'reissue' => $b['reissueInvoiceBtn'],
+                'paid' => $b['paidInvoiceBtn'],
+            ];
+        }
         if ($key === 'ton') {
             // its invoice is paid by hand from a wallet, so it carries the
             // copy buttons and the two ways back that the redirect gateways
@@ -4958,7 +5300,7 @@ if (!function_exists('topup_invoice_btnstyle_items')) {
             // 'paid' is not one of card's own buttons - the shared map below
             // is what actually renders it, so it decides the colour too
         }
-        if ($key === 'trx') {
+        if ($key === 'trx' || $key === 'usdtbep') {
             // same convention as TON: green moves the payment forward, blue
             // only copies, red abandons the invoice
             return ['check' => 'success', 'back' => 'danger', 'reissue' => 'danger', 'paid' => 'success'][$which] ?? 'primary';
@@ -5031,6 +5373,7 @@ if (!function_exists('topup_expire_minutes')) {
             'startelegrams' => 'starInvoiceExpireMinutes',
             'ton' => 'tonInvoiceExpireMinutes',
             'trx' => 'trxInvoiceExpireMinutes',
+            'usdtbep' => 'usdtbepInvoiceExpireMinutes',
             'digitaltron' => 'digitaltronInvoiceExpireMinutes',
         ][$key] ?? null;
     }
@@ -5168,6 +5511,7 @@ if (!function_exists('topup_gateway_key_by_method')) {
             'Star Telegram' => 'startelegrams',
             'TON' => 'ton',
             'TRX' => 'trx',
+            'USDT-BEP20' => 'usdtbep',
             'arze digital offline' => 'digitaltron',
             'zarinpal' => 'zarinpal',
             'aqayepardakht' => 'aqayepardakht',
@@ -5223,6 +5567,7 @@ if (!function_exists('topup_expire_gateway_keys')) {
             'Star Telegram' => 'startelegrams',
             'TON' => 'ton',
             'TRX' => 'trx',
+            'USDT-BEP20' => 'usdtbep',
         ];
     }
 }
@@ -6428,10 +6773,12 @@ function activecron()
         "*/1 * * * * flock -n /tmp/mz_croncard.lock curl -s --max-time 55 https://$domainhosts/cronbot/croncard.php > /dev/null 2>&1",
         "*/1 * * * * flock -n /tmp/mz_iranpay1.lock curl -s --max-time 55 https://$domainhosts/cronbot/iranpay1.php > /dev/null 2>&1",
         "*/1 * * * * flock -n /tmp/mz_sendmessage.lock curl -s --max-time 55 https://$domainhosts/cronbot/sendmessage.php > /dev/null 2>&1",
-        // TON and TRX are settled by reading the chain, so nothing credits a
-        // customer until these run - they are the whole gateway, not an extra
+        // TON, TRX and USDT-BEP20 are settled by reading the chain, so nothing
+        // credits a customer until these run - they are the whole gateway, not
+        // an extra
         "*/2 * * * * flock -n /tmp/mz_ton.lock curl -s --max-time 110 https://$domainhosts/cronbot/ton.php > /dev/null 2>&1",
         "*/2 * * * * flock -n /tmp/mz_trx.lock curl -s --max-time 110 https://$domainhosts/cronbot/trx.php > /dev/null 2>&1",
+        "*/2 * * * * flock -n /tmp/mz_usdtbep.lock curl -s --max-time 110 https://$domainhosts/cronbot/usdtbep.php > /dev/null 2>&1",
         "*/3 * * * * flock -n /tmp/mz_plisio.lock curl -s --max-time 170 https://$domainhosts/cronbot/plisio.php > /dev/null 2>&1",
         "*/5 * * * * flock -n /tmp/mz_payment_expire.lock curl -s --max-time 280 https://$domainhosts/cronbot/payment_expire.php > /dev/null 2>&1",
         // --- stretched: these were the load ---
@@ -9531,6 +9878,7 @@ if (!function_exists('topup_disc_method_to_gateway')) {
             'Currency Rial 3' => 'iranpay3',
             'arze digital offline' => 'digitaltron',
             'Star Telegram' => 'startelegrams',
+            'USDT-BEP20' => 'usdtbep',
         ];
         return $map[(string) $method] ?? null;
     }

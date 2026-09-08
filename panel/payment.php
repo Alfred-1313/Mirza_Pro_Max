@@ -61,6 +61,7 @@ $methodMap = [
   'arze digital offline' => $textbotlang['panel']['paymentMethodCryptoOffline'],
   'Star Telegram' => $textbotlang['panel']['paymentMethodTelegramStar'],
   'nowpayment' => 'NowPayment',
+  'USDT-BEP20' => 'USDT (BEP20)',
 ];
 
 $pageTitle = $textbotlang['panel']['paymentTransactionsTitle'];

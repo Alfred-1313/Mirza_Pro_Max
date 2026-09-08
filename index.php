@@ -5395,6 +5395,78 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     }
     Editmessagetext($from_id, $message_id, $built['text'], $built['keyboard'], 'HTML');
     update("Payment_report", "message_id", (int) $message_id, "id_order", $built['randomString']);
+} elseif (preg_match('/^usdtbepcheck:([a-z0-9]+)$/', $datain, $ub_m)) {
+    // Same two-in-one tap as TRX below: look for the transfer first, and only
+    // ask for a hash when the chain has nothing yet. A BEP20 transfer carries no
+    // note either, so the amount is what identifies the invoice.
+    $ub_row = select("Payment_report", "*", "id_order", $ub_m[1], "select");
+    if (!is_array($ub_row) || (string) $ub_row['id_user'] !== (string) $from_id) {
+        return;
+    }
+    $ub_lang = $user['lang'] ?? 'fa';
+    if ($ub_row['payment_Status'] === 'paid') {
+        telegram('answerCallbackQuery', [
+            'callback_query_id' => $callback_query_id,
+            'text' => topup_paid_alert_for($ub_lang, 'usdtbep', $textbotlang['users']['Balance']['topupPaidAlert']),
+            'show_alert' => true,
+        ]);
+        return;
+    }
+    // from the invoice's own age, so the block window stays as small as it can
+    $ub_since = strtotime((string) $ub_row['time']);
+    $ub_incoming = usdtbep_incoming_transfers(topup_usdtbep_address($ub_lang), $ub_since > 0 ? $ub_since - 300 : 0);
+    if (usdtbep_payment_settled($ub_row, $ub_incoming)) {
+        $ub_claim = $pdo->prepare("UPDATE Payment_report SET payment_Status = 'paid' WHERE id_order = ? AND payment_Status = 'Unpaid'");
+        $ub_claim->execute([$ub_row['id_order']]);
+        if ($ub_claim->rowCount() === 1) {
+            DirectPayment($ub_row['id_order'], "images.jpg");
+        }
+        return;
+    }
+    telegram('answerCallbackQuery', [
+        'callback_query_id' => $callback_query_id,
+        'text' => topup_notseen_caption_for($ub_lang, 'usdtbep', $textbotlang['users']['Balance']['usdtbepNotSeenYet']),
+        'show_alert' => true,
+    ]);
+    // one prompt at a time, same as TRX
+    $ub_prev = (int) (select("user", "*", "id", $from_id, "select")['topup_range_msg_id'] ?? 0);
+    if ($ub_prev > 0) {
+        deletemessage($from_id, $ub_prev);
+    }
+    $ub_cancelKb = json_encode(['inline_keyboard' => [
+        [['text' => $textbotlang['bottext']['btn_close'] ?? '❌', 'callback_data' => 'topup_range_close', 'style' => 'danger']],
+    ]]);
+    $ub_prompt = sendmessage($from_id, topup_askhash_caption_for($ub_lang, 'usdtbep', $textbotlang['users']['Balance']['usdtbepAskHash']), $ub_cancelKb, 'HTML');
+    $ub_promptId = (int) ($ub_prompt['result']['message_id'] ?? 0);
+    update("user", "topup_range_msg_id", (string) $ub_promptId, "id", $from_id);
+    step("usdtbephash:{$ub_m[1]}:{$ub_promptId}", $from_id);
+} elseif (preg_match('/^usdtbephash:([a-z0-9]+):([0-9]+)$/', (string) $user['step'], $ub_m) && $datain == '') {
+    $ub_row = select("Payment_report", "*", "id_order", $ub_m[1], "select");
+    if (!is_array($ub_row) || (string) $ub_row['id_user'] !== (string) $from_id) {
+        step('home', $from_id);
+        return;
+    }
+    $ub_lang = $user['lang'] ?? 'fa';
+    $ub_promptId = (int) $ub_m[2];
+    deletemessage($from_id, (int) ($update['message']['message_id'] ?? 0));
+    if (!usdtbep_verify_hash($ub_row, $text, topup_usdtbep_address($ub_lang))) {
+        $ub_cancelKb = json_encode(['inline_keyboard' => [
+            [['text' => $textbotlang['bottext']['btn_close'] ?? '❌', 'callback_data' => 'topup_range_close', 'style' => 'danger']],
+        ]]);
+        Editmessagetext($from_id, $ub_promptId,
+            '<blockquote>' . topup_hashbad_caption_for($ub_lang, 'usdtbep', $textbotlang['users']['Balance']['usdtbepHashInvalid']) . "</blockquote>\n\n"
+            . topup_askhash_caption_for($ub_lang, 'usdtbep', $textbotlang['users']['Balance']['usdtbepAskHash']),
+            $ub_cancelKb, 'HTML');
+        step("usdtbephash:{$ub_m[1]}:{$ub_promptId}", $from_id);
+        return;
+    }
+    topup_amount_prompt_clear($from_id);
+    step('home', $from_id);
+    $ub_claim = $pdo->prepare("UPDATE Payment_report SET payment_Status = 'paid' WHERE id_order = ? AND payment_Status = 'Unpaid'");
+    $ub_claim->execute([$ub_row['id_order']]);
+    if ($ub_claim->rowCount() === 1) {
+        DirectPayment($ub_row['id_order'], "images.jpg");
+    }
 } elseif (preg_match('/^trxcheck:([a-z0-9]+)$/', $datain, $tx_m)) {
     // One tap does both: look for the transfer first, and only ask for a hash
     // if the chain has nothing yet. TRON carries no note, so the amount is what
@@ -5522,6 +5594,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
         'startelegrams' => 'star_invoice_build',
         'ton' => 'ton_invoice_build',
         'trx' => 'trx_invoice_build',
+        'usdtbep' => 'usdtbep_invoice_build',
     ];
     $gr_key = $grm[1];
     if (!isset($gr_builders[$gr_key])) {

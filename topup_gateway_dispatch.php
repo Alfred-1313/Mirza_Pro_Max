@@ -433,6 +433,38 @@ if (!isset($from_id, $datain)) {
         }
         topup_linkmsg_help($from_id, 'helptrx');
         topup_track_invoice_message($built['randomString'], topup_linkmsg_finish($from_id, $built['text'], $built['keyboard']));
+    } elseif ($datain == "usdtbep") {
+        $mainbalance = topup_effective_gateway_min($user['lang'] ?? 'fa', 'usdtbep', pay_value("minbalanceusdtbep", $user['lang'] ?? null));
+        $maxbalance = topup_effective_gateway_max($user['lang'] ?? 'fa', 'usdtbep', pay_value("maxbalanceusdtbep", $user['lang'] ?? null));
+        if ($user['Processing_value'] < $mainbalance || $user['Processing_value'] > $maxbalance) {
+            topup_range_notice($from_id, $user['lang'] ?? 'fa', 'usdtbep', $mainbalance, $maxbalance, $textbotlang);
+            return;
+        }
+        deletemessage($from_id, $message_id);
+        topup_linkmsg_show($from_id, $user['lang'] ?? 'fa', 'usdtbep', $textbotlang['users']['Balance']['linkpayments']);
+        $invoice = "{$user['Processing_value_tow']}|{$user['Processing_value_one']}";
+        $built = usdtbep_invoice_build($from_id, $user['lang'] ?? 'fa', $user['Processing_value'], $invoice, $textbotlang, $setting);
+        if ($built['error'] === 'toolow') {
+            // the toman figure rounded down to nothing in Tether - the range
+            // message says what the smallest workable amount is
+            topup_linkmsg_drop($from_id);
+            topup_range_notice($from_id, $user['lang'] ?? 'fa', 'usdtbep', $mainbalance, $maxbalance, $textbotlang);
+            return;
+        }
+        if ($built['error'] === 'noaddress') {
+            // nothing the customer can do about this one - say so plainly
+            topup_linkmsg_drop($from_id);
+            sendmessage($from_id, topup_noaddress_caption_for($user['lang'] ?? 'fa', 'usdtbep', $textbotlang['users']['Balance']['usdtbepNoAddress']), $keyboard, 'HTML');
+            step('home', $from_id);
+            return;
+        }
+        if ($built['error'] !== null) {
+            topup_linkmsg_drop($from_id);
+            sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
+            step('home', $from_id);
+            return;
+        }
+        topup_track_invoice_message($built['randomString'], topup_linkmsg_finish($from_id, $built['text'], $built['keyboard']));
     } elseif ($datain == "startelegrams") {
         $mainbalance = topup_effective_gateway_min($user['lang'] ?? 'fa', 'startelegrams', pay_value("minbalancestar", $user['lang'] ?? null));
         $maxbalance = topup_effective_gateway_max($user['lang'] ?? 'fa', 'startelegrams', pay_value("maxbalancestar", $user['lang'] ?? null));
