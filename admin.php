@@ -584,6 +584,11 @@ if (!function_exists('bottext_item_menu_payload')) {
         // simply quoting the current text right here does - the same way the
         // gateway caption screens (💳 کپشن و دکمه‌های درگاه‌ها) already work.
         $bt_inline = in_array($bt_key, bt_inline_block_keys(), true);
+        // A sticker only ever fires from sendmessage()/Editmessagetext() (see
+        // bottext_send_extras() in botapi.php). These texts go out as a photo
+        // or a document caption instead, which never reaches that path - so the
+        // setting sat there doing nothing.
+        $bt_nosticker = $bt_inline || in_array($bt_key, bt_media_message_keys(), true);
         // NOTE: users.status.getConfigHintBuy deliberately does NOT go in this
         // list - like its usertest counterpart users.status.getConfigHint, its
         // "buttons" aren't genbtn-shaped (button_edit[lang][key]) but the
@@ -593,10 +598,10 @@ if (!function_exists('bottext_item_menu_payload')) {
         $bt_has_buttons = in_array($bt_key, ['users.usertest.selectUsernamePrompt', 'users.Balance.insufficientBalanceSimple', 'users.sell.selectUsernamePrompt', 'users.sell.preInvoice', 'users.sell.preInvoice2', 'textbot.preInvoice', 'users.sell.service_not_available', 'textbot.testExpired', 'users.sell.service_sell', 'users.status.infoFull', 'users.Balance.chargeSuccess', 'textbot.channel', 'users.extend.invoiceCreated', 'users.changeLink.warnchange'], true);
         $info = "📝 <b>{$bt_label}</b>\n➖➖➖➖➖➖➖➖➖➖\n{$bt_extra_note}";
         $info .= "✏️ متن: " . ($bt_custom ? "سفارشی ✅" : "پیش‌فرض") . "\n";
-        if (!$bt_inline) {
+        if (!$bt_nosticker) {
             $info .= "🖼 استیکر: " . ($bt_sticker !== '' ? "ست شده ✅" : "ندارد ❌") . "\n";
         }
-        if ($bt_can_react && !$bt_inline) {
+        if ($bt_can_react && !$bt_nosticker) {
             $info .= "❤️ ری‌اکشن: " . ($bt_react !== '' ? $bt_react : "ندارد ❌") . "\n";
         }
         $bt_btn_custom = false;
@@ -663,7 +668,7 @@ if (!function_exists('bottext_item_menu_payload')) {
             ['text' => '📋 کپشن پیش‌فرض', 'callback_data' => "btact|rsttext|{$bt_lang}|{$bt_key}"],
             ['text' => '✏️ ویرایش کپشن', 'callback_data' => "btact|text|{$bt_lang}|{$bt_key}", 'style' => $bt_custom ? 'success' : 'primary'],
         ];
-        if (!$bt_inline) {
+        if (!$bt_nosticker) {
             $bt_row = [['text' => '🖼 استیکر', 'callback_data' => "btact|sticker|{$bt_lang}|{$bt_key}", 'style' => 'primary']];
             if ($bt_can_react) {
                 $bt_row[] = ['text' => '❤️ ری‌اکشن', 'callback_data' => "btact|react|{$bt_lang}|{$bt_key}", 'style' => 'primary'];
@@ -819,6 +824,25 @@ if (!function_exists('bt_inline_block_keys')) {
             'users.status.svcUsageUnavailable',
             'users.extend.insufficientBalanceAlert',
             'keyboard.infoRefreshed',
+        ];
+    }
+    // These ARE messages of their own, but they leave as a photo or a document
+    // caption. bottext_send_extras() - the only thing that ever fires a text
+    // sticker - hangs off sendmessage() and Editmessagetext() alone, so a
+    // sticker set here could never appear. They keep their text editor and
+    // their buttons; only the 🖼 استیکر row goes.
+    function bt_media_message_keys()
+    {
+        return [
+            // the service screen and the two subscription screens carry the
+            // subscription QR (photo) or the WireGuard .conf (document)
+            'users.status.infoFull',
+            'users.status.linksubCaption',
+            'users.status.subscriptionFile',
+            // both config-delivery messages ride along with the config QR;
+            // only a panel with no QR-able link falls back to plain text
+            'textbot.afterPay',
+            'textbot.afterText',
         ];
     }
 }
