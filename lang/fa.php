@@ -5943,6 +5943,8 @@ nowpayments.io
       'groupMethodsOnBtn' => '🟢 روشن — برای خاموش کردن بزن',
       'groupMethodsOffBtn' => '🔵 خاموش — برای روشن کردن بزن',
       'groupBtnsLabel' => '🎛 دکمه‌های دسته‌بندی',
+      'gwStyleOtherLabel' => '🔻 سایر درگاه‌ها',
+      'gwStyleSepAlert' => 'عنوان دسته: {group} — دکمه‌های زیرش مال همین دسته‌ان.',
       'editGroupCaptionBtn' => '✏️ ویرایش کپشن صفحهٔ دسته',
       'defaultGroupCaptionBtn' => '📋 پیش‌فرض (صفحهٔ دسته)',
       'askGroupCaption' => '✏️ متن جدید کپشن صفحهٔ دسته رو بفرست

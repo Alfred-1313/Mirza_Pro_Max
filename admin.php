@@ -4500,7 +4500,7 @@ if (!function_exists('help_rename_editor_payload')) {
                 }
                 $buttonsByKey[$key] = $btn;
             }
-            $rows = help_layout_chunk_rows($orderedKeys, $buttonsByKey, $section['width']);
+            $rows = help_layout_grouped_rows($kind, $lang, $orderedKeys, $buttonsByKey, $section, $textbotlang);
             foreach ($rows as $row) {
                 $kb['inline_keyboard'][] = $row;
             }
@@ -4550,7 +4550,7 @@ if (!function_exists('help_layout_editor_payload')) {
                 }
                 $buttonsByKey[$key] = $btn;
             }
-            $rows = help_layout_chunk_rows($orderedKeys, $buttonsByKey, $section['width']);
+            $rows = help_layout_grouped_rows($kind, $lang, $orderedKeys, $buttonsByKey, $section, $textbotlang);
             foreach ($rows as $row) {
                 $kb['inline_keyboard'][] = $row;
             }
@@ -4573,6 +4573,54 @@ if (!function_exists('help_layout_editor_payload')) {
     }
 }
 
+if (!function_exists('help_layout_grouped_rows')) {
+    // The payment gateways are a dozen buttons in one flat run on all four
+    // appearance screens (چیدمان / رنگ‌بندی / ایموجی / تغییر نام). They get the
+    // same family headings 💳 کپشن و دکمه‌های درگاه‌ها already uses, so the same
+    // set reads the same way wherever it is edited.
+    //
+    // Display only: the stored order is untouched, the order inside a family is
+    // still the admin's own, and every other kind keeps its single list. The
+    // headings are white labels that navigate nowhere.
+    function help_layout_grouped_rows($kind, $lang, array $orderedKeys, array $buttonsByKey, array $section, $textbotlang)
+    {
+        if ($kind !== 'gateway' || !function_exists('gateway_disc_groups') || count($orderedKeys) < 2) {
+            return help_layout_chunk_rows($orderedKeys, $buttonsByKey, $section['width']);
+        }
+        $rows = [];
+        $placed = [];
+        foreach (array_keys(gateway_disc_groups()) as $group) {
+            $members = [];
+            foreach ($orderedKeys as $k) {
+                if (gateway_disc_group_of($k) === $group) {
+                    $members[] = $k;
+                    $placed[$k] = true;
+                }
+            }
+            if (empty($members)) {
+                continue;
+            }
+            $rows[] = [['text' => gateway_group_label($group, $textbotlang), 'callback_data' => "gwstylesep:{$lang}:{$group}"]];
+            foreach (help_layout_chunk_rows($members, $buttonsByKey, $section['width']) as $r) {
+                $rows[] = $r;
+            }
+        }
+        // a gateway added later that no family claims still has to show up
+        $rest = [];
+        foreach ($orderedKeys as $k) {
+            if (empty($placed[$k])) {
+                $rest[] = $k;
+            }
+        }
+        if (!empty($rest)) {
+            $rows[] = [['text' => $textbotlang['Admin']['BtnStyle']['gwStyleOtherLabel'], 'callback_data' => "gwstylesep:{$lang}:other"]];
+            foreach (help_layout_chunk_rows($rest, $buttonsByKey, $section['width']) as $r) {
+                $rows[] = $r;
+            }
+        }
+        return $rows;
+    }
+}
 if (!function_exists('help_layout_effective_color')) {
     // The colour a button will ACTUALLY render with for the end user, so every
     // preview screen here shows the same thing the customer sees. Payment-method
@@ -4616,7 +4664,7 @@ if (!function_exists('help_color_editor_payload')) {
                 }
                 $buttonsByKey[$key] = $btn;
             }
-            $rows = help_layout_chunk_rows($orderedKeys, $buttonsByKey, $section['width']);
+            $rows = help_layout_grouped_rows($kind, $lang, $orderedKeys, $buttonsByKey, $section, $textbotlang);
             foreach ($rows as $row) {
                 $kb['inline_keyboard'][] = $row;
             }
@@ -4655,7 +4703,7 @@ if (!function_exists('help_emoji_editor_payload')) {
                 }
                 $buttonsByKey[$key] = $btn;
             }
-            $rows = help_layout_chunk_rows($orderedKeys, $buttonsByKey, $section['width']);
+            $rows = help_layout_grouped_rows($kind, $lang, $orderedKeys, $buttonsByKey, $section, $textbotlang);
             foreach ($rows as $row) {
                 $kb['inline_keyboard'][] = $row;
             }
@@ -20399,6 +20447,17 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     // ---- 🗂 دسته‌بندی درگاه‌ها ----
     list($gg_cap, $gg_kb) = topup_group_hub_payload($gg_m[1], $textbotlang);
     Editmessagetext($from_id, $message_id, $gg_cap, $gg_kb, 'HTML');
+} elseif (preg_match('/^gwstylesep:([a-z]{2}):([a-z]+)$/', $datain, $gg_m) && $adminrulecheck['rule'] == "administrator") {
+    // a family heading on the four gateway appearance screens - a label, not a
+    // button, so it says what it is rather than doing nothing
+    $gs_label = $gg_m[2] === 'other'
+        ? $textbotlang['Admin']['BtnStyle']['gwStyleOtherLabel']
+        : gateway_group_label($gg_m[2], $textbotlang);
+    telegram('answerCallbackQuery', [
+        'callback_query_id' => $callback_query_id,
+        'text' => strtr($textbotlang['Admin']['BtnStyle']['gwStyleSepAlert'], ['{group}' => $gs_label]),
+        'show_alert' => false,
+    ]);
 } elseif (preg_match('/^gwgrpsep:([a-z]{2})$/', $datain, $gg_m) && $adminrulecheck['rule'] == "administrator") {
     // a label, not a button - say so rather than doing nothing
     telegram('answerCallbackQuery', [
