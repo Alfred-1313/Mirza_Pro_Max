@@ -4298,14 +4298,18 @@ if (!function_exists('topup_usd_rate')) {
     }
     // "Does this gateway's wording have to explain the one-dollar rule?"
     //
-    // Only the two processors that actually refuse a sub-dollar invoice. The
-    // rest of the online family has no dollar in the middle to floor against:
-    // TON and TRX are paid straight into the shop's own wallet and priced in
-    // toman, and Telegram Stars is invoiced in Telegram's own currency - so
-    // quoting a dollar at their customers only ever confused them.
+    // The two processors that actually refuse a sub-dollar invoice, plus USDT:
+    // Tether IS the dollar, so a one-dollar floor is the natural unit there and
+    // the customer is better told the toman figure it works out to than left to
+    // discover that 5,000 toman buys 0.02 of a coin.
+    //
+    // The rest of the online family has no dollar in the middle to floor
+    // against: TON and TRX are paid straight into the shop's own wallet and
+    // priced in toman, and Telegram Stars is invoiced in Telegram's own
+    // currency - so quoting a dollar at their customers only ever confused them.
     function topup_has_usd_floor($key)
     {
-        return $key === 'plisio' || $key === 'nowpayment';
+        return $key === 'plisio' || $key === 'nowpayment' || $key === 'usdtbep';
     }
     // The smallest amount this gateway can actually put on an invoice, in
     // toman, or null when it has none - and null too when the rate cannot be
