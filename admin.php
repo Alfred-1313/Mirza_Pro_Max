@@ -804,11 +804,19 @@ if (!function_exists('bt_inline_block_keys')) {
             'users.Balance.topupDiscAutoBlock',
             // the quote appended to the top-up confirmation message
             'users.Balance.chargeSuccessDiscount',
-            // single lines rendered inside a blockquote on the amount screens
+            // the exact-amount warning appended to the card-to-card invoice:
+            // the message the customer gets starts with the invoice caption, so
+            // this text is never at the front and never matches
+            'textbot.cardRandomAmountNotice',
+            // single lines rendered inside a blockquote on the amount screens.
+            // The two "All" variants belong with the other four - they were
+            // simply missed when this list was written.
             'hardcoded.topupDiscPercentCaption',
             'hardcoded.topupDiscFixedCaption',
             'hardcoded.topupDiscGroupPercentCaption',
             'hardcoded.topupDiscGroupFixedCaption',
+            'hardcoded.topupDiscAllPercentCaption',
+            'hardcoded.topupDiscAllFixedCaption',
             // a line inside the service-status caption
             'users.status.svcLocationMore',
             // button labels: there is no message to attach a sticker to, and
