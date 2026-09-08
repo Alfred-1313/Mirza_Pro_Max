@@ -4523,46 +4523,6 @@ if (!function_exists('svc_daily_usage')) {
         return ['supported' => true, 'daily' => $daily, 'error' => null];
     }
 }
-if (!function_exists('svc_nodeusage_enabled')) {
-    // 🌐 مصرف لوکیشن, per panel. Only marzban/marzneshin/rebecca can answer at
-    // all (panel_usage_supported()); this is the admin's own switch on top of
-    // that, for a panel that CAN answer but whose node names the shop would
-    // rather not show its customers. Off means {location_block} renders empty -
-    // the same thing an unsupported panel already produces - and the extra
-    // request to the panel is skipped entirely.
-    // Shape: {panel name: '0'|'1'}; absent = on.
-    function svc_nodeusage_map($fresh = false)
-    {
-        static $cache = null;
-        if ($cache !== null && !$fresh) {
-            return $cache;
-        }
-        $setting = select("setting", "*", null, null, "select");
-        $m = json_decode((string) ($setting['svc_node_usage'] ?? ''), true);
-        return $cache = is_array($m) ? $m : [];
-    }
-    function svc_nodeusage_enabled($name_panel)
-    {
-        return (string) (svc_nodeusage_map()[(string) $name_panel] ?? '1') !== '0';
-    }
-    function svc_nodeusage_toggle($name_panel)
-    {
-        $m = svc_nodeusage_map(true);
-        $m[(string) $name_panel] = svc_nodeusage_enabled($name_panel) ? '0' : '1';
-        update("setting", "svc_node_usage", json_encode($m, JSON_UNESCAPED_UNICODE), null, null);
-        svc_nodeusage_map(true);
-    }
-    // what the customer is actually shown for this panel, in one word - the
-    // admin screen needs to tell "off by my choice" apart from "this panel type
-    // cannot do it", which look identical from the customer's side
-    function svc_nodeusage_state($name_panel, $type)
-    {
-        if (!panel_usage_supported($type)) {
-            return 'unsupported';
-        }
-        return svc_nodeusage_enabled($name_panel) ? 'on' : 'off';
-    }
-}
 if (!function_exists('svc_status_blocks')) {
     // The pieces the service caption is assembled from. Kept here rather than in
     // index.php so the same blocks can be reused by anything else that shows a
@@ -4589,14 +4549,13 @@ if (!function_exists('svc_status_blocks')) {
             ]);
         }
 
-        // the location block carries its own heading, so that an unsupported
-        // panel drops the heading too instead of leaving a title over nothing
+        // just the rows: the heading is a normal line of the admin's own
+        // template now, so they can reword, restyle or move the whole section -
+        // svc_apply_location() takes that heading away with the rows when a
+        // panel has nothing to report
         $locBlock = '';
         if (!empty($usage['supported'])) {
-            $rows = svc_location_block((array) ($usage['nodes'] ?? []), $textbotlang);
-            if ($rows !== '') {
-                $locBlock = "\n\n<blockquote><b>" . ($b['svcLocationTitle'] ?? '🌐 مصرف لوکیشن') . "</b></blockquote>\n\n" . $rows;
-            }
+            $locBlock = svc_location_block((array) ($usage['nodes'] ?? []), $textbotlang);
         }
 
         // last online: a date line and a clock line, or a single "never" line
@@ -4625,6 +4584,44 @@ if (!function_exists('svc_status_blocks')) {
         ];
     }
 }
+if (!function_exists('svc_apply_location')) {
+    // {location_block} is the location section's own on/off switch inside the
+    // caption. The heading above it is ordinary template text, so the admin can
+    // reword it, restyle it or move the whole section - which means that when a
+    // panel reports nothing, the heading has to go with it or it would sit
+    // there over an empty space.
+    //
+    // So: {location_block} ALONE on its line is a whole section. Empty, it takes
+    // its own line and the unbroken run of lines above it (its heading) away,
+    // and the blank lines that met around the hole collapse into one. With
+    // rows, they arrive one blank line under the heading.
+    //
+    // {location_block} sharing a line with other text is left as it was: the
+    // token is simply replaced (with nothing when empty) and the line stays -
+    // that is what the older templates do, and they must keep working.
+    function svc_apply_location($template, $block)
+    {
+        $out = [];
+        foreach (explode("\n", $template) as $line) {
+            if (strpos($line, '{location_block}') === false) {
+                $out[] = $line;
+                continue;
+            }
+            if (trim(str_replace('{location_block}', '', $line)) !== '') {
+                $out[] = str_replace('{location_block}', $block === '' ? '' : "\n" . $block, $line);
+                continue;
+            }
+            if ($block !== '') {
+                $out[] = "\n" . $block;
+                continue;
+            }
+            while (!empty($out) && trim((string) end($out)) !== '') {
+                array_pop($out);
+            }
+        }
+        return preg_replace("/\n{3,}/", "\n\n", implode("\n", $out));
+    }
+}
 if (!function_exists('svc_build_caption')) {
     // Assembles the service caption and makes sure it FITS.
     //
@@ -4642,16 +4639,9 @@ if (!function_exists('svc_build_caption')) {
     {
         $nodes = array_filter($nodes, fn($b) => (int) $b > 0);
         $rows = count($nodes);
-        $heading = "\n\n<blockquote><b>" . (($textbotlang['users']['status']['svcLocationTitle']) ?? '🌐 مصرف لوکیشن') . "</b></blockquote>\n\n";
         for ($try = $rows; $try >= 0; $try--) {
-            $block = '';
-            if ($try > 0) {
-                $body = svc_location_block($nodes, $textbotlang, 18, $try);
-                if ($body !== '') {
-                    $block = $heading . $body;
-                }
-            }
-            $caption = strtr($template, $vars + ['{location_block}' => $block]);
+            $block = $try > 0 ? svc_location_block($nodes, $textbotlang, 18, $try) : '';
+            $caption = strtr(svc_apply_location($template, $block), $vars);
             if (mb_strlen($caption) <= $limit) {
                 return $caption;
             }
@@ -4660,7 +4650,7 @@ if (!function_exists('svc_build_caption')) {
         // caption longer than Telegram allows. Hand back the shortest version we
         // can build and let the caller deal with it - silently dropping their
         // text would be worse than a visible failure.
-        return strtr($template, $vars + ['{location_block}' => '']);
+        return strtr(svc_apply_location($template, ''), $vars);
     }
 }
 if (!function_exists('svc_usage_report_text')) {

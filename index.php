@@ -1405,12 +1405,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         // an unsupported panel simply renders without the block instead of
         // paying for a request that cannot work.
         $svc_lang = $user['lang'] ?? 'fa';
-        // the admin can also switch the block off for a panel that CAN answer
-        // (🌐 مصرف لوکیشن on the service-status screen) - then it renders empty,
-        // exactly like an unsupported panel, and the request is never made
-        $svc_usage = svc_nodeusage_enabled($nameloc['Service_location'])
-            ? panel_user_usage($nameloc['Service_location'], $DataUserOut['username'])
-            : ['supported' => false, 'nodes' => [], 'total' => 0, 'error' => null];
+        $svc_usage = panel_user_usage($nameloc['Service_location'], $DataUserOut['username']);
         $svc_blocks = svc_status_blocks($DataUserOut, $svc_usage, $svc_lang, $textbotlang);
         // Both the old placeholders and the new ones are filled: an admin who
         // has already written their own template keeps working exactly as

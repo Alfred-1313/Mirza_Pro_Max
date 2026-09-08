@@ -1912,7 +1912,10 @@ n2  = نماینده با قابلیت های بیشتر',
 <blockquote><b>📶 نمودار مصرف</b></blockquote>
 
 {usage_bar}
-{usage_line}{location_block}
+{usage_line}
+
+<blockquote><b>🌐 مصرف لوکیشن</b></blockquote>
+{location_block}
 
 <blockquote><b>🕐 آخرین آنلاین</b></blockquote>
 
@@ -1920,7 +1923,6 @@ n2  = نماینده با قابلیت های بیشتر',
       'svcUsageReportBtn' => '📊 گزارش مصرف',
       'svcUnlimited' => 'نامحدود ♾️',
       'svcNoExpire' => 'بدون انقضا ♾️',
-      'svcLocationTitle' => '🌐 مصرف لوکیشن',
       'svcLocationMore' => '➕ و {n} لوکیشن دیگر ({volume})',
       'svcUsageOf' => '🎛 {used} مصرف شده از {total} ({percent}%)',
       'svcUsageOfUnlimited' => '🎛 {used} مصرف شده از {total}',

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 #----------------[  admin section  ]------------------#
 $textadmin = ["panel", "/panel", $textbotlang['Admin']['panelAdmin']];
 $text_panel_admin_login_template = sprintf($textbotlang['Admin']['report']['aboutBot'], $version);
@@ -466,7 +466,7 @@ if (!function_exists('bottext_item_menu_payload')) {
             $bt_extra_note = "\nℹ️ این پیام وقتی نشون داده می‌شه که کاربر داخل «🛍 سرویس‌های من» هیچ سرویس فعالی نداشته باشه.\n";
         }
         if ($bt_key === 'users.status.infoFull') {
-            $bt_extra_note = "\nℹ️ این پیام وقتی نشون داده می‌شه که کاربر روی یکی از سرویس‌هاش (داخل «🛍 سرویس‌های من») بزنه - وضعیت کامل همون سرویس رو نشون می‌ده.\n🖼 این صفحه حالا با QR سابسکریپشن به‌صورت عکس فرستاده می‌شه، پس متنش کپشن عکسه (سقف ۱۰۲۴ کاراکتر).\n📊 «{location_block}» یعنی «هر لوکیشن چقدر مصرف شده». از بین همه‌ی پنل‌ها فقط <b>rebecca</b> این رو واقعاً به کاربر نشون می‌ده (زنده تست شده)؛ <b>marzban</b> طبق مستنداتش باید بده ولی تست نشده، و بقیه‌ی پنل‌ها این تیکه رو خالی می‌بینن.\n🎯 این بلوک هرجای متن بذاریش همون‌جا میاد و تیتر «🌐 مصرف لوکیشن» هم داخل خودشه - پس اگه خالی باشه، تیتر بی‌محتوا هم جا نمی‌مونه.\n🌐 با دکمه‌ی «فیلتر مصرف لوکیشن» پایین، می‌تونی برای هر پنل جدا خاموشش کنی تا خالی بمونه.\n💡 دکمه‌های زیرش (تا ۱۴ تا، بسته به نوع پنل و تنظیمات فقط بعضی‌هاشون واقعاً نشون داده می‌شن) از دکمه‌ی پایین همین صفحه قابل ویرایشن.\n";
+            $bt_extra_note = "\nℹ️ این پیام وقتی نشون داده می‌شه که کاربر روی یکی از سرویس‌هاش (داخل «🛍 سرویس‌های من») بزنه - وضعیت کامل همون سرویس رو نشون می‌ده.\n🖼 این صفحه حالا با QR سابسکریپشن به‌صورت عکس فرستاده می‌شه، پس متنش کپشن عکسه (سقف ۱۰۲۴ کاراکتر).\n📊 «{location_block}» یعنی «هر لوکیشن چقدر مصرف شده». از بین همه‌ی پنل‌ها فقط <b>rebecca</b> این رو واقعاً می‌ده (زنده تست شده)؛ <b>marzban</b> طبق مستنداتش باید بده ولی تست نشده، و بقیه‌ی پنل‌ها چیزی برای این تیکه ندارن.\n🎯 خودش فیلتر خودشه: «{location_block}» رو <b>تنهایی توی یک خط</b> بذار و تیترش رو خط بالاش بنویس. پنلی که لوکیشن نداشته باشه، هم لیست و هم همون تیتر و هم فاصله‌ش کامل حذف می‌شن - جای خالی نمی‌مونه. پس می‌تونی تیتر رو هرجور خواستی بنویسی یا کل بخش رو جابه‌جا کنی.\n⚠️ اگه «{location_block}» رو وسط یه خط دیگه بذاری (کنار متن)، فقط خودش خالی می‌شه و اون خط سر جاش می‌مونه.\n💡 دکمه‌های زیرش (تا ۱۴ تا، بسته به نوع پنل و تنظیمات فقط بعضی‌هاشون واقعاً نشون داده می‌شن) از دکمه‌ی پایین همین صفحه قابل ویرایشن.\n";
         }
         if ($bt_key === 'users.sell.service_sell') {
             $bt_extra_note = "\nℹ️ این پیام وقتی نشون داده می‌شه که کاربر داخل «🛍 سرویس‌های من» حداقل یک سرویس فعال داشته باشه - زیرش لیست سرویس‌هاش (که خودکار ساخته می‌شه) و یه دکمه‌ی «بستن» میاد.\n💡 هم متن این پیام، هم دکمه‌ی بستنش (رنگ/اسم/ایموجی) رو می‌تونی از پایین تنظیم کنی.\n";
@@ -700,7 +700,6 @@ if (!function_exists('bottext_item_menu_payload')) {
             $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه بستن', 'callback_data' => "gbtn|list|{$bt_lang}|sc", 'style' => 'primary']];
         } elseif ($bt_key === 'users.status.infoFull') {
             $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های صفحه‌ی وضعیت', 'callback_data' => "statusbtn|list|{$bt_lang}", 'style' => 'primary']];
-            $kb['inline_keyboard'][] = [['text' => '🌐 فیلتر مصرف لوکیشن (پنل‌ها)', 'callback_data' => "svcnu|list|{$bt_lang}", 'style' => svcnu_any_off() ? 'success' : 'primary']];
         } elseif ($bt_key === 'users.Balance.chargeSuccess') {
             $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه تهیه اشتراک', 'callback_data' => "gbtn|list|{$bt_lang}|bc", 'style' => 'primary']];
             $kb['inline_keyboard'][] = [['text' => '🎁 ویرایش متن بلوک تخفیف', 'callback_data' => "bt_edit|{$bt_lang}|users.Balance.chargeSuccessDiscount", 'style' => 'primary']];
@@ -1070,72 +1069,6 @@ if (!function_exists('lang_switch_settings_payload')) {
     }
 }
 
-if (!function_exists('svcnu_payload')) {
-    // 🌐 فیلتر مصرف لوکیشن: one row per panel the shop actually has. A panel
-    // whose TYPE cannot report per-node usage gets no switch at all - there is
-    // nothing to turn off there, and offering one would suggest the shop could
-    // make it work by tapping.
-    function svcnu_any_off()
-    {
-        foreach ((array) select("marzban_panel", "*", null, null, "fetchAll") as $p) {
-            if (panel_usage_supported($p['type'] ?? '') && !svc_nodeusage_enabled($p['name_panel'] ?? '')) {
-                return true;
-            }
-        }
-        return false;
-    }
-    // panel names are free text and often Persian; rawurlencoded they can blow
-    // the 64-byte callback_data cap on their own, and a list index would point
-    // at the wrong panel once one is added or removed. A short digest of the
-    // name is stable and fixed-width.
-    function svcnu_hash($name)
-    {
-        return substr(md5((string) $name), 0, 8);
-    }
-    function svcnu_panel_by_hash($h)
-    {
-        foreach ((array) select("marzban_panel", "*", null, null, "fetchAll") as $p) {
-            if (svcnu_hash($p['name_panel'] ?? '') === $h) {
-                return $p;
-            }
-        }
-        return null;
-    }
-    function svcnu_payload($lang)
-    {
-        $panels = (array) select("marzban_panel", "*", null, null, "fetchAll");
-        $kb = ['inline_keyboard' => []];
-        $cap = "🌐 <b>فیلتر مصرف لوکیشن</b>\n➖➖➖➖➖➖➖➖➖➖\n";
-        $cap .= "این فیلتر تعیین می‌کنه بلوک «{location_block}» توی صفحه‌ی وضعیت سرویس، برای هر پنل پر بشه یا خالی بمونه.\n\n";
-        $cap .= "<blockquote>✅ <b>rebecca</b>: تنها پنلی که واقعاً مصرف هر لوکیشن رو جدا به کاربر نشون می‌ده - روی پنل خودِ همین فروشگاه تست و تأیید شده.\n⚠️ <b>marzban</b>: طبق مستنداتش همین شکل جواب رو می‌ده، ولی چون پنل مرزبانی نداریم تست نشده.\n❌ <b>marzneshin</b>: خروجی مصرفش بر اساس تاریخه نه لوکیشن، پس چیزی برای نشون‌دادن نداره و خالی می‌مونه.\n❌ بقیه (hiddify، WGDashboard، ibsng، mikrotik، mirza agent، فروش دستی، x-ui، s-ui، alireza) تک‌سرورن و اصلاً نود ندارن.</blockquote>\n\n";
-        $cap .= "خاموش که بشه، اون تیکه از کپشن (همراه تیتر خودش) کاملاً خالی می‌شه و ربات هم دیگه برای گرفتنش به پنل درخواست نمی‌زنه.\n";
-        $off = [];
-        foreach ($panels as $p) {
-            $name = (string) ($p['name_panel'] ?? '');
-            $type = (string) ($p['type'] ?? '');
-            $state = svc_nodeusage_state($name, $type);
-            if ($state === 'unsupported') {
-                $off[] = $name . ' (' . ($type !== '' ? $type : '—') . ')';
-                continue;
-            }
-            $on = $state === 'on';
-            $kb['inline_keyboard'][] = [[
-                'text' => ($on ? '✅ ' : '❌ ') . $name . ' (' . $type . ')',
-                'callback_data' => "svcnu|tog|{$lang}|" . svcnu_hash($name),
-                'style' => $on ? 'success' : 'danger',
-            ]];
-        }
-        if (empty($kb['inline_keyboard'])) {
-            $cap .= "\n⚠️ هیچ‌کدوم از پنل‌های این فروشگاه از این قابلیت پشتیبانی نمی‌کنن، پس چیزی برای تنظیم نیست.\n";
-        }
-        if (!empty($off)) {
-            $cap .= "\n🚫 بدون این قابلیت: " . implode('، ', $off) . "\n";
-        }
-        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "bt_edit|{$lang}|users.status.infoFull", 'style' => 'danger']];
-        $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
-        return [$cap, json_encode($kb)];
-    }
-}
 if (!function_exists('close_sticker_screen')) {
     // 🖼 استیکر دکمه بستن lives on the ❌ بستن button's own edit screen, not on a
     // settings screen of its own - one button, one screen. Every clst2* handler
@@ -5183,26 +5116,6 @@ if (preg_match('/^lsw_lang-(fa|en|ru|zh|tk)$/', $datain, $lsw_match) && $adminru
     }
     lang_switch_save(['langs' => $lsw_langs]);
     Editmessagetext($from_id, $message_id, $lsw_warn . lang_switch_settings_caption($textbotlang), lang_switch_settings_payload(), 'HTML');
-    return;
-}
-
-//----------------[  🌐 فیلتر مصرف لوکیشن, per panel  ]----------------
-if (preg_match('/^svcnu\|list\|([a-z]{2})$/', $datain, $nu_m) && $adminrulecheck['rule'] == "administrator") {
-    list($nu_txt, $nu_kb) = svcnu_payload($nu_m[1]);
-    Editmessagetext($from_id, $message_id, $nu_txt, $nu_kb, 'HTML');
-    return;
-}
-if (preg_match('/^svcnu\|tog\|([a-z]{2})\|([0-9a-f]{8})$/', $datain, $nu_m) && $adminrulecheck['rule'] == "administrator") {
-    $nu_panel = svcnu_panel_by_hash($nu_m[2]);
-    // the panel was renamed or deleted while this screen sat open
-    if ($nu_panel === null || !panel_usage_supported($nu_panel['type'] ?? '')) {
-        list($nu_txt, $nu_kb) = svcnu_payload($nu_m[1]);
-        Editmessagetext($from_id, $message_id, $nu_txt, $nu_kb, 'HTML');
-        return;
-    }
-    svc_nodeusage_toggle($nu_panel['name_panel']);
-    list($nu_txt, $nu_kb) = svcnu_payload($nu_m[1]);
-    Editmessagetext($from_id, $message_id, $nu_txt, $nu_kb, 'HTML');
     return;
 }
 
