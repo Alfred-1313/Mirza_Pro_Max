@@ -16,12 +16,26 @@ require_once __DIR__ . '/Rebecca.php';
 if (!function_exists('panel_usage_supported')) {
     // ---- which panels can report where the traffic went ----
     //
-    // Only the multi-node panels have the idea of a "location" at all: Marzban,
-    // Marzneshin and Rebecca each expose a per-user, per-node usage endpoint.
+    // Audited driver by driver, not guessed:
+    //
+    //   rebecca     VERIFIED LIVE against this shop's own panel - answers
+    //               {"usages":[{node_id,node_name,used_traffic}, ...]} with real
+    //               node names and byte counts.
+    //   marzban     Same endpoint and same documented response shape (Rebecca is
+    //               a Marzban fork), and its driver here carries the full node
+    //               API (Get_Nodes / Get_usage_Nodes / Get_Node). Almost
+    //               certainly works, but this shop runs no Marzban panel so it
+    //               could not be confirmed.
+    //   marzneshin  Kept in the list, but expect nothing: its usage endpoint
+    //               answers a time series ({datetime, used_traffic}), not a
+    //               per-node split, and the driver here has no node calls at
+    //               all. panel_user_usage() drops rows with no node identity,
+    //               so this degrades to an empty block rather than a bogus one.
+    //
     // Every other type this bot drives is a single server (x-ui, s-ui, hiddify,
     // WGDashboard, alireza), a non-VPN biller (ibsng, mikrotik), a manual
     // product with no panel behind it (Manualsale), or a proxy to another bot
-    // (mirza_agent) - none of them can say which server the bytes came from.
+    // (mirza_agent) - none of them has a node function at all.
     //
     // The service screen asks this before it renders: an unsupported panel gets
     // an empty location block and a گزارش مصرف button that explains itself
@@ -101,7 +115,16 @@ if (!function_exists('panel_user_usage')) {
             }
             $name = trim((string) ($u['node_name'] ?? ''));
             if ($name === '') {
-                $name = 'Node ' . ($u['node_id'] ?? '?');
+                // No node_name AND no node_id means this row is not about a node
+                // at all - Marzneshin's usage endpoint answers a time series
+                // ({datetime, used_traffic}) rather than a per-node split, and
+                // every one of those rows used to collapse into a single bucket
+                // literally called "Node ?" holding the whole total. An empty
+                // block is the honest answer there, so drop the row.
+                if (!isset($u['node_id'])) {
+                    continue;
+                }
+                $name = 'Node ' . $u['node_id'];
             }
             // marzban/rebecca give used_traffic; the subscription-side shape
             // splits it into uplink/downlink, so accept either
