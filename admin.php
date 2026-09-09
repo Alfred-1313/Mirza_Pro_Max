@@ -4537,8 +4537,14 @@ if (!function_exists('feature_status_lang_payload')) {
     function feature_status_lang_payload($textbotlang, $lang = 'fa')
     {
         $setting = select("setting", "*", null, null, "select");
-        $on = $textbotlang['Admin']['Status']['statuson'];
-        $off = $textbotlang['Admin']['Status']['statusoff'];
+        // labels come from the tab's OWN language file, not the admin's
+        // account language, so the screen reads in whichever language it is
+        // editing - same as keyboard_list_text() (keyboard.php) does for
+        // 🎨 شخصی‌سازی. Only the language-tab row below stays on the admin's
+        // own $textbotlang, exactly like that screen.
+        $tx = lang_tab_texts($lang);
+        $on = $tx['Admin']['Status']['statuson'];
+        $off = $tx['Admin']['Status']['statusoff'];
         $tog = function ($type, $value) use ($lang) {
             return "fls_tog:{$lang}:{$type}:{$value}";
         };
@@ -4573,7 +4579,7 @@ if (!function_exists('feature_status_lang_payload')) {
         ];
         $rows[] = [
             ['text' => $NotUser_v == 'onnotuser' ? $on : $off, 'callback_data' => $tog('usernamebtn', $NotUser_v)],
-            ['text' => $textbotlang['Admin']['Status']['statusUsernameBtn'], 'callback_data' => "usernamebtn"],
+            ['text' => $tx['Admin']['Status']['statusUsernameBtn'], 'callback_data' => "usernamebtn"],
         ];
         // second column used to point at the wrong callback ("statusnewuser",
         // copy-pasted from the row above it) in both duplicated copies of the
@@ -4582,87 +4588,87 @@ if (!function_exists('feature_status_lang_payload')) {
         // "none" every other cron label-only button in this screen already uses
         $rows[] = [
             ['text' => $statusagentrequest_v == 'onrequestagent' ? $on : $off, 'callback_data' => $tog('showagent', $statusagentrequest_v)],
-            ['text' => $textbotlang['Admin']['Status']['statusShowAgent'], 'callback_data' => "none"],
+            ['text' => $tx['Admin']['Status']['statusShowAgent'], 'callback_data' => "none"],
         ];
         $rows[] = [
             ['text' => $roll_Status_v == 'rolleon' ? $on : $off, 'callback_data' => $tog('role', $roll_Status_v)],
-            ['text' => $textbotlang['Admin']['Status']['statusRole'], 'callback_data' => "stautsrolee"],
+            ['text' => $tx['Admin']['Status']['statusRole'], 'callback_data' => "stautsrolee"],
         ];
         $rows[] = [
             ['text' => $get_number_v == 'onAuthenticationphone' ? $on : $off, 'callback_data' => $tog('Authenticationphone', $get_number_v)],
-            ['text' => $textbotlang['Admin']['Status']['Authenticationphone'], 'callback_data' => "Authenticationphone"],
+            ['text' => $tx['Admin']['Status']['Authenticationphone'], 'callback_data' => "Authenticationphone"],
         ];
         $rows[] = [
             ['text' => $iran_number_v == 'onAuthenticationiran' ? $on : $off, 'callback_data' => $tog('Authenticationiran', $iran_number_v)],
-            ['text' => $textbotlang['Admin']['Status']['Authenticationiran'], 'callback_data' => "Authenticationiran"],
+            ['text' => $tx['Admin']['Status']['Authenticationiran'], 'callback_data' => "Authenticationiran"],
         ];
         $rows[] = [
             ['text' => $verifystart_v == 'onverify' ? $on : $off, 'callback_data' => $tog('verifystart', $verifystart_v)],
-            ['text' => $textbotlang['keyboard']['authenticate'], 'callback_data' => "verify"],
+            ['text' => $tx['keyboard']['authenticate'], 'callback_data' => "verify"],
         ];
         $rows[] = [
             ['text' => $statussupportpv_v == 'onpvsupport' ? $on : $off, 'callback_data' => $tog('statussupportpv', $statussupportpv_v)],
-            ['text' => $textbotlang['keyboard']['supportInPv'], 'callback_data' => "statussupportpv"],
+            ['text' => $tx['keyboard']['supportInPv'], 'callback_data' => "statussupportpv"],
         ];
         $rows[] = [
             ['text' => $statusnamecustom_v == 'onnamecustom' ? $on : $off, 'callback_data' => $tog('statusnamecustom', $statusnamecustom_v)],
-            ['text' => $textbotlang['keyboard']['configNote'], 'callback_data' => "statusnamecustom"],
+            ['text' => $tx['keyboard']['configNote'], 'callback_data' => "statusnamecustom"],
         ];
         $rows[] = [
             ['text' => $statusnoteforf_v == '1' ? $on : $off, 'callback_data' => $tog('statusnamecustomf', $statusnoteforf_v)],
-            ['text' => $textbotlang['keyboard']['userNote'], 'callback_data' => "statusnamecustomf"],
+            ['text' => $tx['keyboard']['userNote'], 'callback_data' => "statusnamecustomf"],
         ];
         $rows[] = [
             ['text' => $bulkbuy_v == 'onbulk' ? $on : $off, 'callback_data' => $tog('bulkbuy', $bulkbuy_v)],
-            ['text' => $textbotlang['keyboard']['bulkPurchaseStatus'], 'callback_data' => "bulkbuy"],
+            ['text' => $tx['keyboard']['bulkPurchaseStatus'], 'callback_data' => "bulkbuy"],
         ];
         $rows[] = [
             ['text' => $verifybucodeuser_v == 'onverify' ? $on : $off, 'callback_data' => $tog('verifybyuser', $verifybucodeuser_v)],
-            ['text' => $textbotlang['keyboard']['authWithLink'], 'callback_data' => "verifybyuser"],
+            ['text' => $tx['keyboard']['authWithLink'], 'callback_data' => "verifybyuser"],
         ];
         $rows[] = [
             ['text' => $categoryhelp_v == '1' ? $on : $off, 'callback_data' => $tog('btn_status_category', $categoryhelp_v)],
-            ['text' => $textbotlang['keyboard']['educationCategory'], 'callback_data' => "btn_status_category"],
+            ['text' => $tx['keyboard']['educationCategory'], 'callback_data' => "btn_status_category"],
         ];
         $rows[] = [
             ['text' => $wheelagent_v == '1' ? $on : $off, 'callback_data' => $tog('wheelagent', $wheelagent_v)],
-            ['text' => $textbotlang['keyboard']['agentWheelOfLuck'], 'callback_data' => "wheelagent"],
+            ['text' => $tx['keyboard']['agentWheelOfLuck'], 'callback_data' => "wheelagent"],
         ];
         $rows[] = [
             ['text' => $Dice_v == '1' ? $on : $off, 'callback_data' => $tog('Dice', $Dice_v)],
-            ['text' => $textbotlang['keyboard']['showDice'], 'callback_data' => "Dice"],
+            ['text' => $tx['keyboard']['showDice'], 'callback_data' => "Dice"],
         ];
         $rows[] = [
             ['text' => $statusfirstwheel_v == '1' ? $on : $off, 'callback_data' => $tog('wheelagentfirst', $statusfirstwheel_v)],
-            ['text' => $textbotlang['keyboard']['firstPurchaseWheel'], 'callback_data' => "wheelagentfirst"],
+            ['text' => $tx['keyboard']['firstPurchaseWheel'], 'callback_data' => "wheelagentfirst"],
         ];
         $rows[] = [
             ['text' => $Debtsettlement_v == '1' ? $on : $off, 'callback_data' => $tog('Debtsettlement', $Debtsettlement_v)],
-            ['text' => $textbotlang['keyboard']['settleDebt'], 'callback_data' => "Debtsettlement"],
+            ['text' => $tx['keyboard']['settleDebt'], 'callback_data' => "Debtsettlement"],
         ];
         $rows[] = [
             ['text' => $statuscopycart_v == '1' ? $on : $off, 'callback_data' => $tog('compycart', $statuscopycart_v)],
-            ['text' => $textbotlang['keyboard']['copyCard'], 'callback_data' => "copycart"],
+            ['text' => $tx['keyboard']['copyCard'], 'callback_data' => "copycart"],
         ];
         $rows[] = [
-            ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "linkappsetting"],
+            ['text' => $tx['keyboard']['settings'], 'callback_data' => "linkappsetting"],
             ['text' => $linkappstatus_v == '1' ? $on : $off, 'callback_data' => $tog('linkappstatus', $linkappstatus_v)],
-            ['text' => $textbotlang['keyboard']['appDownloadLinkAlt'], 'callback_data' => "linkappstatus"],
+            ['text' => $tx['keyboard']['appDownloadLinkAlt'], 'callback_data' => "linkappstatus"],
         ];
         $rows[] = [
-            ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "gradonhshans"],
+            ['text' => $tx['keyboard']['settings'], 'callback_data' => "gradonhshans"],
             ['text' => $wheelـluck_v == '1' ? $on : $off, 'callback_data' => $tog('wheel_luck', $wheelـluck_v)],
-            ['text' => $textbotlang['keyboard']['wheelOfLuck'], 'callback_data' => "wheel_luck"],
+            ['text' => $tx['keyboard']['wheelOfLuck'], 'callback_data' => "wheel_luck"],
         ];
         $rows[] = [
-            ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "settingaffiliatesf"],
+            ['text' => $tx['keyboard']['settings'], 'callback_data' => "settingaffiliatesf"],
             ['text' => $affiliatesstatus_v == 'onaffiliates' ? $on : $off, 'callback_data' => $tog('affiliatesstatus', $affiliatesstatus_v)],
-            ['text' => $textbotlang['keyboard']['affiliateGift'], 'callback_data' => "affiliatesstatus"],
+            ['text' => $tx['keyboard']['affiliateGift'], 'callback_data' => "affiliatesstatus"],
         ];
         $rows[] = [
-            ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "changeloclimit"],
+            ['text' => $tx['keyboard']['settings'], 'callback_data' => "changeloclimit"],
             ['text' => $statuslimitchangeloc_v == '1' ? $on : $off, 'callback_data' => $tog('changeloc', $statuslimitchangeloc_v)],
-            ['text' => $textbotlang['keyboard']['locationChangeLimit'], 'callback_data' => "changeloc"],
+            ['text' => $tx['keyboard']['locationChangeLimit'], 'callback_data' => "changeloc"],
         ];
         return json_encode(['inline_keyboard' => $rows]);
     }
@@ -4670,7 +4676,9 @@ if (!function_exists('feature_status_lang_payload')) {
 if (!function_exists('feature_status_lang_caption')) {
     function feature_status_lang_caption($textbotlang, $lang = 'fa')
     {
-        return strtr($textbotlang['Admin']['Status']['featureLangBotTitle'], ['{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang]);
+        // written in the language being edited, like the buttons above it
+        $tx = lang_tab_texts($lang);
+        return strtr($tx['Admin']['Status']['featureLangBotTitle'], ['{lang}' => $tx['bottext']['langs'][$lang] ?? ($textbotlang['bottext']['langs'][$lang] ?? $lang)]);
     }
 }
 if (!function_exists('displayhub_payload')) {

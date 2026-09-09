@@ -1545,6 +1545,39 @@ if (!function_exists('shop_feature_lang_map')) {
         shop_feature_lang_map(true);
     }
 }
+if (!function_exists('lang_tab_texts')) {
+    // The text array for ONE specific language, regardless of whose request
+    // this is - languagechange() can't do this because it overrides its own
+    // $lang argument with the current user's account language. Same three
+    // steps keyboard_list_text() (keyboard.php) already does for its language
+    // tabs: load the file, fill anything missing from fa, apply the admin's
+    // saved text overrides for that language. Cached per language because a
+    // screen usually needs it more than once per render.
+    function lang_tab_texts($lang)
+    {
+        static $cache = [];
+        if (isset($cache[$lang])) {
+            return $cache[$lang];
+        }
+        $file = __DIR__ . '/lang/' . $lang . '.php';
+        if (!preg_match('/^[a-z]{2}$/', (string) $lang) || !file_exists($file)) {
+            $lang = 'fa';
+            $file = __DIR__ . '/lang/fa.php';
+        }
+        $texts = require $file;
+        if (!is_array($texts)) {
+            return $cache[$lang] = [];
+        }
+        if ($lang !== 'fa') {
+            $fa = require __DIR__ . '/lang/fa.php';
+            if (is_array($fa)) {
+                $texts = bt_lang_fill_defaults($texts, $fa);
+            }
+        }
+        bottext_apply_overrides($texts, $lang);
+        return $cache[$lang] = $texts;
+    }
+}
 if (!function_exists('feature_lang_map')) {
     // same per-language-override contract as shop_feature_lang_map(), separate
     // column so general bot-feature keys (get_number, wheelagent, ...) never
