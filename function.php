@@ -1545,6 +1545,54 @@ if (!function_exists('shop_feature_lang_map')) {
         shop_feature_lang_map(true);
     }
 }
+if (!function_exists('feature_setting_map')) {
+    // Per-language overrides for the VALUES behind 🌐 وضعیت قابلیت‌ها (هر زبان)'s
+    // ⚙️ تنظیمات sub-screens (affiliate percent, wheel prize, location limits,
+    // ...) - same fallback contract as feature_value(), separate column from
+    // feature_lang because that one holds the on/off flags themselves.
+    function feature_setting_map($fresh = false)
+    {
+        static $cache = null;
+        if ($cache !== null && !$fresh) {
+            return $cache;
+        }
+        $setting = select("setting", "*", null, null, "select");
+        $m = json_decode((string) ($setting['feature_lang_settings'] ?? ''), true);
+        return $cache = is_array($m) ? $m : [];
+    }
+    // $globalValue is whatever the caller already read from the old column/row,
+    // so a language nobody has overridden keeps behaving exactly as before.
+    function feature_setting_value($key, $lang, $globalValue)
+    {
+        $m = feature_setting_map();
+        $v = $m[$key][$lang] ?? null;
+        return ($v === null || $v === '') ? $globalValue : $v;
+    }
+    function feature_setting_set($key, $lang, $value)
+    {
+        $m = feature_setting_map(true);
+        if (!isset($m[$key]) || !is_array($m[$key])) {
+            $m[$key] = [];
+        }
+        $m[$key][$lang] = $value;
+        update("setting", "feature_lang_settings", json_encode($m, JSON_UNESCAPED_UNICODE), null, null);
+        feature_setting_map(true);
+    }
+}
+if (!function_exists('app_rows_for_lang')) {
+    // app-download rows visible to one language, using the same lang-column
+    // convention as the marzban_panel query in keyboard.php: a row with no
+    // language (or 'all') belongs to every language, so every row that existed
+    // before app.lang was added stays visible exactly as before.
+    function app_rows_for_lang($lang)
+    {
+        global $pdo;
+        $stmt = $pdo->prepare("SELECT * FROM app WHERE FIND_IN_SET(:userlang, lang) OR lang = 'all' OR lang IS NULL OR lang = ''");
+        $stmt->bindValue(':userlang', (string) $lang);
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+}
 if (!function_exists('lang_tab_texts')) {
     // The text array for ONE specific language, regardless of whose request
     // this is - languagechange() can't do this because it overrides its own

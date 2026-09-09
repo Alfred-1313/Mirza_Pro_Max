@@ -383,11 +383,15 @@ if ($user['joinchannel'] != "active") {
                 }
                 $marzbanDiscountaffiliates = select("affiliates", "*", null, null, "select");
                 $useraffiliates = select("user", "*", 'id', $affiliatesid, "select");
-                if ($marzbanDiscountaffiliates['Discount'] == "onDiscountaffiliates") {
-                    $marzbanDiscountaffiliates = select("affiliates", "*", null, null, "select");
-                    $Balance_add_user = $useraffiliates['Balance'] + $marzbanDiscountaffiliates['price_Discount'];
+                // the gift lands in the REFERRER's balance, so it is their
+                // language's amount that applies - the same one they were shown
+                // on their own 👥 زیرمجموعه‌گیری screen
+                $aff_reflang = $useraffiliates['lang'] ?? 'fa';
+                if (feature_setting_value('aff_startgift', $aff_reflang, $marzbanDiscountaffiliates['Discount']) == "onDiscountaffiliates") {
+                    $aff_giftamount = feature_setting_value('aff_giftamount', $aff_reflang, $marzbanDiscountaffiliates['price_Discount']);
+                    $Balance_add_user = $useraffiliates['Balance'] + $aff_giftamount;
                     update("user", "Balance", $Balance_add_user, "id", $affiliatesid);
-                    $addbalancediscount = number_format($marzbanDiscountaffiliates['price_Discount'], 0);
+                    $addbalancediscount = number_format($aff_giftamount, 0);
                     sendmessage($affiliatesid, strtr($textbotlang['users']['affiliates']['balanceGift'], ['{addbalancediscount}' => $addbalancediscount, '{from_id}' => $from_id]), null, 'html');
                 }
                 sendmessage($from_id, strtr($textbotlang['users']['text_start'], bottext_user_placeholders($user, $from_id)), $keyboard, 'html');
@@ -2513,6 +2517,10 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
 } elseif (preg_match('/changeloc_(\w+)/', $datain, $dataget)) {
     $id_invoice = $dataget[1];
     $limitchangeloc = json_decode($setting['limitnumber'], true);
+    // per-language override of the two location-change limits, falling back to
+    // the shared limitnumber values
+    $limitchangeloc['all'] = feature_setting_value('loc_limit_all', $user['lang'] ?? 'fa', $limitchangeloc['all'] ?? 0);
+    $limitchangeloc['free'] = feature_setting_value('loc_limit_free', $user['lang'] ?? 'fa', $limitchangeloc['free'] ?? 0);
     if ($user['limitchangeloc'] > $limitchangeloc['all'] and intval(feature_value('statuslimitchangeloc', $user['lang'] ?? 'fa', $setting['statuslimitchangeloc'])) == 1) {
         sendmessage($from_id, $textbotlang['users']['changeLocation']['limitReached'], null, 'html');
         return;
@@ -2533,6 +2541,10 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
 } elseif (preg_match('/changelocselectlo-(\w+)/', $datain, $dataget)) {
     update("user", "Processing_value_one", $dataget[1], "id", $from_id);
     $limitchangeloc = json_decode($setting['limitnumber'], true);
+    // per-language override of the two location-change limits, falling back to
+    // the shared limitnumber values
+    $limitchangeloc['all'] = feature_setting_value('loc_limit_all', $user['lang'] ?? 'fa', $limitchangeloc['all'] ?? 0);
+    $limitchangeloc['free'] = feature_setting_value('loc_limit_free', $user['lang'] ?? 'fa', $limitchangeloc['free'] ?? 0);
     $userlimitlast = $limitchangeloc['all'] - $user['limitchangeloc'];
     $userlimitlastfree = $limitchangeloc['free'] - $user['limitchangeloc'];
     if ($userlimitlastfree < 0)
@@ -2556,6 +2568,10 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $marzban_list_get = select("marzban_panel", "*", "name_panel", $nameloc['Service_location'], "select");
     $marzban_list_get_new = select("marzban_panel", "*", "code_panel", $user['Processing_value_one'], "select");
     $limitchangeloc = json_decode($setting['limitnumber'], true);
+    // per-language override of the two location-change limits, falling back to
+    // the shared limitnumber values
+    $limitchangeloc['all'] = feature_setting_value('loc_limit_all', $user['lang'] ?? 'fa', $limitchangeloc['all'] ?? 0);
+    $limitchangeloc['free'] = feature_setting_value('loc_limit_free', $user['lang'] ?? 'fa', $limitchangeloc['free'] ?? 0);
     $limitfree = true;
     if ($user['limitchangeloc'] < $limitchangeloc['free'] and intval(feature_value('statuslimitchangeloc', $user['lang'] ?? 'fa', $setting['statuslimitchangeloc'])) == 1) {
         $limitfree = false;
@@ -4508,10 +4524,15 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     $stmt->bindParam(':name_product', $textbotlang['common']['labels']['testServiceName']);
     $stmt->execute();
     $countinvoice = $stmt->rowCount();
-    if ($affiliatescommission['status_commission'] == "oncommission" && ($user['affiliates'] != null && intval($user['affiliates']) != 0)) {
-        if ($marzbanporsant_one_buy['porsant_one_buy'] == "on_buy_porsant") {
+    // the commission is credited to the referrer, so their language's
+    // percentage/flags apply - same value their own referral screen advertises
+    $aff_reflang = ($user['affiliates'] != null && intval($user['affiliates']) != 0)
+        ? (select("user", "*", "id", $user['affiliates'], "select")['lang'] ?? 'fa')
+        : 'fa';
+    if (feature_setting_value('aff_commission', $aff_reflang, $affiliatescommission['status_commission']) == "oncommission" && ($user['affiliates'] != null && intval($user['affiliates']) != 0)) {
+        if (feature_setting_value('aff_firstbuy', $aff_reflang, $marzbanporsant_one_buy['porsant_one_buy']) == "on_buy_porsant") {
             if ($countinvoice == 1) {
-                $result = ($priceproduct * $setting['affiliatespercentage']) / 100;
+                $result = ($priceproduct * feature_setting_value('aff_percent', $aff_reflang, $setting['affiliatespercentage'])) / 100;
                 $user_Balance = select("user", "*", "id", $user['affiliates'], "select");
                 $Balance_prim = $user_Balance['Balance'] + $result;
                 if (intval($setting['scorestatus']) == 1 and !in_array($user['affiliates'], $admin_ids)) {
@@ -4536,7 +4557,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
             }
         } else {
 
-            $result = ($priceproduct * $setting['affiliatespercentage']) / 100;
+            $result = ($priceproduct * feature_setting_value('aff_percent', $aff_reflang, $setting['affiliatespercentage'])) / 100;
             $user_Balance = select("user", "*", "id", $user['affiliates'], "select");
             $Balance_prim = $user_Balance['Balance'] + $result;
             if (intval($setting['scorestatus']) == 1 and !in_array($user['affiliates'], $admin_ids)) {
@@ -5996,11 +6017,16 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
         return;
     }
     $affiliates = select("affiliates", "*", null, null, "select");
-    $textaffiliates = "{$affiliates['description']}\n\n🔗 https://t.me/$usernamebot?start=$from_id";
-    if (strlen($affiliates['id_media']) >= 5) {
+    // banner, percentages and gift amounts are all per-language now (🌐 وضعیت
+    // قابلیت‌ها (هر زبان) -> ⚙️ تنظیمات), falling back to the shared value
+    $aff_lang = $user['lang'] ?? 'fa';
+    $aff_banner_text = feature_setting_value('aff_banner_text', $aff_lang, $affiliates['description']);
+    $aff_banner_media = feature_setting_value('aff_banner_media', $aff_lang, $affiliates['id_media']);
+    $textaffiliates = "{$aff_banner_text}\n\n🔗 https://t.me/$usernamebot?start=$from_id";
+    if (strlen($aff_banner_media) >= 5) {
         telegram('sendphoto', [
             'chat_id' => $from_id,
-            'photo' => $affiliates['id_media'],
+            'photo' => $aff_banner_media,
             'caption' => $textaffiliates,
             'parse_mode' => "HTML",
         ]);
@@ -6010,7 +6036,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     $stmt = $pdo->prepare($sqlPanel);
     $stmt->execute();
     $inforefral = $stmt->fetch(PDO::FETCH_ASSOC);
-    $inforefral['total_price'] = ($inforefral['total_price'] * $setting['affiliatespercentage']) / 100;
+    $inforefral['total_price'] = ($inforefral['total_price'] * feature_setting_value('aff_percent', $aff_lang, $setting['affiliatespercentage'])) / 100;
     $keyboard_share = json_encode([
         'inline_keyboard' => [
             [
@@ -6021,12 +6047,12 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     ]);
     $text_start = "";
     $text_porsant = "";
-    $Percent_porsant = $setting['affiliatespercentage'];
+    $Percent_porsant = feature_setting_value('aff_percent', $aff_lang, $setting['affiliatespercentage']);
     $sum_order = number_format($inforefral['total_price'], 0);
-    if ($affiliatescommission['Discount'] == "onDiscountaffiliates") {
-        $text_start = sprintf($textbotlang['users']['affiliates']['membershipGiftInfo'], $affiliatescommission['price_Discount']);
+    if (feature_setting_value('aff_startgift', $aff_lang, $affiliatescommission['Discount']) == "onDiscountaffiliates") {
+        $text_start = sprintf($textbotlang['users']['affiliates']['membershipGiftInfo'], feature_setting_value('aff_giftamount', $aff_lang, $affiliatescommission['price_Discount']));
     }
-    if ($affiliatescommission['status_commission'] == "oncommission") {
+    if (feature_setting_value('aff_commission', $aff_lang, $affiliatescommission['status_commission']) == "oncommission") {
         $text_porsant = sprintf($textbotlang['users']['affiliates']['purchaseCommissionInfo'], $Percent_porsant);
     }
     $textaffiliates = sprintf($textbotlang['users']['affiliates']['welcomeGiftInfo'], $text_start, $text_porsant, $user['affiliatescount'], $inforefral['orders'], $sum_order);
@@ -6034,7 +6060,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     sendmessage($from_id, $textaffiliates, $keyboard_share, 'HTML');
 } elseif ($datain == "get_gift_start") {
     $gift_status = select("affiliates", "*", null, null, "select");
-    if ($gift_status['Discount'] == "offDiscountaffiliates") {
+    if (feature_setting_value('aff_startgift', $user['lang'] ?? 'fa', $gift_status['Discount']) == "offDiscountaffiliates") {
         sendmessage($from_id, $textbotlang['users']['sectionDisabled'], $keyboard, 'HTML');
         return;
     }
@@ -6054,7 +6080,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     }
     $reagent['get_gift'] = true;
     $price_gift_Start = select("affiliates", "*", null, null, "select");
-    $price_gift_Start = intval($price_gift_Start['price_Discount']) / 2;
+    $price_gift_Start = intval(feature_setting_value('aff_giftamount', $user['lang'] ?? 'fa', $price_gift_Start['price_Discount'])) / 2;
     $useraffiliates = select("user", "*", 'id', $reagent['reagent'], "select");
     $Balance_add_regent = $useraffiliates['Balance'] + $price_gift_Start;
     update("user", "Balance", $Balance_add_regent, "id", $reagent['reagent']);
@@ -6433,11 +6459,12 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
         }
     }
     if ($status) {
-        $balance_last = intval($setting['wheelـluck_price']) + $user['Balance'];
+        $wheel_prize = feature_setting_value('wheel_price', $user['lang'] ?? 'fa', $setting['wheelـluck_price']);
+        $balance_last = intval($wheel_prize) + $user['Balance'];
         update("user", "Balance", $balance_last, "id", $from_id);
-        $price = number_format($setting['wheelـluck_price']);
+        $price = number_format($wheel_prize);
         sendmessage($from_id, sprintf($textbotlang['users']['wheelLuck']['winnerCongratulations'], $price), null, 'HTML');
-        $pricelast = $setting['wheelـluck_price'];
+        $pricelast = $wheel_prize;
         if (strlen($setting['Channel_Report']) > 0) {
             telegram('sendmessage', [
                 'chat_id' => $setting['Channel_Report'],
@@ -6662,7 +6689,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     update("user", "pagenumber", $previous_page, "id", $from_id);
     Editmessagetext($from_id, $message_id, $textbotlang['users']['extend']['selectOrderDirect'], $keyboard_json);
 } elseif ($datain == "linkappdownlod") {
-    $countapp = select("app", "*", null, null, "count");
+    $countapp = count(app_rows_for_lang($user['lang'] ?? 'fa'));
     if ($countapp == 0) {
         sendmessage($from_id, $textbotlang['users']['app']['appempty'], $json_list_helpـlink, "html");
         return;

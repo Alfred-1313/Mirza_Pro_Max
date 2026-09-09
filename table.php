@@ -1425,6 +1425,10 @@ addFieldToTable("setting", "close_sticker", '{}', "TEXT");
 addFieldToTable("setting", "svc_node_usage", '{}', "TEXT");
 addFieldToTable("setting", "shop_feature_lang", '{}', "TEXT");
 addFieldToTable("setting", "feature_lang", '{}', "TEXT");
+addFieldToTable("setting", "feature_lang_settings", '{}', "TEXT");
+// per-language app-download rows, same convention marzban_panel.lang already
+// uses: a comma list of language codes, or 'all'/NULL/'' meaning every language
+addFieldToTable("app", "lang", null, "VARCHAR(20)");
 try {
     $result = $pdo->query("SHOW TABLES LIKE 'reagent_report'");
     $table_exists = ($result->rowCount() > 0);

@@ -4650,23 +4650,26 @@ if (!function_exists('feature_status_lang_payload')) {
             ['text' => $statuscopycart_v == '1' ? $on : $off, 'callback_data' => $tog('compycart', $statuscopycart_v)],
             ['text' => $tx['keyboard']['copyCard'], 'callback_data' => "copycart"],
         ];
+        // the ⚙️ تنظیمات cells open their section inline, in this same message
+        // and in this same language (flsec:), instead of the old reply-keyboard
+        // screens they used to send as a new message
         $rows[] = [
-            ['text' => $tx['keyboard']['settings'], 'callback_data' => "linkappsetting"],
+            ['text' => $tx['keyboard']['settings'], 'callback_data' => "flsec:{$lang}:linkapp"],
             ['text' => $linkappstatus_v == '1' ? $on : $off, 'callback_data' => $tog('linkappstatus', $linkappstatus_v)],
             ['text' => $tx['keyboard']['appDownloadLinkAlt'], 'callback_data' => "linkappstatus"],
         ];
         $rows[] = [
-            ['text' => $tx['keyboard']['settings'], 'callback_data' => "gradonhshans"],
+            ['text' => $tx['keyboard']['settings'], 'callback_data' => "flsec:{$lang}:wheel"],
             ['text' => $wheelـluck_v == '1' ? $on : $off, 'callback_data' => $tog('wheel_luck', $wheelـluck_v)],
             ['text' => $tx['keyboard']['wheelOfLuck'], 'callback_data' => "wheel_luck"],
         ];
         $rows[] = [
-            ['text' => $tx['keyboard']['settings'], 'callback_data' => "settingaffiliatesf"],
+            ['text' => $tx['keyboard']['settings'], 'callback_data' => "flsec:{$lang}:aff"],
             ['text' => $affiliatesstatus_v == 'onaffiliates' ? $on : $off, 'callback_data' => $tog('affiliatesstatus', $affiliatesstatus_v)],
             ['text' => $tx['keyboard']['affiliateGift'], 'callback_data' => "affiliatesstatus"],
         ];
         $rows[] = [
-            ['text' => $tx['keyboard']['settings'], 'callback_data' => "changeloclimit"],
+            ['text' => $tx['keyboard']['settings'], 'callback_data' => "flsec:{$lang}:loc"],
             ['text' => $statuslimitchangeloc_v == '1' ? $on : $off, 'callback_data' => $tog('changeloc', $statuslimitchangeloc_v)],
             ['text' => $tx['keyboard']['locationChangeLimit'], 'callback_data' => "changeloc"],
         ];
@@ -4679,6 +4682,139 @@ if (!function_exists('feature_status_lang_caption')) {
         // written in the language being edited, like the buttons above it
         $tx = lang_tab_texts($lang);
         return strtr($tx['Admin']['Status']['featureLangBotTitle'], ['{lang}' => $tx['bottext']['langs'][$lang] ?? ($textbotlang['bottext']['langs'][$lang] ?? $lang)]);
+    }
+}
+if (!function_exists('feature_section_effective')) {
+    // The four ⚙️ تنظیمات sub-screens of 🌐 وضعیت قابلیت‌ها (هر زبان). Each
+    // value is read through feature_setting_value(), so a language nobody has
+    // touched still shows (and the bot still uses) the original global value.
+    // Keys are stable strings - they are what the per-language store is keyed
+    // by and what the value prompts carry in their callback_data.
+    function feature_section_effective($lang)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $aff = select("affiliates", "*", null, null, "select");
+        $limit = json_decode((string) $setting['limitnumber'], true);
+        if (!is_array($limit)) {
+            $limit = [];
+        }
+        return [
+            'aff_percent' => feature_setting_value('aff_percent', $lang, (string) $setting['affiliatespercentage']),
+            'aff_giftamount' => feature_setting_value('aff_giftamount', $lang, (string) $aff['price_Discount']),
+            'aff_commission' => feature_setting_value('aff_commission', $lang, (string) $aff['status_commission']),
+            'aff_startgift' => feature_setting_value('aff_startgift', $lang, (string) $aff['Discount']),
+            'aff_firstbuy' => feature_setting_value('aff_firstbuy', $lang, (string) $aff['porsant_one_buy']),
+            'aff_banner_text' => feature_setting_value('aff_banner_text', $lang, (string) $aff['description']),
+            'aff_banner_media' => feature_setting_value('aff_banner_media', $lang, (string) $aff['id_media']),
+            'wheel_price' => feature_setting_value('wheel_price', $lang, (string) $setting['wheelـluck_price']),
+            'loc_limit_all' => feature_setting_value('loc_limit_all', $lang, (string) ($limit['all'] ?? 0)),
+            'loc_limit_free' => feature_setting_value('loc_limit_free', $lang, (string) ($limit['free'] ?? 0)),
+        ];
+    }
+}
+if (!function_exists('feature_section_of_key')) {
+    // which of the four sections a value key belongs to - the value prompts
+    // only carry the key, and the screen to return to has to be derivable
+    // from it. null means "not a key this screen owns", i.e. ignore.
+    function feature_section_of_key($key)
+    {
+        $map = [
+            'aff_percent' => 'aff',
+            'aff_giftamount' => 'aff',
+            'aff_banner' => 'aff',
+            'wheel_price' => 'wheel',
+            'loc_limit_all' => 'loc',
+            'loc_limit_free' => 'loc',
+            'app_name' => 'linkapp',
+            'app_link' => 'linkapp',
+        ];
+        return $map[$key] ?? null;
+    }
+}
+if (!function_exists('feature_section_caption')) {
+    function feature_section_caption($textbotlang, $lang, $section)
+    {
+        $tx = lang_tab_texts($lang);
+        $v = feature_section_effective($lang);
+        $langName = $tx['bottext']['langs'][$lang] ?? $lang;
+        $s = $tx['Admin']['FeatureSection'];
+        if ($section === 'linkapp') {
+            $rows = app_rows_for_lang($lang);
+            $list = '';
+            foreach ($rows as $r) {
+                // a row with no language of its own is shown to every language,
+                // so say so - editing or deleting it here hits all of them
+                $shared = ($r['lang'] === null || $r['lang'] === '' || $r['lang'] === 'all');
+                $list .= "\n• " . ($shared ? '🌍 ' : '') . htmlspecialchars($r['name'], ENT_QUOTES, 'UTF-8');
+            }
+            if ($list === '') {
+                $list = "\n" . $s['appNone'];
+            }
+            return strtr($s['appTitle'], ['{lang}' => $langName, '{list}' => $list]);
+        }
+        if ($section === 'wheel') {
+            return strtr($s['wheelTitle'], ['{lang}' => $langName, '{price}' => number_format((float) $v['wheel_price'])]);
+        }
+        if ($section === 'aff') {
+            return strtr($s['affTitle'], [
+                '{lang}' => $langName,
+                '{percent}' => (string) $v['aff_percent'],
+                '{gift}' => number_format((float) $v['aff_giftamount']),
+            ]);
+        }
+        return strtr($s['locTitle'], [
+            '{lang}' => $langName,
+            '{all}' => (string) $v['loc_limit_all'],
+            '{free}' => (string) $v['loc_limit_free'],
+        ]);
+    }
+}
+if (!function_exists('feature_section_payload')) {
+    function feature_section_payload($textbotlang, $lang, $section)
+    {
+        $tx = lang_tab_texts($lang);
+        $s = $tx['Admin']['FeatureSection'];
+        $v = feature_section_effective($lang);
+        $on = $tx['Admin']['Status']['statuson'];
+        $off = $tx['Admin']['Status']['statusoff'];
+        $rows = [];
+        if ($section === 'linkapp') {
+            foreach (app_rows_for_lang($lang) as $r) {
+                $shared = ($r['lang'] === null || $r['lang'] === '' || $r['lang'] === 'all');
+                $rows[] = [
+                    ['text' => '✏️ ' . ($shared ? '🌍 ' : '') . $r['name'], 'callback_data' => "flsappe:{$lang}:{$r['id']}"],
+                    ['text' => '🗑', 'callback_data' => "flsappd:{$lang}:{$r['id']}", 'style' => 'danger'],
+                ];
+            }
+            $rows[] = [['text' => $s['appAdd'], 'callback_data' => "flsask:{$lang}:app_name", 'style' => 'success']];
+        } elseif ($section === 'wheel') {
+            $rows[] = [['text' => strtr($s['wheelPriceBtn'], ['{price}' => number_format((float) $v['wheel_price'])]), 'callback_data' => "flsask:{$lang}:wheel_price"]];
+        } elseif ($section === 'aff') {
+            $rows[] = [['text' => strtr($s['affPercentBtn'], ['{percent}' => (string) $v['aff_percent']]), 'callback_data' => "flsask:{$lang}:aff_percent"]];
+            $rows[] = [['text' => strtr($s['affGiftBtn'], ['{gift}' => number_format((float) $v['aff_giftamount'])]), 'callback_data' => "flsask:{$lang}:aff_giftamount"]];
+            $rows[] = [['text' => $s['affBannerBtn'], 'callback_data' => "flsask:{$lang}:aff_banner"]];
+            $comOn = $v['aff_commission'] === 'oncommission';
+            $rows[] = [
+                ['text' => $comOn ? $on : $off, 'callback_data' => "flstog:{$lang}:aff_commission:{$v['aff_commission']}", 'style' => $comOn ? 'success' : 'danger'],
+                ['text' => $s['affCommissionBtn'], 'callback_data' => "none"],
+            ];
+            $giftOn = $v['aff_startgift'] === 'onDiscountaffiliates';
+            $rows[] = [
+                ['text' => $giftOn ? $on : $off, 'callback_data' => "flstog:{$lang}:aff_startgift:{$v['aff_startgift']}", 'style' => $giftOn ? 'success' : 'danger'],
+                ['text' => $s['affStartGiftBtn'], 'callback_data' => "none"],
+            ];
+            $firstOn = $v['aff_firstbuy'] === 'on_buy_porsant';
+            $rows[] = [
+                ['text' => $firstOn ? $on : $off, 'callback_data' => "flstog:{$lang}:aff_firstbuy:{$v['aff_firstbuy']}", 'style' => $firstOn ? 'success' : 'danger'],
+                ['text' => $s['affFirstBuyBtn'], 'callback_data' => "none"],
+            ];
+        } else {
+            $rows[] = [['text' => strtr($s['locAllBtn'], ['{all}' => (string) $v['loc_limit_all']]), 'callback_data' => "flsask:{$lang}:loc_limit_all"]];
+            $rows[] = [['text' => strtr($s['locFreeBtn'], ['{free}' => (string) $v['loc_limit_free']]), 'callback_data' => "flsask:{$lang}:loc_limit_free"]];
+            $rows[] = [['text' => $s['locResetBtn'], 'callback_data' => "flsloc:{$lang}:ask", 'style' => 'danger']];
+        }
+        $rows[] = [['text' => $s['back'], 'callback_data' => "fls_lang:{$lang}"]];
+        return json_encode(['inline_keyboard' => $rows]);
     }
 }
 if (!function_exists('displayhub_payload')) {
@@ -9634,6 +9770,140 @@ elseif ($datain == "systemsms") {
     feature_set($featureKey, $fls_lang, $valuenew);
     $Bot_Status = feature_status_lang_payload($textbotlang, $fls_lang);
     Editmessagetext($from_id, $message_id, feature_status_lang_caption($textbotlang, $fls_lang), $Bot_Status);
+} elseif (preg_match('/^flsec:([a-z]{2}):(linkapp|wheel|aff|loc)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
+    // ⚙️ تنظیمات - opens the section inline, in the same message, in the same
+    // language, instead of the old reply-keyboard screen
+    $fs_lang = $fs_m[1];
+    $fs_sec = $fs_m[2];
+    Editmessagetext($from_id, $message_id, feature_section_caption($textbotlang, $fs_lang, $fs_sec), feature_section_payload($textbotlang, $fs_lang, $fs_sec));
+} elseif (preg_match('/^flstog:([a-z]{2}):(aff_commission|aff_startgift|aff_firstbuy):([a-zA-Z_]+)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
+    $fs_lang = $fs_m[1];
+    $fs_key = $fs_m[2];
+    $fs_val = $fs_m[3];
+    if ($fs_key === 'aff_commission') {
+        $fs_new = ($fs_val === 'oncommission') ? 'offcommission' : 'oncommission';
+    } elseif ($fs_key === 'aff_startgift') {
+        $fs_new = ($fs_val === 'onDiscountaffiliates') ? 'offDiscountaffiliates' : 'onDiscountaffiliates';
+    } else {
+        $fs_new = ($fs_val === 'on_buy_porsant') ? 'off_buy_porsant' : 'on_buy_porsant';
+    }
+    feature_setting_set($fs_key, $fs_lang, $fs_new);
+    Editmessagetext($from_id, $message_id, feature_section_caption($textbotlang, $fs_lang, 'aff'), feature_section_payload($textbotlang, $fs_lang, 'aff'));
+} elseif (preg_match('/^flsask:([a-z]{2}):([a-z_]+)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
+    $fs_lang = $fs_m[1];
+    $fs_key = $fs_m[2];
+    $fs_sec = feature_section_of_key($fs_key);
+    if ($fs_sec === null) {
+        return;
+    }
+    $fs_tx = lang_tab_texts($fs_lang);
+    savedata("clear", "fls_key", $fs_key);
+    savedata("save", "fls_lang", $fs_lang);
+    step("flsval", $from_id);
+    // the prompt replaces the section screen in place and carries its own
+    // cancel button, so the admin is never stranded in a step with no way out
+    $fs_cancel = json_encode(['inline_keyboard' => [[
+        ['text' => $fs_tx['Admin']['FeatureSection']['cancel'], 'callback_data' => "flscan:{$fs_lang}:{$fs_sec}", 'style' => 'danger'],
+    ]]]);
+    Editmessagetext($from_id, $message_id, strtr($fs_tx['Admin']['FeatureSection']['ask_' . $fs_key], ['{lang}' => $fs_tx['bottext']['langs'][$fs_lang] ?? $fs_lang]), $fs_cancel);
+} elseif (preg_match('/^flscan:([a-z]{2}):(linkapp|wheel|aff|loc)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
+    $fs_lang = $fs_m[1];
+    $fs_sec = $fs_m[2];
+    step("home", $from_id);
+    Editmessagetext($from_id, $message_id, feature_section_caption($textbotlang, $fs_lang, $fs_sec), feature_section_payload($textbotlang, $fs_lang, $fs_sec));
+} elseif ($user['step'] == "flsval" && $adminrulecheck['rule'] == "administrator") {
+    $fs_data = json_decode((string) $user['Processing_value'], true);
+    $fs_key = $fs_data['fls_key'] ?? '';
+    $fs_lang = $fs_data['fls_lang'] ?? 'fa';
+    $fs_sec = feature_section_of_key($fs_key);
+    if ($fs_sec === null) {
+        step("home", $from_id);
+        return;
+    }
+    $fs_tx = lang_tab_texts($fs_lang);
+    if ($fs_key === 'aff_banner') {
+        if (!$photo) {
+            sendmessage($from_id, $fs_tx['Admin']['affiliates']['invalidBanner'], null, 'HTML');
+            return;
+        }
+        feature_setting_set('aff_banner_media', $fs_lang, $photoid);
+        feature_setting_set('aff_banner_text', $fs_lang, (string) $caption);
+    } elseif ($fs_key === 'app_name') {
+        if (trim((string) $text) === '' || mb_strlen((string) $text) > 200) {
+            sendmessage($from_id, $fs_tx['Admin']['apps']['nameTooLong'], null, 'HTML');
+            return;
+        }
+        savedata("save", "fls_appname", $text);
+        step("flsapplink", $from_id);
+        sendmessage($from_id, $fs_tx['Admin']['apps']['askLink'], null, 'HTML');
+        return;
+    } elseif ($fs_key === 'app_link') {
+        if (!filter_var($text, FILTER_VALIDATE_URL)) {
+            sendmessage($from_id, $fs_tx['Admin']['managepanel']['invalidDomain'], null, 'HTML');
+            return;
+        }
+        $fs_appid = (int) ($fs_data['fls_appid'] ?? 0);
+        update("app", "link", $text, "id", $fs_appid);
+    } else {
+        // every remaining key is a plain number
+        if (!ctype_digit((string) $text)) {
+            sendmessage($from_id, $fs_tx['common']['invalidInput'], null, 'HTML');
+            return;
+        }
+        feature_setting_set($fs_key, $fs_lang, (string) intval($text));
+    }
+    step("home", $from_id);
+    sendmessage($from_id, feature_section_caption($textbotlang, $fs_lang, $fs_sec), feature_section_payload($textbotlang, $fs_lang, $fs_sec), 'HTML');
+} elseif ($user['step'] == "flsapplink" && $adminrulecheck['rule'] == "administrator") {
+    $fs_data = json_decode((string) $user['Processing_value'], true);
+    $fs_lang = $fs_data['fls_lang'] ?? 'fa';
+    $fs_tx = lang_tab_texts($fs_lang);
+    if (!filter_var($text, FILTER_VALIDATE_URL)) {
+        sendmessage($from_id, $fs_tx['Admin']['managepanel']['invalidDomain'], null, 'HTML');
+        return;
+    }
+    // a row added from a language tab belongs to that language only
+    $fs_stmt = $pdo->prepare("INSERT INTO app (name, link, lang) VALUES (:name, :link, :lang)");
+    $fs_stmt->bindValue(':name', (string) ($fs_data['fls_appname'] ?? ''));
+    $fs_stmt->bindValue(':link', (string) $text);
+    $fs_stmt->bindValue(':lang', $fs_lang);
+    $fs_stmt->execute();
+    step("home", $from_id);
+    sendmessage($from_id, feature_section_caption($textbotlang, $fs_lang, 'linkapp'), feature_section_payload($textbotlang, $fs_lang, 'linkapp'), 'HTML');
+} elseif (preg_match('/^flsappd:([a-z]{2}):(\d+)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
+    $fs_lang = $fs_m[1];
+    $fs_stmt = $pdo->prepare("DELETE FROM app WHERE id = :id");
+    $fs_stmt->bindValue(':id', (int) $fs_m[2], PDO::PARAM_INT);
+    $fs_stmt->execute();
+    Editmessagetext($from_id, $message_id, feature_section_caption($textbotlang, $fs_lang, 'linkapp'), feature_section_payload($textbotlang, $fs_lang, 'linkapp'));
+} elseif (preg_match('/^flsappe:([a-z]{2}):(\d+)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
+    $fs_lang = $fs_m[1];
+    $fs_tx = lang_tab_texts($fs_lang);
+    savedata("clear", "fls_key", 'app_link');
+    savedata("save", "fls_lang", $fs_lang);
+    savedata("save", "fls_appid", (int) $fs_m[2]);
+    step("flsval", $from_id);
+    $fs_cancel = json_encode(['inline_keyboard' => [[
+        ['text' => $fs_tx['Admin']['FeatureSection']['cancel'], 'callback_data' => "flscan:{$fs_lang}:linkapp", 'style' => 'danger'],
+    ]]]);
+    Editmessagetext($from_id, $message_id, $fs_tx['Admin']['apps']['askNewLink'], $fs_cancel);
+} elseif (preg_match('/^flsloc:([a-z]{2}):(ask|do)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
+    $fs_lang = $fs_m[1];
+    $fs_tx = lang_tab_texts($fs_lang);
+    if ($fs_m[2] === 'ask') {
+        $fs_kb = json_encode(['inline_keyboard' => [
+            [['text' => $fs_tx['keyboard']['confirmAndZero'], 'callback_data' => "flsloc:{$fs_lang}:do", 'style' => 'danger']],
+            [['text' => $fs_tx['Admin']['FeatureSection']['cancel'], 'callback_data' => "flscan:{$fs_lang}:loc"]],
+        ]]);
+        Editmessagetext($from_id, $message_id, strtr($fs_tx['Admin']['FeatureSection']['locResetConfirm'], ['{lang}' => $fs_tx['bottext']['langs'][$fs_lang] ?? $fs_lang]), $fs_kb);
+        return;
+    }
+    // scoped to this language's own users - the whole screen is per-language,
+    // so a reset triggered from the English tab must not touch Persian users
+    $fs_stmt = $pdo->prepare("UPDATE user SET limitchangeloc = '0' WHERE lang = :lang");
+    $fs_stmt->bindValue(':lang', $fs_lang);
+    $fs_stmt->execute();
+    Editmessagetext($from_id, $message_id, feature_section_caption($textbotlang, $fs_lang, 'loc'), feature_section_payload($textbotlang, $fs_lang, 'loc'));
 } elseif ($text == $textbotlang['keyboard']['botReports'] && $adminrulecheck['rule'] == "administrator") {
     $textreports = sprintf($textbotlang['Admin']['Channel']['askReportGroupId'], $setting['Channel_Report']);
     sendmessage($from_id, $textreports, $backadmin, 'HTML');

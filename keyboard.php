@@ -819,10 +819,11 @@ $json_list_helpـcategory = json_encode($helpcwtgory);
 
 
 //------------------  [ help app ]----------------//
-$stmt = $pdo->prepare("SELECT * FROM app");
-$stmt->execute();
+// only the rows that belong to this customer's language (a row with no
+// language of its own belongs to every language) - managed per language from
+// 🌐 وضعیت قابلیت‌ها (هر زبان) -> 🔗 لینک دانلود برنامه
 $helpapp = ['inline_keyboard' => []];
-while ($result = $stmt->fetch(PDO::FETCH_ASSOC)) {
+foreach (app_rows_for_lang($users['lang'] ?? 'fa') as $result) {
     $helpapp['inline_keyboard'][] = [
         ['text' => $result['name'], 'url' => $result['link']]
     ];

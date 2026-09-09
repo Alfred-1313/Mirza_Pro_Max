@@ -2740,7 +2740,36 @@ Möhletiň çäksiz bolmagyny isleseňiz, 0 sanyny iberiň',
       'removeProtocol' => 'Pozmak isleýän protokolyňyzy saýlaň.',
       'removedProtocol' => 'Protokol üstünlikli pozuldy.',
     ),
-    'Status' => 
+    'FeatureSection' =>
+    array (
+      'back' => '🔙 Yza',
+      'cancel' => '❌ Ýatyrmak',
+      'appTitle' => "🔗 <b>Programma ýükleme baglanyşyklary</b> — {lang}\n\nBu sanaw diňe şu dile degişlidir.{list}\n\n✏️ baglanyşygy üýtgedýär, 🗑 pozýar. 🌍 setiriň ähli diller üçin görkezilýändigini aňladýar.",
+      'appNone' => "\n— entek programma goşulmady —",
+      'appAdd' => '➕ Programma goşmak',
+      'wheelTitle' => "🎲 <b>Bagt tigriniň sazlamalary</b> — {lang}\n\nBaýrak: <b>{price}</b>\n\nBu möçber diňe şu dile degişlidir.",
+      'wheelPriceBtn' => '💰 Baýrak: {price}',
+      'affTitle' => "🎁 <b>Wekilçilik sazlamalary</b> — {lang}\n\nKomissiýa: <b>{percent}%</b>\nGoşulmak sowgady: <b>{gift}</b>\n\nBu sazlamalar diňe şu dile degişlidir.",
+      'affPercentBtn' => '📊 Komissiýa: {percent}%',
+      'affGiftBtn' => '🎁 Goşulmak sowgady: {gift}',
+      'affBannerBtn' => '🖼 Wekilçilik banneri',
+      'affCommissionBtn' => '💵 Satyn alyş komissiýasy',
+      'affStartGiftBtn' => '🎉 Goşulmak sowgady',
+      'affFirstBuyBtn' => '1️⃣ Diňe ilkinji satyn alyş',
+      'locTitle' => "🌍 <b>Ýerleşiş çäklendirmesi</b> — {lang}\n\nUmumy çäk: <b>{all}</b>\nMugt çalyşmalar: <b>{free}</b>\n\nBu bahalar diňe şu dile degişlidir.",
+      'locAllBtn' => '🔢 Umumy çäk: {all}',
+      'locFreeBtn' => '🆓 Mugt çalyşmalar: {free}',
+      'locResetBtn' => '♻️ Ulanyjylaryň çäklerini nollamak',
+      'locResetConfirm' => "♻️ <b>{lang}</b> dilindäki ähli ulanyjylaryň ýerleşiş çalyşmak çäki nollanar. Beýleki dillerdäki ulanyjylar üýtgemän galar.\n\nBerkmi?",
+      'ask_aff_percent' => "📊 <b>{lang}</b> dili üçin wekilçilik komissiýasynyň göterimini iberiň (diňe san).",
+      'ask_aff_giftamount' => "🎁 <b>{lang}</b> dili üçin goşulmak sowgadynyň möçberini iberiň (diňe san).",
+      'ask_aff_banner' => "🖼 <b>{lang}</b> dili üçin wekilçilik banneriniň suratyny ýazgysy bilen iberiň.",
+      'ask_wheel_price' => "💰 <b>{lang}</b> dili üçin bagt tigriniň baýragyny iberiň (diňe san).",
+      'ask_loc_limit_all' => "🔢 <b>{lang}</b> dili üçin ýerleşiş çalyşmagyň iň köp sanyny iberiň (diňe san).",
+      'ask_loc_limit_free' => "🆓 <b>{lang}</b> dili üçin mugt ýerleşiş çalyşmalarynyň sanyny iberiň (diňe san).",
+      'ask_app_name' => "📝 Programmanyň adyny iberiň (<b>{lang}</b> dili üçin).",
+    ),
+    'Status' =>
     array (
       'applyScope' => 'Ähli ulanyjylar üçin öçürilsinmi ýa-da diňe täze ulanyjylar üçin?
     Täze ulanyjylar 0 
