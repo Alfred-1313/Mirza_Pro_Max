@@ -4738,6 +4738,10 @@ if (!function_exists('feature_section_caption')) {
         $v = feature_section_effective($lang);
         $langName = $tx['bottext']['langs'][$lang] ?? $lang;
         $s = $tx['Admin']['FeatureSection'];
+        // amounts belong to this language's currency (setting.lang_currency),
+        // so they are rendered with its symbol/decimals rather than as a bare
+        // number the admin would read as toman
+        $cur = currency_for_lang($lang);
         if ($section === 'linkapp') {
             $rows = app_rows_for_lang($lang);
             $list = '';
@@ -4753,13 +4757,13 @@ if (!function_exists('feature_section_caption')) {
             return strtr($s['appTitle'], ['{lang}' => $langName, '{list}' => $list]);
         }
         if ($section === 'wheel') {
-            return strtr($s['wheelTitle'], ['{lang}' => $langName, '{price}' => number_format((float) $v['wheel_price'])]);
+            return strtr($s['wheelTitle'], ['{lang}' => $langName, '{price}' => money($v['wheel_price'], $cur)]);
         }
         if ($section === 'aff') {
             return strtr($s['affTitle'], [
                 '{lang}' => $langName,
                 '{percent}' => (string) $v['aff_percent'],
-                '{gift}' => number_format((float) $v['aff_giftamount']),
+                '{gift}' => money($v['aff_giftamount'], $cur),
             ]);
         }
         return strtr($s['locTitle'], [
@@ -4777,6 +4781,7 @@ if (!function_exists('feature_section_payload')) {
         $v = feature_section_effective($lang);
         $on = $tx['Admin']['Status']['statuson'];
         $off = $tx['Admin']['Status']['statusoff'];
+        $cur = currency_for_lang($lang);
         $rows = [];
         if ($section === 'linkapp') {
             foreach (app_rows_for_lang($lang) as $r) {
@@ -4788,10 +4793,10 @@ if (!function_exists('feature_section_payload')) {
             }
             $rows[] = [['text' => $s['appAdd'], 'callback_data' => "flsask:{$lang}:app_name", 'style' => 'success']];
         } elseif ($section === 'wheel') {
-            $rows[] = [['text' => strtr($s['wheelPriceBtn'], ['{price}' => number_format((float) $v['wheel_price'])]), 'callback_data' => "flsask:{$lang}:wheel_price"]];
+            $rows[] = [['text' => strtr($s['wheelPriceBtn'], ['{price}' => money($v['wheel_price'], $cur)]), 'callback_data' => "flsask:{$lang}:wheel_price"]];
         } elseif ($section === 'aff') {
             $rows[] = [['text' => strtr($s['affPercentBtn'], ['{percent}' => (string) $v['aff_percent']]), 'callback_data' => "flsask:{$lang}:aff_percent"]];
-            $rows[] = [['text' => strtr($s['affGiftBtn'], ['{gift}' => number_format((float) $v['aff_giftamount'])]), 'callback_data' => "flsask:{$lang}:aff_giftamount"]];
+            $rows[] = [['text' => strtr($s['affGiftBtn'], ['{gift}' => money($v['aff_giftamount'], $cur)]), 'callback_data' => "flsask:{$lang}:aff_giftamount"]];
             $rows[] = [['text' => $s['affBannerBtn'], 'callback_data' => "flsask:{$lang}:aff_banner"]];
             $comOn = $v['aff_commission'] === 'oncommission';
             $rows[] = [
@@ -9805,7 +9810,12 @@ elseif ($datain == "systemsms") {
     $fs_cancel = json_encode(['inline_keyboard' => [[
         ['text' => $fs_tx['Admin']['FeatureSection']['cancel'], 'callback_data' => "flscan:{$fs_lang}:{$fs_sec}", 'style' => 'danger'],
     ]]]);
-    Editmessagetext($from_id, $message_id, strtr($fs_tx['Admin']['FeatureSection']['ask_' . $fs_key], ['{lang}' => $fs_tx['bottext']['langs'][$fs_lang] ?? $fs_lang]), $fs_cancel);
+    Editmessagetext($from_id, $message_id, strtr($fs_tx['Admin']['FeatureSection']['ask_' . $fs_key], [
+        '{lang}' => $fs_tx['bottext']['langs'][$fs_lang] ?? $fs_lang,
+        // amounts are entered in THIS language's currency, so the prompt has
+        // to name it - otherwise every market gets typed in toman
+        '{currency}' => currency_get(currency_for_lang($fs_lang))['title'],
+    ]), $fs_cancel);
 } elseif (preg_match('/^flscan:([a-z]{2}):(linkapp|wheel|aff|loc)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
     $fs_lang = $fs_m[1];
     $fs_sec = $fs_m[2];
@@ -9844,8 +9854,17 @@ elseif ($datain == "systemsms") {
         }
         $fs_appid = (int) ($fs_data['fls_appid'] ?? 0);
         update("app", "link", $text, "id", $fs_appid);
+    } elseif ($fs_key === 'wheel_price' || $fs_key === 'aff_giftamount') {
+        // an amount in this language's currency - USD/CNY/RUB/TMT carry
+        // decimals, so "12.5" has to be accepted, not just whole numbers
+        $fs_cur = currency_for_lang($fs_lang);
+        if (!money_valid($text, $fs_cur)) {
+            sendmessage($from_id, $fs_tx['common']['invalidInput'], null, 'HTML');
+            return;
+        }
+        feature_setting_set($fs_key, $fs_lang, money_normalize($text));
     } else {
-        // every remaining key is a plain number
+        // counts and percentages stay whole numbers
         if (!ctype_digit((string) $text)) {
             sendmessage($from_id, $fs_tx['common']['invalidInput'], null, 'HTML');
             return;

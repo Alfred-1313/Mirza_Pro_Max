@@ -1073,10 +1073,10 @@ Gapjyk balansy: %s
       'offaffiliates' => '❌ Ýollama bölümi öçürilen',
       'commissionPaid' => '🎁  Komissiýa tölegi 
         
-        Tanşyňyzdan %s Toman gapjygyňyza geçirildi',
+        Tanşyňyzdan %s gapjygyňyza geçirildi',
       'commissionPaid2' => '🎁  Komissiýa tölegi 
         
-        Tanşyňyzdan %s Toman gapjygyňyza geçirildi',
+        Tanşyňyzdan %s gapjygyňyza geçirildi',
       'commissionPaidFn' => '🎁  Komissiýa tölegi 
         
         Tanşyňyzdan %s Toman gapjygyňyza geçirildi',
@@ -1103,7 +1103,7 @@ Dostlaryňyzy <b>ýörite salgyňyz</b> arkaly çagyryp, hiç zat tölemän gapj
 <b>📊 Statistikaňyz:</b>
 • 👥 Tanyşlar: %s
 • 🛒 Satyn alyşlar: %s
-• 💵 Jemi satyn alyş: %s Toman
+• 💵 Jemi satyn alyş: %s
 
 <b>📢 Çagyr, sowgat al, ösüş gazan!</b>
 ',
@@ -1120,7 +1120,7 @@ Agzalyk sowgadyny almak üçin:
       'membershipGiftClaimed' => '<b>⛔ Siz agzalyk sowgadyny eýýäm aldyňyz.</b>
 Bu sowgady diňe <b>bir gezek</b> işjeňleşdirip bolýar.',
       'membershipGiftInfo' => '<b>🎁 Agzalyk sowgady:</b>
-• 🎉 Jemi sowgat: %s Toman  
+• 🎉 Jemi sowgat: %s  
 • 🔻 50%% size (çagyran)  
 • 🔻 50%% tanşa (täze ulanyja]
 ',
@@ -1747,7 +1747,7 @@ Habaryň teksti:
       'featureDisabled' => '❌ Bu mümkinçilik häzirlikçe öçürilen',
       'notWinner' => '🥲 Gynansak-da, siz ýeňmediňiz, başga gün täzeden synanyşyň',
       'wheelWinner' => '⭕️ @%s ulanyjy adyndaky we %s san ID-li ulanyjy şowlulyk çarhynda ýeňdi',
-      'winnerCongratulations' => '🤩 Gutlaýarys, siz ýeňdiňiz. %s Toman hasabyňyza goşuldy',
+      'winnerCongratulations' => '🤩 Gutlaýarys, siz ýeňdiňiz. %s hasabyňyza goşuldy',
     ),
     'Rules' => '✅ Düzgünler tassyklandy, indi botuň hyzmatlaryndan peýdalanyp bilersiňiz.',
     'SendMessage' => '📩 Ulanyja habar ibermek',
@@ -2762,9 +2762,9 @@ Möhletiň çäksiz bolmagyny isleseňiz, 0 sanyny iberiň',
       'locResetBtn' => '♻️ Ulanyjylaryň çäklerini nollamak',
       'locResetConfirm' => "♻️ <b>{lang}</b> dilindäki ähli ulanyjylaryň ýerleşiş çalyşmak çäki nollanar. Beýleki dillerdäki ulanyjylar üýtgemän galar.\n\nBerkmi?",
       'ask_aff_percent' => "📊 <b>{lang}</b> dili üçin wekilçilik komissiýasynyň göterimini iberiň (diňe san).",
-      'ask_aff_giftamount' => "🎁 <b>{lang}</b> dili üçin goşulmak sowgadynyň möçberini iberiň (diňe san).",
+      'ask_aff_giftamount' => "🎁 <b>{lang}</b> dili üçin goşulmak sowgadynyň möçberini iberiň.\n\n💱 Pul birligi: <b>{currency}</b>",
       'ask_aff_banner' => "🖼 <b>{lang}</b> dili üçin wekilçilik banneriniň suratyny ýazgysy bilen iberiň.",
-      'ask_wheel_price' => "💰 <b>{lang}</b> dili üçin bagt tigriniň baýragyny iberiň (diňe san).",
+      'ask_wheel_price' => "💰 <b>{lang}</b> dili üçin bagt tigriniň baýragyny iberiň.\n\n💱 Pul birligi: <b>{currency}</b>",
       'ask_loc_limit_all' => "🔢 <b>{lang}</b> dili üçin ýerleşiş çalyşmagyň iň köp sanyny iberiň (diňe san).",
       'ask_loc_limit_free' => "🆓 <b>{lang}</b> dili üçin mugt ýerleşiş çalyşmalarynyň sanyny iberiň (diňe san).",
       'ask_app_name' => "📝 Programmanyň adyny iberiň (<b>{lang}</b> dili üçin).",
@@ -7131,7 +7131,7 @@ Adam : %s
     'membershipGiftAlreadyClaimed' => '<b>⛔ Siz eýýäm agzalyk sowgadyny alypsyňyz.</b>
 Bu sowgat diňe <b>bir gezek</b> işjeňleşdirilip bilner.',
     'membershipGiftInfo' => '<b>🎁 Agzalyk sowgady:</b>
-• 🎉 Jemi sowgat: %s Toman  
+• 🎉 Jemi sowgat: %s  
 • 🔻 50%% siz üçin (salgy beren)  
 • 🔻 50%% ýollama üçin (täze ulanyjy]
 ',

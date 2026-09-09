@@ -391,7 +391,7 @@ if ($user['joinchannel'] != "active") {
                     $aff_giftamount = feature_setting_value('aff_giftamount', $aff_reflang, $marzbanDiscountaffiliates['price_Discount']);
                     $Balance_add_user = $useraffiliates['Balance'] + $aff_giftamount;
                     update("user", "Balance", $Balance_add_user, "id", $affiliatesid);
-                    $addbalancediscount = number_format($aff_giftamount, 0);
+                    $addbalancediscount = money($aff_giftamount, currency_for_user($useraffiliates));
                     sendmessage($affiliatesid, strtr($textbotlang['users']['affiliates']['balanceGift'], ['{addbalancediscount}' => $addbalancediscount, '{from_id}' => $from_id]), null, 'html');
                 }
                 sendmessage($from_id, strtr($textbotlang['users']['text_start'], bottext_user_placeholders($user, $from_id)), $keyboard, 'html');
@@ -4541,7 +4541,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
                     update("user", "score", $scorenew, "id", $user['affiliates']);
                 }
                 update("user", "Balance", $Balance_prim, "id", $user['affiliates']);
-                $result = number_format($result);
+                $result = money($result, currency_for_user($user_Balance));
                 $dateacc = date('Y/m/d H:i:s');
                 $textadd = sprintf($textbotlang['users']['affiliates']['commissionPaid'], $result);
                 $textreportport = sprintf($textbotlang['Admin']['reportgroup']['commissionPaid'], $result, $user['affiliates'], $from_id, $dateacc);
@@ -4566,7 +4566,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
                 update("user", "score", $scorenew, "id", $user['affiliates']);
             }
             update("user", "Balance", $Balance_prim, "id", $user['affiliates']);
-            $result = number_format($result);
+            $result = money($result, currency_for_user($user_Balance));
             $dateacc = date('Y/m/d H:i:s');
             $textadd = sprintf($textbotlang['users']['affiliates']['commissionPaid2'], $result);
             $textreportport = sprintf($textbotlang['Admin']['reportgroup']['commissionPaid2'], $result, $user['affiliates'], $from_id, $dateacc);
@@ -6048,9 +6048,10 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     $text_start = "";
     $text_porsant = "";
     $Percent_porsant = feature_setting_value('aff_percent', $aff_lang, $setting['affiliatespercentage']);
-    $sum_order = number_format($inforefral['total_price'], 0);
+    $aff_cur = currency_for_user($user);
+    $sum_order = money($inforefral['total_price'], $aff_cur);
     if (feature_setting_value('aff_startgift', $aff_lang, $affiliatescommission['Discount']) == "onDiscountaffiliates") {
-        $text_start = sprintf($textbotlang['users']['affiliates']['membershipGiftInfo'], feature_setting_value('aff_giftamount', $aff_lang, $affiliatescommission['price_Discount']));
+        $text_start = sprintf($textbotlang['users']['affiliates']['membershipGiftInfo'], money(feature_setting_value('aff_giftamount', $aff_lang, $affiliatescommission['price_Discount']), $aff_cur));
     }
     if (feature_setting_value('aff_commission', $aff_lang, $affiliatescommission['status_commission']) == "oncommission") {
         $text_porsant = sprintf($textbotlang['users']['affiliates']['purchaseCommissionInfo'], $Percent_porsant);
@@ -6080,13 +6081,13 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     }
     $reagent['get_gift'] = true;
     $price_gift_Start = select("affiliates", "*", null, null, "select");
-    $price_gift_Start = intval(feature_setting_value('aff_giftamount', $user['lang'] ?? 'fa', $price_gift_Start['price_Discount'])) / 2;
+    $price_gift_Start = ((float) feature_setting_value('aff_giftamount', $user['lang'] ?? 'fa', $price_gift_Start['price_Discount'])) / 2;
     $useraffiliates = select("user", "*", 'id', $reagent['reagent'], "select");
     $Balance_add_regent = $useraffiliates['Balance'] + $price_gift_Start;
     update("user", "Balance", $Balance_add_regent, "id", $reagent['reagent']);
     $Balance_add_user = $user['Balance'] + $price_gift_Start;
     update("user", "Balance", $Balance_add_user, "id", $from_id);
-    $addbalancediscount = number_format($price_gift_Start, 0);
+    $addbalancediscount = money($price_gift_Start, currency_for_user($user));
     sendmessage($reagent['reagent'], $textbotlang['users']['affiliates']['joinedGift'], null, 'html');
     sendmessage($from_id, $textbotlang['users']['affiliates']['joinGiftActivated'], null, 'html');
     $report_join_gift = sprintf($textbotlang['Admin']['reportgroup']['membershipGiftPaid'], $from_id, $username, $reagent['reagent'], $user['Balance'], $Balance_add_user, $useraffiliates['Balance'], $Balance_add_regent);
@@ -6460,9 +6461,11 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     }
     if ($status) {
         $wheel_prize = feature_setting_value('wheel_price', $user['lang'] ?? 'fa', $setting['wheelـluck_price']);
-        $balance_last = intval($wheel_prize) + $user['Balance'];
+        $balance_last = $wheel_prize + $user['Balance'];
         update("user", "Balance", $balance_last, "id", $from_id);
-        $price = number_format($wheel_prize);
+        // the prize is denominated in this language's currency, so render it
+        // with that currency's symbol instead of a bare "toman" number
+        $price = money($wheel_prize, currency_for_user($user));
         sendmessage($from_id, sprintf($textbotlang['users']['wheelLuck']['winnerCongratulations'], $price), null, 'HTML');
         $pricelast = $wheel_prize;
         if (strlen($setting['Channel_Report']) > 0) {

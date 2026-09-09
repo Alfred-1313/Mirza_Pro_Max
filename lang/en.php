@@ -524,10 +524,10 @@ Use the button below to pay👇🏻',
                         'joinGiftActivated' => '🎉 The membership gift was activated for you!',
                         'commissionPaid' => '🎁  Commission payment 
         
-        An amount of %s Toman was credited to your wallet from your referral',
+        An amount of %s was credited to your wallet from your referral',
                         'commissionPaid2' => '🎁  Commission payment 
         
-        An amount of %s Toman was credited to your wallet from your referral',
+        An amount of %s was credited to your wallet from your referral',
                         'commissionPaidFn' => '🎁  Commission payment 
         
         An amount of %s Toman was credited to your wallet from your referral',
@@ -554,7 +554,7 @@ By inviting friends through your <b>dedicated link</b>, your wallet is topped up
 <b>📊 Your stats:</b>
 • 👥 Referrals: %s people
 • 🛒 Purchases: %s
-• 💵 Total purchases: %s Toman
+• 💵 Total purchases: %s
 
 <b>📢 Invite, get a gift, grow!</b>
 ',
@@ -571,7 +571,7 @@ This way, both you and your referrer get a gift! 💰
                         'membershipGiftClaimed' => '<b>⛔ You have already received the membership gift.</b>
 This gift can only be activated <b>once</b>.',
                         'membershipGiftInfo' => '<b>🎁 Membership gift:</b>
-• 🎉 Total gift: %s Toman  
+• 🎉 Total gift: %s  
 • 🔻 50% for you (referrer)  
 • 🔻 50% for the referral (new user)
 
@@ -1222,7 +1222,7 @@ Message text:
                         'featureDisabled' => '❌ This feature is currently turned off',
                         'notWinner' => '🥲 Unfortunately you did not win. Try again another day',
                         'wheelWinner' => '⭕️ A user with username @%s and numeric ID %s won the wheel of fortune',
-                        'winnerCongratulations' => '🤩 Congratulations, you won! The amount of %s Toman has been added to your account.',
+                        'winnerCongratulations' => '🤩 Congratulations, you won! The amount of %s has been added to your account.',
                         'resultError' => '❌ An error occurred while getting the game result. Please try again later.',
                 ],
         ],
@@ -1540,9 +1540,9 @@ Number of products sold: %s
                         'locResetBtn' => '♻️ Zero out users\' limits',
                         'locResetConfirm' => "♻️ The location-change limit of every <b>{lang}</b> user will be set to zero. Users of the other languages stay untouched.\n\nAre you sure?",
                         'ask_aff_percent' => "📊 Send the referral commission percentage for <b>{lang}</b> (digits only).",
-                        'ask_aff_giftamount' => "🎁 Send the join-gift amount for <b>{lang}</b> (digits only).",
+                        'ask_aff_giftamount' => "🎁 Send the join-gift amount for <b>{lang}</b>.\n\n💱 Currency: <b>{currency}</b>",
                         'ask_aff_banner' => "🖼 Send the referral banner photo for <b>{lang}</b>, with its caption.",
-                        'ask_wheel_price' => "💰 Send the wheel-of-fortune prize for <b>{lang}</b> (digits only).",
+                        'ask_wheel_price' => "💰 Send the wheel-of-fortune prize for <b>{lang}</b>.\n\n💱 Currency: <b>{currency}</b>",
                         'ask_loc_limit_all' => "🔢 Send the maximum number of location changes for <b>{lang}</b> (digits only).",
                         'ask_loc_limit_free' => "🆓 Send the number of free location changes for <b>{lang}</b> (digits only).",
                         'ask_app_name' => "📝 Send the app name (for <b>{lang}</b>).",

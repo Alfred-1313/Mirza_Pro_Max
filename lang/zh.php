@@ -524,10 +524,10 @@ return [
                         'joinGiftActivated' => '🎉 会员礼品已为您激活！',
                         'commissionPaid' => '🎁  佣金支付 
         
-        来自您下线的金额 %s 托曼已充值到您的钱包',
+        来自您下线的金额 %s已充值到您的钱包',
                         'commissionPaid2' => '🎁  佣金支付 
         
-        来自您下线的金额 %s 托曼已充值到您的钱包',
+        来自您下线的金额 %s已充值到您的钱包',
                         'commissionPaidFn' => '🎁  佣金支付 
         
         来自您下线的金额 %s 托曼已充值到您的钱包',
@@ -554,7 +554,7 @@ return [
 <b>📊 您的统计：</b>
 • 👥 下线：%s 人
 • 🛒 购买：%s 个
-• 💵 总购买额：%s 托曼
+• 💵 总购买额：%s
 
 <b>📢 邀请，获得礼品，成长！</b>
 ',
@@ -571,7 +571,7 @@ return [
                         'membershipGiftClaimed' => '<b>⛔ 您已领取过会员礼品。</b>
 此礼品仅可激活<b>一次</b>。',
                         'membershipGiftInfo' => '<b>🎁 会员礼品：</b>
-• 🎉 礼品总额：%s 托曼  
+• 🎉 礼品总额：%s  
 • 🔻 50% 给您（推荐人）  
 • 🔻 50% 给下线（新用户）
 
@@ -1222,7 +1222,7 @@ https://t.me/%s?start=%s',
                         'featureDisabled' => '❌ 此功能目前已关闭',
                         'notWinner' => '🥲 很遗憾您没有中奖。改天再来试试吧',
                         'wheelWinner' => '⭕️ 用户名为 @%s、数字ID 为 %s 的用户赢得了幸运转盘',
-                        'winnerCongratulations' => '🤩 恭喜您中奖了！%s 托曼已添加到您的账户。',
+                        'winnerCongratulations' => '🤩 恭喜您中奖了！%s已添加到您的账户。',
                         'resultError' => '❌ 获取游戏结果时出错。请稍后再试。',
                 ],
         ],
@@ -1540,9 +1540,9 @@ n2',
                         'locResetBtn' => '♻️ 清零用户的限制',
                         'locResetConfirm' => "♻️ 所有 <b>{lang}</b> 用户的位置更改限制将被清零。其他语言的用户不受影响。\n\n确定吗？",
                         'ask_aff_percent' => "📊 请发送 <b>{lang}</b> 的推荐佣金百分比（仅数字）。",
-                        'ask_aff_giftamount' => "🎁 请发送 <b>{lang}</b> 的加入礼金金额（仅数字）。",
+                        'ask_aff_giftamount' => "🎁 请发送 <b>{lang}</b> 的加入礼金金额。\n\n💱 货币：<b>{currency}</b>",
                         'ask_aff_banner' => "🖼 请发送 <b>{lang}</b> 的推荐横幅图片，并附上说明文字。",
-                        'ask_wheel_price' => "💰 请发送 <b>{lang}</b> 的幸运转盘奖金（仅数字）。",
+                        'ask_wheel_price' => "💰 请发送 <b>{lang}</b> 的幸运转盘奖金。\n\n💱 货币：<b>{currency}</b>",
                         'ask_loc_limit_all' => "🔢 请发送 <b>{lang}</b> 的位置更改次数上限（仅数字）。",
                         'ask_loc_limit_free' => "🆓 请发送 <b>{lang}</b> 的免费位置更改次数（仅数字）。",
                         'ask_app_name' => "📝 请发送应用名称（用于 <b>{lang}</b>）。",
