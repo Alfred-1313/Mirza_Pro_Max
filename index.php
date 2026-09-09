@@ -964,7 +964,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             ]
         ]
     ];
-    $marzbanstatusextra = select("shopSetting", "*", "Namevalue", "statusextra", "select")['value'];
+    $marzbanstatusextra = shop_feature_value('extravolunme', $user['lang'] ?? 'fa', select("shopSetting", "*", "Namevalue", "statusextra", "select")['value']);
     if ($marzbanstatusextra == "onextra") {
         $keyboardinfo['inline_keyboard'][] = [
             ['text' => $textbotlang['users']['extend']['title'], 'callback_data' => 'extends_' . $DataUserOut['username'] . "_" . $dataget[1]],
@@ -1215,12 +1215,12 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         }
     }
     #-----------------------------#
-    $statustimeextra = select("shopSetting", "*", "Namevalue", "statustimeextra", "select")['value'];
-    $marzbanstatusextra = select("shopSetting", "*", "Namevalue", "statusextra", "select")['value'];
-    $statusdisorder = select("shopSetting", "*", "Namevalue", "statusdisorder", "select")['value'];
-    $statuschangeservice = select("shopSetting", "*", "Namevalue", "statuschangeservice", "select")['value'];
-    $statusshowconfig = select("shopSetting", "*", "Namevalue", "configshow", "select")['value'];
-    $statusremoveserveice = select("shopSetting", "*", "Namevalue", "backserviecstatus", "select")['value'];
+    $statustimeextra = shop_feature_value('statustimeextra', $user['lang'] ?? 'fa', select("shopSetting", "*", "Namevalue", "statustimeextra", "select")['value']);
+    $marzbanstatusextra = shop_feature_value('extravolunme', $user['lang'] ?? 'fa', select("shopSetting", "*", "Namevalue", "statusextra", "select")['value']);
+    $statusdisorder = shop_feature_value('disorderss', $user['lang'] ?? 'fa', select("shopSetting", "*", "Namevalue", "statusdisorder", "select")['value']);
+    $statuschangeservice = shop_feature_value('changgestatus', $user['lang'] ?? 'fa', select("shopSetting", "*", "Namevalue", "statuschangeservice", "select")['value']);
+    $statusshowconfig = shop_feature_value('showconfig', $user['lang'] ?? 'fa', select("shopSetting", "*", "Namevalue", "configshow", "select")['value']);
+    $statusremoveserveice = shop_feature_value('removeservicebackbtn', $user['lang'] ?? 'fa', select("shopSetting", "*", "Namevalue", "backserviecstatus", "select")['value']);
     if (!in_array($status, ["active", "on_hold", "disabled", "Unknown"])) {
         $textinfo = sprintf($textbotlang['users']['status']['infoDetailed'], $status_var, $DataUserOut['username'], $nameloc['Service_location'], $nameloc['name_product'], $lastonline, $LastTraffic, $usedTrafficGb, $RemainingVolume, $Percent, $expirationDate, $day, $nameconfig);
 
@@ -1630,7 +1630,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     ]);
     unlink($urlimage);
 } elseif (preg_match('/changestatus_(\w+)/', $datain, $dataget)) {
-    $statuschangeservice = select("shopSetting", "*", "Namevalue", "statuschangeservice", "select")['value'];
+    $statuschangeservice = shop_feature_value('changgestatus', $user['lang'] ?? 'fa', select("shopSetting", "*", "Namevalue", "statuschangeservice", "select")['value']);
     if ($statuschangeservice == "offstatus") {
         sendmessage($from_id, $textbotlang['users']['featureUnavailable'], null, 'html');
         return;
@@ -1752,7 +1752,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         step('gettimecustomvolomforextend', $from_id);
         return;
     }
-    if ($setting['statuscategory'] == "offcategory") {
+    if (shop_feature_value('categorytime', $user['lang'] ?? 'fa', $setting['statuscategory']) == "offcategory") {
         $stmt = $pdo->prepare("SELECT * FROM product WHERE (Location = :service_location OR Location = '/all') AND agent = :agent AND one_buy_status = '0' AND (FIND_IN_SET(:userlang, lang) OR lang = 'all' OR lang IS NULL OR lang = '')");
         $stmt->execute([
             ':service_location' => $nameloc['Service_location'],
@@ -1760,7 +1760,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             ':userlang' => $user['lang'] ?? 'fa',
         ]);
         $productextend = ['inline_keyboard' => []];
-        $statusshowprice = select("shopSetting", "*", "Namevalue", "statusshowprice", "select")['value'];
+        $statusshowprice = shop_feature_value('showprice', $user['lang'] ?? 'fa', select("shopSetting", "*", "Namevalue", "statusshowprice", "select")['value']);
         while ($result = $stmt->fetch(PDO::FETCH_ASSOC)) {
             $hide_panel = json_decode($result['hide_panel'], true);
             if (in_array($nameloc['Service_location'], $hide_panel))
@@ -1832,7 +1832,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     ]);
     $productextend = ['inline_keyboard' => []];
     $marzban_list_get = select("marzban_panel", "*", "name_panel", $nameloc['Service_location'], "select");
-    $statusshowprice = select("shopSetting", "*", "Namevalue", "statusshowprice", "select")['value'];
+    $statusshowprice = shop_feature_value('showprice', $user['lang'] ?? 'fa', select("shopSetting", "*", "Namevalue", "statusshowprice", "select")['value']);
     while ($result = $stmt->fetch(PDO::FETCH_ASSOC)) {
         if (intval($user['pricediscount']) != 0) {
             $resultper = ($result['price_product'] * $user['pricediscount']) / 100;
@@ -1984,7 +1984,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         sendmessage($from_id, sprintf($textbotlang['users']['Discount']['discountapplied'], $user['pricediscount']), null, 'HTML');
     }
     if ($user['Balance'] < $pricelastextend && $user['agent'] != "n2" && intval($pricelastextend) != 0) {
-        $marzbandirectpay = select('shopSetting', "*", "Namevalue", "statusdirectpabuy", "select")['value'];
+        $marzbandirectpay = shop_feature_value('paydirect', $user['lang'] ?? 'fa', select('shopSetting', "*", "Namevalue", "statusdirectpabuy", "select")['value']);
         if ($marzbandirectpay == "offdirectbuy") {
             $minbalance = json_decode(select("PaySetting", "*", "NamePay", "minbalance", "select")['ValuePay'], true)[$user['agent']];
             $maxbalance = json_decode(select("PaySetting", "*", "NamePay", "maxbalance", "select")['ValuePay'], true)[$user['agent']];
@@ -2404,7 +2404,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $eextraprice = json_decode($marzban_list_get['priceextravolume'], true);
     $extrapricevalue = $eextraprice[$user['agent']];
     if ($user['Balance'] < $volume && $user['agent'] != "n2") {
-        $marzbandirectpay = select('shopSetting', "*", "Namevalue", "statusdirectpabuy", "select")['value'];
+        $marzbandirectpay = shop_feature_value('paydirect', $user['lang'] ?? 'fa', select('shopSetting', "*", "Namevalue", "statusdirectpabuy", "select")['value']);
         if ($marzbandirectpay == "offdirectbuy") {
             $minbalance = number_format(json_decode(select("PaySetting", "*", "NamePay", "minbalance", "select")['ValuePay'], true)[$user['agent']]);
             $maxbalance = number_format(json_decode(select("PaySetting", "*", "NamePay", "maxbalance", "select")['ValuePay'], true)[$user['agent']]);
@@ -2606,7 +2606,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         $Pricechange = 0;
     }
     if ($user['Balance'] < $Pricechange && $user['agent'] != "n2" && $limitfree) {
-        $marzbandirectpay = select('shopSetting', "*", "Namevalue", "statusdirectpabuy", "select")['value'];
+        $marzbandirectpay = shop_feature_value('paydirect', $user['lang'] ?? 'fa', select('shopSetting', "*", "Namevalue", "statusdirectpabuy", "select")['value']);
         if ($marzbandirectpay == "offdirectbuy") {
             $minbalance = number_format(json_decode(select("PaySetting", "*", "NamePay", "minbalance", "select")['ValuePay'], true)[$user['agent']]);
             $maxbalance = number_format(json_decode(select("PaySetting", "*", "NamePay", "maxbalance", "select")['ValuePay'], true)[$user['agent']]);
@@ -2977,7 +2977,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $eextraprice = json_decode($marzban_list_get['priceextratime'], true);
     $extratimepricevalue = $eextraprice[$user['agent']];
     if ($user['Balance'] < $tmieextra && $user['agent'] != "n2") {
-        $marzbandirectpay = select('shopSetting', "*", "Namevalue", "statusdirectpabuy", "select")['value'];
+        $marzbandirectpay = shop_feature_value('paydirect', $user['lang'] ?? 'fa', select('shopSetting', "*", "Namevalue", "statusdirectpabuy", "select")['value']);
         if ($marzbandirectpay == "offdirectbuy") {
             $minbalance = number_format(json_decode(select("PaySetting", "*", "NamePay", "minbalance", "select")['ValuePay'], true)[$user['agent']]);
             $maxbalance = number_format(json_decode(select("PaySetting", "*", "NamePay", "maxbalance", "select")['ValuePay'], true)[$user['agent']]);
@@ -3862,7 +3862,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     // one-panel shortcut. With 2+ panels this condition is false either way, so
     // the picker always shows regardless of the toggle - there is no other way
     // to ask which panel the user wants.
-    if ($setting['statuspanelshow'] != 'onpanelshow' && ($locationproduct)->rowCount() == 1) {
+    if (shop_feature_value('panelshow', $user['lang'] ?? 'fa', $setting['statuspanelshow']) != 'onpanelshow' && ($locationproduct)->rowCount() == 1) {
         $location = ($locationproduct)->fetch(PDO::FETCH_ASSOC)['name_panel'];
         $locationproduct = select("marzban_panel", "*", "name_panel", $location, "select");
         if ($locationproduct['hide_user'] != null) {
@@ -3888,7 +3888,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         } else {
             savedata('clear', "name_panel", $location);
         }
-        if ($setting['statuscategory'] == "offcategory") {
+        if (shop_feature_value('categorytime', $user['lang'] ?? 'fa', $setting['statuscategory']) == "offcategory") {
             $marzban_list_get = $locationproduct;
             $eextraprice = json_decode($marzban_list_get['pricecustomvolume'], true);
             $custompricevalue = $eextraprice[$user['agent']];
@@ -3909,7 +3909,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
                 step('gettimecustomvol', $from_id);
                 return;
             }
-            if ($setting['statuscategorygenral'] == "oncategorys") {
+            if (shop_feature_value('categroygenral', $user['lang'] ?? 'fa', $setting['statuscategorygenral']) == "oncategorys") {
                 $marzban_list_get = select("marzban_panel", "*", "name_panel", $location, "select");
                 if ($setting['statusnamecustom'] == 'onnamecustom') {
                     $backuser = "buyback";
@@ -4024,8 +4024,8 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         step('gettimecustomvol', $from_id);
         return;
     }
-    if ($setting['statuscategory'] == "offcategory") {
-        if ($setting['statuscategorygenral'] == "oncategorys") {
+    if (shop_feature_value('categorytime', $user['lang'] ?? 'fa', $setting['statuscategory']) == "offcategory") {
+        if (shop_feature_value('categroygenral', $user['lang'] ?? 'fa', $setting['statuscategorygenral']) == "oncategorys") {
             $marzban_list_get = select("marzban_panel", "*", "name_panel", $location, "select");
             sell_screen($from_id, $message_id, $textbotlang['users']['sell']['selectCategory'], KeyboardCategory($location, $user['agent'], "buybacktow"));
         } else {
@@ -4088,7 +4088,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     $monthenumber = $dataget[1];
     $userdate = json_decode($user['Processing_value'], true);
     $marzban_list_get = select("marzban_panel", "*", "name_panel", $userdate['name_panel']);
-    if ($setting['statuscategorygenral'] == "oncategorys") {
+    if (shop_feature_value('categroygenral', $user['lang'] ?? 'fa', $setting['statuscategorygenral']) == "oncategorys") {
         savedata("save", "monthproduct", $monthenumber);
         $marzban_list_get = select("marzban_panel", "*", "name_panel", $userdate['name_panel'], "select");
         $stmt = $pdo->prepare("SELECT * FROM marzban_panel  WHERE status = 'active' AND (agent = :mp3 OR agent = 'all')");
@@ -6112,7 +6112,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
 } elseif (preg_match('/confirmaextras_(\w+)/', $datain, $dataget)) {
     $volume = $dataget[1];
     if ($user['Balance'] < $volume && $user['agent'] != "n2") {
-        $marzbandirectpay = select('shopSetting', "*", "Namevalue", "statusdirectpabuy", "select")['value'];
+        $marzbandirectpay = shop_feature_value('paydirect', $user['lang'] ?? 'fa', select('shopSetting', "*", "Namevalue", "statusdirectpabuy", "select")['value']);
         if ($marzbandirectpay == "offdirectbuy") {
             $minbalance = number_format(json_decode(select("PaySetting", "*", "NamePay", "minbalance", "select")['ValuePay'], true)[$user['agent']]);
             $maxbalance = number_format(json_decode(select("PaySetting", "*", "NamePay", "maxbalance", "select")['ValuePay'], true)[$user['agent']]);
@@ -6826,7 +6826,7 @@ if (isset($update['message']['successful_payment'])) {
         return;
     }
     if ($user['Balance'] < $prodcut['price_product'] && $user['agent'] != "n2") {
-        $marzbandirectpay = select('shopSetting', "*", "Namevalue", "statusdirectpabuy", "select")['value'];
+        $marzbandirectpay = shop_feature_value('paydirect', $user['lang'] ?? 'fa', select('shopSetting', "*", "Namevalue", "statusdirectpabuy", "select")['value']);
         if ($marzbandirectpay == "offdirectbuy") {
             $minbalance = number_format(json_decode(select("PaySetting", "*", "NamePay", "minbalance", "select")['ValuePay'], true)[$user['agent']]);
             $maxbalance = number_format(json_decode(select("PaySetting", "*", "NamePay", "maxbalance", "select")['ValuePay'], true)[$user['agent']]);

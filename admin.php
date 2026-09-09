@@ -4307,7 +4307,14 @@ if (!function_exists('help_layout_back_label')) {
     }
 }
 if (!function_exists('shop_feature_status_payload')) {
-    function shop_feature_status_payload($textbotlang)
+    // 🛒 وضعیت قابلیت‌های فروشگاه - every one of these 11 toggles decides
+    // customer-facing buy-flow behavior, so each is now a per-language override
+    // on top of its old shop-wide value (shop_feature_value() in function.php).
+    // $lang picks which language's overrides this render shows/edits; the
+    // language-tab row on top (identical shape to keyboard_list_text()'s own,
+    // keyboard.php) is what switches it - re-rendering this same function, not
+    // a separate "picker screen".
+    function shop_feature_status_payload($textbotlang, $lang = 'fa')
     {
         $setting = select("setting", "*", null, null, "select");
         $marzbanstatusextra = select("shopSetting", "*", "Namevalue", "statusextra", "select")['value'];
@@ -4318,6 +4325,20 @@ if (!function_exists('shop_feature_status_payload')) {
         $statusshowprice = select("shopSetting", "*", "Namevalue", "statusshowprice", "select")['value'];
         $statusshowconfig = select("shopSetting", "*", "Namevalue", "configshow", "select")['value'];
         $statusremoveserveice = select("shopSetting", "*", "Namevalue", "backserviecstatus", "select")['value'];
+        $statuspanelshow = $setting['statuspanelshow'] ?? 'onpanelshow';
+        // each raw global value above is this language's fallback until an
+        // admin overrides it - see shop_feature_value()'s own contract
+        $extravolunme_v = shop_feature_value('extravolunme', $lang, $marzbanstatusextra);
+        $paydirect_v = shop_feature_value('paydirect', $lang, $marzbandirectpay);
+        $statustimeextra_v = shop_feature_value('statustimeextra', $lang, $statustimeextra);
+        $disorderss_v = shop_feature_value('disorderss', $lang, $statusdisorder);
+        $panelshow_v = shop_feature_value('panelshow', $lang, $statuspanelshow);
+        $categroygenral_v = shop_feature_value('categroygenral', $lang, $setting['statuscategorygenral']);
+        $categorytime_v = shop_feature_value('categorytime', $lang, $setting['statuscategory']);
+        $changgestatus_v = shop_feature_value('changgestatus', $lang, $statuschangeservice);
+        $showprice_v = shop_feature_value('showprice', $lang, $statusshowprice);
+        $showconfig_v = shop_feature_value('showconfig', $lang, $statusshowconfig);
+        $removeservicebackbtn_v = shop_feature_value('removeservicebackbtn', $lang, $statusremoveserveice);
         $btn = function ($isOn, $label, $cb) {
             return [
                 'text' => ($isOn ? '✅ ' : '❌ ') . $label,
@@ -4325,21 +4346,37 @@ if (!function_exists('shop_feature_status_payload')) {
                 'style' => $isOn ? 'success' : 'danger',
             ];
         };
+        $tog = function ($type, $value) use ($lang) {
+            return "sfs_tog:{$lang}:{$type}:{$value}";
+        };
         $rows = [];
-        $rows[] = [$btn($marzbanstatusextra == 'onextra', $textbotlang['Admin']['Status']['statusVolumeExtra'], "editshops-extravolunme-$marzbanstatusextra")];
-        $rows[] = [$btn($marzbandirectpay == 'ondirectbuy', $textbotlang['Admin']['Status']['paydirect'], "editshops-paydirect-$marzbandirectpay")];
-        $rows[] = [$btn($statustimeextra == 'ontimeextraa', $textbotlang['Admin']['Status']['statusTimeExtra'], "editshops-statustimeextra-$statustimeextra")];
-        $rows[] = [$btn($statusdisorder == 'ondisorder', $textbotlang['keyboard']['sendDisruptionReport'], "editshops-disorderss-$statusdisorder")];
+        $rows[] = [
+            ['text' => ($lang == 'fa' ? "✅" : "") . $textbotlang['bottext']['langs']['fa'], 'callback_data' => "sfs_lang:fa", 'style' => 'primary'],
+            ['text' => ($lang == 'en' ? "✅" : "") . $textbotlang['bottext']['langs']['en'], 'callback_data' => "sfs_lang:en", 'style' => 'primary'],
+            ['text' => ($lang == 'ru' ? "✅" : "") . $textbotlang['bottext']['langs']['ru'], 'callback_data' => "sfs_lang:ru", 'style' => 'primary'],
+            ['text' => ($lang == 'zh' ? "✅" : "") . $textbotlang['bottext']['langs']['zh'], 'callback_data' => "sfs_lang:zh", 'style' => 'primary'],
+            ['text' => ($lang == 'tk' ? "✅" : "") . $textbotlang['bottext']['langs']['tk'], 'callback_data' => "sfs_lang:tk", 'style' => 'primary'],
+        ];
+        $rows[] = [$btn($extravolunme_v == 'onextra', $textbotlang['Admin']['Status']['statusVolumeExtra'], $tog('extravolunme', $extravolunme_v))];
+        $rows[] = [$btn($paydirect_v == 'ondirectbuy', $textbotlang['Admin']['Status']['paydirect'], $tog('paydirect', $paydirect_v))];
+        $rows[] = [$btn($statustimeextra_v == 'ontimeextraa', $textbotlang['Admin']['Status']['statusTimeExtra'], $tog('statustimeextra', $statustimeextra_v))];
+        $rows[] = [$btn($disorderss_v == 'ondisorder', $textbotlang['keyboard']['sendDisruptionReport'], $tog('disorderss', $disorderss_v))];
         // placed right before the category row so the two read top-to-bottom in
         // the same order the buy flow actually visits them: panel, then category
-        $rows[] = [$btn(($setting['statuspanelshow'] ?? 'onpanelshow') == 'onpanelshow', $textbotlang['Admin']['Status']['showPanelSelection'], "editshops-panelshow-" . ($setting['statuspanelshow'] ?? 'onpanelshow'))];
-        $rows[] = [$btn($setting['statuscategorygenral'] == 'oncategorys', $textbotlang['keyboard']['categoryBug'], "editshops-categroygenral-" . $setting['statuscategorygenral'])];
-        $rows[] = [$btn($setting['statuscategory'] == 'oncategory', $textbotlang['Admin']['Status']['statusCategoryTime'], "editshops-categorytime-{$setting['statuscategory']}")];
-        $rows[] = [$btn($statuschangeservice == 'onstatus', $textbotlang['keyboard']['deactivateAccountStatus'], "editshops-changgestatus-" . $statuschangeservice)];
-        $rows[] = [$btn($statusshowprice == 'onshowprice', $textbotlang['keyboard']['showProductPrice'], "editshops-showprice-" . $statusshowprice)];
-        $rows[] = [$btn($statusshowconfig == 'onconfig', $textbotlang['keyboard']['getConfigBtn'], "editshops-showconfig-" . $statusshowconfig)];
-        $rows[] = [$btn($statusremoveserveice == 'on', $textbotlang['keyboard']['refundBtn'], "editshops-removeservicebackbtn-" . $statusremoveserveice)];
+        $rows[] = [$btn($panelshow_v == 'onpanelshow', $textbotlang['Admin']['Status']['showPanelSelection'], $tog('panelshow', $panelshow_v))];
+        $rows[] = [$btn($categroygenral_v == 'oncategorys', $textbotlang['keyboard']['categoryBug'], $tog('categroygenral', $categroygenral_v))];
+        $rows[] = [$btn($categorytime_v == 'oncategory', $textbotlang['Admin']['Status']['statusCategoryTime'], $tog('categorytime', $categorytime_v))];
+        $rows[] = [$btn($changgestatus_v == 'onstatus', $textbotlang['keyboard']['deactivateAccountStatus'], $tog('changgestatus', $changgestatus_v))];
+        $rows[] = [$btn($showprice_v == 'onshowprice', $textbotlang['keyboard']['showProductPrice'], $tog('showprice', $showprice_v))];
+        $rows[] = [$btn($showconfig_v == 'onconfig', $textbotlang['keyboard']['getConfigBtn'], $tog('showconfig', $showconfig_v))];
+        $rows[] = [$btn($removeservicebackbtn_v == 'on', $textbotlang['keyboard']['refundBtn'], $tog('removeservicebackbtn', $removeservicebackbtn_v))];
         return json_encode(['inline_keyboard' => $rows]);
+    }
+}
+if (!function_exists('shop_feature_status_caption')) {
+    function shop_feature_status_caption($textbotlang, $lang = 'fa')
+    {
+        return strtr($textbotlang['Admin']['Status']['botTitle'], ['{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang]);
     }
 }
 if (!function_exists('displayhub_payload')) {
@@ -14840,91 +14877,51 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     }
     step('home', $from_id);
 } elseif ($text == $textbotlang['keyboard']['shopFeatureStatus'] && $adminrulecheck['rule'] == "administrator") {
-    $Bot_Status = shop_feature_status_payload($textbotlang);
-    sendmessage($from_id, $textbotlang['Admin']['Status']['botTitle'], $Bot_Status, 'HTML');
-} elseif (preg_match('/^editshops-(.*)-(.*)/', $datain, $dataget)) {
-    $type = $dataget[1];
-    $value = $dataget[2];
+    // opens on fa, same as every other per-language hub in this bot
+    // (keyboard_list_text(), gateway_hub_payload(), ...)
+    $Bot_Status = shop_feature_status_payload($textbotlang, 'fa');
+    sendmessage($from_id, shop_feature_status_caption($textbotlang, 'fa'), $Bot_Status, 'HTML');
+} elseif (preg_match('/^sfs_lang:([a-z]{2})$/', $datain, $sfs_m) && $adminrulecheck['rule'] == "administrator") {
+    // just switches which language's overrides this screen is showing -
+    // writes nothing
+    $sfs_lang = $sfs_m[1];
+    $Bot_Status = shop_feature_status_payload($textbotlang, $sfs_lang);
+    Editmessagetext($from_id, $message_id, shop_feature_status_caption($textbotlang, $sfs_lang), $Bot_Status);
+} elseif (preg_match('/^sfs_tog:([a-z]{2}):([a-zA-Z]+):([a-zA-Z0-9_]+)$/', $datain, $sfs_m) && $adminrulecheck['rule'] == "administrator") {
+    $sfs_lang = $sfs_m[1];
+    $type = $sfs_m[2];
+    $value = $sfs_m[3];
     if ($type == "extravolunme") {
-        if ($value == "onextra") {
-            $valuenew = "offextra";
-        } else {
-            $valuenew = "onextra";
-        }
-        update("shopSetting", "value", $valuenew, "Namevalue", "statusextra");
+        $valuenew = ($value == "onextra") ? "offextra" : "onextra";
     } elseif ($type == "paydirect") {
-        if ($value == "ondirectbuy") {
-            $valuenew = "offdirectbuy";
-        } else {
-            $valuenew = "ondirectbuy";
-        }
-        update("shopSetting", "value", $valuenew, "Namevalue", "statusdirectpabuy");
+        $valuenew = ($value == "ondirectbuy") ? "offdirectbuy" : "ondirectbuy";
     } elseif ($type == "statustimeextra") {
-        if ($value == "ontimeextraa") {
-            $valuenew = "offtimeextraa";
-        } else {
-            $valuenew = "ontimeextraa";
-        }
-        update("shopSetting", "value", $valuenew, "Namevalue", "statustimeextra");
+        $valuenew = ($value == "ontimeextraa") ? "offtimeextraa" : "ontimeextraa";
     } elseif ($type == "disorderss") {
-        if ($value == "ondisorder") {
-            $valuenew = "offdisorder";
-        } else {
-            $valuenew = "ondisorder";
-        }
-        update("shopSetting", "value", $valuenew, "Namevalue", "statusdisorder");
+        $valuenew = ($value == "ondisorder") ? "offdisorder" : "ondisorder";
     } elseif ($type == "categroygenral") {
-        if ($value == "oncategorys") {
-            $valuenew = "offcategorys";
-        } else {
-            $valuenew = "oncategorys";
-        }
-        update("setting", "statuscategorygenral", $valuenew, null, null);
+        $valuenew = ($value == "oncategorys") ? "offcategorys" : "oncategorys";
     } elseif ($type == "panelshow") {
-        if ($value == "onpanelshow") {
-            $valuenew = "offpanelshow";
-        } else {
-            $valuenew = "onpanelshow";
-        }
-        update("setting", "statuspanelshow", $valuenew, null, null);
+        $valuenew = ($value == "onpanelshow") ? "offpanelshow" : "onpanelshow";
     } elseif ($type == "changgestatus") {
-        if ($value == "onstatus") {
-            $valuenew = "offstatus";
-        } else {
-            $valuenew = "onstatus";
-        }
-        update("shopSetting", "value", $valuenew, "Namevalue", "statuschangeservice");
+        $valuenew = ($value == "onstatus") ? "offstatus" : "onstatus";
     } elseif ($type == "showprice") {
-        if ($value == "onshowprice") {
-            $valuenew = "offshowprice";
-        } else {
-            $valuenew = "onshowprice";
-        }
-        update("shopSetting", "value", $valuenew, "Namevalue", "statusshowprice");
+        $valuenew = ($value == "onshowprice") ? "offshowprice" : "onshowprice";
     } elseif ($type == "showconfig") {
-        if ($value == "onconfig") {
-            $valuenew = "offconfig";
-        } else {
-            $valuenew = "onconfig";
-        }
-        update("shopSetting", "value", $valuenew, "Namevalue", "configshow");
+        $valuenew = ($value == "onconfig") ? "offconfig" : "onconfig";
     } elseif ($type == "removeservicebackbtn") {
-        if ($value == "on") {
-            $valuenew = "off";
-        } else {
-            $valuenew = "on";
-        }
-        update("shopSetting", "value", $valuenew, "Namevalue", "backserviecstatus");
+        $valuenew = ($value == "on") ? "off" : "on";
     } elseif ($type == "categorytime") {
-        if ($value == "oncategory") {
-            $valuenew = "offcategory";
-        } else {
-            $valuenew = "oncategory";
-        }
-        update("setting", "statuscategory", $valuenew);
+        $valuenew = ($value == "oncategory") ? "offcategory" : "oncategory";
+    } else {
+        return;
     }
-    $Bot_Status = shop_feature_status_payload($textbotlang);
-    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Status']['botTitle'], $Bot_Status);
+    // per-language now - the old global setting/shopSetting column this
+    // feature has always used stays untouched, and keeps serving every OTHER
+    // language that has no override of its own
+    shop_feature_set($type, $sfs_lang, $valuenew);
+    $Bot_Status = shop_feature_status_payload($textbotlang, $sfs_lang);
+    Editmessagetext($from_id, $message_id, shop_feature_status_caption($textbotlang, $sfs_lang), $Bot_Status);
 } elseif ($text == $textbotlang['Admin']['report']['btnExport'] && $adminrulecheck['rule'] == "administrator") {
     sendmessage($from_id, $textbotlang['users']['selectoption'], $keyboardexportdata, 'HTML');
 } elseif ($text == $textbotlang['Admin']['cronjob']['btnSettings'] && $adminrulecheck['rule'] == "administrator") {

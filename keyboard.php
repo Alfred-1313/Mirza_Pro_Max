@@ -1805,7 +1805,7 @@ function KeyboardProduct($location, $query, $pricediscount, $datakeyboard, $stat
 {
     global $pdo, $textbotlang, $from_id, $user;
     $product = ['inline_keyboard' => []];
-    $statusshowprice = select("shopSetting", "*", "Namevalue", "statusshowprice", "select")['value'];
+    $statusshowprice = shop_feature_value('showprice', $user['lang'] ?? 'fa', select("shopSetting", "*", "Namevalue", "statusshowprice", "select")['value']);
     $stmt = $pdo->prepare($query);
     $stmt->execute();
     if ($valuetow != null) {
@@ -1912,7 +1912,7 @@ function KeyboardCategory($location, $agent, $backuser = "backuser")
     // When 🖥 نمایش انتخاب پنل is OFF the panel screen this would return to was
     // never shown in the first place, so a close button takes its place instead,
     // matching every other screen this session that got the same treatment.
-    $lc_panelshow = (select("setting", "statuspanelshow", null, null, "select")['statuspanelshow'] ?? 'onpanelshow') == 'onpanelshow';
+    $lc_panelshow = shop_feature_value('panelshow', $ls_userlang, select("setting", "statuspanelshow", null, null, "select")['statuspanelshow'] ?? 'onpanelshow') == 'onpanelshow';
     if ($lc_panelshow) {
         if (!bt_button_hidden($ls_userlang, 'users.sell.backToPanelListBtn')) {
             $list_category['inline_keyboard'][] = [

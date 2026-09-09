@@ -1423,6 +1423,7 @@ addFieldToTable("channels", "hidden", null, "VARCHAR(5)");
 addFieldToTable("setting", "channelButtonsOrder", null, "TEXT");
 addFieldToTable("setting", "close_sticker", '{}', "TEXT");
 addFieldToTable("setting", "svc_node_usage", '{}', "TEXT");
+addFieldToTable("setting", "shop_feature_lang", '{}', "TEXT");
 try {
     $result = $pdo->query("SHOW TABLES LIKE 'reagent_report'");
     $table_exists = ($result->rowCount() > 0);

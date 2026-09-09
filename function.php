@@ -1504,6 +1504,47 @@ if (!function_exists('card_invoice_caption_get')) {
         return is_array($data) ? $data : [];
     }
 }
+if (!function_exists('shop_feature_lang_map')) {
+    // 🛒 وضعیت قابلیت‌های فروشگاه, per language. Each of its 11 toggles used to
+    // be one shop-wide flag (a `setting` column or a `shopSetting` row); this is
+    // the per-language override sitting on top of that, so a shop can show
+    // English customers a different set of buy-flow features than Persian ones.
+    //
+    // Shape: {featureKey: {lang: "onX"/"offX" - the SAME literal the feature has
+    // always stored}}. A language with no entry here still reads whatever the
+    // old global column/row says - the whole point being that nothing changes
+    // for any language until an admin explicitly overrides one, so this needed
+    // no migration script and no new default to invent per feature.
+    function shop_feature_lang_map($fresh = false)
+    {
+        static $cache = null;
+        if ($cache !== null && !$fresh) {
+            return $cache;
+        }
+        $setting = select("setting", "*", null, null, "select");
+        $m = json_decode((string) ($setting['shop_feature_lang'] ?? ''), true);
+        return $cache = is_array($m) ? $m : [];
+    }
+    // $globalValue is whatever the caller already read from the old column/row
+    // for this feature - the exact fallback for every language without an
+    // override, so a shop that never touches this screen keeps behaving exactly
+    // as it did before this existed.
+    function shop_feature_value($featureKey, $lang, $globalValue)
+    {
+        $m = shop_feature_lang_map();
+        return $m[$featureKey][$lang] ?? $globalValue;
+    }
+    function shop_feature_set($featureKey, $lang, $value)
+    {
+        $m = shop_feature_lang_map(true);
+        if (!isset($m[$featureKey]) || !is_array($m[$featureKey])) {
+            $m[$featureKey] = [];
+        }
+        $m[$featureKey][$lang] = $value;
+        update("setting", "shop_feature_lang", json_encode($m, JSON_UNESCAPED_UNICODE), null, null);
+        shop_feature_lang_map(true);
+    }
+}
 if (!function_exists('card_invoice_caption_for')) {
     // per-language override of textbot.cart - empty/unset means "use the
     // global default template", same contract as topup_caption_for()
