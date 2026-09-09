@@ -174,9 +174,9 @@ foreach ($topic_id as $topic) {
         $paymentreports = $topic['idreport'];
 
 }
-if ($setting['statusnamecustom'] == 'onnamecustom')
+if (feature_value('statusnamecustom', $user['lang'] ?? 'fa', $setting['statusnamecustom']) == 'onnamecustom')
     $statusnote = true;
-if ($setting['statusnoteforf'] == "0" && $user['agent'] == "f")
+if (feature_value('statusnoteforf', $user['lang'] ?? 'fa', $setting['statusnoteforf']) == "0" && $user['agent'] == "f")
     $statusnote = false;
 $time_Start = jdate('Y/m/d');
 $date_start = jdate('H:i:s', time());
@@ -256,8 +256,8 @@ if (floor($TimeLastMessage / 60) >= 1) {
 if (strpos($text, "/start ") !== false && $user['step'] != "gettextSystemMessage") {
     $affiliatesid = explode(" ", $text)[1];
     if (!in_array($affiliatesid, ['start', "usertest", "/start", "buy", "help"])) {
-        isValidInvitationCode($setting, $from_id, $user['verify']);
-        if ($setting['affiliatesstatus'] == "offaffiliates") {
+        isValidInvitationCode($setting, $from_id, $user['verify'], $user['lang'] ?? 'fa');
+        if (feature_value('affiliatesstatus', $user['lang'] ?? 'fa', $setting['affiliatesstatus']) == "offaffiliates") {
             sendmessage($from_id, $textbotlang['users']['affiliates']['offaffiliates'], $keyboard, 'HTML');
             return;
         }
@@ -293,7 +293,7 @@ if (strpos($text, "/start ") !== false && $user['step'] != "gettextSystemMessage
         $text = $affiliatesid;
     }
 }
-if (intval($user['verify']) == 0 && !in_array($from_id, $admin_ids) && $setting['verifystart'] == "onverify") {
+if (intval($user['verify']) == 0 && !in_array($from_id, $admin_ids) && feature_value('verifystart', $user['lang'] ?? 'fa', $setting['verifystart']) == "onverify") {
     $textverify = sprintf($textbotlang['users']['account']['notVerifiedNotice'], $setting['id_support']);
     sendmessage($from_id, $textverify, null, 'html');
     return;
@@ -301,7 +301,7 @@ if (intval($user['verify']) == 0 && !in_array($from_id, $admin_ids) && $setting[
 ;
 
 #-----------roll------------#
-if ($setting['roll_Status'] == "rolleon" && $user['roll_Status'] == 0 && ($text != $textbotlang['keyboard']['acceptRulesButton'] and $datain != "acceptrule") && !in_array($from_id, $admin_ids)) {
+if (feature_value('roll_Status', $user['lang'] ?? 'fa', $setting['roll_Status']) == "rolleon" && $user['roll_Status'] == 0 && ($text != $textbotlang['keyboard']['acceptRulesButton'] and $datain != "acceptrule") && !in_array($from_id, $admin_ids)) {
     sendmessage($from_id, $textbotlang['textbot']['rules'], $confrimrolls, 'html');
     return;
 }
@@ -484,7 +484,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         sendmessage($from_id, $textbotlang['users']['number']['warning'], $request_contact, 'html');
         return;
     }
-    if ($setting['iran_number'] == "onAuthenticationiran" && !preg_match("/989[0-9]{9}$/", $user_phone)) {
+    if (feature_value('iran_number', $user['lang'] ?? 'fa', $setting['iran_number']) == "onAuthenticationiran" && !preg_match("/989[0-9]{9}$/", $user_phone)) {
         sendmessage($from_id, $textbotlang['users']['number']['erroriran'], $request_contact, 'html');
         return;
     }
@@ -506,7 +506,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $stmt->bindParam(':start_index', $start_index, PDO::PARAM_INT);
     $stmt->bindParam(':items_per_page', $items_per_page, PDO::PARAM_INT);
     $stmt->execute();
-    if ($setting['statusnamecustom'] == 'onnamecustom') {
+    if (feature_value('statusnamecustom', $user['lang'] ?? 'fa', $setting['statusnamecustom']) == 'onnamecustom') {
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             $rowDataUserOut = $ManagePanel->DataUser($row['Service_location'], $row['username']);
             if (isset($rowDataUserOut['msg']) && strcasecmp(trim((string) $rowDataUserOut['msg']), "user not found") === 0) {
@@ -548,7 +548,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     }
     // nothing survived the live panel check (or the user never had a service):
     // show the buy prompt instead of an empty list carrying only pagination
-    if (count($keyboardlists['inline_keyboard']) === 0 && $setting['NotUser'] == "offnotuser") {
+    if (count($keyboardlists['inline_keyboard']) === 0 && feature_value('NotUser', $user['lang'] ?? 'fa', $setting['NotUser']) == "offnotuser") {
         $noServiceKb = sell_noservice_kb($user['lang'] ?? 'fa', $textbotlang);
         // the 🛍 سرویس‌های من tap already auto-fired ITS OWN sticker before this
         // point - if there is a dedicated sticker for "no active service" it
@@ -572,7 +572,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     // there may be more, anything less means this is the last one and a "next"
     // button would just loop the user back to page 1
     $ms_rowCount = count($keyboardlists['inline_keyboard']);
-    if ($setting['NotUser'] == "onnotuser") {
+    if (feature_value('NotUser', $user['lang'] ?? 'fa', $setting['NotUser']) == "onnotuser") {
         $keyboardlists['inline_keyboard'][] = [['text' => $textbotlang['users']['page']['notusernameme'], 'callback_data' => 'notusernameme']];
     }
     if ($ms_rowCount >= $items_per_page) {
@@ -714,7 +714,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $stmt->bindParam(':start_index', $start_index, PDO::PARAM_INT);
     $stmt->bindParam(':items_per_page', $items_per_page, PDO::PARAM_INT);
     $stmt->execute();
-    if ($setting['statusnamecustom'] == 'onnamecustom') {
+    if (feature_value('statusnamecustom', $user['lang'] ?? 'fa', $setting['statusnamecustom']) == 'onnamecustom') {
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             $rowDataUserOut = $ManagePanel->DataUser($row['Service_location'], $row['username']);
             if (isset($rowDataUserOut['msg']) && strcasecmp(trim((string) $rowDataUserOut['msg']), "user not found") === 0) {
@@ -771,7 +771,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         ]
     ];
     $keyboardlists['inline_keyboard'][] = [['text' => $textbotlang['users']['search']['title'], 'callback_data' => 'searchservice']];
-    if ($setting['NotUser'] == "onnotuser") {
+    if (feature_value('NotUser', $user['lang'] ?? 'fa', $setting['NotUser']) == "onnotuser") {
         $keyboardlists['inline_keyboard'][] = [['text' => $textbotlang['users']['page']['notusernameme'], 'callback_data' => 'notusernameme']];
     }
     $keyboardlists['inline_keyboard'][] = $pagination_buttons;
@@ -807,7 +807,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $stmt->bindParam(':start_index', $start_index, PDO::PARAM_INT);
     $stmt->bindParam(':items_per_page', $items_per_page, PDO::PARAM_INT);
     $stmt->execute();
-    if ($setting['statusnamecustom'] == 'onnamecustom') {
+    if (feature_value('statusnamecustom', $user['lang'] ?? 'fa', $setting['statusnamecustom']) == 'onnamecustom') {
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             $rowDataUserOut = $ManagePanel->DataUser($row['Service_location'], $row['username']);
             if (isset($rowDataUserOut['msg']) && strcasecmp(trim((string) $rowDataUserOut['msg']), "user not found") === 0) {
@@ -864,7 +864,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         ]
     ];
     $keyboardlists['inline_keyboard'][] = [['text' => $textbotlang['users']['search']['title'], 'callback_data' => 'searchservice']];
-    if ($setting['NotUser'] == "onnotuser") {
+    if (feature_value('NotUser', $user['lang'] ?? 'fa', $setting['NotUser']) == "onnotuser") {
         $keyboardlists['inline_keyboard'][] = [['text' => $textbotlang['users']['page']['notusernameme'], 'callback_data' => 'notusernameme']];
     }
     $keyboardlists['inline_keyboard'][] = $pagination_buttons;
@@ -1026,7 +1026,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         $keyboardlists = [
             'inline_keyboard' => [],
         ];
-        if ($setting['statusnamecustom'] == 'onnamecustom') {
+        if (feature_value('statusnamecustom', $user['lang'] ?? 'fa', $setting['statusnamecustom']) == 'onnamecustom') {
             while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
                 $data = "";
                 if ($row != null)
@@ -1056,7 +1056,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
                 'callback_data' => 'backuser'
             ]
         ];
-        if ($setting['NotUser'] == "onnotuser") {
+        if (feature_value('NotUser', $user['lang'] ?? 'fa', $setting['NotUser']) == "onnotuser") {
             $keyboardlists['inline_keyboard'][] = [['text' => $textbotlang['users']['page']['notusernameme'], 'callback_data' => 'notusernameme']];
         }
         $keyboardlists['inline_keyboard'][] = $backuser;
@@ -1359,7 +1359,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         }
         if ($statuschangeservice == "offstatus")
             unset($keyboarddate['changestatus']);
-        if ($setting['statusnamecustom'] == 'offnamecustom')
+        if (feature_value('statusnamecustom', $user['lang'] ?? 'fa', $setting['statusnamecustom']) == 'offnamecustom')
             unset($keyboarddate['changenameconfig']);
         if ($marzbancount == 1)
             unset($keyboarddate['change-location']);
@@ -2513,7 +2513,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
 } elseif (preg_match('/changeloc_(\w+)/', $datain, $dataget)) {
     $id_invoice = $dataget[1];
     $limitchangeloc = json_decode($setting['limitnumber'], true);
-    if ($user['limitchangeloc'] > $limitchangeloc['all'] and intval($setting['statuslimitchangeloc']) == 1) {
+    if ($user['limitchangeloc'] > $limitchangeloc['all'] and intval(feature_value('statuslimitchangeloc', $user['lang'] ?? 'fa', $setting['statuslimitchangeloc'])) == 1) {
         sendmessage($from_id, $textbotlang['users']['changeLocation']['limitReached'], null, 'html');
         return;
     }
@@ -2557,10 +2557,10 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $marzban_list_get_new = select("marzban_panel", "*", "code_panel", $user['Processing_value_one'], "select");
     $limitchangeloc = json_decode($setting['limitnumber'], true);
     $limitfree = true;
-    if ($user['limitchangeloc'] < $limitchangeloc['free'] and intval($setting['statuslimitchangeloc']) == 1) {
+    if ($user['limitchangeloc'] < $limitchangeloc['free'] and intval(feature_value('statuslimitchangeloc', $user['lang'] ?? 'fa', $setting['statuslimitchangeloc'])) == 1) {
         $limitfree = false;
     }
-    if ($user['limitchangeloc'] >= $limitchangeloc['all'] and intval($setting['statuslimitchangeloc']) == 1) {
+    if ($user['limitchangeloc'] >= $limitchangeloc['all'] and intval(feature_value('statuslimitchangeloc', $user['lang'] ?? 'fa', $setting['statuslimitchangeloc'])) == 1) {
         sendmessage($from_id, $textbotlang['users']['changeLocation']['limitReached'], null, 'html');
         return;
     }
@@ -3289,11 +3289,11 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     // panel selection is now always shown, even with a single active test panel, instead
     // of silently auto-picking it - mirrors the purchase flow's "if (false && ...)" fix
     if (true || $locationproduct != 1) {
-        if ($setting['get_number'] == "onAuthenticationphone" && $user['step'] != "get_number" && $user['number'] == "none") {
+        if (feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone" && $user['step'] != "get_number" && $user['number'] == "none") {
             sendmessage($from_id, $textbotlang['users']['number']['confirming'], $request_contact, 'HTML');
             step('get_number', $from_id);
         }
-        if ($user['number'] == "none" && $setting['get_number'] == "onAuthenticationphone")
+        if ($user['number'] == "none" && feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone")
             return;
         if ($user['limit_usertest'] <= 0 && !in_array($from_id, $admin_ids)) {
             sendmessage($from_id, $textbotlang['users']['usertest']['limitwarning'], $keyboard_buy, 'html');
@@ -3335,11 +3335,11 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         sendmessage($from_id, $textbotlang['users']['usertest']['limitwarning'], $keyboard_buy, 'html');
         return;
     }
-    if ($setting['get_number'] == "onAuthenticationphone" && $user['step'] != "get_number" && $user['number'] == "none") {
+    if (feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone" && $user['step'] != "get_number" && $user['number'] == "none") {
         sendmessage($from_id, $textbotlang['users']['number']['confirming'], $request_contact, 'HTML');
         step('get_number', $from_id);
     }
-    if ($user['number'] == "none" && $setting['get_number'] == "onAuthenticationphone")
+    if ($user['number'] == "none" && feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone")
         return;
     $locationproduct = select("marzban_panel", "*", "TestAccount", "ONTestAccount", "count");
     // disabled (was auto-picking the single panel and skipping the picker entirely) -
@@ -3540,7 +3540,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         sendmessage($from_id, $textbotlang['users']['help']['disablehelp'], null, 'HTML');
         return;
     }
-    if ($setting['categoryhelp'] == "1") {
+    if (feature_value('categoryhelp', $user['lang'] ?? 'fa', $setting['categoryhelp']) == "1") {
         // its own key, defaulting to the exact sentence this screen has always
         // shown - it used to borrow the purchase flow's category caption, so
         // rewording the shop's silently reworded the tutorial menu too
@@ -3573,7 +3573,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
             }
         }
         $helpidos['inline_keyboard'] = array_merge($helpidos['inline_keyboard'], help_layout_chunk_rows($help_tut_ordered, $help_tut_buttons, $help_tut_section['width']));
-        if ($setting['linkappstatus'] == "1") {
+        if (feature_value('linkappstatus', $user['lang'] ?? 'fa', $setting['linkappstatus']) == "1") {
             $helpidos['inline_keyboard'][] = [
                 ['text' => $textbotlang['keyboard']['appDownloadLink'], 'callback_data' => "linkappdownlod"],
             ];
@@ -3794,7 +3794,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         $textscore = "";
     }
     $textinvite = "";
-    if ($setting['verifybucodeuser'] == "onverify" and $setting['verifystart'] == "onverify") {
+    if (feature_value('verifybucodeuser', $user['lang'] ?? 'fa', $setting['verifybucodeuser']) == "onverify" and feature_value('verifystart', $user['lang'] ?? 'fa', $setting['verifystart']) == "onverify") {
         $textscore = sprintf($textbotlang['users']['affiliates']['referralLink'], $usernamebot, $user['codeInvitation']);
     }
     $tp_usernameDisplay = (!empty($user['username']) && $user['username'] !== 'none') ? ('@' . $user['username']) : $textbotlang['users']['account']['usernameNotSet'];
@@ -3807,11 +3807,11 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     step('home', $from_id);
     return;
 } elseif (($text == $textbotlang['textbot']['sell'] || $datain == "buy" || $datain == "buyback" || $datain == "buyfresh" || $text == "/buy" || $text == "buy") && $statusnote) {
-    if ($setting['get_number'] == "onAuthenticationphone" && $user['step'] != "get_number" && $user['number'] == "none") {
+    if (feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone" && $user['step'] != "get_number" && $user['number'] == "none") {
         sendmessage($from_id, $textbotlang['users']['number']['confirming'], $request_contact, 'HTML');
         step('get_number', $from_id);
     }
-    if ($user['number'] == "none" && $setting['get_number'] == "onAuthenticationphone")
+    if ($user['number'] == "none" && feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone")
         return;
     if (!check_active_btn($setting['keyboardmain'], "text_sell")) {
         sendmessage($from_id, $textbotlang['users']['buttonDisabled'], null, 'HTML');
@@ -3848,11 +3848,11 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         sendmessage($from_id, $textbotlang['users']['sell']['nullPanel'], null, 'HTML');
         return;
     }
-    if ($setting['get_number'] == "onAuthenticationphone" && $user['step'] != "get_number" && $user['number'] == "none") {
+    if (feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone" && $user['step'] != "get_number" && $user['number'] == "none") {
         sendmessage($from_id, $textbotlang['users']['number']['confirming'], $request_contact, 'HTML');
         step('get_number', $from_id);
     }
-    if ($user['number'] == "none" && $setting['get_number'] == "onAuthenticationphone")
+    if ($user['number'] == "none" && feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone")
         return;
     #-----------------------#
     // 🖥 نمایش انتخاب پنل (setting.statuspanelshow, toggled in 🛒 وضعیت قابلیت‌های
@@ -3911,7 +3911,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
             }
             if (shop_feature_value('categroygenral', $user['lang'] ?? 'fa', $setting['statuscategorygenral']) == "oncategorys") {
                 $marzban_list_get = select("marzban_panel", "*", "name_panel", $location, "select");
-                if ($setting['statusnamecustom'] == 'onnamecustom') {
+                if (feature_value('statusnamecustom', $user['lang'] ?? 'fa', $setting['statusnamecustom']) == 'onnamecustom') {
                     $backuser = "buyback";
                 } else {
                     $backuser = "backuser";
@@ -3932,7 +3932,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
                     $statuscustom = false;
                 }
                 $textproduct = $textbotlang['users']['sell']['serviceSelectFirst'];
-                if ($setting['statusnamecustom'] == 'onnamecustom') {
+                if (feature_value('statusnamecustom', $user['lang'] ?? 'fa', $setting['statusnamecustom']) == 'onnamecustom') {
                     $backuser = "buyback";
                 } else {
                     $backuser = "backuser";
@@ -4592,7 +4592,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     update("user", "Processing_value_four", "none", "id", $from_id);
     step('home', $from_id);
 } elseif ($text == $textbotlang['keyboard']['bulkPurchase'] || $datain == "kharidanbuh") {
-    if ($setting['bulkbuy'] == "offbulk") {
+    if (feature_value('bulkbuy', $user['lang'] ?? 'fa', $setting['bulkbuy']) == "offbulk") {
         sendmessage($from_id, $textbotlang['users']['Major']['disabled'], null, 'HTML');
         return;
     }
@@ -4607,11 +4607,11 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         sendmessage($from_id, $textbotlang['users']['sell']['nullPanel'], null, 'HTML');
         return;
     }
-    if ($setting['get_number'] == "onAuthenticationphone" && $user['step'] != "get_number" && $user['number'] == "none") {
+    if (feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone" && $user['step'] != "get_number" && $user['number'] == "none") {
         sendmessage($from_id, $textbotlang['users']['number']['confirming'], $request_contact, 'HTML');
         step('get_number', $from_id);
     }
-    if ($user['number'] == "none" && $setting['get_number'] == "onAuthenticationphone")
+    if ($user['number'] == "none" && feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone")
         return;
     #-----------------------#
     if ($datain == "kharidanbuh") {
@@ -4963,11 +4963,11 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     update("user", "Processing_value_one", "0", "id", $from_id);
     update("user", "Processing_value_tow", "0", "id", $from_id);
     update("user", "Processing_value_four", "0", "id", $from_id);
-    if ($setting['get_number'] == "onAuthenticationphone" && $user['step'] != "get_number" && $user['number'] == "none") {
+    if (feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone" && $user['step'] != "get_number" && $user['number'] == "none") {
         sendmessage($from_id, $textbotlang['users']['number']['confirming'], $request_contact, 'HTML');
         step('get_number', $from_id);
     }
-    if ($user['number'] == "none" && $setting['get_number'] == "onAuthenticationphone")
+    if ($user['number'] == "none" && feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone")
         return;
     // method first, amount second: $step_payment is already filtered to this
     // user's language (and, since 2026-08-08, hard-excludes fa-only gateways)
@@ -5243,7 +5243,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         sendmessage($from_id, sprintf($textbotlang['users']['Balance']['amountRangeError'], $minbalance, $maxbalance), null, 'HTML');
         return;
     }
-    if ($user['Balance'] < 0 and intval($setting['Debtsettlement']) == 1) {
+    if ($user['Balance'] < 0 and intval(feature_value('Debtsettlement', $user['lang'] ?? 'fa', $setting['Debtsettlement'])) == 1) {
         $balancruser = abs($user['Balance']);
         if ($text < $balancruser) {
             sendmessage($from_id, sprintf($textbotlang['users']['Balance']['debtRequired'], $balancruser), null, 'HTML');
@@ -5991,7 +5991,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
         sendmessage($from_id, $textbotlang['users']['buttonDisabled'], null, 'HTML');
         return;
     }
-    if ($setting['affiliatesstatus'] == "offaffiliates") {
+    if (feature_value('affiliatesstatus', $user['lang'] ?? 'fa', $setting['affiliatesstatus']) == "offaffiliates") {
         sendmessage($from_id, $textbotlang['users']['affiliates']['offaffiliates'], null, 'HTML');
         return;
     }
@@ -6366,7 +6366,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
         sendmessage($from_id, $textbotlang['users']['buttonDisabled'], null, 'HTML');
         return;
     }
-    if ($setting['wheelagent'] == "0" and $user['agent'] != "f") {
+    if (feature_value('wheelagent', $user['lang'] ?? 'fa', $setting['wheelagent']) == "0" and $user['agent'] != "f") {
         sendmessage($from_id, $textbotlang['users']['buttonDisabledForYou'], null, 'HTML');
         return;
     }
@@ -6375,11 +6375,11 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     $stmt->bindParam(':name_product', $textbotlang['common']['labels']['testServiceName']);
     $stmt->execute();
     $countinvoice = $stmt->rowCount();
-    if (intval($setting['statusfirstwheel']) == 1 and $countinvoice != 0) {
+    if (intval(feature_value('statusfirstwheel', $user['lang'] ?? 'fa', $setting['statusfirstwheel'])) == 1 and $countinvoice != 0) {
         sendmessage($from_id, $textbotlang['users']['sell']['noPurchaseUsersOnly'], null, 'HTML');
         return;
     }
-    if ($setting['wheelـluck'] == "0" or ($setting['wheelagent'] == "0" and $users['agent'] != "f")) {
+    if (feature_value('wheelـluck', $user['lang'] ?? 'fa', $setting['wheelـluck']) == "0" or (feature_value('wheelagent', $user['lang'] ?? 'fa', $setting['wheelagent']) == "0" and $users['agent'] != "f")) {
         sendmessage($from_id, $textbotlang['users']['wheelLuck']['featureDisabled'], null, 'HTML');
         return;
     }
@@ -6392,7 +6392,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
         sendmessage($from_id, $textbotlang['users']['wheelLuck']['alreadyParticipated'], null, 'HTML');
         return;
     }
-    if (intval($setting['Dice']) == 1) {
+    if (intval(feature_value('Dice', $user['lang'] ?? 'fa', $setting['Dice'])) == 1) {
         $diceResponse = telegram('sendDice', [
             'chat_id' => $from_id,
             'emoji' => "🎲",
@@ -6423,7 +6423,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
         return;
     }
     $status = false;
-    if (intval($setting['Dice']) == 1) {
+    if (intval(feature_value('Dice', $user['lang'] ?? 'fa', $setting['Dice'])) == 1) {
         if ($diceValue === 6) {
             $status = true;
         }

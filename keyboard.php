@@ -160,7 +160,7 @@ if (!function_exists('build_main_keyboard')) {
             if ($users['agent'] != "f") {
                 $temp_addtional_key[] = ['text' => $textbotlang['textbot']['agentPanel'], 'callback_data' => "agentpanel"];
             }
-            if ($users['agent'] == "f" && $setting['statusagentrequest'] == "onrequestagent") {
+            if ($users['agent'] == "f" && feature_value('statusagentrequest', $users['lang'] ?? 'fa', $setting['statusagentrequest']) == "onrequestagent") {
                 $temp_addtional_key[] = ['text' => $textbotlang['textbot']['requestAgent'], 'callback_data' => "requestagent"];
             }
             $keyboard = ['inline_keyboard' => []];
@@ -218,7 +218,7 @@ if (!function_exists('build_main_keyboard')) {
             if ($users['agent'] != "f") {
                 $temp_addtional_key[] = ['text' => $textbotlang['textbot']['agentPanel']];
             }
-            if ($users['agent'] == "f" && $setting['statusagentrequest'] == "onrequestagent") {
+            if ($users['agent'] == "f" && feature_value('statusagentrequest', $users['lang'] ?? 'fa', $setting['statusagentrequest']) == "onrequestagent") {
                 $temp_addtional_key[] = ['text' => $textbotlang['textbot']['requestAgent']];
             }
             $keyboard = ['keyboard' => [], 'resize_keyboard' => true];
@@ -372,7 +372,7 @@ $NowPaymentsManage = json_encode([
 ]);
 $setting_panel = json_encode([
     'keyboard' => [
-        [['text' => $textbotlang['keyboard']['featureStatus']]],
+        [['text' => $textbotlang['keyboard']['featureStatus']], ['text' => $textbotlang['keyboard']['featureStatusLang']]],
         [['text' => $textbotlang['keyboard']['botReports']], ['text' => $textbotlang['keyboard']['channelSettings']]],
         [['text' => $textbotlang['keyboard']['activateWebPanel']]],
         [['text' => $textbotlang['keyboard']['miniAppSettingsBtn']]],
@@ -805,7 +805,7 @@ foreach ($help_cat_ordered as $help_cat_fa_key) {
     }
 }
 $helpcwtgory['inline_keyboard'] = array_merge($helpcwtgory['inline_keyboard'], help_layout_chunk_rows($help_cat_ordered, $help_cat_buttons_byfa, $help_cat_section['width']));
-if ($setting['linkappstatus'] == "1") {
+if (feature_value('linkappstatus', $help_cat_disp_lang, $setting['linkappstatus']) == "1") {
     $helpcwtgory['inline_keyboard'][] = [
         ['text' => $textbotlang['keyboard']['appDownloadLink'], 'callback_data' => "linkappdownlod"],
     ];
@@ -885,9 +885,9 @@ while ($result = $stmt->fetch(PDO::FETCH_ASSOC)) {
 $lp_ordered = help_layout_visible(help_layout_apply_order(array_keys($lp_buttons), $lp_section['order']), $lp_section);
 $list_marzban_panel_users['inline_keyboard'] = array_merge($list_marzban_panel_users['inline_keyboard'], help_layout_chunk_rows($lp_ordered, $lp_buttons, $lp_section['width']));
 $statusnote = false;
-if ($setting['statusnamecustom'] == 'onnamecustom')
+if (feature_value('statusnamecustom', $lp_userlang, $setting['statusnamecustom']) == 'onnamecustom')
     $statusnote = true;
-if ($setting['statusnoteforf'] == "0" && $users['agent'] == "f")
+if (feature_value('statusnoteforf', $lp_userlang, $setting['statusnoteforf']) == "0" && $users['agent'] == "f")
     $statusnote = false;
 if (!bt_button_hidden($lp_userlang, 'bottext.btnCloseBuy')) {
     $list_marzban_panel_users['inline_keyboard'][] = [
@@ -1536,7 +1536,7 @@ $optionhiddfy = json_encode([
     ],
     'resize_keyboard' => true
 ]);
-if ($setting['statussupportpv'] == "onpvsupport") {
+if (feature_value('statussupportpv', $users['lang'] ?? 'fa', $setting['statussupportpv']) == "onpvsupport") {
     $supportoption = json_encode([
         'inline_keyboard' => [
             [

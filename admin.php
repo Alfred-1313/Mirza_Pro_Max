@@ -4376,7 +4376,301 @@ if (!function_exists('shop_feature_status_payload')) {
 if (!function_exists('shop_feature_status_caption')) {
     function shop_feature_status_caption($textbotlang, $lang = 'fa')
     {
-        return strtr($textbotlang['Admin']['Status']['botTitle'], ['{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang]);
+        // own dedicated key now (was Admin.Status.botTitle, shared with the
+        // unrelated ⚙️ وضعیت قابلیت ها screen until that screen got its own
+        // per-language split too) - text unchanged, just decoupled
+        return strtr($textbotlang['Admin']['Status']['shopBotTitle'], ['{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang]);
+    }
+}
+if (!function_exists('feature_status_global_payload')) {
+    // ⚙️ وضعیت قابلیت ها - the 13 rows here have no sensible per-customer
+    // language (whole-bot kill switch, admin-only notices, cron/maintenance
+    // gates) so they stay exactly as they've always behaved: one shared
+    // setting for the whole bot. This single function replaces what used to
+    // be the same ~150 lines of keyboard-building code pasted twice (once for
+    // the initial render, once for the post-toggle re-render) - that
+    // duplication had already drifted (the "درخواست نمایندگی" row lost its
+    // real callback in one of the two copies).
+    function feature_status_global_payload($textbotlang)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $status_cron = json_decode($setting['cron_status'], true);
+        $name_status = [
+            'botstatuson' => $textbotlang['Admin']['Status']['statuson'],
+            'botstatusoff' => $textbotlang['Admin']['Status']['statusoff'],
+        ][$setting['Bot_Status']];
+        $name_status_notifnewuser = [
+            'onnewuser' => $textbotlang['Admin']['Status']['statuson'],
+            'offnewuser' => $textbotlang['Admin']['Status']['statusoff'],
+        ][$setting['statusnewuser']];
+        $statusinline = [
+            'oninline' => $textbotlang['Admin']['Status']['statuson'],
+            'offinline' => $textbotlang['Admin']['Status']['statusoff'],
+        ][$setting['inlinebtnmain']];
+        $score = [
+            '1' => $textbotlang['Admin']['Status']['statuson'],
+            '0' => $textbotlang['Admin']['Status']['statusoff'],
+        ][$setting['scorestatus']];
+        $Lotteryagent = [
+            '1' => $textbotlang['Admin']['Status']['statuson'],
+            '0' => $textbotlang['Admin']['Status']['statusoff'],
+        ][$setting['Lotteryagent']];
+        $cronteststatustext = [
+            true => $textbotlang['Admin']['Status']['statuson'],
+            false => $textbotlang['Admin']['Status']['statusoff'],
+        ][$status_cron['test']];
+        $crondaystatustext = [
+            true => $textbotlang['Admin']['Status']['statuson'],
+            false => $textbotlang['Admin']['Status']['statusoff'],
+        ][$status_cron['day']];
+        $cronvolumestatustext = [
+            true => $textbotlang['Admin']['Status']['statuson'],
+            false => $textbotlang['Admin']['Status']['statusoff'],
+        ][$status_cron['volume']];
+        $cronremovestatustext = [
+            true => $textbotlang['Admin']['Status']['statuson'],
+            false => $textbotlang['Admin']['Status']['statusoff'],
+        ][$status_cron['remove']];
+        $cronremovevolumestatustext = [
+            true => $textbotlang['Admin']['Status']['statuson'],
+            false => $textbotlang['Admin']['Status']['statusoff'],
+        ][$status_cron['remove_volume']];
+        $cronuptime_nodestatustext = [
+            true => $textbotlang['Admin']['Status']['statuson'],
+            false => $textbotlang['Admin']['Status']['statusoff'],
+        ][$status_cron['uptime_node']];
+        $cronuptime_panelstatustext = [
+            true => $textbotlang['Admin']['Status']['statuson'],
+            false => $textbotlang['Admin']['Status']['statusoff'],
+        ][$status_cron['uptime_panel']];
+        $cronon_holdtext = [
+            true => $textbotlang['Admin']['Status']['statuson'],
+            false => $textbotlang['Admin']['Status']['statusoff'],
+        ][$status_cron['on_hold']];
+        return json_encode([
+            'inline_keyboard' => [
+                [
+                    ['text' => $textbotlang['Admin']['Status']['subject'], 'callback_data' => "subject"],
+                    ['text' => $textbotlang['Admin']['Status']['statusSubject'], 'callback_data' => "subjectde"],
+                ],
+                [
+                    ['text' => $name_status, 'callback_data' => "editstsuts-statusbot-{$setting['Bot_Status']}"],
+                    ['text' => $textbotlang['Admin']['Status']['statusBot'], 'callback_data' => "statusbot"],
+                ],
+                [
+                    ['text' => $name_status_notifnewuser, 'callback_data' => "editstsuts-notifnew-{$setting['statusnewuser']}"],
+                    ['text' => $textbotlang['Admin']['Status']['statusNotifNewUser'], 'callback_data' => "statusnewuser"],
+                ],
+                [
+                    ['text' => $statusinline, 'callback_data' => "editstsuts-inlinebtnmain-{$setting['inlinebtnmain']}"],
+                    ['text' => $textbotlang['Admin']['Status']['inlinebtns'], 'callback_data' => "inlinebtnmain"],
+                ],
+                [
+                    ['text' => $Lotteryagent, 'callback_data' => "editstsuts-Lotteryagent-{$setting['Lotteryagent']}"],
+                    ['text' => $textbotlang['keyboard']['agentLottery'], 'callback_data' => "Lotteryagent"],
+                ],
+                [
+                    ['text' => $cronteststatustext, 'callback_data' => "editstsuts-crontest-{$status_cron['test']}"],
+                    ['text' => $textbotlang['keyboard']['cronTest'], 'callback_data' => "none"],
+                ],
+                [
+                    ['text' => $cronuptime_nodestatustext, 'callback_data' => "editstsuts-uptime_node-{$status_cron['uptime_node']}"],
+                    ['text' => $textbotlang['keyboard']['nodeUptime'], 'callback_data' => "none"],
+                ],
+                [
+                    ['text' => $cronuptime_panelstatustext, 'callback_data' => "editstsuts-uptime_panel-{$status_cron['uptime_panel']}"],
+                    ['text' => $textbotlang['keyboard']['panelUptime'], 'callback_data' => "none"],
+                ],
+                [
+                    ['text' => $textbotlang['keyboard']['timeAlert'], 'callback_data' => "settimecornday"],
+                    ['text' => $crondaystatustext, 'callback_data' => "editstsuts-cronday-{$status_cron['day']}"],
+                    ['text' => $textbotlang['keyboard']['cronTime'], 'callback_data' => "none"],
+                ],
+                [
+                    ['text' => $textbotlang['keyboard']['firstConnectTime'], 'callback_data' => "setting_on_holdcron"],
+                    ['text' => $cronon_holdtext, 'callback_data' => "editstsuts-on_hold-{$status_cron['on_hold']}"],
+                    ['text' => $textbotlang['keyboard']['cronFirstConnection'], 'callback_data' => "none"],
+                ],
+                [
+                    ['text' => $textbotlang['keyboard']['volumeAlert'], 'callback_data' => "settimecornvolume"],
+                    ['text' => $cronvolumestatustext, 'callback_data' => "editstsuts-cronvolume-{$status_cron['volume']}"],
+                    ['text' => $textbotlang['keyboard']['cronVolume'], 'callback_data' => "none"],
+                ],
+                [
+                    ['text' => $textbotlang['keyboard']['deleteTime'], 'callback_data' => "settimecornremove"],
+                    ['text' => $cronremovestatustext, 'callback_data' => "editstsuts-notifremove-{$status_cron['remove']}"],
+                    ['text' => $textbotlang['keyboard']['cronDelete'], 'callback_data' => "none"],
+                ],
+                [
+                    ['text' => $textbotlang['keyboard']['deleteTime'], 'callback_data' => "settimecornremovevolume"],
+                    ['text' => $cronremovevolumestatustext, 'callback_data' => "editstsuts-notifremove_volume-{$status_cron['remove_volume']}"],
+                    ['text' => $textbotlang['keyboard']['cronDeleteVolume'], 'callback_data' => "none"],
+                ],
+                [
+                    ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "scoresetting"],
+                    ['text' => $score, 'callback_data' => "editstsuts-score-{$setting['scorestatus']}"],
+                    ['text' => $textbotlang['keyboard']['nightLottery'], 'callback_data' => "score"],
+                ],
+            ],
+        ]);
+    }
+}
+if (!function_exists('feature_status_global_caption')) {
+    function feature_status_global_caption($textbotlang)
+    {
+        return $textbotlang['Admin']['Status']['botTitle'];
+    }
+}
+if (!function_exists('feature_status_lang_payload')) {
+    // 🌐 وضعیت قابلیت‌ها (هر زبان) - the 21 rows here all gate something a
+    // single customer sees/hits mid-conversation (phone/rules verification,
+    // wheel-of-luck, support-in-pv, custom config name, agent request, ...),
+    // so each is a per-language override on the old shared setting value -
+    // same fallback contract as shop_feature_value(), separate column
+    // (feature_lang) and function set (feature_value()/feature_set()) so the
+    // two screens' keys never mix. Row/cell shape (plain on/off text, no
+    // emoji/colour, plus this screen's existing - mostly decorative - second
+    // "label" button) is copied verbatim from the old keyboard; only the
+    // toggle cell's value now goes through feature_value() and its
+    // callback_data becomes fls_tog:{lang}:{type}:{value} instead of
+    // editstsuts-{type}-{value}.
+    function feature_status_lang_payload($textbotlang, $lang = 'fa')
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $on = $textbotlang['Admin']['Status']['statuson'];
+        $off = $textbotlang['Admin']['Status']['statusoff'];
+        $tog = function ($type, $value) use ($lang) {
+            return "fls_tog:{$lang}:{$type}:{$value}";
+        };
+        $NotUser_v = feature_value('NotUser', $lang, $setting['NotUser']);
+        $statusagentrequest_v = feature_value('statusagentrequest', $lang, $setting['statusagentrequest']);
+        $roll_Status_v = feature_value('roll_Status', $lang, $setting['roll_Status']);
+        $get_number_v = feature_value('get_number', $lang, $setting['get_number']);
+        $iran_number_v = feature_value('iran_number', $lang, $setting['iran_number']);
+        $verifystart_v = feature_value('verifystart', $lang, $setting['verifystart']);
+        $statussupportpv_v = feature_value('statussupportpv', $lang, $setting['statussupportpv']);
+        $statusnamecustom_v = feature_value('statusnamecustom', $lang, $setting['statusnamecustom']);
+        $statusnoteforf_v = feature_value('statusnoteforf', $lang, $setting['statusnoteforf']);
+        $bulkbuy_v = feature_value('bulkbuy', $lang, $setting['bulkbuy']);
+        $verifybucodeuser_v = feature_value('verifybucodeuser', $lang, $setting['verifybucodeuser']);
+        $categoryhelp_v = feature_value('categoryhelp', $lang, $setting['categoryhelp']);
+        $wheelagent_v = feature_value('wheelagent', $lang, $setting['wheelagent']);
+        $Dice_v = feature_value('Dice', $lang, $setting['Dice']);
+        $statusfirstwheel_v = feature_value('statusfirstwheel', $lang, $setting['statusfirstwheel']);
+        $Debtsettlement_v = feature_value('Debtsettlement', $lang, $setting['Debtsettlement']);
+        $statuscopycart_v = feature_value('statuscopycart', $lang, $setting['statuscopycart']);
+        $linkappstatus_v = feature_value('linkappstatus', $lang, $setting['linkappstatus']);
+        $wheelـluck_v = feature_value('wheelـluck', $lang, $setting['wheelـluck']);
+        $affiliatesstatus_v = feature_value('affiliatesstatus', $lang, $setting['affiliatesstatus']);
+        $statuslimitchangeloc_v = feature_value('statuslimitchangeloc', $lang, $setting['statuslimitchangeloc']);
+        $rows = [];
+        $rows[] = [
+            ['text' => ($lang == 'fa' ? "✅" : "") . $textbotlang['bottext']['langs']['fa'], 'callback_data' => "fls_lang:fa", 'style' => 'primary'],
+            ['text' => ($lang == 'en' ? "✅" : "") . $textbotlang['bottext']['langs']['en'], 'callback_data' => "fls_lang:en", 'style' => 'primary'],
+            ['text' => ($lang == 'ru' ? "✅" : "") . $textbotlang['bottext']['langs']['ru'], 'callback_data' => "fls_lang:ru", 'style' => 'primary'],
+            ['text' => ($lang == 'zh' ? "✅" : "") . $textbotlang['bottext']['langs']['zh'], 'callback_data' => "fls_lang:zh", 'style' => 'primary'],
+            ['text' => ($lang == 'tk' ? "✅" : "") . $textbotlang['bottext']['langs']['tk'], 'callback_data' => "fls_lang:tk", 'style' => 'primary'],
+        ];
+        $rows[] = [
+            ['text' => $NotUser_v == 'onnotuser' ? $on : $off, 'callback_data' => $tog('usernamebtn', $NotUser_v)],
+            ['text' => $textbotlang['Admin']['Status']['statusUsernameBtn'], 'callback_data' => "usernamebtn"],
+        ];
+        // second column used to point at the wrong callback ("statusnewuser",
+        // copy-pasted from the row above it) in both duplicated copies of the
+        // old keyboard - it never did anything either way (no dispatcher
+        // matched either string), so it's rebuilt here as the same inert
+        // "none" every other cron label-only button in this screen already uses
+        $rows[] = [
+            ['text' => $statusagentrequest_v == 'onrequestagent' ? $on : $off, 'callback_data' => $tog('showagent', $statusagentrequest_v)],
+            ['text' => $textbotlang['Admin']['Status']['statusShowAgent'], 'callback_data' => "none"],
+        ];
+        $rows[] = [
+            ['text' => $roll_Status_v == 'rolleon' ? $on : $off, 'callback_data' => $tog('role', $roll_Status_v)],
+            ['text' => $textbotlang['Admin']['Status']['statusRole'], 'callback_data' => "stautsrolee"],
+        ];
+        $rows[] = [
+            ['text' => $get_number_v == 'onAuthenticationphone' ? $on : $off, 'callback_data' => $tog('Authenticationphone', $get_number_v)],
+            ['text' => $textbotlang['Admin']['Status']['Authenticationphone'], 'callback_data' => "Authenticationphone"],
+        ];
+        $rows[] = [
+            ['text' => $iran_number_v == 'onAuthenticationiran' ? $on : $off, 'callback_data' => $tog('Authenticationiran', $iran_number_v)],
+            ['text' => $textbotlang['Admin']['Status']['Authenticationiran'], 'callback_data' => "Authenticationiran"],
+        ];
+        $rows[] = [
+            ['text' => $verifystart_v == 'onverify' ? $on : $off, 'callback_data' => $tog('verifystart', $verifystart_v)],
+            ['text' => $textbotlang['keyboard']['authenticate'], 'callback_data' => "verify"],
+        ];
+        $rows[] = [
+            ['text' => $statussupportpv_v == 'onpvsupport' ? $on : $off, 'callback_data' => $tog('statussupportpv', $statussupportpv_v)],
+            ['text' => $textbotlang['keyboard']['supportInPv'], 'callback_data' => "statussupportpv"],
+        ];
+        $rows[] = [
+            ['text' => $statusnamecustom_v == 'onnamecustom' ? $on : $off, 'callback_data' => $tog('statusnamecustom', $statusnamecustom_v)],
+            ['text' => $textbotlang['keyboard']['configNote'], 'callback_data' => "statusnamecustom"],
+        ];
+        $rows[] = [
+            ['text' => $statusnoteforf_v == '1' ? $on : $off, 'callback_data' => $tog('statusnamecustomf', $statusnoteforf_v)],
+            ['text' => $textbotlang['keyboard']['userNote'], 'callback_data' => "statusnamecustomf"],
+        ];
+        $rows[] = [
+            ['text' => $bulkbuy_v == 'onbulk' ? $on : $off, 'callback_data' => $tog('bulkbuy', $bulkbuy_v)],
+            ['text' => $textbotlang['keyboard']['bulkPurchaseStatus'], 'callback_data' => "bulkbuy"],
+        ];
+        $rows[] = [
+            ['text' => $verifybucodeuser_v == 'onverify' ? $on : $off, 'callback_data' => $tog('verifybyuser', $verifybucodeuser_v)],
+            ['text' => $textbotlang['keyboard']['authWithLink'], 'callback_data' => "verifybyuser"],
+        ];
+        $rows[] = [
+            ['text' => $categoryhelp_v == '1' ? $on : $off, 'callback_data' => $tog('btn_status_category', $categoryhelp_v)],
+            ['text' => $textbotlang['keyboard']['educationCategory'], 'callback_data' => "btn_status_category"],
+        ];
+        $rows[] = [
+            ['text' => $wheelagent_v == '1' ? $on : $off, 'callback_data' => $tog('wheelagent', $wheelagent_v)],
+            ['text' => $textbotlang['keyboard']['agentWheelOfLuck'], 'callback_data' => "wheelagent"],
+        ];
+        $rows[] = [
+            ['text' => $Dice_v == '1' ? $on : $off, 'callback_data' => $tog('Dice', $Dice_v)],
+            ['text' => $textbotlang['keyboard']['showDice'], 'callback_data' => "Dice"],
+        ];
+        $rows[] = [
+            ['text' => $statusfirstwheel_v == '1' ? $on : $off, 'callback_data' => $tog('wheelagentfirst', $statusfirstwheel_v)],
+            ['text' => $textbotlang['keyboard']['firstPurchaseWheel'], 'callback_data' => "wheelagentfirst"],
+        ];
+        $rows[] = [
+            ['text' => $Debtsettlement_v == '1' ? $on : $off, 'callback_data' => $tog('Debtsettlement', $Debtsettlement_v)],
+            ['text' => $textbotlang['keyboard']['settleDebt'], 'callback_data' => "Debtsettlement"],
+        ];
+        $rows[] = [
+            ['text' => $statuscopycart_v == '1' ? $on : $off, 'callback_data' => $tog('compycart', $statuscopycart_v)],
+            ['text' => $textbotlang['keyboard']['copyCard'], 'callback_data' => "copycart"],
+        ];
+        $rows[] = [
+            ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "linkappsetting"],
+            ['text' => $linkappstatus_v == '1' ? $on : $off, 'callback_data' => $tog('linkappstatus', $linkappstatus_v)],
+            ['text' => $textbotlang['keyboard']['appDownloadLinkAlt'], 'callback_data' => "linkappstatus"],
+        ];
+        $rows[] = [
+            ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "gradonhshans"],
+            ['text' => $wheelـluck_v == '1' ? $on : $off, 'callback_data' => $tog('wheel_luck', $wheelـluck_v)],
+            ['text' => $textbotlang['keyboard']['wheelOfLuck'], 'callback_data' => "wheel_luck"],
+        ];
+        $rows[] = [
+            ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "settingaffiliatesf"],
+            ['text' => $affiliatesstatus_v == 'onaffiliates' ? $on : $off, 'callback_data' => $tog('affiliatesstatus', $affiliatesstatus_v)],
+            ['text' => $textbotlang['keyboard']['affiliateGift'], 'callback_data' => "affiliatesstatus"],
+        ];
+        $rows[] = [
+            ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "changeloclimit"],
+            ['text' => $statuslimitchangeloc_v == '1' ? $on : $off, 'callback_data' => $tog('changeloc', $statuslimitchangeloc_v)],
+            ['text' => $textbotlang['keyboard']['locationChangeLimit'], 'callback_data' => "changeloc"],
+        ];
+        return json_encode(['inline_keyboard' => $rows]);
+    }
+}
+if (!function_exists('feature_status_lang_caption')) {
+    function feature_status_lang_caption($textbotlang, $lang = 'fa')
+    {
+        return strtr($textbotlang['Admin']['Status']['featureLangBotTitle'], ['{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang]);
     }
 }
 if (!function_exists('displayhub_payload')) {
@@ -8945,301 +9239,8 @@ elseif ($datain == "systemsms") {
     } elseif ($setting['iran_number'] == $textbotlang['Admin']['Status']['iranPhoneOff']) {
         update("setting", "iran_number", "offAuthenticationiran");
     }
-    $status_cron = json_decode($setting['cron_status'], true);
-    $setting = select("setting", "*", null, null, "select");
-    $name_status = [
-        'botstatuson' => $textbotlang['Admin']['Status']['statuson'],
-        'botstatusoff' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['Bot_Status']];
-    $name_status_username = [
-        'onnotuser' => $textbotlang['Admin']['Status']['statuson'],
-        'offnotuser' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['NotUser']];
-    $name_status_notifnewuser = [
-        'onnewuser' => $textbotlang['Admin']['Status']['statuson'],
-        'offnewuser' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['statusnewuser']];
-    $name_status_showagent = [
-        'onrequestagent' => $textbotlang['Admin']['Status']['statuson'],
-        'offrequestagent' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['statusagentrequest']];
-    $name_status_role = [
-        'rolleon' => $textbotlang['Admin']['Status']['statuson'],
-        'rolleoff' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['roll_Status']];
-    $Authenticationphone = [
-        'onAuthenticationphone' => $textbotlang['Admin']['Status']['statuson'],
-        'offAuthenticationphone' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['get_number']];
-    $Authenticationiran = [
-        'onAuthenticationiran' => $textbotlang['Admin']['Status']['statuson'],
-        'offAuthenticationiran' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['iran_number']];
-    $statusinline = [
-        'oninline' => $textbotlang['Admin']['Status']['statuson'],
-        'offinline' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['inlinebtnmain']];
-    $statusverify = [
-        'onverify' => $textbotlang['Admin']['Status']['statuson'],
-        'offverify' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['verifystart']];
-    $statuspvsupport = [
-        'onpvsupport' => $textbotlang['Admin']['Status']['statuson'],
-        'offpvsupport' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['statussupportpv']];
-    $statusnameconfig = [
-        'onnamecustom' => $textbotlang['Admin']['Status']['statuson'],
-        'offnamecustom' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['statusnamecustom']];
-    $statusnamebulk = [
-        'onbulk' => $textbotlang['Admin']['Status']['statuson'],
-        'offbulk' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['bulkbuy']];
-    $statusverifybyuser = [
-        'onverify' => $textbotlang['Admin']['Status']['statuson'],
-        'offverify' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['verifybucodeuser']];
-    $score = [
-        '1' => $textbotlang['Admin']['Status']['statuson'],
-        '0' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['scorestatus']];
-    $wheel_luck = [
-        '1' => $textbotlang['Admin']['Status']['statuson'],
-        '0' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['wheelـluck']];
-    $refralstatus = [
-        'onaffiliates' => $textbotlang['Admin']['Status']['statuson'],
-        'offaffiliates' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['affiliatesstatus']];
-    $btnstatuscategory = [
-        '1' => $textbotlang['Admin']['Status']['statuson'],
-        '0' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['categoryhelp']];
-    $btnstatuslinkapp = [
-        '1' => $textbotlang['Admin']['Status']['statuson'],
-        '0' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['linkappstatus']];
-    $cronteststatustext = [
-        true => $textbotlang['Admin']['Status']['statuson'],
-        false => $textbotlang['Admin']['Status']['statusoff']
-    ][$status_cron['test']];
-    $crondaystatustext = [
-        true => $textbotlang['Admin']['Status']['statuson'],
-        false => $textbotlang['Admin']['Status']['statusoff']
-    ][$status_cron['day']];
-    $cronvolumestatustext = [
-        true => $textbotlang['Admin']['Status']['statuson'],
-        false => $textbotlang['Admin']['Status']['statusoff']
-    ][$status_cron['volume']];
-    $cronremovestatustext = [
-        true => $textbotlang['Admin']['Status']['statuson'],
-        false => $textbotlang['Admin']['Status']['statusoff']
-    ][$status_cron['remove']];
-    $cronremovevolumestatustext = [
-        true => $textbotlang['Admin']['Status']['statuson'],
-        false => $textbotlang['Admin']['Status']['statusoff']
-    ][$status_cron['remove_volume']];
-    $cronuptime_nodestatustext = [
-        true => $textbotlang['Admin']['Status']['statuson'],
-        false => $textbotlang['Admin']['Status']['statusoff']
-    ][$status_cron['uptime_node']];
-    $cronuptime_panelstatustext = [
-        true => $textbotlang['Admin']['Status']['statuson'],
-        false => $textbotlang['Admin']['Status']['statusoff']
-    ][$status_cron['uptime_panel']];
-    $cronon_holdtext = [
-        true => $textbotlang['Admin']['Status']['statuson'],
-        false => $textbotlang['Admin']['Status']['statusoff']
-    ][$status_cron['on_hold']];
-    $wheelagent = [
-        '1' => $textbotlang['Admin']['Status']['statuson'],
-        '0' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['wheelagent']];
-    $Lotteryagent = [
-        '1' => $textbotlang['Admin']['Status']['statuson'],
-        '0' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['Lotteryagent']];
-    $statusfirstwheel = [
-        '1' => $textbotlang['Admin']['Status']['statuson'],
-        '0' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['statusfirstwheel']];
-    $statuslimitchangeloc = [
-        '1' => $textbotlang['Admin']['Status']['statuson'],
-        '0' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['statuslimitchangeloc']];
-    $statusDebtsettlement = [
-        '1' => $textbotlang['Admin']['Status']['statuson'],
-        '0' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['Debtsettlement']];
-    $statusDice = [
-        '1' => $textbotlang['Admin']['Status']['statuson'],
-        '0' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['Dice']];
-    $statusnotef = [
-        '1' => $textbotlang['Admin']['Status']['statuson'],
-        '0' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['statusnoteforf']];
-    $status_copy_cart = [
-        '1' => $textbotlang['Admin']['Status']['statuson'],
-        '0' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['statuscopycart']];
-
-    $Bot_Status = json_encode([
-        'inline_keyboard' => [
-            [
-                ['text' => $textbotlang['Admin']['Status']['subject'], 'callback_data' => "subject"],
-                ['text' => $textbotlang['Admin']['Status']['statusSubject'], 'callback_data' => "subjectde"],
-            ],
-            [
-                ['text' => $name_status, 'callback_data' => "editstsuts-statusbot-{$setting['Bot_Status']}"],
-                ['text' => $textbotlang['Admin']['Status']['statusBot'], 'callback_data' => "statusbot"],
-            ],
-            [
-                ['text' => $name_status_username, 'callback_data' => "editstsuts-usernamebtn-{$setting['NotUser']}"],
-                ['text' => $textbotlang['Admin']['Status']['statusUsernameBtn'], 'callback_data' => "usernamebtn"],
-            ],
-            [
-                ['text' => $name_status_notifnewuser, 'callback_data' => "editstsuts-notifnew-{$setting['statusnewuser']}"],
-                ['text' => $textbotlang['Admin']['Status']['statusNotifNewUser'], 'callback_data' => "statusnewuser"],
-            ],
-            [
-                ['text' => $name_status_showagent, 'callback_data' => "editstsuts-showagent-{$setting['statusagentrequest']}"],
-                ['text' => $textbotlang['Admin']['Status']['statusShowAgent'], 'callback_data' => "statusnewuser"],
-            ],
-            [
-                ['text' => $name_status_role, 'callback_data' => "editstsuts-role-{$setting['roll_Status']}"],
-                ['text' => $textbotlang['Admin']['Status']['statusRole'], 'callback_data' => "stautsrolee"],
-            ],
-            [
-                ['text' => $Authenticationphone, 'callback_data' => "editstsuts-Authenticationphone-{$setting['get_number']}"],
-                ['text' => $textbotlang['Admin']['Status']['Authenticationphone'], 'callback_data' => "Authenticationphone"],
-            ],
-            [
-                ['text' => $Authenticationiran, 'callback_data' => "editstsuts-Authenticationiran-{$setting['iran_number']}"],
-                ['text' => $textbotlang['Admin']['Status']['Authenticationiran'], 'callback_data' => "Authenticationiran"],
-            ],
-            [
-                ['text' => $statusinline, 'callback_data' => "editstsuts-inlinebtnmain-{$setting['inlinebtnmain']}"],
-                ['text' => $textbotlang['Admin']['Status']['inlinebtns'], 'callback_data' => "inlinebtnmain"],
-            ],
-            [
-                ['text' => $statusverify, 'callback_data' => "editstsuts-verifystart-{$setting['verifystart']}"],
-                ['text' => $textbotlang['keyboard']['authenticate'], 'callback_data' => "verify"],
-            ],
-            [
-                ['text' => $statuspvsupport, 'callback_data' => "editstsuts-statussupportpv-{$setting['statussupportpv']}"],
-                ['text' => $textbotlang['keyboard']['supportInPv'], 'callback_data' => "statussupportpv"],
-            ],
-            [
-                ['text' => $statusnameconfig, 'callback_data' => "editstsuts-statusnamecustom-{$setting['statusnamecustom']}"],
-                ['text' => $textbotlang['keyboard']['configNote'], 'callback_data' => "statusnamecustom"],
-            ],
-            [
-                ['text' => $statusnotef, 'callback_data' => "editstsuts-statusnamecustomf-{$setting['statusnoteforf']}"],
-                ['text' => $textbotlang['keyboard']['userNote'], 'callback_data' => "statusnamecustomf"],
-            ],
-            [
-                ['text' => $statusnamebulk, 'callback_data' => "editstsuts-bulkbuy-{$setting['bulkbuy']}"],
-                ['text' => $textbotlang['keyboard']['bulkPurchaseStatus'], 'callback_data' => "bulkbuy"],
-            ],
-            [
-                ['text' => $statusverifybyuser, 'callback_data' => "editstsuts-verifybyuser-{$setting['verifybucodeuser']}"],
-                ['text' => $textbotlang['keyboard']['authWithLink'], 'callback_data' => "verifybyuser"],
-            ],
-            [
-                ['text' => $btnstatuscategory, 'callback_data' => "editstsuts-btn_status_category-{$setting['categoryhelp']}"],
-                ['text' => $textbotlang['keyboard']['educationCategory'], 'callback_data' => "btn_status_category"],
-            ],
-            [
-                ['text' => $wheelagent, 'callback_data' => "editstsuts-wheelagent-{$setting['wheelagent']}"],
-                ['text' => $textbotlang['keyboard']['agentWheelOfLuck'], 'callback_data' => "wheelagent"],
-            ],
-
-            [
-                ['text' => $statusDice, 'callback_data' => "editstsuts-Dice-{$setting['Dice']}"],
-                ['text' => $textbotlang['keyboard']['showDice'], 'callback_data' => "Dice"],
-            ],
-            [
-                ['text' => $statusfirstwheel, 'callback_data' => "editstsuts-wheelagentfirst-{$setting['statusfirstwheel']}"],
-                ['text' => $textbotlang['keyboard']['firstPurchaseWheel'], 'callback_data' => "wheelagentfirst"],
-            ],
-            [
-                ['text' => $Lotteryagent, 'callback_data' => "editstsuts-Lotteryagent-{$setting['Lotteryagent']}"],
-                ['text' => $textbotlang['keyboard']['agentLottery'], 'callback_data' => "Lotteryagent"],
-            ],
-            [
-                ['text' => $statusDebtsettlement, 'callback_data' => "editstsuts-Debtsettlement-{$setting['Debtsettlement']}"],
-                ['text' => $textbotlang['keyboard']['settleDebt'], 'callback_data' => "Debtsettlement"],
-            ],
-            [
-                ['text' => $status_copy_cart, 'callback_data' => "editstsuts-compycart-{$setting['statuscopycart']}"],
-                ['text' => $textbotlang['keyboard']['copyCard'], 'callback_data' => "copycart"],
-            ],
-            [
-                ['text' => $cronteststatustext, 'callback_data' => "editstsuts-crontest-{$status_cron['test']}"],
-                ['text' => $textbotlang['keyboard']['cronTest'], 'callback_data' => "none"],
-            ],
-            [
-                ['text' => $cronuptime_nodestatustext, 'callback_data' => "editstsuts-uptime_node-{$status_cron['uptime_node']}"],
-                ['text' => $textbotlang['keyboard']['nodeUptime'], 'callback_data' => "none"],
-            ],
-            [
-                ['text' => $cronuptime_panelstatustext, 'callback_data' => "editstsuts-uptime_panel-{$status_cron['uptime_panel']}"],
-                ['text' => $textbotlang['keyboard']['panelUptime'], 'callback_data' => "none"],
-            ],
-            [
-                ['text' => $textbotlang['keyboard']['timeAlert'], 'callback_data' => "settimecornday"],
-                ['text' => $crondaystatustext, 'callback_data' => "editstsuts-cronday-{$status_cron['day']}"],
-                ['text' => $textbotlang['keyboard']['cronTime'], 'callback_data' => "none"],
-            ],
-            [
-                ['text' => $textbotlang['keyboard']['firstConnectTime'], 'callback_data' => "setting_on_holdcron"],
-                ['text' => $cronon_holdtext, 'callback_data' => "editstsuts-on_hold-{$status_cron['on_hold']}"],
-                ['text' => $textbotlang['keyboard']['cronFirstConnection'], 'callback_data' => "none"],
-            ],
-            [
-                ['text' => $textbotlang['keyboard']['volumeAlert'], 'callback_data' => "settimecornvolume"],
-                ['text' => $cronvolumestatustext, 'callback_data' => "editstsuts-cronvolume-{$status_cron['volume']}"],
-                ['text' => $textbotlang['keyboard']['cronVolume'], 'callback_data' => "none"],
-            ],
-            [
-                ['text' => $textbotlang['keyboard']['deleteTime'], 'callback_data' => "settimecornremove"],
-                ['text' => $cronremovestatustext, 'callback_data' => "editstsuts-notifremove-{$status_cron['remove']}"],
-                ['text' => $textbotlang['keyboard']['cronDelete'], 'callback_data' => "none"],
-            ],
-            [
-                ['text' => $textbotlang['keyboard']['deleteTime'], 'callback_data' => "settimecornremovevolume"],
-                ['text' => $cronremovevolumestatustext, 'callback_data' => "editstsuts-notifremove_volume-{$status_cron['remove_volume']}"],
-                ['text' => $textbotlang['keyboard']['cronDeleteVolume'], 'callback_data' => "none"],
-            ],
-            [
-                ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "linkappsetting"],
-                ['text' => $btnstatuslinkapp, 'callback_data' => "editstsuts-linkappstatus-{$setting['linkappstatus']}"],
-                ['text' => $textbotlang['keyboard']['appDownloadLinkAlt'], 'callback_data' => "linkappstatus"],
-            ],
-            [
-                ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "scoresetting"],
-                ['text' => $score, 'callback_data' => "editstsuts-score-{$setting['scorestatus']}"],
-                ['text' => $textbotlang['keyboard']['nightLottery'], 'callback_data' => "score"],
-            ],
-            [
-                ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "gradonhshans"],
-                ['text' => $wheel_luck, 'callback_data' => "editstsuts-wheel_luck-{$setting['wheelـluck']}"],
-                ['text' => $textbotlang['keyboard']['wheelOfLuck'], 'callback_data' => "wheel_luck"],
-            ],
-            [
-                ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "settingaffiliatesf"],
-                ['text' => $refralstatus, 'callback_data' => "editstsuts-affiliatesstatus-{$setting['affiliatesstatus']}"],
-                ['text' => $textbotlang['keyboard']['affiliateGift'], 'callback_data' => "affiliatesstatus"],
-            ],
-            [
-                ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "changeloclimit"],
-                ['text' => $statuslimitchangeloc, 'callback_data' => "editstsuts-changeloc-{$setting['statuslimitchangeloc']}"],
-                ['text' => $textbotlang['keyboard']['locationChangeLimit'], 'callback_data' => "changeloc"],
-            ]
-        ]
-    ]);
-    sendmessage($from_id, $textbotlang['Admin']['Status']['botTitle'], $Bot_Status, 'HTML');
+    $Bot_Status = feature_status_global_payload($textbotlang);
+    sendmessage($from_id, feature_status_global_caption($textbotlang), $Bot_Status, 'HTML');
 } elseif (preg_match('/^editstsuts-(.*)-(.*)/', $datain, $dataget)) {
     $status_cron = json_decode($setting['cron_status'], true);
     $type = $dataget[1];
@@ -9528,305 +9529,103 @@ elseif ($datain == "systemsms") {
         $status_cron['on_hold'] = $valueneww;
         update("setting", "cron_status", json_encode($status_cron));
     }
-    $setting = select("setting", "*");
-    $status_cron = json_decode($setting['cron_status'], true);
-    $name_status = [
-        'botstatuson' => $textbotlang['Admin']['Status']['statuson'],
-        'botstatusoff' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['Bot_Status']];
-    $name_status_username = [
-        'onnotuser' => $textbotlang['Admin']['Status']['statuson'],
-        'offnotuser' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['NotUser']];
-    $name_status_notifnewuser = [
-        'onnewuser' => $textbotlang['Admin']['Status']['statuson'],
-        'offnewuser' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['statusnewuser']];
-    $name_status_showagent = [
-        'onrequestagent' => $textbotlang['Admin']['Status']['statuson'],
-        'offrequestagent' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['statusagentrequest']];
-    $name_status_role = [
-        'rolleon' => $textbotlang['Admin']['Status']['statuson'],
-        'rolleoff' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['roll_Status']];
-    $Authenticationphone = [
-        'onAuthenticationphone' => $textbotlang['Admin']['Status']['statuson'],
-        'offAuthenticationphone' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['get_number']];
-    $Authenticationiran = [
-        'onAuthenticationiran' => $textbotlang['Admin']['Status']['statuson'],
-        'offAuthenticationiran' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['iran_number']];
-    $statusinline = [
-        'oninline' => $textbotlang['Admin']['Status']['statuson'],
-        'offinline' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['inlinebtnmain']];
-    $statusverify = [
-        'onverify' => $textbotlang['Admin']['Status']['statuson'],
-        'offverify' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['verifystart']];
-    $statuspvsupport = [
-        'onpvsupport' => $textbotlang['Admin']['Status']['statuson'],
-        'offpvsupport' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['statussupportpv']];
-    $statusnameconfig = [
-        'onnamecustom' => $textbotlang['Admin']['Status']['statuson'],
-        'offnamecustom' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['statusnamecustom']];
-    $statusnamebulk = [
-        'onbulk' => $textbotlang['Admin']['Status']['statuson'],
-        'offbulk' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['bulkbuy']];
-    $statusverifybyuser = [
-        'onverify' => $textbotlang['Admin']['Status']['statuson'],
-        'offverify' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['verifybucodeuser']];
-    $score = [
-        '1' => $textbotlang['Admin']['Status']['statuson'],
-        '0' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['scorestatus']];
-    $wheel_luck = [
-        '1' => $textbotlang['Admin']['Status']['statuson'],
-        '0' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['wheelـluck']];
-    $refralstatus = [
-        'onaffiliates' => $textbotlang['Admin']['Status']['statuson'],
-        'offaffiliates' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['affiliatesstatus']];
-    $btnstatuscategory = [
-        '1' => $textbotlang['Admin']['Status']['statuson'],
-        '0' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['categoryhelp']];
-    $btnstatuslinkapp = [
-        '1' => $textbotlang['Admin']['Status']['statuson'],
-        '0' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['linkappstatus']];
-    $cronteststatustext = [
-        true => $textbotlang['Admin']['Status']['statuson'],
-        false => $textbotlang['Admin']['Status']['statusoff']
-    ][$status_cron['test']];
-    $crondaystatustext = [
-        true => $textbotlang['Admin']['Status']['statuson'],
-        false => $textbotlang['Admin']['Status']['statusoff']
-    ][$status_cron['day']];
-    $cronvolumestatustext = [
-        true => $textbotlang['Admin']['Status']['statuson'],
-        false => $textbotlang['Admin']['Status']['statusoff']
-    ][$status_cron['volume']];
-    $cronremovestatustext = [
-        true => $textbotlang['Admin']['Status']['statuson'],
-        false => $textbotlang['Admin']['Status']['statusoff']
-    ][$status_cron['remove']];
-    $cronremovevolumestatustext = [
-        true => $textbotlang['Admin']['Status']['statuson'],
-        false => $textbotlang['Admin']['Status']['statusoff']
-    ][$status_cron['remove_volume']];
-    $cronuptime_nodestatustext = [
-        true => $textbotlang['Admin']['Status']['statuson'],
-        false => $textbotlang['Admin']['Status']['statusoff']
-    ][$status_cron['uptime_node']];
-    $cronuptime_panelstatustext = [
-        true => $textbotlang['Admin']['Status']['statuson'],
-        false => $textbotlang['Admin']['Status']['statusoff']
-    ][$status_cron['uptime_panel']];
-    $cronon_holdtext = [
-        true => $textbotlang['Admin']['Status']['statuson'],
-        false => $textbotlang['Admin']['Status']['statusoff']
-    ][$status_cron['on_hold']];
-    $wheelagent = [
-        '1' => $textbotlang['Admin']['Status']['statuson'],
-        '0' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['wheelagent']];
-    $Lotteryagent = [
-        '1' => $textbotlang['Admin']['Status']['statuson'],
-        '0' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['Lotteryagent']];
-    $statusfirstwheel = [
-        '1' => $textbotlang['Admin']['Status']['statuson'],
-        '0' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['statusfirstwheel']];
-    $statuslimitchangeloc = [
-        '1' => $textbotlang['Admin']['Status']['statuson'],
-        '0' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['statuslimitchangeloc']];
-    $statusDebtsettlement = [
-        '1' => $textbotlang['Admin']['Status']['statuson'],
-        '0' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['Debtsettlement']];
-    $statusDice = [
-        '1' => $textbotlang['Admin']['Status']['statuson'],
-        '0' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['Dice']];
-    $statusnotef = [
-        '1' => $textbotlang['Admin']['Status']['statuson'],
-        '0' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['statusnoteforf']];
-    $statusnotef = [
-        '1' => $textbotlang['Admin']['Status']['statuson'],
-        '0' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['statusnoteforf']];
-    $status_copy_cart = [
-        '1' => $textbotlang['Admin']['Status']['statuson'],
-        '0' => $textbotlang['Admin']['Status']['statusoff']
-    ][$setting['statuscopycart']];
-
-    $Bot_Status = json_encode([
-        'inline_keyboard' => [
-            [
-                ['text' => $textbotlang['Admin']['Status']['subject'], 'callback_data' => "subject"],
-                ['text' => $textbotlang['Admin']['Status']['statusSubject'], 'callback_data' => "subjectde"],
-            ],
-            [
-                ['text' => $name_status, 'callback_data' => "editstsuts-statusbot-{$setting['Bot_Status']}"],
-                ['text' => $textbotlang['Admin']['Status']['statusBot'], 'callback_data' => "statusbot"],
-            ],
-            [
-                ['text' => $name_status_username, 'callback_data' => "editstsuts-usernamebtn-{$setting['NotUser']}"],
-                ['text' => $textbotlang['Admin']['Status']['statusUsernameBtn'], 'callback_data' => "usernamebtn"],
-            ],
-            [
-                ['text' => $name_status_notifnewuser, 'callback_data' => "editstsuts-notifnew-{$setting['statusnewuser']}"],
-                ['text' => $textbotlang['Admin']['Status']['statusNotifNewUser'], 'callback_data' => "statusnewuser"],
-            ],
-            [
-                ['text' => $name_status_showagent, 'callback_data' => "editstsuts-showagent-{$setting['statusagentrequest']}"],
-                ['text' => $textbotlang['Admin']['Status']['statusShowAgent'], 'callback_data' => "statusnewuser"],
-            ],
-            [
-                ['text' => $name_status_role, 'callback_data' => "editstsuts-role-{$setting['roll_Status']}"],
-                ['text' => $textbotlang['Admin']['Status']['statusRole'], 'callback_data' => "stautsrolee"],
-            ],
-            [
-                ['text' => $Authenticationphone, 'callback_data' => "editstsuts-Authenticationphone-{$setting['get_number']}"],
-                ['text' => $textbotlang['Admin']['Status']['Authenticationphone'], 'callback_data' => "Authenticationphone"],
-            ],
-            [
-                ['text' => $Authenticationiran, 'callback_data' => "editstsuts-Authenticationiran-{$setting['iran_number']}"],
-                ['text' => $textbotlang['Admin']['Status']['Authenticationiran'], 'callback_data' => "Authenticationiran"],
-            ],
-            [
-                ['text' => $statusinline, 'callback_data' => "editstsuts-inlinebtnmain-{$setting['inlinebtnmain']}"],
-                ['text' => $textbotlang['Admin']['Status']['inlinebtns'], 'callback_data' => "inlinebtnmain"],
-            ],
-            [
-                ['text' => $statusverify, 'callback_data' => "editstsuts-verifystart-{$setting['verifystart']}"],
-                ['text' => $textbotlang['keyboard']['authenticate'], 'callback_data' => "verify"],
-            ],
-            [
-                ['text' => $statuspvsupport, 'callback_data' => "editstsuts-statussupportpv-{$setting['statussupportpv']}"],
-                ['text' => $textbotlang['keyboard']['supportInPv'], 'callback_data' => "statussupportpv"],
-            ],
-            [
-                ['text' => $statusnameconfig, 'callback_data' => "editstsuts-statusnamecustom-{$setting['statusnamecustom']}"],
-                ['text' => $textbotlang['keyboard']['configNote'], 'callback_data' => "statusnamecustom"],
-            ],
-            [
-                ['text' => $statusnotef, 'callback_data' => "editstsuts-statusnamecustomf-{$setting['statusnoteforf']}"],
-                ['text' => $textbotlang['keyboard']['userNote'], 'callback_data' => "statusnamecustomf"],
-            ],
-            [
-                ['text' => $statusnamebulk, 'callback_data' => "editstsuts-bulkbuy-{$setting['bulkbuy']}"],
-                ['text' => $textbotlang['keyboard']['bulkPurchaseStatus'], 'callback_data' => "bulkbuy"],
-            ],
-            [
-                ['text' => $statusverifybyuser, 'callback_data' => "editstsuts-verifybyuser-{$setting['verifybucodeuser']}"],
-                ['text' => $textbotlang['keyboard']['authWithLink'], 'callback_data' => "verifybyuser"],
-            ],
-            [
-                ['text' => $btnstatuscategory, 'callback_data' => "editstsuts-btn_status_category-{$setting['categoryhelp']}"],
-                ['text' => $textbotlang['keyboard']['educationCategory'], 'callback_data' => "btn_status_category"],
-            ],
-            [
-                ['text' => $wheelagent, 'callback_data' => "editstsuts-wheelagent-{$setting['wheelagent']}"],
-                ['text' => $textbotlang['keyboard']['agentWheelOfLuck'], 'callback_data' => "wheelagent"],
-            ],
-
-            [
-                ['text' => $statusDice, 'callback_data' => "editstsuts-Dice-{$setting['Dice']}"],
-                ['text' => $textbotlang['keyboard']['showDice'], 'callback_data' => "Dice"],
-            ],
-            [
-                ['text' => $statusfirstwheel, 'callback_data' => "editstsuts-wheelagentfirst-{$setting['statusfirstwheel']}"],
-                ['text' => $textbotlang['keyboard']['firstPurchaseWheel'], 'callback_data' => "wheelagentfirst"],
-            ],
-            [
-                ['text' => $Lotteryagent, 'callback_data' => "editstsuts-Lotteryagent-{$setting['Lotteryagent']}"],
-                ['text' => $textbotlang['keyboard']['agentLottery'], 'callback_data' => "Lotteryagent"],
-            ],
-            [
-                ['text' => $statusDebtsettlement, 'callback_data' => "editstsuts-Debtsettlement-{$setting['Debtsettlement']}"],
-                ['text' => $textbotlang['keyboard']['settleDebt'], 'callback_data' => "Debtsettlement"],
-            ],
-            [
-                ['text' => $status_copy_cart, 'callback_data' => "editstsuts-compycart-{$setting['statuscopycart']}"],
-                ['text' => $textbotlang['keyboard']['copyCard'], 'callback_data' => "copycart"],
-            ],
-            [
-                ['text' => $cronteststatustext, 'callback_data' => "editstsuts-crontest-{$status_cron['test']}"],
-                ['text' => $textbotlang['keyboard']['cronTest'], 'callback_data' => "none"],
-            ],
-            [
-                ['text' => $cronuptime_nodestatustext, 'callback_data' => "editstsuts-uptime_node-{$status_cron['uptime_node']}"],
-                ['text' => $textbotlang['keyboard']['nodeUptime'], 'callback_data' => "none"],
-            ],
-            [
-                ['text' => $cronuptime_panelstatustext, 'callback_data' => "editstsuts-uptime_panel-{$status_cron['uptime_panel']}"],
-                ['text' => $textbotlang['keyboard']['panelUptime'], 'callback_data' => "none"],
-            ],
-            [
-                ['text' => $textbotlang['keyboard']['timeAlert'], 'callback_data' => "settimecornday"],
-                ['text' => $crondaystatustext, 'callback_data' => "editstsuts-cronday-{$status_cron['day']}"],
-                ['text' => $textbotlang['keyboard']['cronTime'], 'callback_data' => "none"],
-            ],
-            [
-                ['text' => $textbotlang['keyboard']['firstConnectTime'], 'callback_data' => "setting_on_holdcron"],
-                ['text' => $cronon_holdtext, 'callback_data' => "editstsuts-on_hold-{$status_cron['on_hold']}"],
-                ['text' => $textbotlang['keyboard']['cronFirstConnection'], 'callback_data' => "none"],
-            ],
-            [
-                ['text' => $textbotlang['keyboard']['volumeAlert'], 'callback_data' => "settimecornvolume"],
-                ['text' => $cronvolumestatustext, 'callback_data' => "editstsuts-cronvolume-{$status_cron['volume']}"],
-                ['text' => $textbotlang['keyboard']['cronVolume'], 'callback_data' => "none"],
-            ],
-            [
-                ['text' => $textbotlang['keyboard']['deleteTime'], 'callback_data' => "settimecornremove"],
-                ['text' => $cronremovestatustext, 'callback_data' => "editstsuts-notifremove-{$status_cron['remove']}"],
-                ['text' => $textbotlang['keyboard']['cronDelete'], 'callback_data' => "none"],
-            ],
-            [
-                ['text' => $textbotlang['keyboard']['deleteTime'], 'callback_data' => "settimecornremovevolume"],
-                ['text' => $cronremovevolumestatustext, 'callback_data' => "editstsuts-notifremove_volume-{$status_cron['remove_volume']}"],
-                ['text' => $textbotlang['keyboard']['cronDeleteVolume'], 'callback_data' => "none"],
-            ],
-            [
-                ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "linkappsetting"],
-                ['text' => $btnstatuslinkapp, 'callback_data' => "editstsuts-linkappstatus-{$setting['linkappstatus']}"],
-                ['text' => $textbotlang['keyboard']['appDownloadLinkAlt'], 'callback_data' => "linkappstatus"],
-            ],
-            [
-                ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "scoresetting"],
-                ['text' => $score, 'callback_data' => "editstsuts-score-{$setting['scorestatus']}"],
-                ['text' => $textbotlang['keyboard']['nightLottery'], 'callback_data' => "score"],
-            ],
-            [
-                ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "gradonhshans"],
-                ['text' => $wheel_luck, 'callback_data' => "editstsuts-wheel_luck-{$setting['wheelـluck']}"],
-                ['text' => $textbotlang['keyboard']['wheelOfLuck'], 'callback_data' => "wheel_luck"],
-            ],
-            [
-                ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "settingaffiliatesf"],
-                ['text' => $refralstatus, 'callback_data' => "editstsuts-affiliatesstatus-{$setting['affiliatesstatus']}"],
-                ['text' => $textbotlang['keyboard']['affiliateGift'], 'callback_data' => "affiliatesstatus"],
-            ],
-            [
-                ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "changeloclimit"],
-                ['text' => $statuslimitchangeloc, 'callback_data' => "editstsuts-changeloc-{$setting['statuslimitchangeloc']}"],
-                ['text' => $textbotlang['keyboard']['locationChangeLimit'], 'callback_data' => "changeloc"],
-            ]
-        ]
-    ]);
-    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Status']['botTitle'], $Bot_Status);
+    $Bot_Status = feature_status_global_payload($textbotlang);
+    Editmessagetext($from_id, $message_id, feature_status_global_caption($textbotlang), $Bot_Status);
+} elseif ($text == $textbotlang['keyboard']['featureStatusLang'] && $adminrulecheck['rule'] == "administrator") {
+    // opens on fa, same as every other per-language hub in this bot
+    // (keyboard_list_text(), shop_feature_status_payload(), ...)
+    $Bot_Status = feature_status_lang_payload($textbotlang, 'fa');
+    sendmessage($from_id, feature_status_lang_caption($textbotlang, 'fa'), $Bot_Status, 'HTML');
+} elseif (preg_match('/^fls_lang:([a-z]{2})$/', $datain, $fls_m) && $adminrulecheck['rule'] == "administrator") {
+    // just switches which language's overrides this screen is showing -
+    // writes nothing
+    $fls_lang = $fls_m[1];
+    $Bot_Status = feature_status_lang_payload($textbotlang, $fls_lang);
+    Editmessagetext($from_id, $message_id, feature_status_lang_caption($textbotlang, $fls_lang), $Bot_Status);
+// the type group has to allow "_" - btn_status_category and wheel_luck carry
+// this screen's historical underscored callback identifiers
+} elseif (preg_match('/^fls_tog:([a-z]{2}):([a-zA-Z_]+):([a-zA-Z0-9_]+)$/', $datain, $fls_m) && $adminrulecheck['rule'] == "administrator") {
+    $fls_lang = $fls_m[1];
+    $type = $fls_m[2];
+    $value = $fls_m[3];
+    // $type is this screen's historical callback identifier, which for 11 of
+    // the 21 rows is NOT the setting column's name (Authenticationphone ->
+    // get_number, compycart -> statuscopycart, ...). The override has to be
+    // stored under the COLUMN name, because that is the key every consumer
+    // read site (index.php/keyboard.php/function.php) and the render above
+    // look it up by.
+    if ($type == "usernamebtn") {
+        $featureKey = "NotUser";
+        $valuenew = ($value == "onnotuser") ? "offnotuser" : "onnotuser";
+    } elseif ($type == "showagent") {
+        $featureKey = "statusagentrequest";
+        $valuenew = ($value == "onrequestagent") ? "offrequestagent" : "onrequestagent";
+    } elseif ($type == "role") {
+        $featureKey = "roll_Status";
+        $valuenew = ($value == "rolleon") ? "rolleoff" : "rolleon";
+    } elseif ($type == "Authenticationphone") {
+        $featureKey = "get_number";
+        $valuenew = ($value == "onAuthenticationphone") ? "offAuthenticationphone" : "onAuthenticationphone";
+    } elseif ($type == "Authenticationiran") {
+        $featureKey = "iran_number";
+        $valuenew = ($value == "onAuthenticationiran") ? "offAuthenticationiran" : "onAuthenticationiran";
+    } elseif ($type == "verifystart") {
+        $featureKey = "verifystart";
+        $valuenew = ($value == "onverify") ? "offverify" : "onverify";
+    } elseif ($type == "statussupportpv") {
+        $featureKey = "statussupportpv";
+        $valuenew = ($value == "onpvsupport") ? "offpvsupport" : "onpvsupport";
+    } elseif ($type == "statusnamecustom") {
+        $featureKey = "statusnamecustom";
+        $valuenew = ($value == "onnamecustom") ? "offnamecustom" : "onnamecustom";
+    } elseif ($type == "statusnamecustomf") {
+        $featureKey = "statusnoteforf";
+        $valuenew = ($value == "1") ? "0" : "1";
+    } elseif ($type == "bulkbuy") {
+        $featureKey = "bulkbuy";
+        $valuenew = ($value == "onbulk") ? "offbulk" : "onbulk";
+    } elseif ($type == "verifybyuser") {
+        $featureKey = "verifybucodeuser";
+        $valuenew = ($value == "onverify") ? "offverify" : "onverify";
+    } elseif ($type == "btn_status_category") {
+        $featureKey = "categoryhelp";
+        $valuenew = ($value == "1") ? "0" : "1";
+    } elseif ($type == "wheelagent") {
+        $featureKey = "wheelagent";
+        $valuenew = ($value == "1") ? "0" : "1";
+    } elseif ($type == "Dice") {
+        $featureKey = "Dice";
+        $valuenew = ($value == "1") ? "0" : "1";
+    } elseif ($type == "wheelagentfirst") {
+        $featureKey = "statusfirstwheel";
+        $valuenew = ($value == "1") ? "0" : "1";
+    } elseif ($type == "Debtsettlement") {
+        $featureKey = "Debtsettlement";
+        $valuenew = ($value == "1") ? "0" : "1";
+    } elseif ($type == "compycart") {
+        $featureKey = "statuscopycart";
+        $valuenew = ($value == "1") ? "0" : "1";
+    } elseif ($type == "linkappstatus") {
+        $featureKey = "linkappstatus";
+        $valuenew = ($value == "1") ? "0" : "1";
+    } elseif ($type == "wheel_luck") {
+        $featureKey = "wheelـluck";
+        $valuenew = ($value == "1") ? "0" : "1";
+    } elseif ($type == "affiliatesstatus") {
+        $featureKey = "affiliatesstatus";
+        $valuenew = ($value == "onaffiliates") ? "offaffiliates" : "onaffiliates";
+    } elseif ($type == "changeloc") {
+        $featureKey = "statuslimitchangeloc";
+        $valuenew = ($value == "1") ? "0" : "1";
+    } else {
+        return;
+    }
+    // per-language now - the old global setting column this feature has
+    // always used stays untouched, and keeps serving every OTHER language
+    // that has no override of its own
+    feature_set($featureKey, $fls_lang, $valuenew);
+    $Bot_Status = feature_status_lang_payload($textbotlang, $fls_lang);
+    Editmessagetext($from_id, $message_id, feature_status_lang_caption($textbotlang, $fls_lang), $Bot_Status);
 } elseif ($text == $textbotlang['keyboard']['botReports'] && $adminrulecheck['rule'] == "administrator") {
     $textreports = sprintf($textbotlang['Admin']['Channel']['askReportGroupId'], $setting['Channel_Report']);
     sendmessage($from_id, $textreports, $backadmin, 'HTML');

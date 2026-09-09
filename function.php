@@ -1545,6 +1545,40 @@ if (!function_exists('shop_feature_lang_map')) {
         shop_feature_lang_map(true);
     }
 }
+if (!function_exists('feature_lang_map')) {
+    // same per-language-override contract as shop_feature_lang_map(), separate
+    // column so general bot-feature keys (get_number, wheelagent, ...) never
+    // collide with the shop-feature-status screen's own key namespace
+    function feature_lang_map($fresh = false)
+    {
+        static $cache = null;
+        if ($cache !== null && !$fresh) {
+            return $cache;
+        }
+        $setting = select("setting", "*", null, null, "select");
+        $m = json_decode((string) ($setting['feature_lang'] ?? ''), true);
+        return $cache = is_array($m) ? $m : [];
+    }
+    // $globalValue is whatever the caller already read from the old setting
+    // column for this feature - the fallback for every language without an
+    // override, so nothing changes for any language until an admin explicitly
+    // overrides one.
+    function feature_value($featureKey, $lang, $globalValue)
+    {
+        $m = feature_lang_map();
+        return $m[$featureKey][$lang] ?? $globalValue;
+    }
+    function feature_set($featureKey, $lang, $value)
+    {
+        $m = feature_lang_map(true);
+        if (!isset($m[$featureKey]) || !is_array($m[$featureKey])) {
+            $m[$featureKey] = [];
+        }
+        $m[$featureKey][$lang] = $value;
+        update("setting", "feature_lang", json_encode($m, JSON_UNESCAPED_UNICODE), null, null);
+        feature_lang_map(true);
+    }
+}
 if (!function_exists('card_invoice_caption_for')) {
     // per-language override of textbot.cart - empty/unset means "use the
     // global default template", same contract as topup_caption_for()
@@ -2954,7 +2988,7 @@ if (!function_exists('topup_card_invoice_generate')) {
         $payment_Status = "Unpaid";
         $Payment_Method = "cart to cart";
         $stmt->execute([$from_id, $randomString, $dateacc, $amount, $payment_Status, $Payment_Method, $idInvoice]);
-        if ($setting['statuscopycart'] == "1") {
+        if (feature_value('statuscopycart', $lang, $setting['statuscopycart']) == "1") {
             // one style entry per card (copyCard, copyCard2, ...) so each row can
             // carry its own colour and name - a single shared entry rendered
             // every card with the identical label the moment a card had no name
@@ -13540,11 +13574,11 @@ function sendMessageService($panel_info, $config, $sub_link, $username_service, 
         }
     }
 }
-function isValidInvitationCode($setting, $fromId, $verfy_status)
+function isValidInvitationCode($setting, $fromId, $verfy_status, $lang = 'fa')
 {
     global $textbotlang;
 
-    if ($setting['verifybucodeuser'] == "onverify" && $verfy_status != 1) {
+    if (feature_value('verifybucodeuser', $lang, $setting['verifybucodeuser']) == "onverify" && $verfy_status != 1) {
         sendmessage($fromId, $textbotlang['hardcoded']['accountVerifiedSuccess'], null, 'html');
         update("user", "verify", "1", "id", $fromId);
         update("user", "cardpayment", "1", "id", $fromId);
