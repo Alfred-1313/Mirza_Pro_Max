@@ -2768,9 +2768,10 @@ Möhletiň çäksiz bolmagyny isleseňiz, 0 sanyny iberiň',
       'ask_loc_limit_all' => "🔢 <b>{lang}</b> dili üçin ýerleşiş çalyşmagyň iň köp sanyny iberiň (diňe san).",
       'ask_loc_limit_free' => "🆓 <b>{lang}</b> dili üçin mugt ýerleşiş çalyşmalarynyň sanyny iberiň (diňe san).",
       'ask_app_name' => "📝 Programmanyň adyny iberiň (<b>{lang}</b> dili üçin).",
-      'phoneTitle' => "📞 <b>Telefon tassyklamasy</b> — {lang}\n\nRugsat berlen ýurt kodlary: <b>{prefixes}</b>\n\nDiňe şular bilen başlaýan belgiler kabul edilýär. Bu sazlama diňe şu dile degişlidir.",
-      'phonePrefixBtn' => "🌍 Rugsat berlen ýurt kody: {prefixes}",
-      'ask_phone_prefix' => "🌍 <b>{lang}</b> dili üçin rugsat berlen ýurt kodyny iberiň (+ bolmazdan).\n\nMysal: <code>993</code>\nBirnäçe: <code>993,90</code>",
+      'phoneTitle' => "📞 <b>Telefon tassyklamasy</b> — {lang}\n\nRugsat berlen ýurt kody: <b>{prefixes}</b>\n\nBu dil üçin tassyklama açykka, diňe şu kod bilen başlaýan belgiler kabul edilýär. Kod bellenilmedik bolsa, islendik ýurt kabul edilýär.",
+      'phonePrefixBtn' => "🌍 Ýurt kody: {prefixes}",
+      'phoneAny' => "ähli ýurtlar",
+      'ask_phone_prefix' => "🌍 <b>{lang}</b> dili üçin rugsat berlen ýurt kodyny iberiň (+ bolmazdan).\n\nMysal: <code>993</code>\nBirnäçe: <code>993,90</code>\nÇäklendirmäni aýyrmak: <code>0</code>",
     ),
     'Status' =>
     array (

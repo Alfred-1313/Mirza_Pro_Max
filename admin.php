@@ -4552,7 +4552,6 @@ if (!function_exists('feature_status_lang_payload')) {
         $statusagentrequest_v = feature_value('statusagentrequest', $lang, $setting['statusagentrequest']);
         $roll_Status_v = feature_value('roll_Status', $lang, $setting['roll_Status']);
         $get_number_v = feature_value('get_number', $lang, $setting['get_number']);
-        $iran_number_v = feature_value('iran_number', $lang, $setting['iran_number']);
         $verifystart_v = feature_value('verifystart', $lang, $setting['verifystart']);
         $statussupportpv_v = feature_value('statussupportpv', $lang, $setting['statussupportpv']);
         $statusnamecustom_v = feature_value('statusnamecustom', $lang, $setting['statusnamecustom']);
@@ -4594,16 +4593,15 @@ if (!function_exists('feature_status_lang_payload')) {
             ['text' => $roll_Status_v == 'rolleon' ? $on : $off, 'callback_data' => $tog('role', $roll_Status_v)],
             ['text' => $tx['Admin']['Status']['statusRole'], 'callback_data' => "stautsrolee"],
         ];
-        $rows[] = [
-            ['text' => $get_number_v == 'onAuthenticationphone' ? $on : $off, 'callback_data' => $tog('Authenticationphone', $get_number_v)],
-            ['text' => $tx['Admin']['Status']['Authenticationphone'], 'callback_data' => "Authenticationphone"],
-        ];
-        // ⚙️ picks which country's dial code this language accepts, so a shop
-        // does not force an Iranian number on every market
+        // ⚙️ picks which country's dial code this language accepts. It lives on
+        // the phone-verification row itself now: turning verification on for a
+        // language is what enforces that language's own country, so the second
+        // "require country code" toggle this screen used to carry was both
+        // redundant and Iran-shaped for every market.
         $rows[] = [
             ['text' => $tx['keyboard']['settings'], 'callback_data' => "flsec:{$lang}:phone"],
-            ['text' => $iran_number_v == 'onAuthenticationiran' ? $on : $off, 'callback_data' => $tog('Authenticationiran', $iran_number_v)],
-            ['text' => $tx['Admin']['Status']['Authenticationiran'], 'callback_data' => "Authenticationiran"],
+            ['text' => $get_number_v == 'onAuthenticationphone' ? $on : $off, 'callback_data' => $tog('Authenticationphone', $get_number_v)],
+            ['text' => $tx['Admin']['Status']['Authenticationphone'], 'callback_data' => "Authenticationphone"],
         ];
         $rows[] = [
             ['text' => $verifystart_v == 'onverify' ? $on : $off, 'callback_data' => $tog('verifystart', $verifystart_v)],
@@ -4736,6 +4734,20 @@ if (!function_exists('feature_section_of_key')) {
         return $map[$key] ?? null;
     }
 }
+if (!function_exists('feature_phone_prefix_label')) {
+    // "+98" / "+7 / +375" / "any country" - an unset language really does
+    // accept every country, so it needs wording rather than an empty gap
+    function feature_phone_prefix_label($lang, $sectionTexts)
+    {
+        $p = phone_prefixes_for_lang($lang);
+        if (!$p) {
+            return $sectionTexts['phoneAny'] ?? 'any';
+        }
+        return implode(' / ', array_map(function ($x) {
+            return '+' . $x;
+        }, $p));
+    }
+}
 if (!function_exists('feature_section_caption')) {
     function feature_section_caption($textbotlang, $lang, $section)
     {
@@ -4764,9 +4776,7 @@ if (!function_exists('feature_section_caption')) {
         if ($section === 'phone') {
             return strtr($s['phoneTitle'], [
                 '{lang}' => $langName,
-                '{prefixes}' => implode(' / ', array_map(function ($p) {
-                    return '+' . $p;
-                }, phone_prefixes_for_lang($lang))),
+                '{prefixes}' => feature_phone_prefix_label($lang, $s),
             ]);
         }
         if ($section === 'wheel') {
@@ -4806,9 +4816,7 @@ if (!function_exists('feature_section_payload')) {
             }
             $rows[] = [['text' => $s['appAdd'], 'callback_data' => "flsask:{$lang}:app_name", 'style' => 'success']];
         } elseif ($section === 'phone') {
-            $rows[] = [['text' => strtr($s['phonePrefixBtn'], ['{prefixes}' => implode(', ', array_map(function ($p) {
-                return '+' . $p;
-            }, phone_prefixes_for_lang($lang)))]), 'callback_data' => "flsask:{$lang}:phone_prefix"]];
+            $rows[] = [['text' => strtr($s['phonePrefixBtn'], ['{prefixes}' => feature_phone_prefix_label($lang, $s)]), 'callback_data' => "flsask:{$lang}:phone_prefix"]];
         } elseif ($section === 'wheel') {
             $rows[] = [['text' => strtr($s['wheelPriceBtn'], ['{price}' => money($v['wheel_price'], $cur)]), 'callback_data' => "flsask:{$lang}:wheel_price"]];
         } elseif ($section === 'aff') {
@@ -9732,9 +9740,6 @@ elseif ($datain == "systemsms") {
     } elseif ($type == "Authenticationphone") {
         $featureKey = "get_number";
         $valuenew = ($value == "onAuthenticationphone") ? "offAuthenticationphone" : "onAuthenticationphone";
-    } elseif ($type == "Authenticationiran") {
-        $featureKey = "iran_number";
-        $valuenew = ($value == "onAuthenticationiran") ? "offAuthenticationiran" : "onAuthenticationiran";
     } elseif ($type == "verifystart") {
         $featureKey = "verifystart";
         $valuenew = ($value == "onverify") ? "offverify" : "onverify";
@@ -9872,19 +9877,22 @@ elseif ($datain == "systemsms") {
         $fs_appid = (int) ($fs_data['fls_appid'] ?? 0);
         update("app", "link", $text, "id", $fs_appid);
     } elseif ($fs_key === 'phone_prefix') {
-        // one or more country dial codes, e.g. "98" or "1,44"
+        // one or more country dial codes, e.g. "98" or "1,44"; a lone 0 clears
+        // the restriction so the language accepts every country again
         $fs_clean = [];
         foreach (preg_split('/[,\s]+/', (string) $text) as $fs_p) {
             $fs_p = preg_replace('/\D+/', '', (string) $fs_p);
-            if ($fs_p !== '') {
+            if ($fs_p !== '' && $fs_p !== '0') {
                 $fs_clean[] = $fs_p;
             }
         }
-        if (!$fs_clean) {
+        if (!$fs_clean && trim((string) $text) !== '0') {
             sendmessage($from_id, $fs_tx['common']['invalidInput'], null, 'HTML');
             return;
         }
-        feature_setting_set('phone_prefix', $fs_lang, implode(',', $fs_clean));
+        // "0" is stored, not "": an empty value reads as "never set" and would
+        // fall straight back to this language's built-in default
+        feature_setting_set('phone_prefix', $fs_lang, $fs_clean ? implode(',', $fs_clean) : '0');
     } elseif ($fs_key === 'wheel_price' || $fs_key === 'aff_giftamount') {
         // an amount in this language's currency - USD/CNY/RUB/TMT carry
         // decimals, so "12.5" has to be accepted, not just whole numbers

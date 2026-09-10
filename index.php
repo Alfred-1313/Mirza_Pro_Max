@@ -492,9 +492,11 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         sendmessage($from_id, $textbotlang['users']['number']['warning'], $request_contact, 'html');
         return;
     }
-    // each language enforces ITS OWN country's dial code, not Iran's for
-    // everyone - the allowed prefixes come from 🌐 وضعیت قابلیت‌ها (هر زبان)
-    if (feature_value('iran_number', $user['lang'] ?? 'fa', $setting['iran_number']) == "onAuthenticationiran" && !phone_matches_lang($user_phone, $user['lang'] ?? 'fa')) {
+    // Phone verification carries the country requirement itself: when it is on
+    // for a language, that language's OWN dial code is what gets enforced
+    // (🌐 وضعیت قابلیت‌ها (هر زبان) → ⚙️ on the phone row). A language with no
+    // country configured accepts any number.
+    if (feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone" && !phone_matches_lang($user_phone, $user['lang'] ?? 'fa')) {
         sendmessage($from_id, strtr($textbotlang['users']['number']['erroriran'], [
             '{prefixes}' => implode(' / ', array_map(function ($p) {
                 return '+' . $p;

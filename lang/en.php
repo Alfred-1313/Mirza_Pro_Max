@@ -1671,9 +1671,10 @@ Number of products sold: %s
                         'ask_loc_limit_all' => "🔢 Send the maximum number of location changes for <b>{lang}</b> (digits only).",
                         'ask_loc_limit_free' => "🆓 Send the number of free location changes for <b>{lang}</b> (digits only).",
                         'ask_app_name' => "📝 Send the app name (for <b>{lang}</b>).",
-                        'phoneTitle' => "📞 <b>Phone verification</b> — {lang}\n\nAllowed country codes: <b>{prefixes}</b>\n\nOnly numbers starting with these are accepted. This setting belongs to this language only.",
-                        'phonePrefixBtn' => "🌍 Allowed country code: {prefixes}",
-                        'ask_phone_prefix' => "🌍 Send the allowed country code for <b>{lang}</b> (without +).\n\nExample: <code>1</code>\nSeveral: <code>1,44</code>",
+                        'phoneTitle' => "📞 <b>Phone verification</b> — {lang}\n\nAllowed country code: <b>{prefixes}</b>\n\nWhile phone verification is on for this language, only numbers starting with it are accepted. With no code set, any country is accepted.",
+                        'phonePrefixBtn' => "🌍 Country code: {prefixes}",
+                        'phoneAny' => "any country",
+                        'ask_phone_prefix' => "🌍 Send the allowed country code for <b>{lang}</b> (without +).\n\nExample: <code>1</code>\nSeveral: <code>1,44</code>\nTo drop the restriction: <code>0</code>",
                 ],
                 'Status' => [
                         'Authenticationiran' => "📞 Require phone country code",

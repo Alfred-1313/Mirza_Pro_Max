@@ -1580,33 +1580,47 @@ if (!function_exists('feature_setting_map')) {
     }
 }
 if (!function_exists('phone_prefixes_for_lang')) {
-    // Which country dial codes a phone number may start with, for ONE language.
-    // Stored per language (feature_lang_settings key "phone_prefix") as a comma
-    // list of digits; "98" is the fallback because that is the only rule this
-    // check has ever applied - so nothing changes for any language until an
-    // admin sets its own country.
+    // Each language's OWN country dial code - never Iran's for everyone, which
+    // is what the fixed 989xxxxxxxxx check used to enforce on every market.
+    // English is deliberately unrestricted: it is a language, not a country.
+    function phone_prefix_defaults()
+    {
+        return ['fa' => '98', 'ru' => '7', 'zh' => '86', 'tk' => '993', 'en' => ''];
+    }
+    // Which dial codes a number may start with, for ONE language. Stored per
+    // language (feature_lang_settings key "phone_prefix") as a comma list of
+    // digits. An empty list means "any country" - that is the honest default
+    // for a language with no single country behind it.
     function phone_prefixes_for_lang($lang)
     {
-        $raw = (string) feature_setting_value('phone_prefix', $lang, '98');
+        $defaults = phone_prefix_defaults();
+        $raw = (string) feature_setting_value('phone_prefix', $lang, $defaults[$lang] ?? '');
         $out = [];
         foreach (explode(',', $raw) as $p) {
             $p = preg_replace('/\D+/', '', (string) $p);
-            if ($p !== '') {
+            // "0" is the stored sentinel for "no country restriction" - an
+            // empty string cannot be used, feature_setting_value() reads that
+            // as "never set" and falls back to the default
+            if ($p !== '' && $p !== '0') {
                 $out[] = $p;
             }
         }
-        return $out ?: ['98'];
+        return $out;
     }
     // Telegram hands contact numbers over without a "+", so a prefix test is
-    // enough - and it is the only shape that generalises past Iran's fixed
-    // 989xxxxxxxxx pattern.
+    // enough - and it is the only shape that generalises past one fixed country.
     function phone_matches_lang($phone, $lang)
     {
         $digits = preg_replace('/\D+/', '', (string) $phone);
         if ($digits === '') {
             return false;
         }
-        foreach (phone_prefixes_for_lang($lang) as $prefix) {
+        $prefixes = phone_prefixes_for_lang($lang);
+        if (!$prefixes) {
+            // no country configured for this language: any real number passes
+            return strlen($digits) >= 7;
+        }
+        foreach ($prefixes as $prefix) {
             if (strpos($digits, $prefix) === 0 && strlen($digits) >= strlen($prefix) + 6) {
                 return true;
             }
