@@ -1810,7 +1810,7 @@ Indi botdan peýdalanyp bilersiňiz ✔️',
     array (
       'active' => '✅ Telefon belgiňiz üstünlikli tassyklandy',
       'confirming' => '📞 Tassyklamak üçin telefon belgiňizi aşakdaky düwme arkaly iberiň',
-      'erroriran' => '⭕️ Telefon belgisi nädogry. Diňe Eýran belgileri kabul edilýär',
+      'erroriran' => "❌ Iberen belgiňiz rugsat berilmedi.\n\nDiňe {prefixes} ýurt kody bolan belgiler kabul edilýär.",
       'false' => '❌ Telefon belgisi dogry däl, telefon belgisini aşakdaky düwmeden iberiň.',
       'warning' => '⚠️ Telefon belgisini saklamakda ýalňyşlyk, belgi hökman şu hasaba degişli bolmaly',
     ),
@@ -2768,6 +2768,9 @@ Möhletiň çäksiz bolmagyny isleseňiz, 0 sanyny iberiň',
       'ask_loc_limit_all' => "🔢 <b>{lang}</b> dili üçin ýerleşiş çalyşmagyň iň köp sanyny iberiň (diňe san).",
       'ask_loc_limit_free' => "🆓 <b>{lang}</b> dili üçin mugt ýerleşiş çalyşmalarynyň sanyny iberiň (diňe san).",
       'ask_app_name' => "📝 Programmanyň adyny iberiň (<b>{lang}</b> dili üçin).",
+      'phoneTitle' => "📞 <b>Telefon tassyklamasy</b> — {lang}\n\nRugsat berlen ýurt kodlary: <b>{prefixes}</b>\n\nDiňe şular bilen başlaýan belgiler kabul edilýär. Bu sazlama diňe şu dile degişlidir.",
+      'phonePrefixBtn' => "🌍 Rugsat berlen ýurt kody: {prefixes}",
+      'ask_phone_prefix' => "🌍 <b>{lang}</b> dili üçin rugsat berlen ýurt kodyny iberiň (+ bolmazdan).\n\nMysal: <code>993</code>\nBirnäçe: <code>993,90</code>",
     ),
     'Status' =>
     array (
@@ -2785,7 +2788,7 @@ Möhletiň çäksiz bolmagyny isleseňiz, 0 sanyny iberiň',
       'phoneVerifyOn' => '✅ Mobil belgini tassyklamak ýakyk',
       'rulesOff' => '❌ Kadalary tassyklamak öçük',
       'rulesOn' => '✅ Kadalary tassyklamak ýakyk',
-      'Authenticationiran' => '🇮🇷 Eýran belgisini tassyklamak',
+      'Authenticationiran' => "📞 Belginiň ýurt kody hökmany",
       'Authenticationphone' => '☎️ Telefon belgisiniň şahsyýetini tassyklamak',
       'activePanel' => '⭕️ Bu bölümde paneli satuw üçin öçürip ýa-da ýakyp bilersiňiz',
       'activePanelOff' => '❌ Panel öçürildi',
@@ -8065,6 +8068,12 @@ Häzirki dil: <b>{lang}</b>',
     'msg_session' => '⛔️ Otyrylyşyň möhleti gutardy. Gaýtadan giriň.',
     'msg_empty' => '⛔️ Tekst boş. Gaýtadan iberiň ýa-da «Ýapmak» düwmesine basyň.',
     'msg_saved' => '✅ Tekst ýatda saklandy.',
+    'groupVerifyLabel' => "📞 Telefon tassyklamasy we düzgünler habarlary",
+    'groupWheelLabel' => "🎲 Bagt tigriniň habarlary",
+    'groupReferralLabel' => "🎁 Wekilçilik habarlary we düwmeleri",
+    'groupVerifyCaption' => "📞 <b>Telefon tassyklamasy we düzgünler</b>\n\nHaýsy birini sazlamak isleýärsiňiz?\n\n📌 Her dil üçin rugsat berlen ýurt kody «🌐 Mümkinçilikleriň ýagdaýy (her dil)» bölüminde bellenilýär, bu ýerde däl. Bu ýerde diňe tekstler we düwmeler.\n\nHäzirki dil: <b>{lang}</b>",
+    'groupWheelCaption' => "🎲 <b>Bagt tigriniň habarlary</b>\n\nHaýsy birini sazlamak isleýärsiňiz?\n\n📌 Baýragyň möçberi «🌐 Mümkinçilikleriň ýagdaýy (her dil)» → ⚙️ tigir sazlamalarynda bellenilýär.\n\nHäzirki dil: <b>{lang}</b>",
+    'groupReferralCaption' => "🎁 <b>Wekilçilik habarlary we düwmeleri</b>\n\nHaýsy birini sazlamak isleýärsiňiz?\n\n📌 Komissiýa, sowgat möçberi we banner «🌐 Mümkinçilikleriň ýagdaýy (her dil)» → ⚙️ wekilçilik sazlamalarynda bellenilýär.\n\nHäzirki dil: <b>{lang}</b>",
     'msg_closed' => 'Ýapyldy.',
     'langs' => 
     array (
@@ -8185,6 +8194,148 @@ Häzirki dil: <b>{lang}</b>',
       array (
         'label' => '🧾 Öň-faktura teksti',
         'key' => 'textbot.preInvoice',
+      ),
+
+      'bt_0' => 
+      array (
+        'label' => '📞 Telefon belgisini soramak',
+        'key' => 'users.number.false',
+        'group' => 'verify',
+        'section' => 'verify_flow',
+      ),
+      'bt_1' => 
+      array (
+        'label' => '⚠️ Başga biriniň belgisi duýduryşy',
+        'key' => 'users.number.warning',
+        'group' => 'verify',
+      ),
+      'bt_2' => 
+      array (
+        'label' => '🌍 Ýurt kody ret edildi',
+        'key' => 'users.number.erroriran',
+        'group' => 'verify',
+      ),
+      'bt_3' => 
+      array (
+        'label' => '✅ Belgi tassyklandy',
+        'key' => 'users.number.active',
+        'group' => 'verify',
+      ),
+      'bt_4' => 
+      array (
+        'label' => '🔔 Tassyklama ýatlatmasy',
+        'key' => 'users.number.confirming',
+        'group' => 'verify',
+      ),
+      'bt_5' => 
+      array (
+        'label' => 'Düwme: Telefon belgisini iber',
+        'key' => 'keyboard.sendPhoneNumber',
+        'group' => 'verify',
+      ),
+      'bt_6' => 
+      array (
+        'label' => 'Düwme: Düzgünleri kabul et',
+        'key' => 'keyboard.acceptRules',
+        'group' => 'verify',
+      ),
+      'bt_7' => 
+      array (
+        'label' => '🎉 Ýeňiji habary',
+        'key' => 'users.wheelLuck.winnerCongratulations',
+        'group' => 'wheel',
+        'section' => 'wheel_flow',
+      ),
+      'bt_8' => 
+      array (
+        'label' => '😕 Ýeňmedik habary',
+        'key' => 'users.wheelLuck.notWinner',
+        'group' => 'wheel',
+      ),
+      'bt_9' => 
+      array (
+        'label' => '⏳ 24 sagatda gatnaşyldy',
+        'key' => 'users.wheelLuck.alreadyParticipated',
+        'group' => 'wheel',
+      ),
+      'bt_10' => 
+      array (
+        'label' => '🚫 Tigir öçürilen',
+        'key' => 'users.wheelLuck.featureDisabled',
+        'group' => 'wheel',
+      ),
+      'bt_11' => 
+      array (
+        'label' => '❌ Netije ýalňyşlygy',
+        'key' => 'users.wheelLuck.resultError',
+        'group' => 'wheel',
+      ),
+      'bt_12' => 
+      array (
+        'label' => '💼 Wekilçilik esasy sahypasy',
+        'key' => 'users.affiliates.welcomeGiftInfo',
+        'group' => 'referral',
+        'section' => 'referral_flow',
+      ),
+      'bt_13' => 
+      array (
+        'label' => '🎁 Goşulmak sowgady bölegi',
+        'key' => 'users.affiliates.membershipGiftInfo',
+        'group' => 'referral',
+      ),
+      'bt_14' => 
+      array (
+        'label' => '💸 Satyn alyş komissiýasy bölegi',
+        'key' => 'users.affiliates.purchaseCommissionInfo',
+        'group' => 'referral',
+      ),
+      'bt_15' => 
+      array (
+        'label' => '🚫 Wekilçilik öçürilen',
+        'key' => 'users.affiliates.offaffiliates',
+        'group' => 'referral',
+      ),
+      'bt_16' => 
+      array (
+        'label' => '💰 Çagyrana sowgat habary',
+        'key' => 'users.affiliates.balanceGift',
+        'group' => 'referral',
+      ),
+      'bt_17' => 
+      array (
+        'label' => '🎁 Komissiýa töleg habary',
+        'key' => 'users.affiliates.commissionPaid',
+        'group' => 'referral',
+      ),
+      'bt_18' => 
+      array (
+        'label' => '❌ Çagyran ýok',
+        'key' => 'users.affiliates.notReferral',
+        'group' => 'referral',
+      ),
+      'bt_19' => 
+      array (
+        'label' => '☑️ Sowgat eýýäm alyndy',
+        'key' => 'users.affiliates.membershipGiftClaimed',
+        'group' => 'referral',
+      ),
+      'bt_20' => 
+      array (
+        'label' => '✅ Goşulmak sowgady işjeňleşdi',
+        'key' => 'users.affiliates.joinGiftActivated',
+        'group' => 'referral',
+      ),
+      'bt_21' => 
+      array (
+        'label' => 'Düwme: Goşulmak sowgadyny al',
+        'key' => 'keyboard.receiveMembershipGift',
+        'group' => 'referral',
+      ),
+      'bt_22' => 
+      array (
+        'label' => 'Düwme: Salgyny paýlaş',
+        'key' => 'keyboard.shareLink',
+        'group' => 'referral',
       ),
     ),
   ),

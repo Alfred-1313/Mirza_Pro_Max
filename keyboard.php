@@ -591,25 +591,28 @@ $bulkproduct_note_keyboard = json_encode([
     ],
     'resize_keyboard' => true
 ]);
+$kb_userlang = $users['lang'] ?? 'fa';
 if ($setting['inlinebtnmain'] == "oninline") {
     $confrimrolls = json_encode([
         'inline_keyboard' => [
             [
-                ['text' => $textbotlang['keyboard']['acceptRules'], 'callback_data' => "acceptrule"],
+                bt_button($kb_userlang, 'keyboard.acceptRules', $textbotlang['keyboard']['acceptRules'], "acceptrule", 'success'),
             ],
         ]
     ]);
 } else {
+    // reply keyboard: only the label can be overridden, Telegram has no
+    // colour/callback here
     $confrimrolls = json_encode([
         'keyboard' => [
-            [['text' => $textbotlang['keyboard']['acceptRules']]],
+            [['text' => bt_reply_label($kb_userlang, 'keyboard.acceptRules', $textbotlang['keyboard']['acceptRules'])]],
         ],
         'resize_keyboard' => true
     ]);
 }
 $request_contact = json_encode([
     'keyboard' => [
-        [['text' => $textbotlang['keyboard']['sendPhoneNumber'], 'request_contact' => true]],
+        [['text' => bt_reply_label($kb_userlang, 'keyboard.sendPhoneNumber', $textbotlang['keyboard']['sendPhoneNumber']), 'request_contact' => true]],
         [['text' => $textbotlang['users']['backbtn']]]
     ],
     'resize_keyboard' => true
@@ -2490,6 +2493,9 @@ function keyboard_list_text($lang, $groupFilter = null)
             'topupdisc' => 'groupTopupDiscCaption',
             'account' => 'groupAccountCaption',
             'help' => 'groupHelpCaption',
+            'verify' => 'groupVerifyCaption',
+            'wheel' => 'groupWheelCaption',
+            'referral' => 'groupReferralCaption',
         ][$groupFilter] ?? 'groupBuyflowCaption';
         $bt_caption_tpl = $bt_tab_texts['bottext'][$bt_captionKey] ?? $textbotlang['bottext'][$bt_captionKey];
         $bt_caption = strtr($bt_caption_tpl, ['{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang]);
@@ -2521,6 +2527,10 @@ function keyboard_list_text($lang, $groupFilter = null)
         // leftovers at the bottom, and the tutorial section had no row at all
         'home_account' => [],
         'home_help' => [],
+        // the three features that 🌐 وضعیت قابلیت‌ها (هر زبان) switches on and
+        // off - their messages had no row here at all until now, so they were
+        // the only customer-facing flows with no way to reword them
+        'home_features' => [],
     ];
     $bt_home_sectioned_keys = array_merge(...array_values($bt_home_sections));
     foreach ($bt_home_sections as $bt_sec_key => $bt_sec_items) {
@@ -2579,8 +2589,18 @@ function keyboard_list_text($lang, $groupFilter = null)
             }
         }
         // 👤 حساب کاربری and 📚 آموزش: one row each into their own submenu,
-        // answering for their children exactly like the rows above do
-        foreach (['home_account' => ['account', 'groupAccountLabel'], 'home_help' => ['help', 'groupHelpLabel']] as $bt_sec_owner => $bt_sec_group) {
+        // answering for their children exactly like the rows above do.
+        // 🎯 قابلیت‌های ربات carries three of them, one per feature.
+        foreach ([
+            'home_account' => ['account', 'groupAccountLabel'],
+            'home_help' => ['help', 'groupHelpLabel'],
+            'home_features:verify' => ['verify', 'groupVerifyLabel'],
+            'home_features:wheel' => ['wheel', 'groupWheelLabel'],
+            'home_features:referral' => ['referral', 'groupReferralLabel'],
+        ] as $bt_sec_owner => $bt_sec_group) {
+            // one section may own several group rows, so the key carries the
+            // section before the ":" and stays unique in this map
+            $bt_sec_owner = explode(':', $bt_sec_owner)[0];
             if ($bt_sec_key !== $bt_sec_owner || empty($bt_grouped[$bt_sec_group[0]])) {
                 continue;
             }

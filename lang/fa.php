@@ -11,6 +11,12 @@ return array (
     'groupTopupDiscLabel' => '🎁 پیام‌های تخفیف',
     'groupAccountLabel' => '👤 پیام و دکمه‌های حساب کاربری',
     'groupHelpLabel' => '📚 پیام و دکمه‌های آموزش',
+    'groupVerifyLabel' => "📞 پیام و دکمه‌های احراز شماره و قوانین",
+    'groupWheelLabel' => "🎲 پیام‌های گردونه شانس",
+    'groupReferralLabel' => "🎁 پیام و دکمه‌های زیرمجموعه‌گیری",
+    'groupVerifyCaption' => "📞 <b>احراز شماره و قوانین</b>\n\nکدوم مورد رو می‌خوای تنظیم کنی؟\n\n📌 کد کشور مجاز برای هر زبان از «🌐 وضعیت قابلیت‌ها (هر زبان)» تنظیم می‌شه، نه اینجا. اینجا فقط متن‌ها و دکمه‌هاست.\n\nزبان فعلی: <b>{lang}</b>",
+    'groupWheelCaption' => "🎲 <b>پیام‌های گردونه شانس</b>\n\nکدوم مورد رو می‌خوای تنظیم کنی؟\n\n📌 مبلغ برد از «🌐 وضعیت قابلیت‌ها (هر زبان)» ← ⚙️ تنظیمات گردونه تنظیم می‌شه.\n\nزبان فعلی: <b>{lang}</b>",
+    'groupReferralCaption' => "🎁 <b>پیام و دکمه‌های زیرمجموعه‌گیری</b>\n\nکدوم مورد رو می‌خوای تنظیم کنی؟\n\n📌 درصد پورسانت، مبلغ هدیه و بنر از «🌐 وضعیت قابلیت‌ها (هر زبان)» ← ⚙️ تنظیمات زیرمجموعه تنظیم می‌شن.\n\nزبان فعلی: <b>{lang}</b>",
     'btnSettingsLabel' => '🔘 تنظیمات دکمه‌های منوی اصلی',
     'langSwitchLabel' => '🌐 تنظیمات تغییر زبان',
     'langPickerCaption' => '═══════════════════════
@@ -626,6 +632,148 @@ return array (
       array (
         'label' => '📯 پیام عضویت اجباری کانال',
         'key' => 'textbot.channel',
+      ),
+
+      'bt_0' => 
+      array (
+        'label' => '📞 درخواست ارسال شماره',
+        'key' => 'users.number.false',
+        'group' => 'verify',
+        'section' => 'verify_flow',
+      ),
+      'bt_1' => 
+      array (
+        'label' => '⚠️ هشدار شماره‌ی شخص دیگر',
+        'key' => 'users.number.warning',
+        'group' => 'verify',
+      ),
+      'bt_2' => 
+      array (
+        'label' => '🌍 پیام رد شدن کد کشور',
+        'key' => 'users.number.erroriran',
+        'group' => 'verify',
+      ),
+      'bt_3' => 
+      array (
+        'label' => '✅ پیام تایید شماره',
+        'key' => 'users.number.active',
+        'group' => 'verify',
+      ),
+      'bt_4' => 
+      array (
+        'label' => '🔔 یادآوری احراز شماره',
+        'key' => 'users.number.confirming',
+        'group' => 'verify',
+      ),
+      'bt_5' => 
+      array (
+        'label' => 'دکمه: ارسال شماره تماس',
+        'key' => 'keyboard.sendPhoneNumber',
+        'group' => 'verify',
+      ),
+      'bt_6' => 
+      array (
+        'label' => 'دکمه: پذیرش قوانین',
+        'key' => 'keyboard.acceptRules',
+        'group' => 'verify',
+      ),
+      'bt_7' => 
+      array (
+        'label' => '🎉 پیام برنده شدن',
+        'key' => 'users.wheelLuck.winnerCongratulations',
+        'group' => 'wheel',
+        'section' => 'wheel_flow',
+      ),
+      'bt_8' => 
+      array (
+        'label' => '😕 پیام نبردن',
+        'key' => 'users.wheelLuck.notWinner',
+        'group' => 'wheel',
+      ),
+      'bt_9' => 
+      array (
+        'label' => '⏳ شرکت تکراری در ۲۴ ساعت',
+        'key' => 'users.wheelLuck.alreadyParticipated',
+        'group' => 'wheel',
+      ),
+      'bt_10' => 
+      array (
+        'label' => '🚫 پیام غیرفعال بودن گردونه',
+        'key' => 'users.wheelLuck.featureDisabled',
+        'group' => 'wheel',
+      ),
+      'bt_11' => 
+      array (
+        'label' => '❌ خطای دریافت نتیجه',
+        'key' => 'users.wheelLuck.resultError',
+        'group' => 'wheel',
+      ),
+      'bt_12' => 
+      array (
+        'label' => '💼 صفحه‌ی اصلی زیرمجموعه‌گیری',
+        'key' => 'users.affiliates.welcomeGiftInfo',
+        'group' => 'referral',
+        'section' => 'referral_flow',
+      ),
+      'bt_13' => 
+      array (
+        'label' => '🎁 بخش هدیه عضویت',
+        'key' => 'users.affiliates.membershipGiftInfo',
+        'group' => 'referral',
+      ),
+      'bt_14' => 
+      array (
+        'label' => '💸 بخش پورسانت خرید',
+        'key' => 'users.affiliates.purchaseCommissionInfo',
+        'group' => 'referral',
+      ),
+      'bt_15' => 
+      array (
+        'label' => '🚫 پیام غیرفعال بودن زیرمجموعه‌گیری',
+        'key' => 'users.affiliates.offaffiliates',
+        'group' => 'referral',
+      ),
+      'bt_16' => 
+      array (
+        'label' => '💰 اعلان هدیه به معرف',
+        'key' => 'users.affiliates.balanceGift',
+        'group' => 'referral',
+      ),
+      'bt_17' => 
+      array (
+        'label' => '🎁 اعلان واریز پورسانت',
+        'key' => 'users.affiliates.commissionPaid',
+        'group' => 'referral',
+      ),
+      'bt_18' => 
+      array (
+        'label' => '❌ پیام نداشتن معرف',
+        'key' => 'users.affiliates.notReferral',
+        'group' => 'referral',
+      ),
+      'bt_19' => 
+      array (
+        'label' => '☑️ هدیه قبلاً دریافت شده',
+        'key' => 'users.affiliates.membershipGiftClaimed',
+        'group' => 'referral',
+      ),
+      'bt_20' => 
+      array (
+        'label' => '✅ فعال شدن هدیه عضویت',
+        'key' => 'users.affiliates.joinGiftActivated',
+        'group' => 'referral',
+      ),
+      'bt_21' => 
+      array (
+        'label' => 'دکمه: دریافت هدیه عضویت',
+        'key' => 'keyboard.receiveMembershipGift',
+        'group' => 'referral',
+      ),
+      'bt_22' => 
+      array (
+        'label' => 'دکمه: اشتراک‌گذاری لینک',
+        'key' => 'keyboard.shareLink',
+        'group' => 'referral',
       ),
     ),
   ),  'language' =>
@@ -1689,7 +1837,7 @@ n2  = نماینده با قابلیت های بیشتر',
     array (
       'active' => '✅ شماره موبایل شما با موفقیت تایید شد',
       'confirming' => '📞 لطفا شماره موبایل خود را برای احراز هویت از طریق دکمه زیر ارسال نمایید',
-      'erroriran' => '⭕️ شماره موبایل نامعتبر است. فقط شماره های ایرانی مورد قبول می باشد',
+      'erroriran' => "❌ شماره‌ای که فرستادی مجاز نیست.\n\nفقط شماره‌هایی با کد کشور {prefixes} پذیرفته می‌شن.",
       'false' => '❌ شماره تلفن صحبح نیست شماره تلفن را از دکمه زیر  ارسال نمایید.',
       'warning' => '⚠️ خطا در ذخیره سازی شماره تلفن، شماره باید حتما برای همین اکانت باشد',
     ),
@@ -2543,10 +2691,13 @@ n2',
       'ask_loc_limit_all' => "🔢 حداکثر تعداد تغییر لوکیشن برای زبان <b>{lang}</b> رو بفرست (فقط عدد).",
       'ask_loc_limit_free' => "🆓 تعداد تغییر لوکیشن رایگان برای زبان <b>{lang}</b> رو بفرست (فقط عدد).",
       'ask_app_name' => "📝 نام برنامه رو بفرست (برای زبان <b>{lang}</b>).",
+      'phoneTitle' => "📞 <b>احراز شماره تماس</b> — {lang}\n\nکد کشورهای مجاز: <b>{prefixes}</b>\n\nفقط شماره‌هایی که با این کد شروع بشن پذیرفته می‌شن. این تنظیم مخصوص همین زبانه.",
+      'phonePrefixBtn' => "🌍 کد کشور مجاز: {prefixes}",
+      'ask_phone_prefix' => "🌍 کد کشور مجاز برای زبان <b>{lang}</b> رو بفرست (بدون +).\n\nمثال: <code>98</code>\nچند کشور: <code>98,971</code>",
     ),
     'Status' =>
     array (
-      'Authenticationiran' => '🇮🇷 تایید شماره ایرانی',
+      'Authenticationiran' => "📞 الزام کد کشور شماره",
       'Authenticationphone' => '☎️  احراز هویت شماره تماس',
       'activePanel' => '⭕️ در این بخش می توانید پنل را برای فروش خاموش یا روشن کنید',
       'activePanelOff' => '❌ پنل خاموش گردید',

@@ -301,11 +301,15 @@ if (intval($user['verify']) == 0 && !in_array($from_id, $admin_ids) && feature_v
 ;
 
 #-----------roll------------#
-if (feature_value('roll_Status', $user['lang'] ?? 'fa', $setting['roll_Status']) == "rolleon" && $user['roll_Status'] == 0 && ($text != $textbotlang['keyboard']['acceptRulesButton'] and $datain != "acceptrule") && !in_array($from_id, $admin_ids)) {
+// the accept button's label is admin-editable (🎨 شخصی‌سازی), so both the
+// default and the override have to be recognised - otherwise renaming it
+// locks every user behind a rules screen whose button no longer matches
+$rules_btn_label = bt_reply_label($user['lang'] ?? 'fa', 'keyboard.acceptRules', $textbotlang['keyboard']['acceptRules']);
+if (feature_value('roll_Status', $user['lang'] ?? 'fa', $setting['roll_Status']) == "rolleon" && $user['roll_Status'] == 0 && ($text != $textbotlang['keyboard']['acceptRulesButton'] and $text != $rules_btn_label and $datain != "acceptrule") && !in_array($from_id, $admin_ids)) {
     sendmessage($from_id, $textbotlang['textbot']['rules'], $confrimrolls, 'html');
     return;
 }
-if ($text == $textbotlang['keyboard']['acceptRules'] or $datain == "acceptrule") {
+if ($text == $textbotlang['keyboard']['acceptRules'] or $text == $rules_btn_label or $datain == "acceptrule") {
     deletemessage($from_id, $message_id);
     sendmessage($from_id, $textbotlang['users']['Rules'], $keyboard, 'html');
     $confrim = true;
@@ -488,8 +492,14 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         sendmessage($from_id, $textbotlang['users']['number']['warning'], $request_contact, 'html');
         return;
     }
-    if (feature_value('iran_number', $user['lang'] ?? 'fa', $setting['iran_number']) == "onAuthenticationiran" && !preg_match("/989[0-9]{9}$/", $user_phone)) {
-        sendmessage($from_id, $textbotlang['users']['number']['erroriran'], $request_contact, 'html');
+    // each language enforces ITS OWN country's dial code, not Iran's for
+    // everyone - the allowed prefixes come from 🌐 وضعیت قابلیت‌ها (هر زبان)
+    if (feature_value('iran_number', $user['lang'] ?? 'fa', $setting['iran_number']) == "onAuthenticationiran" && !phone_matches_lang($user_phone, $user['lang'] ?? 'fa')) {
+        sendmessage($from_id, strtr($textbotlang['users']['number']['erroriran'], [
+            '{prefixes}' => implode(' / ', array_map(function ($p) {
+                return '+' . $p;
+            }, phone_prefixes_for_lang($user['lang'] ?? 'fa'))),
+        ]), $request_contact, 'html');
         return;
     }
     sendmessage($from_id, $textbotlang['users']['number']['active'], json_encode(['inline_keyboard' => [], 'remove_keyboard' => true]), 'html');
@@ -6037,14 +6047,16 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     $stmt->execute();
     $inforefral = $stmt->fetch(PDO::FETCH_ASSOC);
     $inforefral['total_price'] = ($inforefral['total_price'] * feature_setting_value('aff_percent', $aff_lang, $setting['affiliatespercentage'])) / 100;
-    $keyboard_share = json_encode([
-        'inline_keyboard' => [
-            [
-                ['text' => $textbotlang['keyboard']['receiveMembershipGift'], 'callback_data' => "get_gift_start"],
-                ['text' => $textbotlang['keyboard']['shareLink'], 'url' => "https://t.me/share/url?url=https://t.me/$usernamebot?start=$from_id"],
-            ],
-        ]
-    ]);
+    $share_url = "https://t.me/share/url?url=https://t.me/$usernamebot?start=$from_id";
+    $share_row = [];
+    if (!bt_button_hidden($aff_lang, 'keyboard.receiveMembershipGift')) {
+        $share_row[] = bt_button($aff_lang, 'keyboard.receiveMembershipGift', $textbotlang['keyboard']['receiveMembershipGift'], "get_gift_start", 'success');
+    }
+    if (!bt_button_hidden($aff_lang, 'keyboard.shareLink')) {
+        // a url button carries no callback_data, so only its label is overridden
+        $share_row[] = ['text' => bt_reply_label($aff_lang, 'keyboard.shareLink', $textbotlang['keyboard']['shareLink']), 'url' => $share_url];
+    }
+    $keyboard_share = json_encode(['inline_keyboard' => $share_row ? [$share_row] : []]);
     $text_start = "";
     $text_porsant = "";
     $Percent_porsant = feature_setting_value('aff_percent', $aff_lang, $setting['affiliatespercentage']);

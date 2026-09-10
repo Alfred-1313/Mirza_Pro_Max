@@ -4598,7 +4598,10 @@ if (!function_exists('feature_status_lang_payload')) {
             ['text' => $get_number_v == 'onAuthenticationphone' ? $on : $off, 'callback_data' => $tog('Authenticationphone', $get_number_v)],
             ['text' => $tx['Admin']['Status']['Authenticationphone'], 'callback_data' => "Authenticationphone"],
         ];
+        // ⚙️ picks which country's dial code this language accepts, so a shop
+        // does not force an Iranian number on every market
         $rows[] = [
+            ['text' => $tx['keyboard']['settings'], 'callback_data' => "flsec:{$lang}:phone"],
             ['text' => $iran_number_v == 'onAuthenticationiran' ? $on : $off, 'callback_data' => $tog('Authenticationiran', $iran_number_v)],
             ['text' => $tx['Admin']['Status']['Authenticationiran'], 'callback_data' => "Authenticationiran"],
         ];
@@ -4709,6 +4712,7 @@ if (!function_exists('feature_section_effective')) {
             'wheel_price' => feature_setting_value('wheel_price', $lang, (string) $setting['wheelـluck_price']),
             'loc_limit_all' => feature_setting_value('loc_limit_all', $lang, (string) ($limit['all'] ?? 0)),
             'loc_limit_free' => feature_setting_value('loc_limit_free', $lang, (string) ($limit['free'] ?? 0)),
+            'phone_prefix' => implode(',', phone_prefixes_for_lang($lang)),
         ];
     }
 }
@@ -4727,6 +4731,7 @@ if (!function_exists('feature_section_of_key')) {
             'loc_limit_free' => 'loc',
             'app_name' => 'linkapp',
             'app_link' => 'linkapp',
+            'phone_prefix' => 'phone',
         ];
         return $map[$key] ?? null;
     }
@@ -4755,6 +4760,14 @@ if (!function_exists('feature_section_caption')) {
                 $list = "\n" . $s['appNone'];
             }
             return strtr($s['appTitle'], ['{lang}' => $langName, '{list}' => $list]);
+        }
+        if ($section === 'phone') {
+            return strtr($s['phoneTitle'], [
+                '{lang}' => $langName,
+                '{prefixes}' => implode(' / ', array_map(function ($p) {
+                    return '+' . $p;
+                }, phone_prefixes_for_lang($lang))),
+            ]);
         }
         if ($section === 'wheel') {
             return strtr($s['wheelTitle'], ['{lang}' => $langName, '{price}' => money($v['wheel_price'], $cur)]);
@@ -4792,6 +4805,10 @@ if (!function_exists('feature_section_payload')) {
                 ];
             }
             $rows[] = [['text' => $s['appAdd'], 'callback_data' => "flsask:{$lang}:app_name", 'style' => 'success']];
+        } elseif ($section === 'phone') {
+            $rows[] = [['text' => strtr($s['phonePrefixBtn'], ['{prefixes}' => implode(', ', array_map(function ($p) {
+                return '+' . $p;
+            }, phone_prefixes_for_lang($lang)))]), 'callback_data' => "flsask:{$lang}:phone_prefix"]];
         } elseif ($section === 'wheel') {
             $rows[] = [['text' => strtr($s['wheelPriceBtn'], ['{price}' => money($v['wheel_price'], $cur)]), 'callback_data' => "flsask:{$lang}:wheel_price"]];
         } elseif ($section === 'aff') {
@@ -9775,7 +9792,7 @@ elseif ($datain == "systemsms") {
     feature_set($featureKey, $fls_lang, $valuenew);
     $Bot_Status = feature_status_lang_payload($textbotlang, $fls_lang);
     Editmessagetext($from_id, $message_id, feature_status_lang_caption($textbotlang, $fls_lang), $Bot_Status);
-} elseif (preg_match('/^flsec:([a-z]{2}):(linkapp|wheel|aff|loc)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^flsec:([a-z]{2}):(linkapp|wheel|aff|loc|phone)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
     // ⚙️ تنظیمات - opens the section inline, in the same message, in the same
     // language, instead of the old reply-keyboard screen
     $fs_lang = $fs_m[1];
@@ -9816,7 +9833,7 @@ elseif ($datain == "systemsms") {
         // to name it - otherwise every market gets typed in toman
         '{currency}' => currency_get(currency_for_lang($fs_lang))['title'],
     ]), $fs_cancel);
-} elseif (preg_match('/^flscan:([a-z]{2}):(linkapp|wheel|aff|loc)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^flscan:([a-z]{2}):(linkapp|wheel|aff|loc|phone)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
     $fs_lang = $fs_m[1];
     $fs_sec = $fs_m[2];
     step("home", $from_id);
@@ -9854,6 +9871,20 @@ elseif ($datain == "systemsms") {
         }
         $fs_appid = (int) ($fs_data['fls_appid'] ?? 0);
         update("app", "link", $text, "id", $fs_appid);
+    } elseif ($fs_key === 'phone_prefix') {
+        // one or more country dial codes, e.g. "98" or "1,44"
+        $fs_clean = [];
+        foreach (preg_split('/[,\s]+/', (string) $text) as $fs_p) {
+            $fs_p = preg_replace('/\D+/', '', (string) $fs_p);
+            if ($fs_p !== '') {
+                $fs_clean[] = $fs_p;
+            }
+        }
+        if (!$fs_clean) {
+            sendmessage($from_id, $fs_tx['common']['invalidInput'], null, 'HTML');
+            return;
+        }
+        feature_setting_set('phone_prefix', $fs_lang, implode(',', $fs_clean));
     } elseif ($fs_key === 'wheel_price' || $fs_key === 'aff_giftamount') {
         // an amount in this language's currency - USD/CNY/RUB/TMT carry
         // decimals, so "12.5" has to be accepted, not just whole numbers

@@ -1579,6 +1579,41 @@ if (!function_exists('feature_setting_map')) {
         feature_setting_map(true);
     }
 }
+if (!function_exists('phone_prefixes_for_lang')) {
+    // Which country dial codes a phone number may start with, for ONE language.
+    // Stored per language (feature_lang_settings key "phone_prefix") as a comma
+    // list of digits; "98" is the fallback because that is the only rule this
+    // check has ever applied - so nothing changes for any language until an
+    // admin sets its own country.
+    function phone_prefixes_for_lang($lang)
+    {
+        $raw = (string) feature_setting_value('phone_prefix', $lang, '98');
+        $out = [];
+        foreach (explode(',', $raw) as $p) {
+            $p = preg_replace('/\D+/', '', (string) $p);
+            if ($p !== '') {
+                $out[] = $p;
+            }
+        }
+        return $out ?: ['98'];
+    }
+    // Telegram hands contact numbers over without a "+", so a prefix test is
+    // enough - and it is the only shape that generalises past Iran's fixed
+    // 989xxxxxxxxx pattern.
+    function phone_matches_lang($phone, $lang)
+    {
+        $digits = preg_replace('/\D+/', '', (string) $phone);
+        if ($digits === '') {
+            return false;
+        }
+        foreach (phone_prefixes_for_lang($lang) as $prefix) {
+            if (strpos($digits, $prefix) === 0 && strlen($digits) >= strlen($prefix) + 6) {
+                return true;
+            }
+        }
+        return false;
+    }
+}
 if (!function_exists('app_rows_for_lang')) {
     // app-download rows visible to one language, using the same lang-column
     // convention as the marzban_panel query in keyboard.php: a row with no
@@ -8992,6 +9027,22 @@ if (!function_exists('bt_section_meta')) {
                 'label' => '🎨 ظاهر دکمه‌های آموزش',
                 'alert' => 'ترتیب، عرض، رنگ، ایموجی و نمایش/مخفی‌بودن دکمه‌های دسته‌بندی و آموزش‌ها - نه متن پیام‌ها.',
             ],
+            'home_features' => [
+                'label' => '🎯 قابلیت‌های ربات',
+                'alert' => 'پیام‌ها و دکمه‌های قابلیت‌هایی که از «🌐 وضعیت قابلیت‌ها (هر زبان)» روشن/خاموش می‌شن: احراز شماره و قوانین، گردونه شانس، و زیرمجموعه‌گیری.',
+            ],
+            'verify_flow' => [
+                'label' => '📞 احراز شماره و قوانین',
+                'alert' => 'پیام‌های درخواست و تایید شماره تماس، پیام رد شدن شماره‌ی کشور غیرمجاز، و دکمه‌های «ارسال شماره» و «پذیرش قوانین».',
+            ],
+            'wheel_flow' => [
+                'label' => '🎲 گردونه شانس',
+                'alert' => 'پیام‌های گردونه شانس: برنده شدن، نبردن، شرکت تکراری در ۲۴ ساعت، و خطای دریافت نتیجه.',
+            ],
+            'referral_flow' => [
+                'label' => '🎁 زیرمجموعه‌گیری',
+                'alert' => 'پیام‌های زیرمجموعه‌گیری: صفحه‌ی اصلی، هدیه عضویت، پورسانت خرید، و دکمه‌های «دریافت هدیه» و «اشتراک لینک».',
+            ],
             'home_other' => [
                 'label' => '💬 سایر پیام‌ها',
                 'alert' => 'پیام‌هایی که هنوز به هیچ بخشی تعلق ندارن و جای مشخصی براشون تعریف نشده. اگه اینجا چیزی دیدی که فکر می‌کنی باید توی یکی از بخش‌های بالا باشه، بگو تا منتقلش کنم.',
@@ -12878,7 +12929,25 @@ if (!function_exists('bt_button')) {
             'bottext.btnCloseAccount',
             'bottext.btnCloseTest',
             'bottext.btnCloseHelp',
+            // the four buttons of the features 🌐 وضعیت قابلیت‌ها (هر زبان)
+            // switches on and off. sendPhoneNumber and acceptRules can land on
+            // a REPLY keyboard, where Telegram has no colour or callback - only
+            // their label override applies there (bt_reply_label()).
+            'keyboard.sendPhoneNumber',
+            'keyboard.acceptRules',
+            'keyboard.receiveMembershipGift',
+            'keyboard.shareLink',
         ];
+    }
+    // label-only override, for buttons that may render on a reply keyboard
+    function bt_reply_label($lang, $key, $default)
+    {
+        if (!function_exists('genbtn_override')) {
+            return $default;
+        }
+        $ov = genbtn_override($lang, $key, 0);
+        $txt = trim((string) ($ov['text'] ?? ''));
+        return $txt !== '' ? $txt : $default;
     }
     // where each of the seven's own "🎨 ظاهر دکمه" screen (genbtn_detail_payload,
     // reached through genbtn_key_to_alias()) goes back to - their real owning
@@ -12897,6 +12966,10 @@ if (!function_exists('bt_button')) {
             'bottext.btnCloseTopup' => 'topup',
             'bottext.btnCloseAccount' => 'account',
             'bottext.btnCloseHelp' => 'help',
+            'keyboard.sendPhoneNumber' => 'verify',
+            'keyboard.acceptRules' => 'verify',
+            'keyboard.receiveMembershipGift' => 'referral',
+            'keyboard.shareLink' => 'referral',
         ];
         $group = $groups[$key] ?? '';
         return $group !== '' ? "bt_group|{$lang}|{$group}" : "btact|back|{$lang}";
