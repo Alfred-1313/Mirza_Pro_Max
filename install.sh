@@ -541,7 +541,7 @@ precheck_fresh_server() {
     { [ -d /opt/hiddify-manager ] || [ -d /opt/hiddify-config ]; } && found+=("Hiddify panel")
 
     if [ ${#found[@]} -gt 0 ]; then
-        clear
+        clear 2>/dev/null || true
         banner
         _sec "Server is not clean"
         printf "    ${C_BAD}●${CR} ${C_BAD}This installer needs a fresh server with no other software installed.${CR}\n"
@@ -890,7 +890,7 @@ resources_section() {
 }
 
 function show_logo() {
-    clear
+    clear 2>/dev/null || true
     banner
     version_section
     bot_section
@@ -901,7 +901,7 @@ function show_logo() {
 
 # Renew (or issue) the SSL certificate for the bot's domain.
 function renew_ssl() {
-    clear
+    clear 2>/dev/null || true
     banner
     _sec "Renew SSL certificate"
 
@@ -967,7 +967,7 @@ function renew_ssl() {
 }
 
 function backup_bot() {
-    clear
+    clear 2>/dev/null || true
     banner
     _sec "Backup Database"
 
@@ -1045,7 +1045,7 @@ function backup_bot() {
 }
 
 function import_bot() {
-    clear
+    clear 2>/dev/null || true
     banner
     _sec "Import Database"
 
@@ -1191,7 +1191,7 @@ function show_menu() {
 
 # Clean, styled guide of all commands and parameters
 function show_help_screen() {
-    clear
+    clear 2>/dev/null || true
     banner
 
     _sec "Commands"
@@ -1457,7 +1457,7 @@ function install_bot() {
 
     # ── Guard: only block when a PREVIOUS install fully COMPLETED ──
     if [ -f "$CONFIG_FILE_DEFAULT" ] && ! has_resumable_state; then
-        clear
+        clear 2>/dev/null || true
         banner
         _sec "Install blocked"
         printf "    ${C_BAD}●${CR} ${C_BAD}Mirza is already installed on this server.${CR}\n"
@@ -1484,7 +1484,7 @@ function install_bot() {
 
     # ── Resume detector: an unfinished install is on disk ──
     if has_resumable_state; then
-        clear
+        clear 2>/dev/null || true
         banner
         _sec "Resume install"
         local _last
@@ -1513,7 +1513,7 @@ function install_bot() {
     plan_eta   # count pending steps + estimate total time left
 
     # ── Pre-flight checks (network/DNS/disk/ram/ports) ──
-    clear
+    clear 2>/dev/null || true
     banner
     if ! preflight; then
         echo ""
@@ -1684,7 +1684,7 @@ function install_bot() {
     # ╰─────────────────────────────────────────────────────────────╯
 
     # ── Domain capture (needed for SSL, VHost, config & webhook) ──
-    clear
+    clear 2>/dev/null || true
     print_header "SSL Certificate Setup"
     domainname="$(state_get DOMAIN)"
     if [ -n "$domainname" ]; then
@@ -1788,7 +1788,7 @@ EOF
     # ╰─────────────────────────────────────────────────────────────╯
 
     # ── Bot configuration inputs (token / chat id / botname) ──
-    clear
+    clear 2>/dev/null || true
     print_header "Bot Configuration"
     YOUR_BOT_TOKEN="$(state_get BOT_TOKEN)"
     if [ -n "$YOUR_BOT_TOKEN" ]; then
@@ -1884,7 +1884,7 @@ EOF
         dbuser="$(state_get DBUSER)"
         dbpass="$(state_get DBPASS)"
         if [ -z "$dbuser" ] || [ -z "$dbpass" ]; then
-            clear
+            clear 2>/dev/null || true
             if [ -n "$ARG_DBUSER" ]; then
                 dbuser="$ARG_DBUSER"
                 echo -e "\e[32mDatabase username (from --db-user):\e[0m ${dbuser}"
@@ -1999,7 +1999,7 @@ EOF
 
     # ── Done ──
     mark_phase COMPLETE
-    clear
+    clear 2>/dev/null || true
     banner
     _sec "Installation complete"
     printf "    ${C_OK}●${CR} ${C_OK}Mirza is installed and the webhook is set.${CR}\n"
@@ -2026,7 +2026,7 @@ EOF
     self_update_script
 }
 function update_bot() {
-    clear
+    clear 2>/dev/null || true
     banner
     BOT_DIR="/var/www/html/mirzaprobotconfig"
     if [ ! -d "$BOT_DIR" ]; then
@@ -2356,7 +2356,7 @@ function remove_bot() {
 }
 
 function migrate_to_pro() {
-    clear
+    clear 2>/dev/null || true
     echo -e "\033[1;33mStarting Migration from Free to Pro Version...\033[0m"
     if ! ensure_connectivity; then
         echo -e "  ${C_BAD}●${CR} ${C_BAD}No internet connection (even after DNS reset). Aborting.${CR}"
@@ -2561,7 +2561,7 @@ EOF
     chmod +x /root/install.sh
     rm -f /usr/local/bin/mirza
     ln -sf /root/install.sh /usr/local/bin/mirza
-    clear
+    clear 2>/dev/null || true
     echo -e "\033[32m====================================================\033[0m"
     echo -e "\033[32m       MIGRATION SUCCESSFUL (Free -> Pro)           \033[0m"
     echo -e "\033[32m====================================================\033[0m"
