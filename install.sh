@@ -75,7 +75,7 @@ _step_eta() {
 plan_eta() {
     STEP_TOTAL=0; ETA_REMAINING=0; STEP_NO=0
     phase_done DEPS    || { STEP_TOTAL=$((STEP_TOTAL + 12)); ETA_REMAINING=$((ETA_REMAINING + 388)); }
-    phase_done FILES   || { STEP_TOTAL=$((STEP_TOTAL + 2));  ETA_REMAINING=$((ETA_REMAINING + 25)); }
+    phase_done FILES   || { STEP_TOTAL=$((STEP_TOTAL + 3));  ETA_REMAINING=$((ETA_REMAINING + 40)); }
     phase_done DBROOT  || { STEP_TOTAL=$((STEP_TOTAL + 1));  ETA_REMAINING=$((ETA_REMAINING + 10)); }
     if ! phase_done SSL; then
         if [ -f "/etc/letsencrypt/live/$(state_get DOMAIN)/fullchain.pem" ]; then
@@ -519,6 +519,100 @@ EOF
     return 0
 }
 export -f setup_mysql_root
+
+# Install Composer to /usr/local/bin/composer when it is not already available.
+# The installer is verified against the official signature before it is run.
+ensure_composer() {
+    if command -v composer >/dev/null 2>&1; then
+        return 0
+    fi
+
+    local php_bin setup expected actual
+    php_bin="$(command -v php)" || return 1
+    setup="$(mktemp /tmp/composer-setup.XXXXXX.php)"
+
+    expected="$("$php_bin" -r "echo @file_get_contents('https://composer.github.io/installer.sig');" 2>/dev/null | tr -d '[:space:]')"
+    if ! "$php_bin" -r "exit(@copy('https://getcomposer.org/installer', '$setup') ? 0 : 1);"; then
+        rm -f "$setup"
+        echo "Failed to download the Composer installer." >&2
+        return 1
+    fi
+
+    actual="$("$php_bin" -r "echo hash_file('sha384', '$setup');" 2>/dev/null | tr -d '[:space:]')"
+    if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+        rm -f "$setup"
+        echo "Composer installer signature mismatch - refusing to run it." >&2
+        return 1
+    fi
+
+    "$php_bin" "$setup" --quiet --install-dir=/usr/local/bin --filename=composer
+    local rc=$?
+    rm -f "$setup"
+    [ "$rc" -eq 0 ] && command -v composer >/dev/null 2>&1
+}
+export -f ensure_composer
+
+# Detect the active CLI PHP major.minor (e.g. 8.2). Empty on failure.
+active_php_ver() {
+    php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null
+}
+export -f active_php_ver
+
+ensure_php_exts_for_composer() {
+    local ver pkgs
+    ver="$(active_php_ver)"
+    if [ -z "$ver" ]; then
+        echo "PHP CLI not found - cannot install required extensions." >&2
+        return 1
+    fi
+
+    if php -m 2>/dev/null | grep -qi '^mbstring$' \
+        && php -m 2>/dev/null | grep -qi '^dom$'; then
+        return 0
+    fi
+
+    pkgs="php${ver}-mbstring php${ver}-xml php${ver}-zip php${ver}-gd php${ver}-curl php${ver}-intl php${ver}-bcmath"
+    echo "Ensuring PHP ${ver} extensions for Composer: ${pkgs}"
+    DEBIAN_FRONTEND=noninteractive apt-get install -y $pkgs || {
+        echo "Failed to install PHP ${ver} extensions required by Composer." >&2
+        return 1
+    }
+
+    if ! php -m 2>/dev/null | grep -qi '^mbstring$' \
+        || ! php -m 2>/dev/null | grep -qi '^dom$'; then
+        echo "PHP ${ver} is missing mbstring and/or dom after package install." >&2
+        return 1
+    fi
+    return 0
+}
+export -f ensure_php_exts_for_composer
+
+# Build vendor/ from composer.json + composer.lock. vendor/ is not shipped in the
+# release archive, so this must run on every fresh install and update.
+install_php_deps() {
+    local dir="$1"
+
+    if [ ! -f "$dir/composer.json" ]; then
+        echo "No composer.json in $dir - skipping dependency installation."
+        return 0
+    fi
+
+    ensure_php_exts_for_composer || return 1
+    ensure_composer || return 1
+
+    COMPOSER_ALLOW_SUPERUSER=1 COMPOSER_NO_INTERACTION=1 \
+        composer install --working-dir="$dir" \
+        --no-dev --optimize-autoloader --prefer-dist --no-progress || return 1
+
+    if [ ! -f "$dir/vendor/autoload.php" ]; then
+        echo "composer install finished but $dir/vendor/autoload.php is missing." >&2
+        return 1
+    fi
+
+    chown -R www-data:www-data "$dir/vendor" 2>/dev/null
+    return 0
+}
+export -f install_php_deps
 
 # True if a package is installed and configured.
 _pkg_installed() { dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q 'install ok installed'; }
@@ -1737,6 +1831,8 @@ function install_bot() {
         sudo chown -R www-data:www-data "$BOT_DIR"
         sudo chmod -R 755 "$BOT_DIR"
         wait
+        run_step "Installing PHP dependencies (composer)" "install_php_deps '$BOT_DIR'" \
+            || { show_step_error; install_pause "Installing PHP dependencies"; }
         mark_phase FILES
     else
         echo -e "  ${C_OK}●${CR} ${C_DIM}Bot files already downloaded - skipping.${CR}"
@@ -2215,7 +2311,12 @@ function update_bot() {
     # never let a packaged config.php overwrite real credentials
     rm -f "$NEW_DIR/config.php"
 
-    # ── 3. Overlay the new files (no wipe) ───────────────────
+    # ── 3. PHP dependencies - built in the extracted copy first, so a
+    #      composer/network failure aborts before the live install is touched.
+    run_step "Installing PHP dependencies (composer)" "install_php_deps '$NEW_DIR'" \
+        || { show_step_error; printf "  ${C_BAD}Could not install PHP dependencies. Nothing was changed.${CR}\n"; rm -rf "$TEMP_DIR"; sleep 3; show_menu; return 1; }
+
+    # ── 4. Overlay the new files (no wipe) ───────────────────
     # cp -a over the existing tree: shipped files are replaced, everything the
     # operator added (config.php, vendor/, uploads, custom panels) stays put.
     run_step "Installing new files" "cp -a '$NEW_DIR/.' '$BOT_DIR/'" \
@@ -2225,7 +2326,7 @@ function update_bot() {
         "chown -R www-data:www-data '$BOT_DIR' && find '$BOT_DIR' -type d -exec chmod 755 {} + && find '$BOT_DIR' -type f -exec chmod 644 {} + && chmod +x '$BOT_DIR'/*.sh 2>/dev/null; true" \
         || true
 
-    # ── 4. Syntax-check the core before trusting it ──────────
+    # ── 5. Syntax-check the core before trusting it ──────────
     local BAD=""
     for f in index.php admin.php function.php keyboard.php table.php config.php; do
         [ -f "$BOT_DIR/$f" ] || continue
@@ -2238,7 +2339,7 @@ function update_bot() {
     fi
     printf "    ${C_OK}✔${CR} ${C_DIM}Core files pass the PHP syntax check${CR}\n"
 
-    # ── 5. Database migration (additive, never destructive) ──
+    # ── 6. Database migration (additive, never destructive) ──
     # table.php only ever CREATEs missing tables and ADDs missing columns, so
     # it upgrades an original-Mirza schema without touching existing rows.
     local DOMAIN_URL DOMAIN_NAME
@@ -2253,12 +2354,12 @@ function update_bot() {
         printf "      ${C_DIM}Open https://${DOMAIN_URL}/table.php once in a browser.${CR}\n"
     fi
 
-    # ── 6. Apache: only fix what is actually missing ─────────
+    # ── 7. Apache: only fix what is actually missing ─────────
     if [ -n "$DOMAIN_NAME" ]; then
         _ensure_vhost "$DOMAIN_NAME" "$BOT_DIR"
     fi
 
-    # ── 7. Is the bot actually answering? ────────────────────
+    # ── 8. Is the bot actually answering? ────────────────────
     if [ -n "$DOMAIN_NAME" ]; then
         local code
         code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "https://${DOMAIN_NAME}/" 2>/dev/null)
@@ -2269,7 +2370,7 @@ function update_bot() {
         fi
     fi
 
-    # ── 8. Refresh the management script itself ──────────────
+    # ── 9. Refresh the management script itself ──────────────
     if [ -f "$BOT_DIR/install.sh" ]; then
         sed -i 's/\r$//' "$BOT_DIR/install.sh"
         if bash -n "$BOT_DIR/install.sh" 2>/dev/null; then
