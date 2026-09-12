@@ -2159,8 +2159,14 @@ EOF
         sleep 5
         # Self-heal a state left by an install that started before the
         # composer/vendor fix existed: FILES may already be marked done
-        # without vendor/ actually present.
+        # without vendor/ actually present. A directory downloaded from a
+        # release that predates composer.json being shipped at all has
+        # neither file on disk, so fetch them first if still missing.
         if [ ! -f "$BOT_DIR/vendor/autoload.php" ]; then
+            if [ ! -f "$BOT_DIR/composer.json" ]; then
+                curl -fsSL -o "$BOT_DIR/composer.json" "https://raw.githubusercontent.com/${GIT_REPO}/master/composer.json" 2>/dev/null
+                curl -fsSL -o "$BOT_DIR/composer.lock" "https://raw.githubusercontent.com/${GIT_REPO}/master/composer.lock" 2>/dev/null
+            fi
             run_step "Installing PHP dependencies (composer)" "install_php_deps '$BOT_DIR'" \
                 || { show_step_error; install_pause "Installing PHP dependencies"; }
         fi
