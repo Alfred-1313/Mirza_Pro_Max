@@ -1142,14 +1142,14 @@ function import_bot() {
 function show_menu() {
     show_logo
     _sec "Menu"
-    _mi "1" "Install Mirza"
-    _mi "2" "Update Mirza"
-    _mi "3" "Remove Mirza"
-    _mi "4" "Migrate: Free -> Pro (Beta)"
-    _mi "5" "Renew SSL certificate"
-    _mi "6" "Backup Database"
-    _mi "7" "Import Database  ${C_WARN}(Beta)${CR}"
-    _mi "8" "Help & Parameters"
+    _mi "1" "Install          ${C_DIM}set up the bot on a clean server${CR}"
+    _mi "2" "Update           ${C_DIM}newest code + database, keeps your data${CR}"
+    _mi "3" "Remove           ${C_DIM}delete the bot and its packages${CR}"
+    _mi "4" "Free → Pro       ${C_DIM}switch an original Mirza over ${C_WARN}(beta)${CR}"
+    _mi "5" "Renew SSL        ${C_DIM}reissue the domain certificate${CR}"
+    _mi "6" "Backup DB        ${C_DIM}dump the database, send it to Telegram${CR}"
+    _mi "7" "Restore DB       ${C_DIM}import a .sql dump ${C_WARN}(beta)${CR}"
+    _mi "8" "Help            ${C_DIM}commands and flags for scripted use${CR}"
     _mi "9" "Exit"
     _rule
     echo ""
@@ -2006,26 +2006,56 @@ EOF
     self_update_script
 }
 function update_bot() {
-    clear
-    banner
+    clea
+    banne
     BOT_DIR="/var/www/html/mirzaprobotconfig"
     if [ ! -d "$BOT_DIR" ]; then
         _sec "Update"
-        printf "    ${C_BAD}●${CR} ${C_BAD}Mirza is not installed. Install it first.${CR}\n"
+        printf "    ${C_BAD}●${CR} ${C_BAD}Mirza is not installed here. Use option 1 to install it first.${CR}\n"
         sleep 2
         show_menu
         return 1
     fi
 
-    # ── Show current version + choose source (has Back option) ──
-    local current
-    current=$(get_installed_version); [ -z "$current" ] && current="unknown"
+    CONFIG_PATH="$BOT_DIR/config.php"
+    if [ ! -f "$CONFIG_PATH" ]; then
+        _sec "Update"
+        printf "    ${C_BAD}●${CR} ${C_BAD}config.php is missing - this does not look like a working install.${CR}\n"
+        printf "    ${C_DIM}Updating would leave you without database credentials. Aborting.${CR}\n"
+        sleep 3
+        show_menu
+        return 1
+    fi
+
+    # ── What are we updating FROM? ───────────────────────────
+    # The original Mirza (mahdiMGF2/mirzabot) installs to this same directory
+    # with the same config.php variables, so it can be upgraded in place. It
+    # simply has no "version" file of ours.
+    local current flavou
+    current=$(get_installed_version)
+    if [ -n "$current" ]; then
+        flavour="Mirza Pro Max ${current}"
+    elif [ -f "$BOT_DIR/index.php" ] && [ -f "$BOT_DIR/table.php" ]; then
+        flavour="original Mirza (no version file)"
+        current="original"
+    else
+        flavour="unknown"
+        current="unknown"
+    fi
+
     _sec "Update"
-    printf "    ${C_DIM}Currently installed:${CR} ${C_OK}%s${CR}\n" "$current"
+    _kv "Installed" "${C_OK}${flavour}${CR}"
+    _kv "Directory" "${C_DIM}${BOT_DIR}${CR}"
+    echo ""
+    printf "    ${C_DIM}Your config.php, database and any files not shipped by this${CR}\n"
+    printf "    ${C_DIM}project are kept. New files are written over the old ones and${CR}\n"
+    printf "    ${C_DIM}the database gains its new columns - nothing is deleted.${CR}\n"
+
     if ! ensure_connectivity; then
-        printf "    ${C_BAD}●${CR} ${C_BAD}No internet connection (even after DNS reset). Try again later.${CR}\n"
+        printf "\n    ${C_BAD}●${CR} ${C_BAD}No internet connection (even after a DNS reset). Try again later.${CR}\n"
         sleep 2; show_menu; return 1
     fi
+
     choose_source
     local _rc=$?
     if [ "$_rc" -eq 2 ]; then show_menu; return 0; fi
@@ -2034,142 +2064,197 @@ function update_bot() {
 
     echo ""
     echo -e "  ${C_DIM}Update target:${CR} ${C_KEY}${TARGET_LABEL}${CR}"
-    print_header "Updating Mirza Bot"
-    run_step "Updating system packages" "apt update --allow-releaseinfo-change && apt upgrade -y" \
-        || { show_step_error; echo -e "\e[91mError updating the server. Exiting...\033[0m"; exit 1; }
-    echo -e "\e[92mServer packages updated successfully...\033[0m\n"
+    print_header "Updating Mirza"
+
+    # ── 1. Safety net: a restorable snapshot BEFORE anything moves ──
+    local BK_DIR="/root/mirza-backups"
+    local STAMP; STAMP=$(date +%Y%m%d_%H%M%S)
+    local ROLLBACK="${BK_DIR}/pre-update_${STAMP}.tar.gz"
+    mkdir -p "$BK_DIR"
+    run_step "Backing up the current install" \
+        "tar --warning=no-file-changed -czf '$ROLLBACK' -C '$(dirname "$BOT_DIR")' --exclude='*.bak*' --exclude='.git' --exclude='log.txt' --exclude='error_log' '$(basename "$BOT_DIR")'" \
+        || { show_step_error; printf "  ${C_BAD}Could not create a rollback archive. Refusing to continue.${CR}\n"; sleep 3; show_menu; return 1; }
+    # keep the 5 most recent, so this never fills the disk
+    ls -1t "$BK_DIR"/pre-update_*.tar.gz 2>/dev/null | tail -n +6 | xargs -r rm -f
+
+    # ── 2. Fetch and validate the new code ───────────────────
     TEMP_DIR="/tmp/mirzaprobot_update"
     rm -rf "$TEMP_DIR"; mkdir -p "$TEMP_DIR"
-    run_step "Downloading ${TARGET_LABEL}" "wget -q -O '$TEMP_DIR/bot.zip' '$ZIP_URL'" \
-        || { show_step_error; echo -e "\e[91mError: Failed to download update package.\033[0m"; exit 1; }
-    run_step "Extracting update package" "unzip -o -q '$TEMP_DIR/bot.zip' -d '$TEMP_DIR'" \
-        || { show_step_error; echo -e "\e[91mError: Failed to extract update package.\033[0m"; exit 1; }
-    EXTRACTED_DIR=$(find "$TEMP_DIR" -mindepth 1 -maxdepth 1 -type d | head -1)
-    if [ -z "$EXTRACTED_DIR" ] || [ ! -d "$EXTRACTED_DIR" ]; then
-        echo -e "\e[91mError: Extracted update folder not found. Aborting before touching the current install.\033[0m"
-        rm -rf "$TEMP_DIR"; sleep 2; show_menu; return 1
+    run_step "Downloading ${TARGET_LABEL}" \
+        "curl -fsSL --max-time 180 -o '$TEMP_DIR/bot.zip' '$ZIP_URL' || wget -q -O '$TEMP_DIR/bot.zip' '$ZIP_URL'" \
+        || { show_step_error; printf "  ${C_BAD}Download failed. Nothing was changed.${CR}\n"; rm -rf "$TEMP_DIR"; sleep 3; show_menu; return 1; }
+    run_step "Extracting the package" "unzip -o -q '$TEMP_DIR/bot.zip' -d '$TEMP_DIR'" \
+        || { show_step_error; printf "  ${C_BAD}The archive could not be extracted. Nothing was changed.${CR}\n"; rm -rf "$TEMP_DIR"; sleep 3; show_menu; return 1; }
+
+    local NEW_DIR
+    NEW_DIR=$(find "$TEMP_DIR" -mindepth 1 -maxdepth 1 -type d | head -1)
+    # Sanity-check the payload before letting it near a working bot
+    if [ -z "$NEW_DIR" ] || [ ! -f "$NEW_DIR/index.php" ] || [ ! -f "$NEW_DIR/table.php" ] || [ ! -f "$NEW_DIR/admin.php" ]; then
+        printf "  ${C_BAD}●${CR} ${C_BAD}The downloaded package does not look like Mirza. Aborting.${CR}\n"
+        printf "  ${C_DIM}Your install was not touched.${CR}\n"
+        rm -rf "$TEMP_DIR"; sleep 3; show_menu; return 1
     fi
-    CONFIG_PATH="$BOT_DIR/config.php"
-    TEMP_CONFIG="/root/mirzapro_config_backup.php"
-    if [ -f "$CONFIG_PATH" ]; then
-        cp "$CONFIG_PATH" "$TEMP_CONFIG" || {
-            echo -e "\e[91mConfig file backup failed!\033[0m"
-            exit 1
-        }
+    # never let a packaged config.php overwrite real credentials
+    rm -f "$NEW_DIR/config.php"
+
+    # ── 3. Overlay the new files (no wipe) ───────────────────
+    # cp -a over the existing tree: shipped files are replaced, everything the
+    # operator added (config.php, vendor/, uploads, custom panels) stays put.
+    run_step "Installing new files" "cp -a '$NEW_DIR/.' '$BOT_DIR/'" \
+        || { show_step_error; _rollback_update "$ROLLBACK" "$BOT_DIR"; rm -rf "$TEMP_DIR"; sleep 3; show_menu; return 1; }
+
+    run_step "Setting ownership and permissions" \
+        "chown -R www-data:www-data '$BOT_DIR' && find '$BOT_DIR' -type d -exec chmod 755 {} + && find '$BOT_DIR' -type f -exec chmod 644 {} + && chmod +x '$BOT_DIR'/*.sh 2>/dev/null; true" \
+        || true
+
+    # ── 4. Syntax-check the core before trusting it ──────────
+    local BAD=""
+    for f in index.php admin.php function.php keyboard.php table.php config.php; do
+        [ -f "$BOT_DIR/$f" ] || continue
+        php -l "$BOT_DIR/$f" >/dev/null 2>&1 || BAD="$BAD $f"
+    done
+    if [ -n "$BAD" ]; then
+        printf "  ${C_BAD}●${CR} ${C_BAD}PHP syntax errors after update:${CR}${C_KEY}${BAD}${CR}\n"
+        _rollback_update "$ROLLBACK" "$BOT_DIR"
+        rm -rf "$TEMP_DIR"; sleep 4; show_menu; return 1
+    fi
+    printf "    ${C_OK}✔${CR} ${C_DIM}Core files pass the PHP syntax check${CR}\n"
+
+    # ── 5. Database migration (additive, never destructive) ──
+    # table.php only ever CREATEs missing tables and ADDs missing columns, so
+    # it upgrades an original-Mirza schema without touching existing rows.
+    local DOMAIN_URL DOMAIN_NAME
+    DOMAIN_URL=$(grep "^\$domainhosts" "$CONFIG_PATH" | cut -d"'" -f2)
+    DOMAIN_NAME=$(echo "$DOMAIN_URL" | cut -d'/' -f1)
+    if ( cd "$BOT_DIR" && php table.php >/dev/null 2>&1 ); then
+        printf "    ${C_OK}✔${CR} ${C_DIM}Database schema updated${CR}\n"
+    elif [ -n "$DOMAIN_URL" ] && curl -fsS --max-time 60 "https://${DOMAIN_URL}/table.php" >/dev/null 2>&1; then
+        printf "    ${C_OK}✔${CR} ${C_DIM}Database schema updated (over HTTPS)${CR}\n"
     else
-        echo -e "\e[93mWarning: config.php not found. Proceeding without backup.\033[0m"
+        printf "    ${C_WARN}!${CR} ${C_WARN}Could not run table.php automatically.${CR}\n"
+        printf "      ${C_DIM}Open https://${DOMAIN_URL}/table.php once in a browser.${CR}\n"
     fi
-    sudo rm -rf "$BOT_DIR" || {
-        echo -e "\e[91mFailed to remove old bot files!\033[0m"
-        exit 1
-    }
-    sudo mkdir -p "$BOT_DIR"
-    sudo mv "$EXTRACTED_DIR"/* "$BOT_DIR/" || {
-        echo -e "\e[91mFile transfer failed!\033[0m"
-        exit 1
-    }
-    if [ -f "$TEMP_CONFIG" ]; then
-        sudo mv "$TEMP_CONFIG" "$CONFIG_PATH" || {
-            echo -e "\e[91mConfig file restore failed!\033[0m"
-            exit 1
-        }
+
+    # ── 6. Apache: only fix what is actually missing ─────────
+    if [ -n "$DOMAIN_NAME" ]; then
+        _ensure_vhost "$DOMAIN_NAME" "$BOT_DIR"
     fi
+
+    # ── 7. Is the bot actually answering? ────────────────────
+    if [ -n "$DOMAIN_NAME" ]; then
+        local code
+        code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "https://${DOMAIN_NAME}/" 2>/dev/null)
+        if [ "$code" = "200" ] || [ "$code" = "301" ] || [ "$code" = "302" ]; then
+            printf "    ${C_OK}✔${CR} ${C_DIM}Site responds (HTTP ${code})${CR}\n"
+        else
+            printf "    ${C_WARN}!${CR} ${C_WARN}Site returned HTTP ${code:-timeout}. Check Apache and SSL.${CR}\n"
+        fi
+    fi
+
+    # ── 8. Refresh the management script itself ──────────────
     if [ -f "$BOT_DIR/install.sh" ]; then
         sed -i 's/\r$//' "$BOT_DIR/install.sh"
         if bash -n "$BOT_DIR/install.sh" 2>/dev/null; then
-            sudo cp "$BOT_DIR/install.sh" /root/install.sh
-            sudo sed -i 's/\r$//' /root/install.sh
-            echo -e "\n\e[92mCopied latest install.sh to /root/install.sh.\033[0m"
-        else
-            echo -e "\n\e[91mWarning: downloaded install.sh failed syntax check; keeping the existing /root/install.sh.\033[0m"
-        fi
-    else
-        echo -e "\n\e[91mWarning: install.sh not found in update files.\033[0m"
-    fi
-    sudo chown -R www-data:www-data "$BOT_DIR"
-    sudo chmod -R 755 "$BOT_DIR"
-    DOMAIN_NAME=""
-    if [ -f "$CONFIG_PATH" ]; then
-        DOMAIN_NAME=$(grep "^\$domainhosts" "$CONFIG_PATH" | cut -d"'" -f2 | cut -d'/' -f1)
-    fi
-    if [ -n "$DOMAIN_NAME" ]; then
-        echo -e "\e[33mUpdating Apache VirtualHost configuration for domain: $DOMAIN_NAME\033[0m"
-        VHOST_FILE="/etc/apache2/sites-available/${DOMAIN_NAME}.conf"
-        sudo tee "$VHOST_FILE" > /dev/null <<EOF
-<VirtualHost *:80>
-    ServerName $DOMAIN_NAME
-    DocumentRoot $BOT_DIR
-    <Directory $BOT_DIR>
-        Options Indexes FollowSymLinks
-        AllowOverride All
-        Require all granted
-    </Directory>
-    Include /etc/apache2/conf-available/phpmyadmin.conf
-    ErrorLog \${APACHE_LOG_DIR}/${DOMAIN_NAME}-error.log
-    CustomLog \${APACHE_LOG_DIR}/${DOMAIN_NAME}-access.log combined
-</VirtualHost>
-EOF
-        VHOST_SSL_FILE="/etc/apache2/sites-available/${DOMAIN_NAME}-ssl.conf"
-        sudo tee "$VHOST_SSL_FILE" > /dev/null <<EOF
-<VirtualHost *:443>
-    ServerName $DOMAIN_NAME
-    DocumentRoot $BOT_DIR
-    SSLEngine on
-    SSLCertificateFile /etc/letsencrypt/live/$DOMAIN_NAME/fullchain.pem
-    SSLCertificateKeyFile /etc/letsencrypt/live/$DOMAIN_NAME/privkey.pem
-    <Directory $BOT_DIR>
-        Options Indexes FollowSymLinks
-        AllowOverride All
-        Require all granted
-    </Directory>
-    Include /etc/apache2/conf-available/phpmyadmin.conf
-    ErrorLog \${APACHE_LOG_DIR}/${DOMAIN_NAME}-error.log
-    CustomLog \${APACHE_LOG_DIR}/${DOMAIN_NAME}-access.log combined
-</VirtualHost>
-EOF
-        if ! sudo apache2ctl -S 2>/dev/null | grep -q "$DOMAIN_NAME"; then
-            sudo a2ensite "${DOMAIN_NAME}.conf" 2>/dev/null || true
-            sudo a2ensite "${DOMAIN_NAME}-ssl.conf" 2>/dev/null || true
-            echo -e "\e[33mCleaning up conflicting default Apache sites...\033[0m"
-            sudo a2dissite 000-default.conf 2>/dev/null || true
-            sudo a2dissite 000-default-le-ssl.conf 2>/dev/null || true
-            sudo a2dissite default-ssl.conf 2>/dev/null || true
-            sudo rm -f /etc/apache2/sites-enabled/000-default* 2>/dev/null || true
-            sudo rm -f /etc/apache2/sites-enabled/default-ssl* 2>/dev/null || true
-            sudo rm -f /etc/apache2/sites-available/000-default.conf 2>/dev/null || true
-            sudo rm -f /etc/apache2/sites-available/000-default-le-ssl.conf 2>/dev/null || true
-            sleep 3
-            sudo a2enmod ssl 2>/dev/null || true
-        fi
-        sudo a2enmod rewrite 2>/dev/null || true
-        sudo a2enmod ssl 2>/dev/null || true
-        if sudo apache2ctl configtest >/dev/null 2>&1; then
-            sudo systemctl restart apache2 || {
-                echo -e "\e[91mWarning: Failed to restart Apache2 after updating VirtualHost.\033[0m"
-            }
-            echo -e "\e[92mVirtualHost configuration updated and Apache restarted.\033[0m"
-        else
-            echo -e "\e[93mWarning: Apache configuration test failed. Skipping restart.\033[0m"
-            sudo apache2ctl configtest
+            install -m 0755 "$BOT_DIR/install.sh" /root/install.sh 2>/dev/null || \
+                { cp "$BOT_DIR/install.sh" /root/install.sh; chmod +x /root/install.sh; }
+            ln -sf /root/install.sh /usr/local/bin/mirza
         fi
     fi
-    if [ -f "$CONFIG_PATH" ]; then
-        URL_PATH=$(grep "^\$domainhosts" "$CONFIG_PATH" | cut -d"'" -f2)
-        if [ -n "$URL_PATH" ]; then
-            run_step "Updating database tables" "curl -s 'https://$URL_PATH/table.php' > /dev/null" \
-                || echo -e "\e[91mSetup script execution failed! Check logs.\033[0m"
-        fi
-    fi
+
     rm -rf "$TEMP_DIR"
-    echo -e "\n\e[92mMirza Bot updated to latest version successfully!\033[0m"
-    if [ -f "/root/install.sh" ]; then
-        sudo chmod +x /root/install.sh
-        sudo ln -sf /root/install.sh /usr/local/bin/mirza
-        echo -e "\e[92mEnsured /root/install.sh is executable and 'mirza' command is linked.\033[0m"
+
+    local newver; newver=$(get_installed_version); [ -z "$newver" ] && newver="$TARGET_LABEL"
+    echo ""
+    _sec "Done"
+    _kv "Was"      "${C_DIM}${flavour}${CR}"
+    _kv "Now"      "${C_OK}${newver}${CR}"
+    _kv "Rollback" "${C_DIM}${ROLLBACK}${CR}"
+    echo ""
+    printf "    ${C_DIM}Your config.php and database were kept as they were.${CR}\n"
+    printf "    ${C_DIM}To undo:${CR} ${C_KEY}tar -xzf ${ROLLBACK} -C /var/www/html${CR}\n"
+    echo ""
+    printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "
+    read -r _
+    show_menu
+}
+
+# Put the pre-update snapshot back, exactly as it was.
+_rollback_update() {
+    local archive="$1" botdir="$2"
+    printf "  ${C_WARN}↺${CR} ${C_WARN}Rolling back to the pre-update snapshot...${CR}\n"
+    if [ ! -f "$archive" ]; then
+        printf "  ${C_BAD}●${CR} ${C_BAD}Snapshot missing (${archive}). Manual recovery needed.${CR}\n"
+        return 1
+    fi
+    rm -rf "${botdir}.failed" 2>/dev/null
+    mv "$botdir" "${botdir}.failed" 2>/dev/null
+    if tar -xzf "$archive" -C "$(dirname "$botdir")" 2>/dev/null; then
+        chown -R www-data:www-data "$botdir" 2>/dev/null
+        rm -rf "${botdir}.failed"
+        printf "  ${C_OK}✔${CR} ${C_OK}Rolled back. Your bot is as it was before the update.${CR}\n"
+        return 0
+    fi
+    mv "${botdir}.failed" "$botdir" 2>/dev/null
+    printf "  ${C_BAD}●${CR} ${C_BAD}Rollback failed. Snapshot kept at ${archive}${CR}\n"
+    return 1
+}
+
+# Create the Apache vhost only when it is missing or points somewhere else.
+# An operator's customised vhost is backed up, never silently overwritten.
+_ensure_vhost() {
+    local domain="$1" botdir="$2"
+    local vhost="/etc/apache2/sites-available/${domain}.conf"
+    local vhost_ssl="/etc/apache2/sites-available/${domain}-ssl.conf"
+    local need=0
+    [ -f "$vhost" ] || need=1
+    [ -f "$vhost" ] && ! grep -q "DocumentRoot $botdir" "$vhost" 2>/dev/null && need=1
+    if [ "$need" -eq 0 ]; then
+        printf "    ${C_OK}✔${CR} ${C_DIM}Apache vhost already correct - left untouched${CR}\n"
+        return 0
+    fi
+    [ -f "$vhost" ] && cp "$vhost" "${vhost}.bak_$(date +%Y%m%d_%H%M%S)"
+    tee "$vhost" >/dev/null <<EOF
+<VirtualHost *:80>
+    ServerName $domain
+    DocumentRoot $botdi
+    <Directory $botdir>
+        Options Indexes FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+    ErrorLog \${APACHE_LOG_DIR}/${domain}-error.log
+    CustomLog \${APACHE_LOG_DIR}/${domain}-access.log combined
+</VirtualHost>
+EOF
+    if [ -f "/etc/letsencrypt/live/${domain}/fullchain.pem" ] && [ ! -f "$vhost_ssl" ]; then
+        tee "$vhost_ssl" >/dev/null <<EOF
+<VirtualHost *:443>
+    ServerName $domain
+    DocumentRoot $botdi
+    SSLEngine on
+    SSLCertificateFile /etc/letsencrypt/live/${domain}/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/${domain}/privkey.pem
+    <Directory $botdir>
+        Options Indexes FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+    ErrorLog \${APACHE_LOG_DIR}/${domain}-error.log
+    CustomLog \${APACHE_LOG_DIR}/${domain}-access.log combined
+</VirtualHost>
+EOF
+        a2ensite "${domain}-ssl.conf" >/dev/null 2>&1 || true
+    fi
+    a2ensite "${domain}.conf" >/dev/null 2>&1 || true
+    a2enmod rewrite ssl >/dev/null 2>&1 || true
+    if apache2ctl configtest >/dev/null 2>&1; then
+        systemctl reload apache2 >/dev/null 2>&1 || systemctl restart apache2 >/dev/null 2>&1
+        printf "    ${C_OK}✔${CR} ${C_DIM}Apache vhost written and reloaded${CR}\n"
     else
-        echo -e "\e[91mError: /root/install.sh not found after update attempt.\033[0m"
+        printf "    ${C_WARN}!${CR} ${C_WARN}Apache config test failed - not reloading.${CR}\n"
     fi
 }
+
 function remove_bot() {
     echo -e "\e[33mStarting Mirza Bot removal process...\033[0m"
     LOG_FILE="/var/log/remove_bot.log"
@@ -2476,37 +2561,55 @@ ARG_DBUSER=""   ARG_DBPASS=""  ARG_VERSION=""  ARG_CHANNEL=""
 print_usage() {
     cat <<USAGE
 
-  Mirza - management script
+  Mirza Pro Max - install and management script
 
   Usage:
-    mirza [command] [options]
+    mirza                      open the interactive menu
+    mirza <command> [options]
 
   Commands:
-    install            Install Mirza
-    update             Update Mirza
-    remove             Remove Mirza
-    migrate            Migrate Free -> Pro
-    renew              Renew the bot domain SSL certificate
-    backup             Backup database & send to Telegram
-    import             Import database from SQL file (Beta)
-    menu               Show interactive menu (default)
+    install            Set up the bot on a clean server (Ubuntu/Debian)
+    update             Fetch the newest code and migrate the database.
+                       Your config.php, your database rows and any file the
+                       project does not ship are kept. A rollback archive is
+                       written to /root/mirza-backups/ before anything moves.
+                       Works on an original Mirza install too - it upgrades
+                       in place, it does not reinstall.
+    remove             Delete the bot directory and the packages it installed
+    migrate            Switch an original Mirza over to Pro (beta)
+    renew              Reissue the domain's SSL certificate
+    backup             Dump the database and send it to Telegram
+    import             Restore the database from a .sql dump (beta)
+    menu               Open the interactive menu (default)
 
   Options:
-    --name   <user>    Bot username
-    --token  <token>   Telegram bot token
-    --admin  <id>      Admin chat id
-    --domain <domain>  Domain name (e.g. bot.example.com)
-    --db-user <user>   Database username
-    --db-pass <pass>   Database password
-    --version <tag>    Install/update a specific release tag (e.g. 0.1.7)
-    --channel <name>   Source channel: beta | release | auto
-    -h, --help         Show this help and exit
+    --name    <user>   Bot username, without the @
+    --token   <token>  Telegram bot token from @BotFathe
+    --admin   <id>     Your numeric Telegram id (from @userinfobot)
+    --domain  <fqdn>   Domain already pointed at this server, e.g. bot.example.com
+    --db-user <user>   Database user to create
+    --db-pass <pass>   Database password (letters, digits, underscore; 6-64)
+    --version <tag>    Install or update to a specific release, e.g. 1.0.0
+    --channel <name>   Where to take the code from:
+                         release  newest published release (recommended)
+                         beta     current master branch, may be unstable
+                         auto     release if one exists, otherwise beta
+    -h, --help         Show this help
 
   Examples:
-    mirza install --channel auto
-    mirza install --name myvpnbot --token 123:ABC --admin 111 --domain bot.example.com --version 0.1.7
-    mirza update --channel release
-    mirza update --version 0.1.6
+    mirza install --channel release
+    mirza install --name myvpnbot --token 123456:ABC --admin 111222333 \\
+                  --domain bot.example.com --db-user mirza --db-pass s3cret_1
+    mirza update                         # interactive: pick the source
+    mirza update --channel release       # unattended
+    mirza update --version 1.0.0         # pin to one release
+
+  Notes:
+    - Run as root.
+    - The domain must already resolve to this server before installing;
+      the certificate step needs it.
+    - Update never drops a database column or table: it only adds what is
+      missing, so upgrading keeps every existing user, order and setting.
 
 USAGE
 }

@@ -6700,7 +6700,13 @@ function addFieldToTable($tableName, $fieldName, $defaultValue = null, $datatype
 
     assertSqlIdentifier($tableName);
     assertSqlIdentifier($fieldName);
-    $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM information_schema.tables WHERE table_name = :tableName");
+    // table_schema = DATABASE() matters: without it this matched a table of the
+    // same name in ANY database on the server, so the column check (which IS
+    // scoped) then said "missing" and the ALTER ran against a table this
+    // database does not have. That threw, and because table.php calls this ~219
+    // times in a row with no guard, every migration after it silently never
+    // ran - an update could leave a bot half-upgraded.
+    $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = :tableName");
     $stmt->bindParam(':tableName', $tableName);
     $stmt->execute();
     $tableExists = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -6711,15 +6717,19 @@ function addFieldToTable($tableName, $fieldName, $defaultValue = null, $datatype
     $filedExists = $stmt->fetch(PDO::FETCH_ASSOC);
     if ($filedExists['count'] != 0)
         return;
-    $query = "ALTER TABLE $tableName ADD $fieldName $datatype";
-    $statement = $pdo->prepare($query);
-    $statement->execute();
-    if ($defaultValue != null) {
-        $stmt = $pdo->prepare("UPDATE $tableName SET $fieldName= ?");
-        $stmt->bindParam(1, $defaultValue);
-        $stmt->execute();
+    // one failing column must not abort the whole migration run behind it
+    try {
+        $pdo->prepare("ALTER TABLE $tableName ADD $fieldName $datatype")->execute();
+        if ($defaultValue != null) {
+            $stmt = $pdo->prepare("UPDATE $tableName SET $fieldName= ?");
+            $stmt->bindParam(1, $defaultValue);
+            $stmt->execute();
+        }
+        echo "The $fieldName field was added ✅";
+    } catch (Exception $e) {
+        error_log("addFieldToTable({$tableName}.{$fieldName}) failed: " . $e->getMessage());
+        echo "Could not add $fieldName to $tableName ⚠️";
     }
-    echo "The $fieldName field was added ✅";
 }
 function outtypepanel($typepanel, $message)
 {
