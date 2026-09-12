@@ -150,25 +150,35 @@ show_step_error() {
 }
 
 # ── Menu UI helpers ──────────────────────────────────────────
-C_BORDER=$'\033[1;36m'; C_TITLE=$'\033[1;37m'; C_DIM=$'\033[0;37m'
-C_KEY=$'\033[1;33m';    C_TXT=$'\033[0;37m';   C_OK=$'\033[1;32m'
-C_BAD=$'\033[1;31m';    C_WARN=$'\033[1;33m';  C_PROMPT=$'\033[1;36m'
+C_BORDER=$'\033[38;5;24m'; C_TITLE=$'\033[1;97m'; C_DIM=$'\033[38;5;245m'
+C_KEY=$'\033[1;36m';       C_TXT=$'\033[0;37m';   C_OK=$'\033[1;32m'
+C_BAD=$'\033[1;31m';       C_WARN=$'\033[1;33m';  C_PROMPT=$'\033[1;36m'
+C_ACCENT=$'\033[38;5;39m'; C_LABEL=$'\033[38;5;250m'
 CR=$'\033[0m'
-UI_W=52   # width of horizontal rules (no right border = never misaligns)
+UI_W=60   # width of horizontal rules (no right border = never misaligns)
 
 _repeat() { local ch="$1" n="$2" out="" i; for ((i=0;i<n;i++)); do out+="$ch"; done; printf '%s' "$out"; }
 # Horizontal rules (left-aligned, no right edge to drift)
 _rule()   { printf "  ${C_BORDER}%s${CR}\n" "$(_repeat "─" "$UI_W")"; }
-_drule()  { printf "  ${C_BORDER}%s${CR}\n" "$(_repeat "━" "$UI_W")"; }
-# Banner: rules + left-aligned title (no full box)
+_drule()  { printf "  ${C_ACCENT}%s${CR}\n" "$(_repeat "━" "$UI_W")"; }
+# Banner
 banner()  {
     echo
     _drule
-    printf "  ${C_OK}▌${CR} ${C_TITLE}MIRZA${CR}  ${C_DIM}— VPN Subscription Management${CR}\n"
+    printf "  ${C_ACCENT}◆${CR}  ${C_TITLE}MIRZA PRO MAX${CR}\n"
+    printf "     ${C_DIM}one bot, a different shop for every language${CR}\n"
     _drule
 }
-# Menu item row: [n] label  (left-aligned, no right border)
-_mi()     { printf "    ${C_KEY}[%s]${CR}  ${C_TXT}%b${CR}\n" "$1" "$2"; }
+# Menu row. Two forms:
+#   _mi "1" "text"                 - plain
+#   _mi "1" "Install" "what it does" - name padded, description dimmed
+_mi() {
+    if [ -n "${3-}" ]; then
+        printf "    ${C_KEY}%s${CR} ${C_BORDER}│${CR} ${C_TXT}%-14s${CR}${C_DIM}%b${CR}\n" "$1" "$2" "$3"
+    else
+        printf "    ${C_KEY}%s${CR} ${C_BORDER}│${CR} ${C_TXT}%b${CR}\n" "$1" "$2"
+    fi
+}
 
 # ── DNS auto-fix (used early, before any download) ───────────
 RESOLV="/etc/resolv.conf"
@@ -588,13 +598,11 @@ _dot() {
         ok)   printf "${C_OK}●${CR}"  ;;
         bad)  printf "${C_BAD}●${CR}" ;;
         warn) printf "${C_WARN}●${CR}";;
-        *)    printf "${C_DIM}●${CR}" ;;
+        *)    printf "${C_DIM}○${CR}" ;;
     esac
 }
-
-# Dashboard section header + key/value row helpers
-_sec() { printf "\n  ${C_KEY}▌${CR} ${C_TITLE}%s${CR}\n" "$1"; _rule; }
-_kv()  { printf "    ${C_DIM}%-11s${CR}${C_BORDER}:${CR} %b${CR}\n" "$1" "$2"; }
+_sec() { printf "\n  ${C_ACCENT}▎${CR}${C_TITLE}%s${CR}\n" "$1"; _rule; }
+_kv()  { printf "    ${C_LABEL}%-12s${CR} %b${CR}\n" "$1" "$2"; }
 
 # Read the installed version from the source 'version' file
 get_installed_version() {
@@ -739,74 +747,64 @@ version_section() {
     local inst latest
     inst=$(get_installed_version)
     latest=$(get_latest_version)
-    _sec "Version"
+    _sec "Bot"
     if [ -n "$inst" ]; then
-        _kv "Installed" "$(_dot ok) ${C_OK}${inst}${CR}"
-    else
-        _kv "Installed" "$(_dot bad) ${C_BAD}not installed${CR}"
-    fi
-    if [ -n "$latest" ]; then
-        if [ -n "$inst" ] && [ "$inst" = "$latest" ]; then
-            _kv "Latest" "$(_dot ok) ${C_OK}${latest}${CR} ${C_DIM}(up to date)${CR}"
-        elif [ -n "$inst" ]; then
-            _kv "Latest" "$(_dot warn) ${C_WARN}${latest}${CR} ${C_WARN}(update available!)${CR}"
+        if [ -n "$latest" ] && [ "$inst" != "$latest" ]; then
+            _kv "Version" "$(_dot warn) ${C_WARN}${inst}${CR} ${C_DIM}→ ${latest} available${CR}"
+        elif [ -n "$latest" ]; then
+            _kv "Version" "$(_dot ok) ${C_OK}${inst}${CR} ${C_DIM}· up to date${CR}"
         else
-            _kv "Latest" "$(_dot warn) ${C_DIM}${latest}${CR}"
+            _kv "Version" "$(_dot ok) ${C_OK}${inst}${CR}"
         fi
     else
-        _kv "Latest" "$(_dot warn) ${C_DIM}unknown (offline)${CR}"
+        if [ -n "$latest" ]; then
+            _kv "Version" "$(_dot none) ${C_DIM}not installed · ${latest} available${CR}"
+        else
+            _kv "Version" "$(_dot none) ${C_DIM}not installed${CR}"
+        fi
     fi
-    _kv "Channel" "${C_DIM}t.me/mirzapanel${CR}"
-    _kv "Group" "${C_DIM}t.me/mirzapanelgroup${CR}"
 }
 
 bot_section() {
     SSL_DOMAIN=""
-    _sec "Bot Status"
     if [ ! -f "$CONFIG_FILE_DEFAULT" ]; then
-        _kv "State" "$(_dot bad) ${C_BAD}not installed${CR}"
         return
     fi
-    _kv "State" "$(_dot ok) ${C_OK}installed${CR}"
     SSL_DOMAIN=$(grep '^\$domainhosts' "$CONFIG_FILE_DEFAULT" | cut -d"'" -f2 | cut -d'/' -f1)
     if [ -n "$SSL_DOMAIN" ] && [ -f "/etc/letsencrypt/live/$SSL_DOMAIN/cert.pem" ]; then
         local expiry days
         expiry=$(openssl x509 -enddate -noout -in "/etc/letsencrypt/live/$SSL_DOMAIN/cert.pem" 2>/dev/null | cut -d= -f2)
         days=$(( ( $(date -d "$expiry" +%s 2>/dev/null || echo 0) - $(date +%s) ) / 86400 ))
         if [ "$days" -gt 14 ]; then
-            _kv "SSL" "$(_dot ok) ${C_OK}valid${CR} ${C_DIM}(${days} days left)${CR}"
+            _kv "Domain" "$(_dot ok) ${C_OK}${SSL_DOMAIN}${CR} ${C_DIM}· SSL ${days}d left${CR}"
         elif [ "$days" -gt 0 ]; then
-            _kv "SSL" "$(_dot warn) ${C_WARN}valid${CR} ${C_DIM}(${days} days left - renew soon)${CR}"
+            _kv "Domain" "$(_dot warn) ${C_WARN}${SSL_DOMAIN}${CR} ${C_DIM}· SSL ${days}d left, renew soon${CR}"
         else
-            _kv "SSL" "$(_dot bad) ${C_BAD}expired${CR}"
+            _kv "Domain" "$(_dot bad) ${C_BAD}${SSL_DOMAIN}${CR} ${C_BAD}· SSL expired${CR}"
         fi
-    else
-        _kv "SSL" "$(_dot warn) ${C_WARN}certificate not found${CR}"
+    elif [ -n "$SSL_DOMAIN" ]; then
+        _kv "Domain" "$(_dot warn) ${C_WARN}${SSL_DOMAIN}${CR} ${C_DIM}· no certificate${CR}"
     fi
-    if [ -n "$SSL_DOMAIN" ]; then
-        _kv "Domain" "${C_DIM}https://${SSL_DOMAIN}${CR}"
-        _kv "phpMyAdmin" "${C_DIM}https://${SSL_DOMAIN}/phpmyadmin${CR}"
-    fi
+    [ -n "$SSL_DOMAIN" ] && _kv "Database" "${C_DIM}https://${SSL_DOMAIN}/phpmyadmin${CR}"
 }
 
 # Read the Telegram webhook using the bot token from config.php.
 # Prints webhook URL / pending count, and surfaces any error message.
 webhook_section() {
-    _sec "Webhook"
+    # No header of its own: this belongs under "Bot". One line when healthy,
+    # detail only when something is actually wrong.
     if [ ! -f "$CONFIG_FILE_DEFAULT" ]; then
-        _kv "Status" "$(_dot warn) ${C_DIM}n/a (bot not installed)${CR}"
         return
     fi
-    local token info ok url pending err errdate apierr when
+    local token info ok url pending err errdate apierr when host
     token=$(grep '^\$APIKEY' "$CONFIG_FILE_DEFAULT" | cut -d"'" -f2)
     if [ -z "$token" ]; then
-        _kv "Status" "$(_dot bad) ${C_BAD}token not found in config.php${CR}"
+        _kv "Webhook" "$(_dot bad) ${C_BAD}no token in config.php${CR}"
         return
     fi
     info=$(curl -fsSL --max-time 8 "https://api.telegram.org/bot${token}/getWebhookInfo" 2>/dev/null)
     if [ -z "$info" ]; then
-        _kv "Status" "$(_dot bad) ${C_BAD}cannot reach Telegram API${CR}"
-        printf "    ${C_BAD}Error:${CR} request to api.telegram.org failed (network/timeout).\n"
+        _kv "Webhook" "$(_dot warn) ${C_WARN}cannot reach Telegram${CR} ${C_DIM}· network or filtering${CR}"
         return
     fi
     if command -v jq >/dev/null 2>&1; then
@@ -825,61 +823,70 @@ webhook_section() {
         apierr=$(echo "$info" | grep -oE '"description":[[:space:]]*"[^"]*"' | sed -E 's/.*"description":[[:space:]]*"([^"]*)".*/\1/')
         [ -z "$pending" ] && pending=0
     fi
-    # Telegram-level API failure (e.g. invalid/revoked token)
     if [ "$ok" != "true" ]; then
-        _kv "Status" "$(_dot bad) ${C_BAD}API error${CR}"
-        [ -n "$apierr" ] && printf "    ${C_BAD}Error:${CR} %s\n" "$apierr"
+        _kv "Webhook" "$(_dot bad) ${C_BAD}${apierr:-API error}${CR}"
         return
     fi
-    # Webhook URL
-    if [ -n "$url" ]; then
-        _kv "URL" "$(_dot ok) ${C_OK}set${CR} ${C_DIM}(${url})${CR}"
-    else
-        _kv "URL" "$(_dot bad) ${C_BAD}not set${CR}"
+    if [ -z "$url" ]; then
+        _kv "Webhook" "$(_dot bad) ${C_BAD}not set${CR} ${C_DIM}· Telegram has nowhere to deliver${CR}"
+        return
     fi
-    _kv "Pending" "${C_DIM}${pending} update(s)${CR}"
-    # Last delivery error reported by Telegram
     if [ -n "$err" ]; then
         when=""
-        [ -n "$errdate" ] && when=$(date -d "@$errdate" '+%Y-%m-%d %H:%M' 2>/dev/null)
-        _kv "Last error" "$(_dot bad) ${C_BAD}${err}${CR}"
-        [ -n "$when" ] && _kv "Error time" "${C_DIM}${when}${CR}"
+        [ -n "$errdate" ] && when=$(date -d "@$errdate" '+%d %b %H:%M' 2>/dev/null)
+        _kv "Webhook" "$(_dot warn) ${C_WARN}delivering with errors${CR} ${C_DIM}· ${pending} pending${CR}"
+        _kv "" "${C_BAD}${err}${CR}${when:+ ${C_DIM}(${when})${CR}}"
+    elif [ "${pending:-0}" -gt 50 ] 2>/dev/null; then
+        _kv "Webhook" "$(_dot warn) ${C_WARN}${pending} updates queued${CR} ${C_DIM}· bot may be stalled${CR}"
     else
-        _kv "Last error" "$(_dot ok) ${C_OK}none${CR}"
+        _kv "Webhook" "$(_dot ok) ${C_OK}connected${CR} ${C_DIM}· ${pending} pending${CR}"
     fi
 }
 
 system_section() {
-    local php_v apache_s mysql_s ip os
+    local php_v apache_s mysql_s ip os apache_d mysql_d
     php_v=$(php -r 'echo PHP_VERSION;' 2>/dev/null); [ -z "$php_v" ] && php_v="n/a"
     apache_s=$(systemctl is-active apache2 2>/dev/null || echo "inactive")
     mysql_s=$(systemctl is-active mysql 2>/dev/null || echo "inactive")
     ip=$(get_server_ip)
     if [ -f /etc/os-release ]; then os=$(. /etc/os-release; echo "$PRETTY_NAME"); else os="Unknown"; fi
-    _svc_row() { if [ "$2" = "active" ]; then _kv "$1" "$(_dot ok) ${C_OK}active${CR}"; else _kv "$1" "$(_dot bad) ${C_BAD}$2${CR}"; fi; }
-    _sec "System"
-    _kv "OS" "${C_DIM}${os}${CR}"
-    _kv "PHP" "${C_DIM}${php_v}${CR}"
-    _svc_row "Apache" "$apache_s"
-    _svc_row "MySQL" "$mysql_s"
-    _kv "Server IP" "${C_DIM}${ip}${CR}"
+    if [ "$apache_s" = "active" ]; then apache_d="$(_dot ok) ${C_DIM}Apache${CR}"; else apache_d="$(_dot bad) ${C_BAD}Apache ${apache_s}${CR}"; fi
+    if [ "$mysql_s" = "active" ];  then mysql_d="$(_dot ok) ${C_DIM}MySQL${CR}";   else mysql_d="$(_dot bad) ${C_BAD}MySQL ${mysql_s}${CR}"; fi
+    _sec "Server"
+    _kv "System" "${C_DIM}${os}${CR} ${C_BORDER}·${CR} ${C_DIM}PHP ${php_v}${CR}"
+    _kv "Services" "${apache_d}  ${mysql_d}"
+    _kv "Address" "${C_DIM}${ip}${CR}"
 }
 
 resources_section() {
-    local mem_t mem_u mem_p disk load cores up
+    local mem_t mem_u mem_p disk_u disk_t disk_p load cores up bar
     mem_t=$(free -m 2>/dev/null | awk '/^Mem:/{print $2}')
     mem_u=$(free -m 2>/dev/null | awk '/^Mem:/{print $3}')
     if [ -n "$mem_t" ] && [ "$mem_t" -gt 0 ] 2>/dev/null; then mem_p=$(( mem_u * 100 / mem_t )); else mem_p=0; fi
-    disk=$(df -h / 2>/dev/null | awk 'NR==2{print $3" / "$2"  ("$5")"}')
-    load=$(awk '{print $1", "$2", "$3}' /proc/loadavg 2>/dev/null)
+    disk_u=$(df -h / 2>/dev/null | awk 'NR==2{print $3}')
+    disk_t=$(df -h / 2>/dev/null | awk 'NR==2{print $2}')
+    disk_p=$(df -h / 2>/dev/null | awk 'NR==2{gsub(/%/,"",$5); print $5}')
+    load=$(awk '{print $1" "$2" "$3}' /proc/loadavg 2>/dev/null)
     cores=$(nproc 2>/dev/null)
-    up=$(uptime -p 2>/dev/null | sed 's/^up //')
+    up=$(uptime -p 2>/dev/null | sed 's/^up //; s/ hours\?/h/; s/ minutes\?/m/; s/ days\?/d/; s/,//g')
     [ -z "$up" ] && up="n/a"
-    _sec "Resources"
-    _kv "RAM" "${C_DIM}${mem_u}MB / ${mem_t}MB  (${mem_p}%)${CR}"
-    _kv "Disk" "${C_DIM}${disk}${CR}"
-    _kv "CPU load" "${C_DIM}${load}  (${cores} cores)${CR}"
-    _kv "Uptime" "${C_DIM}${up}${CR}"
+    # a 10-cell meter, coloured by pressure
+    _meter() {
+        local pct="$1" filled i out="" col
+        [ -z "$pct" ] && pct=0
+        filled=$(( pct / 10 ))
+        if   [ "$pct" -ge 90 ]; then col="$C_BAD"
+        elif [ "$pct" -ge 70 ]; then col="$C_WARN"
+        else col="$C_OK"; fi
+        for ((i=0;i<10;i++)); do
+            if [ "$i" -lt "$filled" ]; then out+="█"; else out+="░"; fi
+        done
+        printf "${col}%s${CR}" "$out"
+    }
+    _kv "Memory" "$(_meter "$mem_p") ${C_DIM}${mem_p}%  ${mem_u}/${mem_t} MB${CR}"
+    _kv "Disk" "$(_meter "$disk_p") ${C_DIM}${disk_p}%  ${disk_u}/${disk_t}${CR}"
+    local corelbl="cores"; [ "$cores" = "1" ] && corelbl="core"
+    _kv "Load" "${C_DIM}${load}${CR} ${C_BORDER}·${CR} ${C_DIM}${cores} ${corelbl}${CR} ${C_BORDER}·${CR} ${C_DIM}up ${up}${CR}"
 }
 
 function show_logo() {
@@ -1155,18 +1162,18 @@ function import_bot() {
 function show_menu() {
     show_logo
     _sec "Menu"
-    _mi "1" "Install          ${C_DIM}set up the bot on a clean server${CR}"
-    _mi "2" "Update           ${C_DIM}newest code + database, keeps your data${CR}"
-    _mi "3" "Remove           ${C_DIM}delete the bot and its packages${CR}"
-    _mi "4" "Free → Pro       ${C_DIM}switch an original Mirza over ${C_WARN}(beta)${CR}"
-    _mi "5" "Renew SSL        ${C_DIM}reissue the domain certificate${CR}"
-    _mi "6" "Backup DB        ${C_DIM}dump the database, send it to Telegram${CR}"
-    _mi "7" "Restore DB       ${C_DIM}import a .sql dump ${C_WARN}(beta)${CR}"
-    _mi "8" "Help            ${C_DIM}commands and flags for scripted use${CR}"
-    _mi "9" "Exit"
+    _mi "1" "Install"   "set up the bot on a clean server"
+    _mi "2" "Update"    "newest code, keeps all your data"
+    _mi "3" "Remove"    "delete the bot and its packages"
+    _mi "4" "Free to Pro" "move an original Mirza over ${C_WARN}(beta)${CR}"
+    _mi "5" "Renew SSL" "reissue the domain certificate"
+    _mi "6" "Backup"    "database dump, sent to Telegram"
+    _mi "7" "Restore"   "import a .sql dump ${C_WARN}(beta)${CR}"
+    _mi "8" "Help"      "commands and flags for scripts"
+    _mi "0" "Exit"      ""
     _rule
     echo ""
-    printf  "  ${C_PROMPT}❯${CR} Select an option ${C_DIM}[1-9]${CR}: "
+    printf  "  ${C_PROMPT}❯${CR} Choose ${C_DIM}[0-8]${CR}: "
     read -r option
     case $option in
         1) install_bot ;;
@@ -1177,8 +1184,8 @@ function show_menu() {
         6) backup_bot ;;
         7) import_bot ;;
         8) show_help_screen ;;
-        9) echo -e "\n${C_OK}Exiting...${CR}"; exit 0 ;;
-        *) echo -e "\n${C_BAD}Invalid option. Please try again.${CR}"; sleep 1; show_menu ;;
+        0|9) echo -e "\n${C_OK}Bye.${CR}"; exit 0 ;;
+        *) echo -e "\n${C_BAD}Not an option. Try again.${CR}"; sleep 1; show_menu ;;
     esac
 }
 
