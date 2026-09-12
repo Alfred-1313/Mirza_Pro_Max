@@ -212,6 +212,10 @@ _link_mirza() {
 # Self-update: every run, fetch the latest script from GitHub, validate it,
 # install it to /root/install.sh, link it into /usr/local/bin, and re-exec.
 function self_update_script() {
+    # asking for help must never depend on the network
+    for _a in "$@"; do
+        case "$_a" in -h|--help|--version) return 0 ;; esac
+    done
     local MASTER_PATH="/root/install.sh"
     local BIN_LINK="/usr/local/bin/mirza"
     local URL="https://raw.githubusercontent.com/Alfred-1313/Mirza_Pro_Max/master/install.sh"
@@ -241,7 +245,16 @@ function self_update_script() {
         echo -e "\e[91mWarning: could not fetch a valid update (offline / bad download). Using current version.\033[0m"
         rm -f "$TEMP_FILE"
         if [ ! -f "$MASTER_PATH" ]; then
-            echo -e "\e[91mCritical: cannot install the script for the first time without internet.\033[0m"
+            # No copy installed yet - but if the script we are running is
+            # itself valid, use it. Only a genuinely unusable state exits.
+            local SELF; SELF=$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null)
+            if [ -n "$SELF" ] && [ -r "$SELF" ] && bash -n "$SELF" 2>/dev/null; then
+                install -m 0755 "$SELF" "$MASTER_PATH" 2>/dev/null || { cp "$SELF" "$MASTER_PATH"; chmod +x "$MASTER_PATH"; }
+                _link_mirza "$MASTER_PATH" "$BIN_LINK"
+                echo -e "\e[93mGitHub is unreachable - continuing with this copy of the script.\033[0m"
+                return 0
+            fi
+            echo -e "\e[91mCritical: no usable copy of the script and GitHub is unreachable.\033[0m"
             exit 1
         fi
         _link_mirza "$MASTER_PATH" "$BIN_LINK"
@@ -2006,8 +2019,8 @@ EOF
     self_update_script
 }
 function update_bot() {
-    clea
-    banne
+    clear
+    banner
     BOT_DIR="/var/www/html/mirzaprobotconfig"
     if [ ! -d "$BOT_DIR" ]; then
         _sec "Update"
@@ -2031,7 +2044,7 @@ function update_bot() {
     # The original Mirza (mahdiMGF2/mirzabot) installs to this same directory
     # with the same config.php variables, so it can be upgraded in place. It
     # simply has no "version" file of ours.
-    local current flavou
+    local current flavour
     current=$(get_installed_version)
     if [ -n "$current" ]; then
         flavour="Mirza Pro Max ${current}"
@@ -2216,7 +2229,7 @@ _ensure_vhost() {
     tee "$vhost" >/dev/null <<EOF
 <VirtualHost *:80>
     ServerName $domain
-    DocumentRoot $botdi
+    DocumentRoot $botdir
     <Directory $botdir>
         Options Indexes FollowSymLinks
         AllowOverride All
@@ -2230,7 +2243,7 @@ EOF
         tee "$vhost_ssl" >/dev/null <<EOF
 <VirtualHost *:443>
     ServerName $domain
-    DocumentRoot $botdi
+    DocumentRoot $botdir
     SSLEngine on
     SSLCertificateFile /etc/letsencrypt/live/${domain}/fullchain.pem
     SSLCertificateKeyFile /etc/letsencrypt/live/${domain}/privkey.pem
@@ -2584,7 +2597,7 @@ print_usage() {
 
   Options:
     --name    <user>   Bot username, without the @
-    --token   <token>  Telegram bot token from @BotFathe
+    --token   <token>  Telegram bot token from @BotFather
     --admin   <id>     Your numeric Telegram id (from @userinfobot)
     --domain  <fqdn>   Domain already pointed at this server, e.g. bot.example.com
     --db-user <user>   Database user to create
