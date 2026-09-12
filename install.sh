@@ -2152,8 +2152,36 @@ function update_bot() {
     if [ "$_rc" -ne 0 ]; then sleep 2; show_menu; return 1; fi
     local ZIP_URL="$SRC_ZIP_URL" TARGET_LABEL="$SRC_LABEL"
 
-    echo ""
-    echo -e "  ${C_DIM}Update target:${CR} ${C_KEY}${TARGET_LABEL}${CR}"
+    # ── Confirm before touching anything ─────────────────────
+    # Skipped when the run was driven by flags (--channel / --version):
+    # that is already an explicit instruction, and prompting would
+    # break unattended use.
+    if [ -z "$ARG_CHANNEL" ] && [ -z "$ARG_VERSION" ]; then
+        local latest_v; latest_v=$(get_latest_version)
+        _sec "Ready to update"
+        _kv "Installed" "${C_OK}${flavour}${CR}"
+        _kv "Target" "${C_KEY}${TARGET_LABEL}${CR}"
+        if [ -n "$latest_v" ] && [ "$current" = "$latest_v" ]; then
+            _kv "Status" "$(_dot ok) ${C_DIM}already the newest release - this reinstalls it${CR}"
+        elif [ -n "$latest_v" ] && [ "$current" != "original" ] && [ "$current" != "unknown" ]; then
+            _kv "Status" "$(_dot warn) ${C_WARN}${latest_v} is newer than ${current}${CR}"
+        else
+            _kv "Status" "$(_dot warn) ${C_WARN}an update is available${CR}"
+        fi
+        echo ""
+        printf "  ${C_PROMPT}❯${CR} Update now? ${C_DIM}[y/N]${CR}: "
+        local confirm; read -r confirm
+        case "$confirm" in
+            y|Y|yes|YES|Yes) ;;
+            *)
+                printf "\n    ${C_DIM}Nothing was changed.${CR}\n"
+                sleep 1
+                show_menu
+                return 0
+                ;;
+        esac
+    fi
+
     print_header "Updating Mirza"
 
     # ── 1. Safety net: a restorable snapshot BEFORE anything moves ──
