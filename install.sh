@@ -1363,6 +1363,7 @@ function show_help_screen() {
     _kv "update" "${C_DIM}Update Mirza (choose channel / version)${CR}"
     _kv "remove" "${C_DIM}Remove Mirza and its services${CR}"
     _kv "migrate" "${C_DIM}Migrate an original Mirza to Pro Max${CR}"
+    _kv "addbot" "${C_DIM}Install a second, independent bot on this server${CR}"
     _kv "renew" "${C_DIM}Renew the bot domain SSL certificate${CR}"
     _kv "backup" "${C_DIM}Backup database & send to Telegram${CR}"
     _kv "import" "${C_DIM}Import database from SQL file (Beta)${CR}"
@@ -1627,13 +1628,20 @@ function install_bot() {
         printf "    ${C_BAD}●${CR} ${C_BAD}Mirza is already installed on this server.${CR}\n"
         printf "    ${C_DIM}Path:${CR} %s\n" "$BOT_DIR_DEFAULT"
         echo ""
-        printf "    ${C_DIM}To upgrade, use option ${CR}${C_KEY}2 (Update)${CR}${C_DIM}.${CR}\n"
-        printf "    ${C_DIM}To reinstall, first remove it with option ${CR}${C_KEY}3 (Remove)${CR}${C_DIM}.${CR}\n"
         echo ""
-        printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "
-        read -r _
-        show_menu
-        return 1
+        printf "    ${C_KEY}[1]${CR} ${C_TXT}Update it instead${CR}\n"
+        printf "    ${C_KEY}[2]${CR} ${C_TXT}Remove it first, then reinstall${CR}\n"
+        printf "    ${C_KEY}[3]${CR} ${C_TXT}Install another, independent bot on this server${CR}\n"
+        printf "    ${C_KEY}[0]${CR} ${C_TXT}Back to menu${CR}\n"
+        echo ""
+        printf "  ${C_PROMPT}❯${CR} Choose ${C_DIM}[0-3]${CR}: "
+        read -r _blocked_choice
+        case "$_blocked_choice" in
+            1) update_bot; return 0 ;;
+            2) remove_bot; return 0 ;;
+            3) install_second_bot; return 0 ;;
+            *) show_menu; return 1 ;;
+        esac
     fi
     # ── Fresh-server requirement (only on a brand-new install) ──
     if ! has_resumable_state && [ ! -f "$CONFIG_FILE_DEFAULT" ]; then
@@ -2203,6 +2211,230 @@ EOF
     chmod +x /root/install.sh
     ln -sf /root/install.sh /usr/local/bin/mirza
     self_update_script
+}
+function install_second_bot() {
+    clear 2>/dev/null || true
+    banner
+    _sec "Install another bot"
+    printf "    ${C_DIM}Sets up a second, independent Mirza Pro Max on this server:${CR}\n"
+    printf "    ${C_DIM}its own directory, database and domain. Bot(s) already${CR}\n"
+    printf "    ${C_DIM}installed here are not touched.${CR}\n"
+    echo ""
+
+    if [ ! -f "/root/confmirza/dbrootmirza.txt" ]; then
+        printf "    ${C_BAD}●${CR} ${C_BAD}No Mirza install found on this server yet. Use option 1 (Install) first.${CR}\n"
+        sleep 2; show_menu; return 1
+    fi
+    if ! ensure_connectivity; then
+        printf "    ${C_BAD}●${CR} ${C_BAD}No internet connection. Aborting.${CR}\n"
+        sleep 2; show_menu; return 1
+    fi
+
+    # ── Pick a free directory + database name ────────────────
+    local n=2 NEW_BOT_DIR NEW_DB ROOT_PASSWORD
+    ROOT_PASSWORD=$(cat /root/confmirza/dbrootmirza.txt 2>/dev/null | grep '$pass' | cut -d"'" -f2)
+    while [ -d "/var/www/html/mirzaprobotconfig${n}" ] \
+        || mysql -u root -p"$ROOT_PASSWORD" -N -e "SHOW DATABASES LIKE 'mirzaprobot${n}';" 2>/dev/null | grep -q "mirzaprobot${n}"; do
+        n=$((n+1))
+    done
+    NEW_BOT_DIR="/var/www/html/mirzaprobotconfig${n}"
+    NEW_DB="mirzaprobot${n}"
+    _kv "Directory" "${C_KEY}${NEW_BOT_DIR}${CR}"
+    _kv "Database"  "${C_KEY}${NEW_DB}${CR}"
+    echo ""
+
+    # ── Domain ─────────────────────────────────────────────────
+    local domainname
+    read -p "Enter the domain for this bot: " domainname
+    while ! validate_domain "$domainname" || [ -f "/etc/apache2/sites-available/${domainname}.conf" ]; do
+        if [ -f "/etc/apache2/sites-available/${domainname}.conf" ]; then
+            echo -e "\e[91mThis domain already has a virtual host on this server. Use a different domain.\033[0m"
+        else
+            echo -e "\e[91mInvalid domain. Enter a full domain like bot2.example.com (no http://, no slash).\033[0m"
+        fi
+        read -p "Enter the domain: " domainname
+    done
+    domain_points_here "$domainname"
+    case $? in
+        0) echo -e "  ${C_OK}●${CR} ${C_OK}Domain resolves to this server.${CR}" ;;
+        *) echo -e "  ${C_WARN}!${CR} ${C_WARN}Domain does not resolve to this server's IP ($(get_server_ip)) yet.${CR}"
+           printf "  ${C_PROMPT}❯${CR} Continue anyway? SSL will fail until DNS is fixed. ${C_DIM}[y/N]${CR}: "
+           read -r _gd
+           [[ "$_gd" =~ ^[Yy]$ ]] || { echo -e "  ${C_BAD}Aborted.${CR}"; sleep 1; show_menu; return 1; } ;;
+    esac
+    local DOMAIN_NAME="$domainname"
+
+    # ── Bot token / chat id / username ────────────────────────
+    print_header "Bot Configuration"
+    local YOUR_BOT_TOKEN YOUR_CHAT_ID YOUR_BOTNAME
+    printf "\e[33m[+] \e[36mBot Token: \033[0m"; read YOUR_BOT_TOKEN
+    while [[ ! "$YOUR_BOT_TOKEN" =~ ^[0-9]{8,10}:[a-zA-Z0-9_-]{35}$ ]]; do
+        echo -e "\e[91mInvalid bot token format. Please try again.\033[0m"
+        printf "\e[33m[+] \e[36mBot Token: \033[0m"; read YOUR_BOT_TOKEN
+    done
+    validate_token "$YOUR_BOT_TOKEN"
+    if [ $? -eq 0 ]; then
+        echo -e "  ${C_OK}●${CR} ${C_OK}Token verified with Telegram.${CR}"
+    else
+        echo -e "  ${C_WARN}!${CR} ${C_WARN}Could not verify the token with Telegram - continuing anyway.${CR}"
+    fi
+    printf "\e[33m[+] \e[36mChat id: \033[0m"; read YOUR_CHAT_ID
+    printf "\e[33m[+] \e[36musernamebot: \033[0m"; read YOUR_BOTNAME
+
+    # ── Download & extract ────────────────────────────────────
+    print_header "Downloading Bot Files"
+    choose_source
+    local _rc=$?
+    if [ "$_rc" -eq 2 ]; then show_menu; return 0; fi
+    if [ "$_rc" -ne 0 ]; then sleep 2; show_menu; return 1; fi
+    local ZIP_URL="$SRC_ZIP_URL" TARGET_LABEL="$SRC_LABEL"
+
+    mkdir -p "$NEW_BOT_DIR"
+    local TEMP_DIR="/tmp/mirzaprobot_second"
+    rm -rf "$TEMP_DIR"; mkdir -p "$TEMP_DIR"
+    run_step "Downloading Mirza (${TARGET_LABEL})" "wget -O '$TEMP_DIR/bot.zip' '$ZIP_URL'" \
+        || { show_step_error; echo -e "\033[31mDownload failed.\033[0m"; rm -rf "$TEMP_DIR"; sleep 2; show_menu; return 1; }
+    run_step "Extracting source files" "unzip -o '$TEMP_DIR/bot.zip' -d '$TEMP_DIR'" \
+        || { show_step_error; echo -e "\033[31mExtraction failed.\033[0m"; rm -rf "$TEMP_DIR"; sleep 2; show_menu; return 1; }
+    local EXTRACTED_DIR; EXTRACTED_DIR=$(find "$TEMP_DIR" -mindepth 1 -maxdepth 1 -type d | head -1)
+    if [ -z "$EXTRACTED_DIR" ] || [ ! -d "$EXTRACTED_DIR" ]; then
+        echo -e "\033[31mExtracted folder not found.\033[0m"; rm -rf "$TEMP_DIR"; sleep 2; show_menu; return 1
+    fi
+    mv "$EXTRACTED_DIR"/* "$NEW_BOT_DIR"
+    rm -rf "$TEMP_DIR"
+    chown -R www-data:www-data "$NEW_BOT_DIR"
+    chmod -R 755 "$NEW_BOT_DIR"
+    run_step "Installing PHP dependencies (composer)" "install_php_deps '$NEW_BOT_DIR'" \
+        || { show_step_error; echo -e "\033[31mFailed to install PHP dependencies.\033[0m"; sleep 2; show_menu; return 1; }
+
+    # ── Database ───────────────────────────────────────────────
+    local dbuser dbpass
+    dbuser=$(openssl rand -base64 10 | tr -dc 'a-zA-Z' | cut -c1-8)
+    dbpass=$(openssl rand -base64 12 | tr -dc 'a-zA-Z0-9' | cut -c1-10)
+    run_step "Creating database & user" \
+        "mysql -u root -p'$ROOT_PASSWORD' -e \"CREATE DATABASE IF NOT EXISTS $NEW_DB;\" && mysql -u root -p'$ROOT_PASSWORD' -e \"CREATE USER IF NOT EXISTS '$dbuser'@'%' IDENTIFIED WITH mysql_native_password BY '$dbpass'; GRANT ALL PRIVILEGES ON $NEW_DB.* TO '$dbuser'@'%'; FLUSH PRIVILEGES;\" && mysql -u root -p'$ROOT_PASSWORD' -e \"CREATE USER IF NOT EXISTS '$dbuser'@'localhost' IDENTIFIED WITH mysql_native_password BY '$dbpass'; GRANT ALL PRIVILEGES ON $NEW_DB.* TO '$dbuser'@'localhost'; FLUSH PRIVILEGES;\"" \
+        || { show_step_error; echo -e "\033[31mDatabase creation failed.\033[0m"; sleep 2; show_menu; return 1; }
+
+    # ── config.php ─────────────────────────────────────────────
+    local secrettoken; secrettoken=$(openssl rand -base64 10 | tr -dc 'a-zA-Z0-9' | cut -c1-8)
+    cat <<EOF > "$NEW_BOT_DIR/config.php"
+<?php
+// This variable added for high load panels which their response time is long and bot can't communicate with online panel!
+// null for default settings
+\$request_exec_timeout = null;
+\$dbhost = 'localhost';
+\$dbname = '$NEW_DB';
+\$usernamedb = '$dbuser';
+\$passworddb = '$dbpass';
+\$connect = mysqli_connect(\$dbhost, \$usernamedb, \$passworddb, \$dbname);
+if (\$connect->connect_error) { die("error" . \$connect->connect_error); }
+mysqli_set_charset(\$connect, "utf8mb4");
+\$options = [ PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC, PDO::ATTR_EMULATE_PREPARES => false, ];
+\$dsn = "mysql:host=\$dbhost;dbname=\$dbname;charset=utf8mb4";
+try { \$pdo = new PDO(\$dsn, \$usernamedb, \$passworddb, \$options); } catch (\PDOException \$e) { error_log("Database connection failed: " . \$e->getMessage()); }
+\$APIKEY = '${YOUR_BOT_TOKEN}';
+\$adminnumber = '${YOUR_CHAT_ID}';
+\$domainhosts = '${DOMAIN_NAME}';
+\$usernamebot = '${YOUR_BOTNAME}';
+?>
+EOF
+    chown www-data:www-data "$NEW_BOT_DIR/config.php"
+
+    # ── HTTP-only vhost first (needed for the certbot --apache challenge,
+    #    and lets the bot answer over plain HTTP even if SSL fails below) ──
+    local VHOST_FILE="/etc/apache2/sites-available/${DOMAIN_NAME}.conf"
+    tee "$VHOST_FILE" > /dev/null <<EOF
+<VirtualHost *:80>
+    ServerName $DOMAIN_NAME
+    DocumentRoot $NEW_BOT_DIR
+    <Directory $NEW_BOT_DIR>
+        Options Indexes FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+    Include /etc/apache2/conf-available/phpmyadmin.conf
+    ErrorLog \${APACHE_LOG_DIR}/${DOMAIN_NAME}-error.log
+    CustomLog \${APACHE_LOG_DIR}/${DOMAIN_NAME}-access.log combined
+</VirtualHost>
+EOF
+    run_step "Enabling the new virtual host" "a2ensite '${DOMAIN_NAME}.conf' && systemctl reload apache2" \
+        || { show_step_error; echo -e "\033[31mFailed to enable the virtual host.\033[0m"; sleep 2; show_menu; return 1; }
+
+    # ── SSL via the Apache plugin - does not stop Apache, so the bot(s)
+    #    already running keep answering the whole time ────────
+    local ssl_ok=1
+    if [ -f "/etc/letsencrypt/live/${DOMAIN_NAME}/fullchain.pem" ]; then
+        echo -e "  ${C_OK}●${CR} ${C_DIM}SSL certificate for ${DOMAIN_NAME} already exists.${CR}"
+    else
+        # certbot may already be installed (bot #1's SSL phase only ever uses
+        # --standalone mode), but that never pulls in the apache plugin - so
+        # check for the plugin itself, not just the certbot binary.
+        certbot plugins 2>/dev/null | grep -qi apache \
+            || apt install -y certbot python3-certbot-apache >/dev/null 2>&1
+        if ! run_step "Requesting SSL certificate (Let's Encrypt)" \
+            "certbot certonly --apache --non-interactive --agree-tos --register-unsafely-without-email --preferred-challenges http -d '$DOMAIN_NAME'"; then
+            show_step_error
+            echo -e "  ${C_WARN}!${CR} ${C_WARN}Certificate request failed - continuing with HTTP only.${CR}"
+            echo -e "  ${C_DIM}Once the domain's DNS A record points here, run: certbot certonly --apache -d ${DOMAIN_NAME}${CR}"
+            ssl_ok=0
+        fi
+    fi
+    if [ "$ssl_ok" -eq 1 ]; then
+        local VHOST_SSL_FILE="/etc/apache2/sites-available/${DOMAIN_NAME}-ssl.conf"
+        tee "$VHOST_SSL_FILE" > /dev/null <<EOF
+<VirtualHost *:443>
+    ServerName $DOMAIN_NAME
+    DocumentRoot $NEW_BOT_DIR
+    SSLEngine on
+    SSLCertificateFile /etc/letsencrypt/live/$DOMAIN_NAME/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/$DOMAIN_NAME/privkey.pem
+    <Directory $NEW_BOT_DIR>
+        Options Indexes FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+    Include /etc/apache2/conf-available/phpmyadmin.conf
+    ErrorLog \${APACHE_LOG_DIR}/${DOMAIN_NAME}-error.log
+    CustomLog \${APACHE_LOG_DIR}/${DOMAIN_NAME}-access.log combined
+</VirtualHost>
+EOF
+        run_step "Enabling the HTTPS virtual host" "a2ensite '${DOMAIN_NAME}-ssl.conf' && a2enmod ssl && systemctl reload apache2" \
+            || show_step_error
+    fi
+
+    # ── Webhook + table.php ────────────────────────────────────
+    local proto="http"; [ "$ssl_ok" -eq 1 ] && proto="https"
+    run_step "Setting Telegram webhook" \
+        "curl -s -F \"url=${proto}://${DOMAIN_NAME}/index.php\" -F \"secret_token=${secrettoken}\" \"https://api.telegram.org/bot${YOUR_BOT_TOKEN}/setWebhook\"" \
+        || show_step_error
+    curl -s -X POST "https://api.telegram.org/bot${YOUR_BOT_TOKEN}/sendMessage" -d chat_id="${YOUR_CHAT_ID}" -d text="✅ The Mirza bot is installed! for start the bot send /start command." > /dev/null 2>&1
+    run_step "Initializing database tables" "cd '$NEW_BOT_DIR' && php table.php" \
+        || { show_step_error; echo -e "\033[31mtable.php failed - see the details above.\033[0m"; }
+    # table.php's own first run on a brand-new database has been observed to
+    # report success while a column (app.lang) still isn't visible to the very
+    # next request - a pre-existing issue, not specific to this flow. Running
+    # it once more is a safe, idempotent way to make sure the schema actually
+    # landed before handing the bot over.
+    (cd "$NEW_BOT_DIR" && php table.php > /dev/null 2>&1)
+
+    clear 2>/dev/null || true
+    banner
+    _sec "Another bot installed"
+    printf "    ${C_OK}●${CR} ${C_OK}Set up alongside the bot(s) already on this server.${CR}\n"
+    echo ""
+    _kv "Bot URL"    "${C_DIM}${proto}://${DOMAIN_NAME}${CR}"
+    _kv "Directory"  "${C_DIM}${NEW_BOT_DIR}${CR}"
+    _kv "Database"   "${C_KEY}${NEW_DB}${CR}"
+    _kv "DB User"    "${C_KEY}${dbuser}${CR}"
+    _kv "DB Pass"    "${C_KEY}${dbpass}${CR}"
+    echo ""
+    printf "    ${C_WARN}!${CR} ${C_DIM}Save these credentials. Update/Backup/Remove in this menu${CR}\n"
+    printf "    ${C_DIM}currently manage only the first bot - for this one, run those${CR}\n"
+    printf "    ${C_DIM}steps manually inside ${CR}${C_KEY}${NEW_BOT_DIR}${CR}${C_DIM}.${CR}\n"
+    echo ""
+    printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "
+    read -r _
+    show_menu
 }
 function update_bot() {
     clear 2>/dev/null || true
@@ -2825,6 +3057,7 @@ print_usage() {
                        in place, it does not reinstall.
     remove             Delete the bot directory and the packages it installed
     migrate            Migrate an original Mirza install to Pro Max (beta)
+    addbot             Install a second, independent bot on this server
     renew              Reissue the domain's SSL certificate
     backup             Dump the database and send it to Telegram
     import             Restore the database from a .sql dump (beta)
@@ -2866,7 +3099,7 @@ process_arguments() {
     local cmd="menu"
     # First non-flag token is the command
     case "$1" in
-        install|update|remove|migrate|renew|backup|import|menu) cmd="$1"; shift ;;
+        install|update|remove|migrate|renew|backup|import|addbot|menu) cmd="$1"; shift ;;
         -h|--help) print_usage; exit 0 ;;
         "") cmd="menu" ;;
         --*) cmd="menu" ;;            # only flags given -> menu, but still parse flags
@@ -2897,6 +3130,7 @@ process_arguments() {
         renew)   renew_ssl ;;
         backup)  backup_bot ;;
         import)  import_bot ;;
+        addbot)  install_second_bot ;;
         menu|*)  show_menu ;;
     esac
 }
