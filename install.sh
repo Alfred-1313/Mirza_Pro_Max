@@ -2155,13 +2155,6 @@ EOF
     # ╭──────────────────────── PHASE: WEBHOOK ─────────────────────╮
     if ! phase_done WEBHOOK; then
         sleep 1
-        run_step "Setting Telegram webhook" \
-            "curl -s -F \"url=https://${YOUR_DOMAIN}/index.php\" -F \"secret_token=${secrettoken}\" \"https://api.telegram.org/bot${YOUR_BOT_TOKEN}/setWebhook\"" \
-            || { show_step_error; install_pause "Setting Telegram webhook"; }
-
-        MESSAGE="✅ The Mirza bot is installed! for start the bot send /start command."
-        curl -s -X POST "https://api.telegram.org/bot${YOUR_BOT_TOKEN}/sendMessage" -d chat_id="${YOUR_CHAT_ID}" -d text="$MESSAGE" > /dev/null 2>&1
-        sleep 3
         run_step "Starting Apache" "systemctl start apache2" \
             || { show_step_error; install_pause "Starting Apache"; }
         sleep 5
@@ -2180,6 +2173,15 @@ EOF
         fi
         run_step "Initializing database tables" "cd '$BOT_DIR' && php${PHP_VER} table.php" \
             || { show_step_error; install_pause "Initializing database tables"; }
+        # Only now - Apache is up and the schema is migrated - tell Telegram
+        # about the webhook and invite the admin to send /start. Doing this
+        # earlier risked a real update arriving before table.php had run.
+        run_step "Setting Telegram webhook" \
+            "curl -s -F \"url=https://${YOUR_DOMAIN}/index.php\" -F \"secret_token=${secrettoken}\" \"https://api.telegram.org/bot${YOUR_BOT_TOKEN}/setWebhook\"" \
+            || { show_step_error; install_pause "Setting Telegram webhook"; }
+
+        MESSAGE="✅ The Mirza bot is installed! for start the bot send /start command."
+        curl -s -X POST "https://api.telegram.org/bot${YOUR_BOT_TOKEN}/sendMessage" -d chat_id="${YOUR_CHAT_ID}" -d text="$MESSAGE" > /dev/null 2>&1
         mark_phase WEBHOOK
     fi
     # ╰─────────────────────────────────────────────────────────────╯
@@ -2402,20 +2404,16 @@ EOF
             || show_step_error
     fi
 
-    # ── Webhook + table.php ────────────────────────────────────
+    # ── table.php, then webhook - never the other way around. Telling
+    #    Telegram (and the admin) the bot is ready before the schema is
+    #    migrated risks a real update arriving mid-migration.  ─────
     local proto="http"; [ "$ssl_ok" -eq 1 ] && proto="https"
+    run_step "Initializing database tables" "cd '$NEW_BOT_DIR' && php table.php" \
+        || { show_step_error; echo -e "\033[31mtable.php failed - see the details above.\033[0m"; }
     run_step "Setting Telegram webhook" \
         "curl -s -F \"url=${proto}://${DOMAIN_NAME}/index.php\" -F \"secret_token=${secrettoken}\" \"https://api.telegram.org/bot${YOUR_BOT_TOKEN}/setWebhook\"" \
         || show_step_error
     curl -s -X POST "https://api.telegram.org/bot${YOUR_BOT_TOKEN}/sendMessage" -d chat_id="${YOUR_CHAT_ID}" -d text="✅ The Mirza bot is installed! for start the bot send /start command." > /dev/null 2>&1
-    run_step "Initializing database tables" "cd '$NEW_BOT_DIR' && php table.php" \
-        || { show_step_error; echo -e "\033[31mtable.php failed - see the details above.\033[0m"; }
-    # table.php's own first run on a brand-new database has been observed to
-    # report success while a column (app.lang) still isn't visible to the very
-    # next request - a pre-existing issue, not specific to this flow. Running
-    # it once more is a safe, idempotent way to make sure the schema actually
-    # landed before handing the bot over.
-    (cd "$NEW_BOT_DIR" && php table.php > /dev/null 2>&1)
 
     clear 2>/dev/null || true
     banner
@@ -3011,12 +3009,13 @@ EOF
     a2enmod ssl
     a2enmod rewrite
     systemctl restart apache2
-    echo -e "\033[33mUpdating Webhook and Tables...\033[0m"
+    echo -e "\033[33mUpdating database tables...\033[0m"
+    curl -k "https://${DOMAIN_NAME}/table.php" > /dev/null 2>&1
+    sleep 2
+    echo -e "\033[33mUpdating webhook...\033[0m"
     curl -F "url=https://${DOMAIN_NAME}/index.php" \
          -F "secret_token=${NEW_SECRET_TOKEN}" \
          "https://api.telegram.org/bot${OLD_API_KEY}/setWebhook"
-    sleep 2
-    curl -k "https://${DOMAIN_NAME}/table.php" > /dev/null 2>&1
     sed -i 's/\r$//' /root/install.sh
     chmod +x /root/install.sh
     rm -f /usr/local/bin/mirza

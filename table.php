@@ -408,7 +408,8 @@ try {
         if (!$result) {
             echo "table marzban_panel" . implode(' ', $pdo->errorInfo());
         }
-    } else {
+    }
+    {
         $VALUE = json_encode(array(
             'f' => '0',
             'n' => '0',
@@ -519,7 +520,8 @@ try {
         if (!$result) {
             echo "table product" . implode(' ', $pdo->errorInfo());
         }
-    } else {
+    }
+    {
         addFieldToTable("product", "one_buy_status", "0", "VARCHAR(20)");
         addFieldToTable("product", "Location", null, "VARCHAR(200)");
         addFieldToTable("product", "inbounds", null, "TEXT");
