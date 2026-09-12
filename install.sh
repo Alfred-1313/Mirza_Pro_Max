@@ -530,30 +530,96 @@ _pkg_installed_glob() {
 # Refuse to install on a server that already has conflicting software.
 # Only runs on a brand-new install (never on resume / Mirza's own partial state).
 precheck_fresh_server() {
-    local found=()
-    _pkg_installed apache2 && found+=("apache2 (web server)")
-    { _pkg_installed nginx || _pkg_installed nginx-core || _pkg_installed nginx-full; } && found+=("nginx (web server)")
-    { _pkg_installed mysql-server || _pkg_installed_glob 'mysql-server-[0-9]*'; } && found+=("mysql-server")
-    { _pkg_installed mariadb-server || _pkg_installed_glob 'mariadb-server-[0-9]*'; } && found+=("mariadb-server")
-    _pkg_installed phpmyadmin && found+=("phpMyAdmin")
-    # Known VPN panels
-    { [ -d /opt/marzban ] || [ -d /var/lib/marzban ]; } && found+=("Marzban panel")
-    { [ -d /opt/hiddify-manager ] || [ -d /opt/hiddify-config ]; } && found+=("Hiddify panel")
+    # A package being installed is not a reason to refuse. What matters is
+    # whether something on this server would actually be damaged: someone
+    # else's site, someone else's database, or a panel that owns 80/443.
+    # An empty LAMP stack - which many VPS images ship with, and which a
+    # failed install leaves behind - is fine and gets reconfigured in place.
+    local blockers=() notes=()
 
-    if [ ${#found[@]} -gt 0 ]; then
-        clear 2>/dev/null || true
-        banner
-        _sec "Server is not clean"
-        printf "    ${C_BAD}●${CR} ${C_BAD}This installer needs a fresh server with no other software installed.${CR}\n"
-        printf "    ${C_DIM}Detected conflicting components:${CR}\n"
-        local f
-        for f in "${found[@]}"; do printf "      ${C_WARN}-${CR} ${C_TXT}%s${CR}\n" "$f"; done
-        echo ""
-        printf "    ${C_TXT}Use a clean Ubuntu 22.04/24.04/26.04 server (no web server, database, or panel)${CR}\n"
-        printf "    ${C_TXT}or reinstall the OS, then run the installer again.${CR}\n"
-        return 1
+    # --- panels that bind the same ports and rewrite the same configs ---
+    { [ -d /opt/marzban ] || [ -d /var/lib/marzban ]; } && blockers+=("Marzban panel is installed (it owns ports 80/443)")
+    { [ -d /opt/hiddify-manager ] || [ -d /opt/hiddify-config ]; } && blockers+=("Hiddify panel is installed (it owns ports 80/443)")
+    { [ -d /etc/x-ui ] || [ -d /usr/local/x-ui ]; } && notes+=("x-ui is installed - make sure it is not using port 80 or 443")
+
+    # --- nginx: only a problem if it is actually serving ---
+    if _pkg_installed nginx || _pkg_installed nginx-core || _pkg_installed nginx-full; then
+        if systemctl is-active nginx >/dev/null 2>&1; then
+            blockers+=("nginx is running and will fight Apache for port 80/443")
+        else
+            notes+=("nginx is installed but stopped - leaving it alone")
+        fi
     fi
-    return 0
+
+    # --- apache: only a problem if it already serves something of yours ---
+    if _pkg_installed apache2; then
+        local other_sites
+        other_sites=$(ls -1 /etc/apache2/sites-enabled/ 2>/dev/null \
+            | grep -vE '^(000-default|default-ssl)' | wc -l)
+        if [ "${other_sites:-0}" -gt 0 ]; then
+            blockers+=("Apache already serves $other_sites other site(s) - $(ls -1 /etc/apache2/sites-enabled/ 2>/dev/null | grep -vE '^(000-default|default-ssl)' | tr '\n' ' ')")
+        else
+            notes+=("Apache is installed with no sites of its own - it will be configured for the bot")
+        fi
+    fi
+
+    # --- mysql/mariadb: only a problem if it holds real databases ---
+    if _pkg_installed mysql-server || _pkg_installed_glob 'mysql-server-[0-9]*' \
+       || _pkg_installed mariadb-server || _pkg_installed_glob 'mariadb-server-[0-9]*'; then
+        local dbs dbcount
+        dbs=$(mysql -N -B -e "SHOW DATABASES;" 2>/dev/null \
+            | grep -vxE '(mysql|information_schema|performance_schema|sys|phpmyadmin)')
+        if [ -n "$dbs" ]; then
+            dbcount=$(echo "$dbs" | wc -l)
+            blockers+=("MySQL already holds $dbcount database(s): $(echo "$dbs" | tr '\n' ' ')")
+        else
+            # either genuinely empty, or root needs a password we do not have
+            if mysql -e "SELECT 1;" >/dev/null 2>&1; then
+                notes+=("MySQL is installed and empty - the bot's database will be created in it")
+            else
+                notes+=("MySQL is installed but its root login is password-protected - the installer will ask for it")
+            fi
+        fi
+    fi
+
+    _pkg_installed phpmyadmin && notes+=("phpMyAdmin is installed - it will be reconfigured for Apache")
+
+    # --- nothing in the way ---
+    if [ ${#blockers[@]} -eq 0 ]; then
+        if [ ${#notes[@]} -gt 0 ]; then
+            _sec "Existing software"
+            local n
+            for n in "${notes[@]}"; do printf "    ${C_DIM}·${CR} ${C_DIM}%s${CR}\n" "$n"; done
+            echo ""
+        fi
+        return 0
+    fi
+
+    # --- something real is here: say what, and let an informed operator decide ---
+    clear 2>/dev/null || true
+    banner
+    _sec "This server is already in use"
+    printf "    ${C_BAD}●${CR} ${C_TXT}Installing here would take over things that are already running:${CR}\n"
+    echo ""
+    local b
+    for b in "${blockers[@]}"; do printf "      ${C_BAD}-${CR} ${C_TXT}%s${CR}\n" "$b"; done
+    echo ""
+    printf "    ${C_DIM}The installer writes an Apache vhost, sets the MySQL root password${CR}\n"
+    printf "    ${C_DIM}and installs phpMyAdmin. On the list above that can break what is${CR}\n"
+    printf "    ${C_DIM}there now.${CR}\n"
+    echo ""
+    printf "    ${C_TXT}If this server already runs Mirza, press Enter and choose ${CR}${C_KEY}2 (Update)${CR}${C_TXT} instead.${CR}\n"
+    printf "    ${C_TXT}A clean server is still the safe choice for a new install.${CR}\n"
+    echo ""
+    printf "    ${C_WARN}Know what you are doing and want to continue anyway?${CR}\n"
+    printf "  ${C_PROMPT}❯${CR} Type ${C_KEY}INSTALL${CR} to proceed, or press Enter to go back: "
+    local answer; read -r answer
+    if [ "$answer" = "INSTALL" ]; then
+        printf "\n    ${C_WARN}Continuing on a server that is already in use.${CR}\n"
+        sleep 1
+        return 0
+    fi
+    return 1
 }
 
 
