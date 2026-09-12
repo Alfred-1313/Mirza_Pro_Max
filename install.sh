@@ -530,35 +530,36 @@ _pkg_installed_glob() {
 # Refuse to install on a server that already has conflicting software.
 # Only runs on a brand-new install (never on resume / Mirza's own partial state).
 precheck_fresh_server() {
-    # A package being installed is not a reason to refuse. What matters is
-    # whether something on this server would actually be damaged: someone
-    # else's site, someone else's database, or a panel that owns 80/443.
-    # An empty LAMP stack - which many VPS images ship with, and which a
-    # failed install leaves behind - is fine and gets reconfigured in place.
+    # A package being installed is not a reason to refuse - an empty LAMP
+    # stack is fine and gets reconfigured. What blocks the install is
+    # something that is actually IN USE and would be taken over: another
+    # site, another database, a running web server, a panel.
+    # There is no way past this on purpose: the installer resets the MySQL
+    # root password, rewrites the Apache config and reinstalls phpMyAdmin.
+    # Each blocker is "label|name|detail" so the name can be shown in red.
     local blockers=() notes=()
 
     # --- panels that bind the same ports and rewrite the same configs ---
-    { [ -d /opt/marzban ] || [ -d /var/lib/marzban ]; } && blockers+=("Marzban panel is installed (it owns ports 80/443)")
-    { [ -d /opt/hiddify-manager ] || [ -d /opt/hiddify-config ]; } && blockers+=("Hiddify panel is installed (it owns ports 80/443)")
+    { [ -d /opt/marzban ] || [ -d /var/lib/marzban ]; } && blockers+=("Panel|Marzban|owns ports 80/443")
+    { [ -d /opt/hiddify-manager ] || [ -d /opt/hiddify-config ]; } && blockers+=("Panel|Hiddify|owns ports 80/443")
     { [ -d /etc/x-ui ] || [ -d /usr/local/x-ui ]; } && notes+=("x-ui is installed - make sure it is not using port 80 or 443")
 
     # --- nginx: only a problem if it is actually serving ---
     if _pkg_installed nginx || _pkg_installed nginx-core || _pkg_installed nginx-full; then
         if systemctl is-active nginx >/dev/null 2>&1; then
-            blockers+=("nginx is running and will fight Apache for port 80/443")
+            blockers+=("Web server|nginx|running, would fight Apache for port 80/443")
         else
             notes+=("nginx is installed but stopped - leaving it alone")
         fi
     fi
 
-    # --- apache: only a problem if it already serves something of yours ---
+    # --- apache: only a problem if it already serves someone else's site ---
     if _pkg_installed apache2; then
-        local other_sites
-        other_sites=$(ls -1 /etc/apache2/sites-enabled/ 2>/dev/null \
-            | grep -vE '^(000-default|default-ssl)' | wc -l)
-        if [ "${other_sites:-0}" -gt 0 ]; then
-            blockers+=("Apache already serves $other_sites other site(s) - $(ls -1 /etc/apache2/sites-enabled/ 2>/dev/null | grep -vE '^(000-default|default-ssl)' | tr '\n' ' ')")
-        else
+        local site
+        for site in $(ls -1 /etc/apache2/sites-enabled/ 2>/dev/null | grep -vE '^(000-default|default-ssl)'); do
+            blockers+=("Apache site|${site}|already served from this server")
+        done
+        if [ ${#blockers[@]} -eq 0 ]; then
             notes+=("Apache is installed with no sites of its own - it will be configured for the bot")
         fi
     fi
@@ -566,14 +567,21 @@ precheck_fresh_server() {
     # --- mysql/mariadb: only a problem if it holds real databases ---
     if _pkg_installed mysql-server || _pkg_installed_glob 'mysql-server-[0-9]*' \
        || _pkg_installed mariadb-server || _pkg_installed_glob 'mariadb-server-[0-9]*'; then
-        local dbs dbcount
+        local dbs db owner
         dbs=$(mysql -N -B -e "SHOW DATABASES;" 2>/dev/null \
             | grep -vxE '(mysql|information_schema|performance_schema|sys|phpmyadmin)')
         if [ -n "$dbs" ]; then
-            dbcount=$(echo "$dbs" | wc -l)
-            blockers+=("MySQL already holds $dbcount database(s): $(echo "$dbs" | tr '\n' ' ')")
+            for db in $dbs; do
+                # name the service that owns it, when one is obvious
+                owner=$(systemctl list-units --type=service --state=running --no-legend 2>/dev/null \
+                        | awk '{print $1}' | grep -iE "^${db}(\.service)?$" | head -1)
+                if [ -n "$owner" ]; then
+                    blockers+=("MySQL database|${db}|in use by ${owner}")
+                else
+                    blockers+=("MySQL database|${db}|holds data that is not the bot's")
+                fi
+            done
         else
-            # either genuinely empty, or root needs a password we do not have
             if mysql -e "SELECT 1;" >/dev/null 2>&1; then
                 notes+=("MySQL is installed and empty - the bot's database will be created in it")
             else
@@ -595,30 +603,26 @@ precheck_fresh_server() {
         return 0
     fi
 
-    # --- something real is here: say what, and let an informed operator decide ---
+    # --- blocked ---
     clear 2>/dev/null || true
     banner
-    _sec "This server is already in use"
-    printf "    ${C_BAD}●${CR} ${C_TXT}Installing here would take over things that are already running:${CR}\n"
+    _sec "Cannot install on this server"
+    printf "    ${C_BAD}●${CR} ${C_TXT}Something here is already in use and would be taken over:${CR}\n"
     echo ""
-    local b
-    for b in "${blockers[@]}"; do printf "      ${C_BAD}-${CR} ${C_TXT}%s${CR}\n" "$b"; done
+    local b label name detail
+    for b in "${blockers[@]}"; do
+        label="${b%%|*}"
+        name="${b#*|}"; name="${name%%|*}"
+        detail="${b##*|}"
+        printf "      ${C_DIM}%-16s${CR} ${C_BAD}%s${CR}  ${C_DIM}%s${CR}\n" "$label" "$name" "$detail"
+    done
     echo ""
-    printf "    ${C_DIM}The installer writes an Apache vhost, sets the MySQL root password${CR}\n"
-    printf "    ${C_DIM}and installs phpMyAdmin. On the list above that can break what is${CR}\n"
-    printf "    ${C_DIM}there now.${CR}\n"
+    printf "    ${C_TXT}Installing Mirza resets the MySQL root password, rewrites the Apache${CR}\n"
+    printf "    ${C_TXT}configuration and reinstalls phpMyAdmin. On the above that breaks${CR}\n"
+    printf "    ${C_TXT}what is running now, so the installer stops here.${CR}\n"
     echo ""
-    printf "    ${C_TXT}If this server already runs Mirza, press Enter and choose ${CR}${C_KEY}2 (Update)${CR}${C_TXT} instead.${CR}\n"
-    printf "    ${C_TXT}A clean server is still the safe choice for a new install.${CR}\n"
-    echo ""
-    printf "    ${C_WARN}Know what you are doing and want to continue anyway?${CR}\n"
-    printf "  ${C_PROMPT}❯${CR} Type ${C_KEY}INSTALL${CR} to proceed, or press Enter to go back: "
-    local answer; read -r answer
-    if [ "$answer" = "INSTALL" ]; then
-        printf "\n    ${C_WARN}Continuing on a server that is already in use.${CR}\n"
-        sleep 1
-        return 0
-    fi
+    printf "    ${C_DIM}Install on a clean server, or remove the software listed above first.${CR}\n"
+    printf "    ${C_DIM}If this server already runs Mirza, choose ${CR}${C_KEY}2 (Update)${CR}${C_DIM} instead.${CR}\n"
     return 1
 }
 
