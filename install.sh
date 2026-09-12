@@ -2157,6 +2157,13 @@ EOF
         run_step "Starting Apache" "systemctl start apache2" \
             || { show_step_error; install_pause "Starting Apache"; }
         sleep 5
+        # Self-heal a state left by an install that started before the
+        # composer/vendor fix existed: FILES may already be marked done
+        # without vendor/ actually present.
+        if [ ! -f "$BOT_DIR/vendor/autoload.php" ]; then
+            run_step "Installing PHP dependencies (composer)" "install_php_deps '$BOT_DIR'" \
+                || { show_step_error; install_pause "Installing PHP dependencies"; }
+        fi
         run_step "Initializing database tables" "cd '$BOT_DIR' && php${PHP_VER} table.php" \
             || { show_step_error; install_pause "Initializing database tables"; }
         mark_phase WEBHOOK
