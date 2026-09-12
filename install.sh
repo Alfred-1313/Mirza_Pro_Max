@@ -1329,7 +1329,7 @@ function show_menu() {
     _mi "1" "Install"   "set up the bot on a clean server"
     _mi "2" "Update"    "newest code, keeps all your data"
     _mi "3" "Remove"    "delete the bot and its packages"
-    _mi "4" "Free to Pro" "move an original Mirza over ${C_WARN}(beta)${CR}"
+    _mi "4" "Migrate to Pro Max" "bring an original Mirza install over ${C_WARN}(beta)${CR}"
     _mi "5" "Renew SSL" "reissue the domain certificate"
     _mi "6" "Backup"    "database dump, sent to Telegram"
     _mi "7" "Restore"   "import a .sql dump ${C_WARN}(beta)${CR}"
@@ -1362,7 +1362,7 @@ function show_help_screen() {
     _kv "install" "${C_DIM}Install Mirza${CR}"
     _kv "update" "${C_DIM}Update Mirza (choose channel / version)${CR}"
     _kv "remove" "${C_DIM}Remove Mirza and its services${CR}"
-    _kv "migrate" "${C_DIM}Migrate Free -> Pro${CR}"
+    _kv "migrate" "${C_DIM}Migrate an original Mirza to Pro Max${CR}"
     _kv "renew" "${C_DIM}Renew the bot domain SSL certificate${CR}"
     _kv "backup" "${C_DIM}Backup database & send to Telegram${CR}"
     _kv "import" "${C_DIM}Import database from SQL file (Beta)${CR}"
@@ -2569,16 +2569,22 @@ function remove_bot() {
 
 function migrate_to_pro() {
     clear 2>/dev/null || true
-    echo -e "\033[1;33mStarting Migration from Free to Pro Version...\033[0m"
+    echo -e "\033[1;33mStarting Migration to Mirza Pro Max...\033[0m"
     if ! ensure_connectivity; then
         echo -e "  ${C_BAD}●${CR} ${C_BAD}No internet connection (even after DNS reset). Aborting.${CR}"
         sleep 2; show_menu; return 1
     fi
-    OLD_BOT_DIR="/var/www/html/mirzabotconfig"
-    if [ ! -d "$OLD_BOT_DIR" ]; then
-        echo -e "\033[31m[ERROR] Free version source code not found in $OLD_BOT_DIR.\033[0m"
-        echo -e "\033[33mMake sure the free version is installed.\033[0m"
+    OLD_BOT_DIR=""
+    for _cand in "/var/www/html/mirzabotconfig" "/var/www/html/mirzaprobotconfig"; do
+        [ -f "$_cand/config.php" ] && { OLD_BOT_DIR="$_cand"; break; }
+    done
+    if [ -z "$OLD_BOT_DIR" ]; then
+        echo -e "\033[31m[ERROR] No existing Mirza install found (checked mirzabotconfig and mirzaprobotconfig).\033[0m"
         exit 1
+    fi
+    if [ -f "$OLD_BOT_DIR/version" ]; then
+        echo -e "\033[33mThis server already runs Mirza Pro Max ($(cat "$OLD_BOT_DIR/version" 2>/dev/null)). Nothing to migrate - use option 2 (Update) instead.\033[0m"
+        exit 0
     fi
     if ! systemctl is-active --quiet mysql; then
         echo -e "\033[31m[ERROR] MySQL service is not active or not installed.\033[0m"
@@ -2588,7 +2594,7 @@ function migrate_to_pro() {
         echo -e "\033[32mMySQL is running.\033[0m"
     fi
     echo ""
-    read -p "Are you sure you want to migrate to the Pro version? (y/n): " confirm_mig
+    read -p "Are you sure you want to migrate this bot to Mirza Pro Max? (y/n): " confirm_mig
     if [[ "$confirm_mig" != "y" && "$confirm_mig" != "Y" ]]; then
         echo -e "\033[31mMigration aborted.\033[0m"
         exit 0
@@ -2599,21 +2605,21 @@ function migrate_to_pro() {
         echo -e "\033[31mPlease create a backup first!\033[0m"
         exit 1
     fi
-    BACKUP_FILE="/root/mirzabot_backup.sql"
-    if [ ! -f "$BACKUP_FILE" ]; then
-        echo -e "\033[31m[ERROR] Backup file not found at $BACKUP_FILE\033[0m"
-        echo -e "\033[33mPlease run the 'mirza' command (Free Version Script) and use option 4 to create a backup.\033[0m"
+    BACKUP_FILE=$(ls -t /root/mirza_backup_*.sql /root/mirzabot_backup.sql 2>/dev/null | head -1)
+    if [ -z "$BACKUP_FILE" ] || [ ! -s "$BACKUP_FILE" ]; then
+        echo -e "\033[31m[ERROR] No database backup found in /root.\033[0m"
+        echo -e "\033[33mRun 'mirza' and use option 6 (Backup Database) first, then try again.\033[0m"
         exit 1
     else
-        echo -e "\033[32mBackup file found.\033[0m"
+        echo -e "\033[32mBackup file found: $BACKUP_FILE\033[0m"
     fi
     echo ""
     echo -e "\033[43;30m[WARNING] Additional Bots Notice\033[0m"
     echo -e "\033[33mThis migration process will reconfigure Apache for the Pro version.\033[0m"
-    echo -e "\033[33mOnly the main bot (mirzabotconfig) will be migrated.\033[0m"
+    echo -e "\033[33mOnly the main bot ($(basename "$OLD_BOT_DIR")) will be migrated.\033[0m"
     echo -e "\033[33mExisting Additional Bots in /var/www/html/ might stop working.\033[0m"
     echo -e "\033[36mFound directories:\033[0m"
-    ls -d /var/www/html/*/ 2>/dev/null | grep -v "mirzabotconfig"
+    ls -d /var/www/html/*/ 2>/dev/null | grep -v "$(basename "$OLD_BOT_DIR")"
     echo ""
     read -p "Do you understand and want to proceed? (y/n): " confirm_add
     if [[ "$confirm_add" != "y" && "$confirm_add" != "Y" ]]; then
@@ -2637,8 +2643,16 @@ function migrate_to_pro() {
         exit 1
     fi
     echo -e "\033[32mDatabase connection successful.\033[0m"
-    OLD_DB="mirzabot"
+    OLD_DB=$(grep '^\$dbname' "$OLD_BOT_DIR/config.php" | cut -d"'" -f2)
     NEW_DB="mirzaprobot"
+    if [ -z "$OLD_DB" ]; then
+        echo -e "\033[31m[ERROR] Could not read the database name from $OLD_BOT_DIR/config.php.\033[0m"
+        exit 1
+    fi
+    if [ "$OLD_DB" = "$NEW_DB" ]; then
+        echo -e "\033[33mThis install already uses the database Pro Max uses ($NEW_DB). Nothing to migrate - use option 2 (Update) instead.\033[0m"
+        exit 0
+    fi
     if ! mysql -u "$ROOT_USER" -p"$ROOT_PASS" -e "USE $OLD_DB;" &>/dev/null; then
         echo -e "\033[31m[ERROR] Database '$OLD_DB' not found!\033[0m"
         exit 1
@@ -2657,7 +2671,7 @@ function migrate_to_pro() {
     done
     mysql -u "$ROOT_USER" -p"$ROOT_PASS" -e "DROP DATABASE IF EXISTS $OLD_DB;"
     echo -e "\033[32mDatabase migrated successfully.\033[0m"
-    OLD_CONFIG="/var/www/html/mirzabotconfig/config.php"
+    OLD_CONFIG="$OLD_BOT_DIR/config.php"
     OLD_DB_USER=$(grep '$usernamedb' "$OLD_CONFIG" | cut -d"'" -f2)
     if [ -n "$OLD_DB_USER" ]; then
         echo -e "\033[33mRemoving old database user ($OLD_DB_USER)...\033[0m"
@@ -2720,6 +2734,8 @@ try { \$pdo = new PDO(\$dsn, \$usernamedb, \$passworddb, \$options); } catch (\P
 EOF
     chown -R www-data:www-data "$NEW_BOT_DIR"
     chmod -R 755 "$NEW_BOT_DIR"
+    run_step "Installing PHP dependencies (composer)" "install_php_deps '$NEW_BOT_DIR'" \
+        || { show_step_error; echo -e "\033[31mError: Failed to install PHP dependencies.\033[0m"; exit 1; }
     echo -e "\033[33mReconfiguring Apache...\033[0m"
     a2dissite 000-default.conf 2>/dev/null || true
     a2dissite 000-default-le-ssl.conf 2>/dev/null || true
@@ -2775,7 +2791,7 @@ EOF
     ln -sf /root/install.sh /usr/local/bin/mirza
     clear 2>/dev/null || true
     echo -e "\033[32m====================================================\033[0m"
-    echo -e "\033[32m       MIGRATION SUCCESSFUL (Free -> Pro)           \033[0m"
+    echo -e "\033[32m     MIGRATION TO MIRZA PRO MAX SUCCESSFUL         \033[0m"
     echo -e "\033[32m====================================================\033[0m"
     echo -e "\033[36mNew Database:\033[0m $NEW_DB"
     echo -e "\033[36mNew User:\033[0m     $NEW_DB_USER"
@@ -2808,7 +2824,7 @@ print_usage() {
                        Works on an original Mirza install too - it upgrades
                        in place, it does not reinstall.
     remove             Delete the bot directory and the packages it installed
-    migrate            Switch an original Mirza over to Pro (beta)
+    migrate            Migrate an original Mirza install to Pro Max (beta)
     renew              Reissue the domain's SSL certificate
     backup             Dump the database and send it to Telegram
     import             Restore the database from a .sql dump (beta)
