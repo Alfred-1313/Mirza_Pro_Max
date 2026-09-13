@@ -12963,7 +12963,7 @@ if (!function_exists('help_defaults_on')) {
     function help_defaults_on()
     {
         $setting = select("setting", "*", null, null, "select");
-        return (string) ($setting['help_defaults_on'] ?? '1') !== '0';
+        return (string) ($setting['help_defaults_on'] ?? '0') !== '0';
     }
     function help_defaults_set($on)
     {

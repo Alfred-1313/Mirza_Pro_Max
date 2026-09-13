@@ -108,14 +108,20 @@ try {
         entities_os TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL)
         ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_unicode_ci");
         $stmt->execute();
-    } else {
-        addFieldToTable("help", "category", null, "TEXT");
-        addFieldToTable("help", "translations", null, "TEXT");
-        addFieldToTable("help", "entities_os", null, "TEXT");
-        // 1 = shipped with the bot, 0 = added by this shop's admin. Only the
-        // shipped ones follow the 📦 آموزش‌های آماده switch.
-        addFieldToTable("help", "is_default", "0", "VARCHAR(5)");
     }
+
+    // Columns added after the CREATE TABLE above was written. They run whether
+    // the table was just made or already existed: a fresh install takes the
+    // CREATE arm, and while these sat in an else they were never added to it -
+    // is_default was missing, so the seeding below failed on every new shop.
+    // addFieldToTable returns at once when the column is there, so an update
+    // pays nothing for this.
+    addFieldToTable("help", "category", null, "TEXT");
+    addFieldToTable("help", "translations", null, "TEXT");
+    addFieldToTable("help", "entities_os", null, "TEXT");
+    // 1 = shipped with the bot, 0 = added by this shop's admin. Only the
+    // shipped ones follow the 📦 آموزش‌های آماده switch.
+    addFieldToTable("help", "is_default", "0", "VARCHAR(5)");
 
     // Starter tutorials, seeded on a fresh install AND on an update - it sits
     // outside the if/else on purpose, because a fresh install takes the CREATE
@@ -272,7 +278,13 @@ timeauto_not_verify,status_keyboard_config,cron_status
 '1','0','$status_cron'
 )");
         $stmt->execute();
-    } else {
+    }
+
+    // Same story as the help table: everything below was added after the CREATE
+    // TABLE above was written, and sat in an else, so a fresh install never got
+    // any of it - 25 columns missing, which is why a brand new shop came up with
+    // no backup schedule, no mini app and no language switch. Unconditional now;
+    // addFieldToTable skips a column that already exists.
         addFieldToTable("setting", "cron_status", $status_cron, "TEXT");
         addFieldToTable("setting", "text_edit", "{}", "JSON");
         addFieldToTable("setting", "button_edit", null, "TEXT");
@@ -354,7 +366,6 @@ timeauto_not_verify,status_keyboard_config,cron_status
         addFieldToTable("setting", "Bot_Status", "botstatuson", "VARCHAR(200)");
         addFieldToTable("setting", "roll_Status", "rolleoff", "VARCHAR(200)");
         addFieldToTable("setting", "verifystart", "offverify", "VARCHAR(200)");
-    }
 } catch (Exception $e) {
     file_put_contents('error_log', $e->getMessage());
 }
