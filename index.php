@@ -3311,7 +3311,9 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     }
     $locationproduct = select("marzban_panel", "*", "TestAccount", "ONTestAccount", "count");
     if ($locationproduct == 0) {
-        sendmessage($from_id, $textbotlang['users']['sell']['nullPanel'], null, 'HTML');
+        // its own message now: this is the test-account flow, and it used to
+        // borrow the purchase flow's nullPanel, so rewording one reworded both
+        sendmessage($from_id, $textbotlang['users']['usertest']['noPanel'], null, 'HTML');
         return;
     }
     // panel selection is now always shown, even with a single active test panel, instead
@@ -3378,7 +3380,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         if ($panel['hide_user'] != null) {
             $list_user = json_decode($panel['hide_user'], true);
             if (in_array($from_id, $list_user)) {
-                sendmessage($from_id, $textbotlang['users']['sell']['nullPanel'], null, 'HTML');
+                sendmessage($from_id, $textbotlang['users']['usertest']['noPanel'], null, 'HTML');
                 return;
             }
         }
@@ -3568,7 +3570,33 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         sendmessage($from_id, $textbotlang['users']['help']['disablehelp'], null, 'HTML');
         return;
     }
-    if (feature_value('categoryhelp', $user['lang'] ?? 'fa', $setting['categoryhelp']) == "1") {
+    // help_rows_for_user() drops the shipped tutorials when the admin has the
+    // "📦 آموزش‌های آماده" switch off, so "is there anything to show?" is asked
+    // about what this customer would ACTUALLY see
+    if (empty(help_rows_for_user())) {
+        sendmessage($from_id, $textbotlang['users']['help']['disablehelp'], null, 'HTML');
+        return;
+    }
+    // 'helpbtn' is the back button of a tutorial that was sent AS MEDIA: a photo
+    // or video caption cannot be edited into a plain text menu, so that message
+    // goes away and the menu is sent fresh. 'helpbtns' (text-only tutorial) still
+    // edits the very same message in place, which keeps the chat from growing.
+    if ($datain == "helpbtn") {
+        deletemessage($from_id, $message_id);
+    }
+    // no separate on/off switch any more: the category screen shows itself when
+    // the admin has actually put a tutorial in a category, and the flat list
+    // shows when nothing is categorized. One less setting to get out of sync
+    // with the data it describes.
+    $help_has_categories = false;
+    foreach (help_rows_for_user() as $help_row_chk) {
+        $help_cat_chk = trim((string) ($help_row_chk['category'] ?? ''));
+        if ($help_cat_chk !== '' && $help_cat_chk !== '0') {
+            $help_has_categories = true;
+            break;
+        }
+    }
+    if ($help_has_categories) {
         // its own key, defaulting to the exact sentence this screen has always
         // shown - it used to borrow the purchase flow's category caption, so
         // rewording the shop's silently reworded the tutorial menu too
@@ -3579,7 +3607,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
             sendmessage($from_id, $help_cat_caption, $json_list_helpـcategory, 'HTML');
         }
     } else {
-        $helplist = select("help", "*", null, null, "fetchAll");
+        $helplist = help_rows_for_user();
         $helpidos = ['inline_keyboard' => []];
         $help_tut_buttons = [];
         foreach ($helplist as $result) {
@@ -3620,7 +3648,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         }
     }
 } elseif (preg_match('/^helpctgoryـ(.*)/', $datain, $dataget)) {
-    $helplist = select("help", "*", "category", $dataget[1], "fetchAll");
+    $helplist = help_rows_for_user($dataget[1]);
     $helpidos = ['inline_keyboard' => []];
     $help_tut_buttons = [];
     foreach ($helplist as $result) {
@@ -3634,15 +3662,20 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         if ($help_tut_emoji !== '') {
             $help_tut_buttons[$help_tut_key]['text'] = $help_tut_emoji . ' ' . $help_tut_buttons[$help_tut_key]['text'];
         }
+        // tutorials are green out of the box (categories are blue) - an admin
+        // colour set in 🎨 نمایش دسته‌بندی و آموزش‌ها still wins
         $help_tut_color = $help_tut_section['color'][$help_tut_key] ?? '';
-        if ($help_tut_color !== '' && in_array($help_tut_color, ['primary', 'success', 'danger'], true)) {
-            $help_tut_buttons[$help_tut_key]['style'] = $help_tut_color;
-        }
+        $help_tut_buttons[$help_tut_key]['style'] = in_array($help_tut_color, ['primary', 'success', 'danger'], true) ? $help_tut_color : 'success';
     }
     $helpidos['inline_keyboard'] = array_merge($helpidos['inline_keyboard'], help_layout_chunk_rows($help_tut_ordered, $help_tut_buttons, $help_tut_section['width']));
-    $helpidos['inline_keyboard'][] = [
-        ['text' => $textbotlang['users']['backmenu'], 'callback_data' => "helpbtns"],
-    ];
+    // own-key button of this caption ('hb'), so its label/colour/emoji are
+    // editable in 🎨 شخصی‌سازی ← 📚 پیام و دکمه‌های آموزش like every other button
+    $help_cat_lang = $user['lang'] ?? 'fa';
+    if (!bt_button_hidden($help_cat_lang, 'users.help.listCaption')) {
+        $helpidos['inline_keyboard'][] = [
+            bt_button($help_cat_lang, 'users.help.listCaption', $textbotlang['users']['help']['backToCategoriesBtn'] ?? $textbotlang['users']['backmenu'], "helpbtns", 'danger'),
+        ];
+    }
     $json_list_help = json_encode($helpidos);
     Editmessagetext($from_id, $message_id, $textbotlang['users']['help']['listCaption'] ?? $textbotlang['users']['selectoption'], $json_list_help, 'HTML');
 } elseif (preg_match('/^helpos_(.*)/', $datain, $dataget)) {
@@ -3652,13 +3685,16 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     if ($helpdata !== false) {
         $help_resolved = help_resolve_lang($helpdata, $user['lang']);
         $help_back_cb = (strlen($help_resolved['media']) != 0) ? "helpbtn" : "helpbtns";
-        $backinfoss = json_encode([
-            'inline_keyboard' => [
-                [
-                    ['text' => $textbotlang['users']['status']['backinfo'], 'callback_data' => $help_back_cb],
-                ]
-            ]
-        ]);
+        // own-key button of the category caption ('hv'), so its label/colour/
+        // emoji are editable in 🎨 شخصی‌سازی ← 📚 پیام و دکمه‌های آموزش
+        $help_view_lang = $user['lang'] ?? 'fa';
+        $help_view_rows = [];
+        if (!bt_button_hidden($help_view_lang, 'users.help.categoryCaption')) {
+            $help_view_rows[] = [
+                bt_button($help_view_lang, 'users.help.categoryCaption', $textbotlang['users']['help']['backToCategoryListBtn'] ?? $textbotlang['users']['status']['backinfo'], $help_back_cb, 'danger'),
+            ];
+        }
+        $backinfoss = json_encode(['inline_keyboard' => $help_view_rows]);
         help_send_content($from_id, $help_resolved, $backinfoss);
     }
 } elseif ($text == $textbotlang['textbot']['support'] || $datain == "supportbtns" || $text == "/support") {

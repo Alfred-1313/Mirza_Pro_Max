@@ -112,6 +112,9 @@ try {
         addFieldToTable("help", "category", null, "TEXT");
         addFieldToTable("help", "translations", null, "TEXT");
         addFieldToTable("help", "entities_os", null, "TEXT");
+        // 1 = shipped with the bot, 0 = added by this shop's admin. Only the
+        // shipped ones follow the 📦 آموزش‌های آماده switch.
+        addFieldToTable("help", "is_default", "0", "VARCHAR(5)");
     }
 } catch (Exception $e) {
     file_put_contents('error_log', $e->getMessage());
@@ -244,7 +247,10 @@ timeauto_not_verify,status_keyboard_config,cron_status
         addFieldToTable("setting", "backup_interval_hours", "5", "VARCHAR(2)");
         addFieldToTable("setting", "topup_disc_admin_selftest", "0", "VARCHAR(1)");
         addFieldToTable("setting", "configGetBtnStyle", null, "VARCHAR(20)");
-        addFieldToTable("setting", "lang_switch", null, "TEXT");
+        // the automatic language picker is off on a fresh install - it used to
+        // rely on this column being NULL and the reader defaulting to '0', which
+        // meant the shipped default was invisible in the database
+        addFieldToTable("setting", "lang_switch", '{"enabled":"0","mode":"once","langs":["fa","en","ru","zh","tk"],"blockOthers":"0"}', "TEXT");
         addFieldToTable("setting", "help_layout", null, "TEXT");
         addFieldToTable("setting", "status_keyboard_config", "1", "varchar(20)");
         addFieldToTable("setting", "configDeliveryMode", null, "TEXT");
@@ -264,6 +270,12 @@ timeauto_not_verify,status_keyboard_config,cron_status
         addFieldToTable("setting", "wheelagent", "1", "varchar(45)");
         addFieldToTable("setting", "linkappstatus", "0", "varchar(45)");
         addFieldToTable("setting", "categoryhelp", "0", "varchar(45)");
+        // names of tutorial categories, so one can exist before (and after) any
+        // tutorial uses it - the rows' own category column only knows the ones
+        // currently in use
+        addFieldToTable("setting", "help_categories", "[]", "TEXT");
+        // the shipped tutorials can be switched off without being deleted
+        addFieldToTable("setting", "help_defaults_on", "1", "VARCHAR(5)");
         addFieldToTable("setting", "daywarn", "2", "varchar(45)");
         addFieldToTable("setting", "btn_status_extned", "0", "varchar(45)");
         addFieldToTable("setting", "wheelـluck_price", "0", "varchar(45)");

@@ -97,7 +97,10 @@ if (!function_exists('bottext_extras_for_text')) {
             $bts_layout = json_decode((string) ($bts_setting['keyboardmain'] ?? ''), true);
             $bts_st = (is_array($bts_layout) && isset($bts_layout['text_stickers']) && is_array($bts_layout['text_stickers'])) ? $bts_layout['text_stickers'] : [];
             $bts_re = (is_array($bts_layout) && isset($bts_layout['text_reactions']) && is_array($bts_layout['text_reactions'])) ? $bts_layout['text_reactions'] : [];
-            foreach (array_unique(array_merge(array_keys($bts_st), array_keys($bts_re))) as $bts_k) {
+            // keys with only a FACTORY sticker have no row in either override
+            // map, so they have to be added here or their sticker never fires
+            $bts_def = function_exists('bt_default_stickers') ? array_keys(bt_default_stickers()) : [];
+            foreach (array_unique(array_merge(array_keys($bts_st), array_keys($bts_re), $bts_def)) as $bts_k) {
                 $bts_val = bottext_resolve_key($bts_k);
                 if (trim($bts_val) === '') {
                     continue;
@@ -122,7 +125,7 @@ if (!function_exists('bottext_extras_for_text')) {
                     'key' => $bts_k,
                     'seg0' => $bts_seg0,
                     'seg1' => $bts_seg1,
-                    'sticker' => function_exists('bt_media_lookup') ? bt_media_lookup($bts_st, $bts_k, $bts_lang) : '',
+                    'sticker' => function_exists('bt_effective_sticker') ? bt_effective_sticker($bts_st, $bts_k, $bts_lang) : (function_exists('bt_media_lookup') ? bt_media_lookup($bts_st, $bts_k, $bts_lang) : ''),
                     'reaction' => function_exists('bt_media_lookup') ? bt_media_lookup($bts_re, $bts_k, $bts_lang) : '',
                 ];
             }

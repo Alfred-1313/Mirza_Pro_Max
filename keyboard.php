@@ -298,7 +298,9 @@ if ($adminrulecheck['rule'] == "administrator") {
             [['text' => $textbotlang['Admin']['Status']['btn']]],
             [['text' => $textbotlang['Admin']['btnKeyboard']['managementPanel']], ['text' => $textbotlang['Admin']['btnKeyboard']['addPanel']]],
             [['text' => $textbotlang['Admin']['btnKeyboard']['manageUser']], ['text' => $textbotlang['keyboard']['shopSettings']]],
-            [['text' => $textbotlang['keyboard']['supportSection']], ['text' => $textbotlang['keyboard']['educationSection']]],
+            // 📚 بخش آموزش moved into 🎨 شخصی‌سازی پیام‌های ربات ← 📚 پیام و دکمه‌های
+            // آموزش, so it is no longer a second entry point of its own here
+            [['text' => $textbotlang['keyboard']['supportSection']]],
             [['text' => $textbotlang['keyboard']['botReport']], ['text' => $textbotlang['keyboard']['panelFeatures']]],
             [['text' => $textbotlang['keyboard']['generalSettings']], ['text' => $textbotlang['keyboard']['pendingReceipts']]],
             [['text' => $textbotlang['bottext']['open_button']]],
@@ -776,13 +778,23 @@ if ($table_exists) {
     $json_list_helpkey = json_encode($help_arrke);
 }
 //------------------  [ help list ]----------------//
-$stmt = $pdo->prepare("SELECT * FROM help");
-$stmt->execute();
+// same filter the tutorial screens use: with 📦 آموزش‌های آماده switched off, a
+// category that only holds shipped tutorials must not appear either
+$help_cat_rows = function_exists('help_rows_for_user') ? help_rows_for_user() : (select("help", "*", null, null, "fetchAll") ?: []);
 $helpcwtgory = ['inline_keyboard' => []];
 $datahelp = [];
 $help_cat_disp_lang = $users['lang'] ?? 'fa';
 $help_cat_buttons_byfa = [];
-while ($result = $stmt->fetch(PDO::FETCH_ASSOC)) {
+// tutorials the admin left out of every category ("هیچ‌کدام") - they sit under
+// the category rows on the same screen instead of being unreachable
+$help_uncat_rows = [];
+foreach ($help_cat_rows as $result) {
+    $help_cat_raw = trim((string) ($result['category'] ?? ''));
+    if ($help_cat_raw === '' || $help_cat_raw === '0') {
+        $help_uncat_view = help_resolve_lang($result, $help_cat_disp_lang);
+        $help_uncat_rows[] = ['text' => $help_uncat_view['name'], 'callback_data' => "helpos_{$result['id']}"];
+        continue;
+    }
     if (in_array($result['category'], $datahelp))
         continue;
     if ($result['category'] == null)
@@ -802,12 +814,14 @@ foreach ($help_cat_ordered as $help_cat_fa_key) {
     if ($help_cat_emoji !== '') {
         $help_cat_buttons_byfa[$help_cat_fa_key]['text'] = $help_cat_emoji . ' ' . $help_cat_buttons_byfa[$help_cat_fa_key]['text'];
     }
+    // categories are blue out of the box (tutorials are green)
     $help_cat_color = $help_cat_section['color'][$help_cat_fa_key] ?? '';
-    if ($help_cat_color !== '' && in_array($help_cat_color, ['primary', 'success', 'danger'], true)) {
-        $help_cat_buttons_byfa[$help_cat_fa_key]['style'] = $help_cat_color;
-    }
+    $help_cat_buttons_byfa[$help_cat_fa_key]['style'] = in_array($help_cat_color, ['primary', 'success', 'danger'], true) ? $help_cat_color : 'primary';
 }
 $helpcwtgory['inline_keyboard'] = array_merge($helpcwtgory['inline_keyboard'], help_layout_chunk_rows($help_cat_ordered, $help_cat_buttons_byfa, $help_cat_section['width']));
+foreach ($help_uncat_rows as $help_uncat_btn) {
+    $helpcwtgory['inline_keyboard'][] = [$help_uncat_btn];
+}
 if (feature_value('linkappstatus', $help_cat_disp_lang, $setting['linkappstatus']) == "1") {
     $helpcwtgory['inline_keyboard'][] = [
         ['text' => $textbotlang['keyboard']['appDownloadLink'], 'callback_data' => "linkappdownlod"],
@@ -2345,7 +2359,11 @@ function keyboard_list_text($lang, $groupFilter = null)
         // two segments, so the old test turned every sibling green the moment one
         // of them was edited - and missed nothing only because it over-matched
         $custom = is_array($bt_list_edit) && bottext_dotted_isset($bt_list_edit[$lang] ?? null, $key);
+        // a message that merely ships with its factory sticker is not customized
         $sticker = bt_media_lookup($bt_list_st, $key, $lang);
+        if ($sticker !== '' && function_exists('bt_default_sticker') && $sticker === bt_default_sticker($key)) {
+            $sticker = '';
+        }
         $react = in_array($key, $bt_can_react_keys, true) ? bt_media_lookup($bt_list_re, $key, $lang) : '';
         $buttons = is_array($bt_list_be) && !empty($bt_list_be[$lang][$key]);
         if (!$buttons && isset($bt_extra_stores[$key])) {
@@ -2471,13 +2489,19 @@ function keyboard_list_text($lang, $groupFilter = null)
             $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['gatewaysBtn'], 'callback_data' => "btnstyle_kindhub:gateway:{$lang}", 'style' => 'primary']];
         }
         if ($groupFilter === 'help') {
+            // the actual tutorial content (add/edit/delete/translate) used to be
+            // reachable only from 👨‍💼 پنل مدیریت's own 📚 بخش آموزش button - this
+            // is the second, more discoverable way in, right next to the
+            // messages/buttons that describe this same feature.
+            $keyboard_text['inline_keyboard'][] = [['text' => bt_section_meta('help_manage')['label'], 'callback_data' => 'bt_sep|help_manage']];
+            $keyboard_text['inline_keyboard'][] = [['text' => '📚 مدیریت آموزش‌ها (افزودن/ویرایش/حذف)', 'callback_data' => 'help_lang:fa', 'style' => 'primary']];
             // the appearance of the tutorial buttons themselves (order, width,
             // colour, emoji, and now show/hide). These two hubs already existed
             // under 📚 آموزش in the admin panel - this is a second way in, from
             // the screen that owns the rest of this section's look.
             $keyboard_text['inline_keyboard'][] = [['text' => bt_section_meta('help_style')['label'], 'callback_data' => 'bt_sep|help_style']];
-            $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['categoriesBtn'], 'callback_data' => "help_disp_cat:{$lang}", 'style' => 'primary']];
-            $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['tutorialsBtn'], 'callback_data' => "help_disp_tut:{$lang}", 'style' => 'primary']];
+            $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['categoriesBtn'], 'callback_data' => "help_disp_cat:{$lang}:bt", 'style' => 'primary']];
+            $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['tutorialsBtn'], 'callback_data' => "help_disp_tut:{$lang}:bt", 'style' => 'primary']];
         }
         $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['resetAllLabel'], 'callback_data' => "bt_group_resetall|$lang|$groupFilter", 'style' => 'danger']];
         // a submenu of another group needs one step back to its parent - the
@@ -2778,11 +2802,20 @@ if (!empty($datain) && isset($sticker_callback_map[$datain])) {
 // $message_id is the bot's own glass main menu, which has to survive.
 if ($menu_tap_from_text) {
     $mt_msId = (int) ($message_id ?? 0);
-    update("user", "menu_tap_id", $mt_msId > 0 ? (string) $mt_msId : "0", "id", $from_id);
+    // the section is stored with the id ("123:text_help") so a later glass tap
+    // can tell "same section, keep it" from "different section, drop it"
+    update("user", "menu_tap_id", $mt_msId > 0 ? $mt_msId . ':' . $sticker_btn_key : "0", "id", $from_id);
 } elseif ($sticker_btn_key !== null) {
-    // a glass tap opens a screen the stashed message does not belong to - drop
-    // it rather than risk closing an unrelated message later
-    update("user", "menu_tap_id", "0", "id", $from_id);
+    // a glass tap that RE-OPENS the same section (📚 آموزش -> a category ->
+    // بازگشت, which comes back as helpbtns) still shows the screen that tap
+    // message opened, so its id has to survive - dropping it here is what left
+    // the user's own "📚 آموزش" message behind when ❌ بستن was finally tapped.
+    // A glass tap into a DIFFERENT section still drops it, as before.
+    // $users, not $user: index.php loads $user only AFTER requiring this file
+    $mt_prev = explode(':', (string) ($users['menu_tap_id'] ?? ''), 2);
+    if (($mt_prev[1] ?? '') !== $sticker_btn_key) {
+        update("user", "menu_tap_id", "0", "id", $from_id);
+    }
 }
 if ($sticker_btn_key !== null) {
     // only the sticker sent on THIS tap may be closed later: a button with no

@@ -413,6 +413,9 @@ if (!function_exists('bottext_item_menu_payload')) {
         if ($bt_key === 'textbot.afterText') {
             $bt_label = '📦 پیام بعد از دریافت اکانت تست';
         }
+        if ($bt_key === 'users.usertest.noPanel') {
+            $bt_label = '⛔️ پیام «اکانت تست غیرفعال است»';
+        }
         if ($bt_key === 'users.status.infoFull') {
             $bt_label = '📊 پیام و دکمه‌های صفحه‌ی وضعیت سرویس';
         }
@@ -687,6 +690,7 @@ if (!function_exists('bottext_item_menu_payload')) {
             // it sent the customer here from the home list before, where it read
             // as a child of whatever section was last on screen; its own back
             // button already pointed at this screen
+            $kb['inline_keyboard'][] = [['text' => '⛔️ پیام «اکانت تست غیرفعال است»', 'callback_data' => "bt_edit|{$bt_lang}|users.usertest.noPanel", 'style' => 'primary']];
             $kb['inline_keyboard'][] = [['text' => '📦 پیام بعد از دریافت اکانت تست', 'callback_data' => "bt_edit|{$bt_lang}|textbot.afterText", 'style' => 'primary']];
             $kb['inline_keyboard'][] = [['text' => '⏰ پیام اتمام اکانت تست', 'callback_data' => "bt_edit|{$bt_lang}|textbot.testExpired", 'style' => 'primary']];
             $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌ی پیام اتمام اکانت تست', 'callback_data' => "gbtn|list|{$bt_lang}|te|u", 'style' => 'primary']];
@@ -715,6 +719,12 @@ if (!function_exists('bottext_item_menu_payload')) {
             $kb['inline_keyboard'][] = [['text' => '💰 ویرایش دکمه‌ی افزایش موجودی', 'callback_data' => "bt_edit|{$bt_lang}|users.Balance.insufficientBalanceSimple", 'style' => 'primary']];
         } elseif ($bt_key === 'users.changeLink.warnchange') {
             $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های تغییر لینک', 'callback_data' => "gbtn|list|{$bt_lang}|cl", 'style' => 'primary']];
+        } elseif ($bt_key === 'users.help.listCaption') {
+            // the one button under the tutorial list ('hb' alias, own-key trick)
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه بازگشت به دسته‌بندی', 'callback_data' => "gbtn|list|{$bt_lang}|hb", 'style' => 'primary']];
+        } elseif ($bt_key === 'users.help.categoryCaption') {
+            // and the one under a tutorial's own content screen ('hv' alias)
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه بازگشت به لیست دسته‌بندی', 'callback_data' => "gbtn|list|{$bt_lang}|hv", 'style' => 'primary']];
         } elseif ($bt_key === 'users.Balance.topupDiscPrompt') {
             // the 'td' alias was wired everywhere except here, so this item's
             // label promised "+ دکمه‌هایش" while the screen offered no way in
@@ -749,7 +759,7 @@ if (!function_exists('bottext_item_menu_payload')) {
             $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => 'bt_langswitch', 'style' => 'danger']];
         } elseif ($bt_key === 'users.Balance.chargeSuccessDiscount') {
             $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "bt_edit|{$bt_lang}|users.Balance.chargeSuccess", 'style' => 'danger']];
-        } elseif ($bt_key === 'textbot.afterText') {
+        } elseif ($bt_key === 'textbot.afterText' || $bt_key === 'users.usertest.noPanel') {
             $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "bt_edit|{$bt_lang}|users.usertest.selectUsernamePrompt", 'style' => 'danger']];
         } elseif ($bt_key === 'textbot.testExpired') {
             // bottext.btnCloseTest used to need the same case here, but it now
@@ -1335,26 +1345,58 @@ if (!function_exists('help_list_payload')) {
         if (empty($rows)) {
             $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['emptyList'], 'callback_data' => "help_lang:{$lang}"]];
         }
+        // grouped under their category, uncategorised last - a flat list gave no
+        // hint of where anything actually lives
+        usort($rows, function ($a, $b) {
+            $ca = trim((string) ($a['category'] ?? ''));
+            $cb = trim((string) ($b['category'] ?? ''));
+            $ca = ($ca === '' || $ca === '0') ? "\xff" : $ca;
+            $cb = ($cb === '' || $cb === '0') ? "\xff" : $cb;
+            return $ca === $cb ? strnatcasecmp((string) $a['name_os'], (string) $b['name_os']) : strnatcasecmp($ca, $cb);
+        });
+        // this list is also a preview: the category headings and the tutorial
+        // rows wear the same colours the customer sees, so the admin does not
+        // have to open 🎨 نمایش دسته‌بندی و آموزش‌ها to know what a change did
+        $help_cat_style = help_layout_section($lang, 'categories');
+        $help_tut_style = help_layout_section($lang, 'tutorials');
+        $help_ok_styles = ['primary', 'success', 'danger'];
+        $help_seen_cat = null;
         foreach ($rows as $help_row) {
+            $help_row_cat = trim((string) ($help_row['category'] ?? ''));
+            $help_row_cat = ($help_row_cat === '' || $help_row_cat === '0') ? '' : $help_row_cat;
+            if ($help_row_cat !== $help_seen_cat) {
+                $help_seen_cat = $help_row_cat;
+                $help_head = [
+                    'text' => $help_row_cat === '' ? '🚫 بدون دسته‌بندی' : "🗂 {$help_row_cat}",
+                    'callback_data' => 'none',
+                ];
+                if ($help_row_cat !== '') {
+                    // the category's own colour (blue unless the admin changed it)
+                    $help_head_color = $help_cat_style['color'][$help_row_cat] ?? '';
+                    $help_head['style'] = in_array($help_head_color, $help_ok_styles, true) ? $help_head_color : 'primary';
+                }
+                $kb['inline_keyboard'][] = [$help_head];
+            }
             $help_tr = json_decode((string) ($help_row['translations'] ?? ''), true);
             $help_entry = (is_array($help_tr) && isset($help_tr[$lang])) ? $help_tr[$lang] : null;
             $help_name = $help_row['name_os'];
-            $help_style = '';
             if ($lang !== 'fa' && is_array($help_entry)) {
                 if (!empty($help_entry['name'])) {
                     $help_name = $help_entry['name'];
                 }
+                // ✏️/🖼 already say "translated for this language" - the colour is
+                // free to show the button's real appearance instead
                 $help_name .= ' ✏️';
                 if (!empty($help_entry['media'])) {
                     $help_name .= ' 🖼';
                 }
-                $help_style = 'success';
             }
-            $help_btn = ['text' => $help_name, 'callback_data' => "help_item:{$help_row['id']}:{$lang}"];
-            if ($help_style !== '') {
-                $help_btn['style'] = $help_style;
-            }
-            $kb['inline_keyboard'][] = [$help_btn];
+            $help_row_color = $help_tut_style['color'][(string) $help_row['id']] ?? '';
+            $kb['inline_keyboard'][] = [[
+                'text' => $help_name,
+                'callback_data' => "help_item:{$help_row['id']}:{$lang}",
+                'style' => in_array($help_row_color, $help_ok_styles, true) ? $help_row_color : 'success',
+            ]];
         }
         $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['previewBtn'], 'callback_data' => "help_preview:{$lang}"]];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['backToHomeBtn'], 'callback_data' => "help_lang:{$lang}"]];
@@ -1362,6 +1404,167 @@ if (!function_exists('help_list_payload')) {
     }
 }
 
+if (!function_exists('help_category_list')) {
+    // Categories used to exist only as whatever strings the tutorials happened
+    // to carry, so a category could not be created before its first tutorial
+    // and vanished again when the last one left it. The names now also live in
+    // setting.help_categories; this merges that list with the ones in use, so
+    // an empty category still shows up (with a count of 0) and nothing that IS
+    // in use can go missing even if the store falls behind.
+    function help_category_store()
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $s = json_decode((string) ($setting['help_categories'] ?? ''), true);
+        return is_array($s) ? array_values(array_filter(array_map('strval', $s), function ($v) {
+            return trim($v) !== '';
+        })) : [];
+    }
+    function help_category_store_save(array $names)
+    {
+        $clean = [];
+        foreach ($names as $n) {
+            $n = trim((string) $n);
+            if ($n !== '' && !in_array($n, $clean, true)) {
+                $clean[] = $n;
+            }
+        }
+        update("setting", "help_categories", json_encode($clean, JSON_UNESCAPED_UNICODE), null, null);
+    }
+    function help_category_store_add($name)
+    {
+        $names = help_category_store();
+        $names[] = $name;
+        help_category_store_save($names);
+    }
+    function help_category_list()
+    {
+        $rows = select("help", "*", null, null, "fetchAll");
+        $cats = [];
+        foreach (help_category_store() as $n) {
+            $cats[$n] = 0;
+        }
+        foreach (is_array($rows) ? $rows : [] as $r) {
+            $c = trim((string) ($r['category'] ?? ''));
+            // "0" is what the add flow writes for "no category"
+            if ($c === '' || $c === '0') {
+                continue;
+            }
+            $cats[$c] = ($cats[$c] ?? 0) + 1;
+        }
+        ksort($cats, SORT_NATURAL | SORT_FLAG_CASE);
+        return $cats;
+    }
+}
+if (!function_exists('help_category_picker_payload')) {
+    // One picker, used both when a tutorial is created and when its category is
+    // changed later - $target is 'add' or a tutorial id.
+    function help_category_picker_payload($lang, $target, $textbotlang)
+    {
+        $cats = help_category_list();
+        $names = array_keys($cats);
+        // when an existing tutorial is being moved, its current category is
+        // ticked and named in the caption, so the admin can see what they are
+        // changing FROM rather than guessing
+        $current = null;
+        $title = '';
+        if ($target !== 'add') {
+            $row = select("help", "*", "id", $target, "select");
+            if (is_array($row)) {
+                $cur = trim((string) ($row['category'] ?? ''));
+                $current = ($cur === '' || $cur === '0') ? null : $cur;
+                $title = (string) $row['name_os'];
+            }
+        }
+        $kb = ['inline_keyboard' => []];
+        foreach ($names as $i => $name) {
+            $tick = ($current !== null && $current === $name) ? '✅ ' : '';
+            $kb['inline_keyboard'][] = [[
+                'text' => $tick . "🗂 {$name}  (" . $cats[$name] . ")",
+                'callback_data' => "help_pickcat:{$lang}:{$target}:{$i}",
+                'style' => 'primary',
+            ]];
+        }
+        $noneTick = ($target !== 'add' && $current === null) ? '✅ ' : '';
+        $kb['inline_keyboard'][] = [['text' => $noneTick . '🚫 بدون دسته‌بندی', 'callback_data' => "help_pickcat:{$lang}:{$target}:none"]];
+        $kb['inline_keyboard'][] = [['text' => '➕ ساخت دسته‌بندی جدید', 'callback_data' => "help_newcat:{$lang}:{$target}", 'style' => 'success']];
+        $back = ($target === 'add') ? "help_lang:{$lang}" : "help_item:{$target}:{$lang}";
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => $back, 'style' => 'danger']];
+
+        if ($target === 'add') {
+            $caption = "🗂 <b>دسته‌بندی آموزش جدید</b>\n\n"
+                . "اول بگو این آموزش کجا قرار بگیره، بعد اسم و محتواش رو ازت می‌پرسم.\n\n"
+                . "• روی یکی از دسته‌های زیر بزن\n"
+                . "• یا «🚫 بدون دسته‌بندی» تا مستقیم توی لیست آموزش‌ها به کاربر نشون داده بشه\n"
+                . "• یا همین‌جا یه دسته‌ی تازه بساز";
+            if (empty($names)) {
+                $caption .= "\n\n📌 هنوز هیچ دسته‌ای نساختی - فعلاً فقط «بدون دسته‌بندی» داری.";
+            }
+        } else {
+            $caption = "🗂 <b>جابه‌جایی دسته‌بندی</b>\n\n"
+                . "آموزش: <b>" . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . "</b>\n"
+                . "دسته‌ی فعلی: <b>" . ($current === null ? 'بدون دسته‌بندی' : htmlspecialchars($current, ENT_QUOTES, 'UTF-8')) . "</b>\n\n"
+                . "مقصد جدید رو انتخاب کن. ✅ یعنی همین الان همینه.";
+        }
+        return [$caption, json_encode($kb)];
+    }
+}
+if (!function_exists('help_categories_payload')) {
+    // one screen that finally answers "which categories exist and what is in
+    // them" - the tutorials under each one open their existing edit screen
+    function help_categories_payload($lang, $textbotlang)
+    {
+        $cats = help_category_list();
+        $kb = ['inline_keyboard' => []];
+        if (empty($cats)) {
+            $kb['inline_keyboard'][] = [['text' => 'هنوز هیچ دسته‌ای ساخته نشده', 'callback_data' => 'none']];
+        }
+        $idx = 0;
+        $empties = 0;
+        foreach ($cats as $name => $count) {
+            // an empty category is worth flagging: it is invisible to customers
+            // until something is put in it, and it is the only kind that can be
+            // deleted here without touching a tutorial
+            if ($count === 0) {
+                $empties++;
+                $kb['inline_keyboard'][] = [
+                    ['text' => "🗂 {$name}  (خالی)", 'callback_data' => "help_catview:{$lang}:{$idx}"],
+                    ['text' => '🗑', 'callback_data' => "help_delcat:{$lang}:{$idx}", 'style' => 'danger'],
+                ];
+            } else {
+                $kb['inline_keyboard'][] = [['text' => "🗂 {$name}  ({$count} آموزش)", 'callback_data' => "help_catview:{$lang}:{$idx}", 'style' => 'primary']];
+            }
+            $idx++;
+        }
+        $kb['inline_keyboard'][] = [['text' => '➕ ساخت دسته‌بندی جدید', 'callback_data' => "help_newcat:{$lang}:list", 'style' => 'success']];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "help_lang:{$lang}", 'style' => 'danger']];
+        $caption = "🗂 <b>دسته‌بندی‌ها</b>\n\n"
+            . "روی هر دسته بزن تا آموزش‌های داخلش رو ببینی.\n\n"
+            . "📌 دسته‌ی خالی به کاربر نشون داده نمی‌شه تا وقتی حداقل یه آموزش توش بذاری.";
+        if ($empties > 0) {
+            $caption .= "\n🗑 فقط دسته‌های خالی قابل حذفن - دسته‌ای که آموزش داره اول باید خالی بشه.";
+        }
+        return [$caption, json_encode($kb)];
+    }
+}
+if (!function_exists('help_category_items_payload')) {
+    function help_category_items_payload($lang, $idx, $textbotlang)
+    {
+        $cats = array_keys(help_category_list());
+        $name = $cats[$idx] ?? null;
+        $kb = ['inline_keyboard' => []];
+        if ($name === null) {
+            $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "help_cats:{$lang}", 'style' => 'danger']];
+            return ["🗂 این دسته دیگه وجود نداره.", json_encode($kb)];
+        }
+        $rows = select("help", "*", "category", $name, "fetchAll");
+        foreach (is_array($rows) ? $rows : [] as $r) {
+            $kb['inline_keyboard'][] = [['text' => $r['name_os'], 'callback_data' => "help_item:{$r['id']}:{$lang}"]];
+        }
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "help_cats:{$lang}", 'style' => 'danger']];
+        $caption = "🗂 <b>" . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . "</b>\n\nآموزش‌های این دسته. روی هرکدوم بزن تا ویرایشش کنی (از همونجا می‌تونی دسته‌اش رو هم عوض کنی).";
+        return [$caption, json_encode($kb)];
+    }
+}
 if (!function_exists('help_home_payload')) {
     // "home": language tabs + add + colored list-count button + close — this
     // is the very first screen, unchanged in spirit from before this feature
@@ -1392,12 +1595,55 @@ if (!function_exists('help_home_payload')) {
             ['text' => ($lang == 'zh' ? "✅" : "") . $textbotlang['bottext']['langs']['zh'], 'callback_data' => "help_lang:zh"],
             ['text' => ($lang == 'tk' ? "✅" : "") . $textbotlang['bottext']['langs']['tk'], 'callback_data' => "help_lang:tk"],
         ];
-        $kb['inline_keyboard'][] = [['text' => $help_add_label, 'callback_data' => 'help_add']];
-        $kb['inline_keyboard'][] = [['text' => $help_list_label, 'callback_data' => "help_view_list:{$lang}", 'style' => $help_style]];
-        $kb['inline_keyboard'][] = [['text' => $help_display_label, 'callback_data' => "help_disp:{$lang}"]];
+        // what actually exists right now, so the screen answers "where do
+        // categories come from?" instead of leaving it to be discovered
+        $help_all = select("help", "*", null, null, "fetchAll");
+        $help_all = is_array($help_all) ? $help_all : [];
+        $help_cats = help_category_list();
+        $help_uncat = 0;
+        foreach ($help_all as $r) {
+            $c = trim((string) ($r['category'] ?? ''));
+            if ($c === '' || $c === '0') {
+                $help_uncat++;
+            }
+        }
+
+        // two labelled halves instead of one flat pile of buttons: what the
+        // categories are, then what the tutorials are
+        $kb['inline_keyboard'][] = [['text' => bt_section_meta('help_cats')['label'], 'callback_data' => 'bt_sep|help_cats']];
+        $kb['inline_keyboard'][] = [['text' => '🗂 دسته‌بندی‌ها (' . count($help_cats) . ')', 'callback_data' => "help_cats:{$lang}", 'style' => 'primary']];
+        $kb['inline_keyboard'][] = [['text' => bt_section_meta('help_items')['label'], 'callback_data' => 'bt_sep|help_items']];
+        $kb['inline_keyboard'][] = [['text' => $help_add_label, 'callback_data' => 'help_add', 'style' => 'success']];
+        $kb['inline_keyboard'][] = [['text' => $help_list_label . ' (' . count($help_all) . ')', 'callback_data' => "help_view_list:{$lang}", 'style' => $help_style]];
+        $help_def_on = help_defaults_on();
+        $help_def_count = 0;
+        $help_own_count = 0;
+        foreach ($help_all as $r) {
+            if ((string) ($r['is_default'] ?? '0') === '1') {
+                $help_def_count++;
+            } else {
+                $help_own_count++;
+            }
+        }
+        $kb['inline_keyboard'][] = [['text' => bt_section_meta('help_defaults')['label'], 'callback_data' => 'bt_sep|help_defaults']];
+        $kb['inline_keyboard'][] = [[
+            'text' => ($help_def_on ? '✅ آموزش‌های آماده روشن است' : '❌ آموزش‌های آماده خاموش است') . " ({$help_def_count})",
+            'callback_data' => "help_defaults:{$lang}:" . ($help_def_on ? '1' : '0'),
+            'style' => $help_def_on ? 'success' : 'danger',
+        ]];
+        // 🎨 نمایش دسته‌بندی و آموزش‌ها is reached from 🎨 شخصی‌سازی پیام‌های ربات ←
+        // 📚 پیام و دکمه‌های آموزش now; a second copy here just split one setting
+        // across two menus
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "bt_group|{$lang}|help", 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'help_close', 'style' => 'danger']];
         $help_caption_tpl = $help_tab_texts['Admin']['Help']['homeCaption'] ?? $textbotlang['Admin']['Help']['homeCaption'];
         $help_caption = strtr($help_caption_tpl, ['{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang]);
+        $help_caption .= "\n\n📊 <b>وضعیت فعلی</b>"
+            . "\n• آموزش‌ها: <b>" . count($help_all) . "</b> (آماده: <b>{$help_def_count}</b> · خودت: <b>{$help_own_count}</b> · بدون دسته: <b>" . $help_uncat . "</b>)"
+            . "\n• دسته‌بندی‌ها: <b>" . count($help_cats) . "</b>"
+            . "\n• آموزش‌های آماده: <b>" . ($help_def_on ? 'روشن (کاربر می‌بیندشون)' : 'خاموش (فقط آموزش‌های خودت)') . "</b>"
+            . "\n\n📌 دسته‌بندی‌ها رو از «🗂 دسته‌بندی‌ها» می‌سازی. موقع افزودن هر آموزش هم ازت پرسیده می‌شه توی کدوم دسته باشه - و «هیچ‌کدام» یعنی بدون دسته نمایش داده بشه."
+            . "\n📦 آموزش‌های آماده همون‌هایی‌ان که ربات باهاشون نصب می‌شه. خاموش‌کردنشون پاکشون نمی‌کنه - فقط از دید کاربر برداشته می‌شن.";
         return [$help_caption, json_encode($kb)];
     }
 }
@@ -1417,26 +1663,41 @@ if (!function_exists('help_display_hub_payload')) {
     }
 }
 
+if (!function_exists('help_disp_back_row')) {
+    // These two hubs have two ways in now: the tutorial manager's own
+    // 🎨 نمایش دسته‌بندی و آموزش‌ها screen, and 🎨 شخصی‌سازی پیام‌های ربات ←
+    // 📚 پیام و دکمه‌های آموزش. "back" has to return to whichever one the admin
+    // actually came from, so the caller tags the callback with :bt for the
+    // second one instead of every route landing in the tutorial manager.
+    function help_disp_back_row($lang, $textbotlang, $origin)
+    {
+        if ($origin === 'bt') {
+            return [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "bt_group|{$lang}|help", 'style' => 'danger']];
+        }
+        return [['text' => $textbotlang['Admin']['Help']['backToHomeBtn'], 'callback_data' => "help_disp:{$lang}"]];
+    }
+}
+
 if (!function_exists('help_disp_cat_hub_payload')) {
-    function help_disp_cat_hub_payload($lang, $textbotlang)
+    function help_disp_cat_hub_payload($lang, $textbotlang, $origin = '')
     {
         $kb = ['inline_keyboard' => []];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['layoutBtn'], 'callback_data' => "help_lay:categories:{$lang}"]];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['colorBtn'], 'callback_data' => "help_col:categories:{$lang}"]];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['emojiBtn'], 'callback_data' => "help_emo:categories:{$lang}"]];
-        $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['backToHomeBtn'], 'callback_data' => "help_disp:{$lang}"]];
+        $kb['inline_keyboard'][] = help_disp_back_row($lang, $textbotlang, $origin);
         return json_encode($kb);
     }
 }
 
 if (!function_exists('help_disp_tut_hub_payload')) {
-    function help_disp_tut_hub_payload($lang, $textbotlang)
+    function help_disp_tut_hub_payload($lang, $textbotlang, $origin = '')
     {
         $kb = ['inline_keyboard' => []];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['layoutBtn'], 'callback_data' => "help_lay:tutorials:{$lang}"]];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['colorBtn'], 'callback_data' => "help_col:tutorials:{$lang}"]];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['emojiBtn'], 'callback_data' => "help_emo:tutorials:{$lang}"]];
-        $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['backToHomeBtn'], 'callback_data' => "help_disp:{$lang}"]];
+        $kb['inline_keyboard'][] = help_disp_back_row($lang, $textbotlang, $origin);
         return json_encode($kb);
     }
 }
@@ -4285,11 +4546,16 @@ if (!function_exists('help_layout_back_cb')) {
     // button-styling per-kind sub-hub for everything else (panel/product/category)
     function help_layout_back_cb($kind, $lang)
     {
+        // :bt - since 📚 مدیریت آموزش‌ها stopped carrying its own copy of the
+        // display hub, 🎨 شخصی‌سازی ← 📚 پیام و دکمه‌های آموزش is the only way
+        // into these two screens, so this is where their chain has to end up.
+        // Without it, backing out of the colour/layout/emoji tools dropped the
+        // admin into 📚 مدیریت آموزش‌ها, a menu they never came through.
         if ($kind === 'categories') {
-            return "help_disp_cat:{$lang}";
+            return "help_disp_cat:{$lang}:bt";
         }
         if ($kind === 'tutorials') {
-            return "help_disp_tut:{$lang}";
+            return "help_disp_tut:{$lang}:bt";
         }
         return "btnstyle_kindhub:{$kind}:{$lang}";
     }
@@ -5254,23 +5520,105 @@ if (!function_exists('help_emoji_editor_payload')) {
     }
 }
 
+if (!function_exists('help_preview_categories')) {
+    // the categories a CUSTOMER would see, in the base (fa) strings the layout
+    // settings are keyed by, with one representative row each so the label can
+    // be resolved into the previewed language
+    function help_preview_categories($rows, $lang)
+    {
+        $cats = [];
+        foreach ($rows as $r) {
+            $c = trim((string) ($r['category'] ?? ''));
+            if ($c === '' || $c === '0' || isset($cats[$c])) {
+                continue;
+            }
+            $view = help_resolve_lang($r, $lang);
+            $cats[$c] = ($view['category'] !== '') ? $view['category'] : $c;
+        }
+        uksort($cats, 'strnatcasecmp');
+        return $cats;
+    }
+}
 if (!function_exists('help_preview_list_payload')) {
-    function help_preview_list_payload($lang, $textbotlang)
+    // A real preview: the same grouping, order, width, emoji, colour and
+    // hidden-ness the customer gets, built from the same help_layout_* helpers
+    // index.php and keyboard.php render with. It used to be a flat list of raw
+    // names, which told the admin nothing about what their display settings
+    // actually did.
+    function help_preview_list_payload($lang, $textbotlang, $catIdx = null)
     {
         $rows = select("help", "*", null, null, "fetchAll");
         if (!is_array($rows)) {
             $rows = [];
         }
+        $ok = ['primary', 'success', 'danger'];
+        $catSec = help_layout_section($lang, 'categories');
+        $tutSec = help_layout_section($lang, 'tutorials');
+        $cats = help_preview_categories($rows, $lang);
+        $catKeys = array_keys($cats);
         $kb = ['inline_keyboard' => []];
-        foreach ($rows as $help_row) {
-            $help_view = help_resolve_lang($help_row, $lang);
-            $kb['inline_keyboard'][] = [['text' => $help_view['name'], 'callback_data' => "help_prev_item:{$help_row['id']}:{$lang}"]];
+        $hiddenCount = 0;
+
+        // which tutorials belong on this screen
+        $scope = [];
+        if ($catIdx === null) {
+            foreach ($rows as $r) {
+                $c = trim((string) ($r['category'] ?? ''));
+                if ($c === '' || $c === '0' || empty($cats)) {
+                    $scope[] = $r;
+                }
+            }
+        } else {
+            $want = $catKeys[$catIdx] ?? null;
+            foreach ($rows as $r) {
+                if (trim((string) ($r['category'] ?? '')) === $want) {
+                    $scope[] = $r;
+                }
+            }
         }
-        if (empty($rows)) {
-            $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['emptyList'], 'callback_data' => "help_preview:{$lang}"]];
+
+        // top screen with categories: the category buttons come first, exactly
+        // as the customer sees them
+        if ($catIdx === null && !empty($cats)) {
+            $catBtns = [];
+            foreach ($catKeys as $i => $base) {
+                $emoji = $catSec['emoji'][$base] ?? '';
+                $color = $catSec['color'][$base] ?? '';
+                $catBtns[$base] = [
+                    'text' => ($emoji !== '' ? $emoji . ' ' : '') . $cats[$base],
+                    'callback_data' => "help_prev_cat:{$lang}:{$i}",
+                    'style' => in_array($color, $ok, true) ? $color : 'primary',
+                ];
+            }
+            $ordered = help_layout_visible(help_layout_apply_order(array_keys($catBtns), $catSec['order']), $catSec);
+            $hiddenCount += count($catBtns) - count($ordered);
+            $kb['inline_keyboard'] = array_merge($kb['inline_keyboard'], help_layout_chunk_rows($ordered, $catBtns, $catSec['width']));
         }
-        $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['backToListBtn'], 'callback_data' => "help_view_list:{$lang}"]];
-        return json_encode($kb);
+
+        // the tutorials of this screen, same treatment
+        $tutBtns = [];
+        foreach ($scope as $r) {
+            $view = help_resolve_lang($r, $lang);
+            $emoji = $tutSec['emoji'][(string) $r['id']] ?? '';
+            $color = $tutSec['color'][(string) $r['id']] ?? '';
+            $tutBtns[(string) $r['id']] = [
+                'text' => ($emoji !== '' ? $emoji . ' ' : '') . $view['name'],
+                'callback_data' => "help_prev_item:{$r['id']}:{$lang}",
+                'style' => in_array($color, $ok, true) ? $color : 'success',
+            ];
+        }
+        $tutOrdered = help_layout_visible(help_layout_apply_order(array_keys($tutBtns), $tutSec['order']), $tutSec);
+        $hiddenCount += count($tutBtns) - count($tutOrdered);
+        $kb['inline_keyboard'] = array_merge($kb['inline_keyboard'], help_layout_chunk_rows($tutOrdered, $tutBtns, $tutSec['width']));
+
+        if (empty($kb['inline_keyboard'])) {
+            $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['emptyList'], 'callback_data' => 'none']];
+        }
+        if ($catIdx !== null) {
+            $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به پیش‌نمایش', 'callback_data' => "help_preview:{$lang}", 'style' => 'danger']];
+        }
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['backToListBtn'], 'callback_data' => "help_view_list:{$lang}", 'style' => 'danger']];
+        return [json_encode($kb), $hiddenCount, count($cats), count($tutBtns)];
     }
 }
 
@@ -6166,6 +6514,10 @@ if (preg_match('/^renamebtn-(\d+)-(\d+)$/', $user['step'], $rn_m) && $datain == 
     return;
 }
 if ($datain == "renamereset" && $adminrulecheck['rule'] == "administrator") {
+    // factory default is NOT "everything visible" - table.php's own keyboardmain
+    // ships these keys pre-hidden, so resetting must restore THAT, not clear
+    // every hidden flag unconditionally (which used to undo the factory default)
+    $rn_default_hidden = mainmenu_default_hidden_keys();
     $rn_setting = select("setting", "*", null, null, "select");
     $rn_layout = json_decode($rn_setting['keyboardmain'], true);
     if (is_array($rn_layout) && isset($rn_layout['keyboard']) && is_array($rn_layout['keyboard'])) {
@@ -6175,7 +6527,12 @@ if ($datain == "renamereset" && $adminrulecheck['rule'] == "administrator") {
             }
             foreach ($rn_row as $rn_c => $rn_b) {
                 if (is_array($rn_b)) {
-                    unset($rn_layout['keyboard'][$rn_r][$rn_c]['custom_text'], $rn_layout['keyboard'][$rn_r][$rn_c]['hidden']);
+                    unset($rn_layout['keyboard'][$rn_r][$rn_c]['custom_text']);
+                    if (isset($rn_b['text']) && in_array($rn_b['text'], $rn_default_hidden, true)) {
+                        $rn_layout['keyboard'][$rn_r][$rn_c]['hidden'] = true;
+                    } else {
+                        unset($rn_layout['keyboard'][$rn_r][$rn_c]['hidden']);
+                    }
                 }
             }
         }
@@ -6704,17 +7061,17 @@ if (preg_match('/^btact\|bbtnpos\|([a-z]{2})\|(left|right)$/', $datain, $btm) &&
     Editmessagetext($from_id, $message_id, $bb_text, $bb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|list\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|list\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|td|hb|hv)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     list($gb_text, $gb_kb) = genbtn_list_payload($gb_m[2], $gb_m[1], $textbotlang, $gb_m[3] ?? '');
     Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|open\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|open\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], (int) $gb_m[3], $textbotlang, $gb_m[4] ?? '');
     Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|text\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|text\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     savedata("clear", "bt_msgid", $message_id);
     $gb_o = $gb_m[4] ?? '';
     $gb_sfx = ($gb_o !== '') ? "|{$gb_o}" : '';
@@ -6725,14 +7082,14 @@ if (preg_match('/^gbtn\|text\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|a
     Editmessagetext($from_id, $message_id, "✏️ متن جدید دکمه رو بفرست ✍️", $gb_cancel_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|style\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he)\|([01])\|(primary|success|danger)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|style\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv)\|([01])\|(primary|success|danger)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     genbtn_set_style($gb_m[1], $gb_key, (int) $gb_m[3], $gb_m[4]);
     list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], (int) $gb_m[3], $textbotlang, $gb_m[5] ?? '');
     Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|emoji\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|emoji\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     $gb_o = $gb_m[4] ?? '';
     $gb_sfx = ($gb_o !== '') ? "|{$gb_o}" : '';
     step("gbtnemo-{$gb_m[1]}-{$gb_m[2]}-{$gb_m[3]}" . (($gb_o !== '') ? "-{$gb_o}" : ''), $from_id);
@@ -6745,7 +7102,7 @@ if (preg_match('/^gbtn\|emoji\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|
     Editmessagetext($from_id, $message_id, $gb_prompt, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|simple\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|simple\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     $gb_ov = genbtn_override($gb_m[1], $gb_key, (int) $gb_m[3]);
     genbtn_set_style($gb_m[1], $gb_key, (int) $gb_m[3], null, null, null, null, empty($gb_ov['simple']));
@@ -6753,7 +7110,7 @@ if (preg_match('/^gbtn\|simple\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp
     Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|pos\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he)\|([01])\|(left|right)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|pos\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv)\|([01])\|(left|right)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     genbtn_set_style($gb_m[1], $gb_key, (int) $gb_m[3], null, null, null, $gb_m[4], null);
     list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], (int) $gb_m[3], $textbotlang, $gb_m[5] ?? '');
@@ -6765,7 +7122,7 @@ if (preg_match('/^gbtn\|pos\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac
 // five ❌ بستن). The other eight aliases are confirm/pay/cancel buttons their
 // screens have no alternative path around, so hiding one would strand the
 // customer - this pattern is what stops that from being reachable at all.
-if (preg_match('/^gbtn\|hide\|([a-z]{2})\|(rc|rp|bu|tp|ac|ts|he)\|([01])$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|hide\|([a-z]{2})\|(rc|rp|bu|tp|ac|ts|he|hb|hv)\|([01])$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     if ($gb_key === null || !in_array($gb_key, bt_btnitem_keys(), true)) {
         return;
@@ -6787,7 +7144,7 @@ if (preg_match('/^gbtn\|hide\|([a-z]{2})\|(rc|rp|bu|tp|ac|ts|he)\|([01])$/', $da
     Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|rst\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|rst\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     genbtn_reset($gb_m[1], $gb_key, (int) $gb_m[3]);
     // 🖼 استیکر دکمه بستن sits on this same screen now, so "ریست این دکمه" has to
@@ -6800,14 +7157,14 @@ if (preg_match('/^gbtn\|rst\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac
     Editmessagetext($from_id, $message_id, "🔁 این دکمه به پیش‌فرض برگشت.\n\n" . $gb_text, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|rstall\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|rstall\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|td|hb|hv)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     genbtn_reset_all($gb_m[1], $gb_key);
     list($gb_text, $gb_kb) = genbtn_list_payload($gb_m[2], $gb_m[1], $textbotlang, $gb_m[3] ?? '');
     Editmessagetext($from_id, $message_id, "🔁 همه دکمه‌ها به پیش‌فرض برگشتن.\n\n" . $gb_text, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtntxt-([a-z]{2})-(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he)-([01])(?:-(u))?$/', (string) $user['step'], $gb_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtntxt-([a-z]{2})-(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv)-([01])(?:-(u))?$/', (string) $user['step'], $gb_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     $gb_newtext = trim((string) $text);
     if ($gb_newtext === '' || mb_strlen($gb_newtext) > 64) {
@@ -6827,7 +7184,7 @@ if (preg_match('/^gbtntxt-([a-z]{2})-(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|
     }
     return;
 }
-if (preg_match('/^gbtnemo-([a-z]{2})-(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he)-([01])(?:-(u))?$/', (string) $user['step'], $gb_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtnemo-([a-z]{2})-(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv)-([01])(?:-(u))?$/', (string) $user['step'], $gb_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     $gb_idx = (int) $gb_m[3];
     $gb_icon_id = '';
@@ -9275,13 +9632,11 @@ elseif ($datain == "systemsms") {
     list($help_caption, $help_kb) = help_home_payload('fa', $textbotlang);
     sendmessage($from_id, $help_caption, $help_kb, 'HTML');
 } elseif ($text == $textbotlang['keyboard']['addEducation'] && $adminrulecheck['rule'] == "administrator") {
-    if ($setting['categoryhelp'] == "1") {
-        sendmessage($from_id, $textbotlang['Admin']['Help']['askCategoryName'], $backadmin, 'HTML');
-        step('add_category_help', $from_id);
-    } else {
-        sendmessage($from_id, $textbotlang['Admin']['Help']['getAddName'], $backadmin, 'HTML');
-        step('add_name_help', $from_id);
-    }
+    // the category is picked from the ones that exist (or "none") instead of
+    // being typed blind, so a typo cannot silently create a second category
+    update("user", "Processing_value_four", "0", "id", $from_id);
+    list($help_pick_caption, $help_pick_kb) = help_category_picker_payload('fa', 'add', $textbotlang);
+    sendmessage($from_id, $help_pick_caption, $help_pick_kb, 'HTML');
 } elseif ($user['step'] == "add_category_help") {
     if ($text === '' || $text === null) {
         sendmessage($from_id, $textbotlang['Admin']['Help']['invalidContent'], $backadmin, 'HTML');
@@ -9303,20 +9658,37 @@ elseif ($datain == "systemsms") {
         sendmessage($from_id, $textbotlang['Admin']['Help']['nameTooLong'], null, 'HTML');
         return;
     }
-    $helpexits = select("help", "*", "name_os", $text, "count");
-    if ($helpexits != 0) {
-        sendmessage($from_id, $textbotlang['Admin']['Help']['nameExists'], null, 'HTML');
-        return;
-    }
-    $stmt = $pdo->prepare("INSERT IGNORE INTO help (name_os) VALUES (?)");
-    $stmt->execute([$text]);
-    clearSelectCache('help');
-    update("user", "Processing_value", $text, "id", $from_id);
-    $help_pending_cat = ($setting['categoryhelp'] == "1") ? (string) $user['Processing_value_four'] : "0";
+    $help_pending_cat = (string) $user['Processing_value_four'];
     if ($help_pending_cat === '') {
         $help_pending_cat = "0";
     }
-    update("help", "category", $help_pending_cat, "name_os", $text);
+    // the name only has to be unique INSIDE its category: "Happ" for Android and
+    // "Happ" for iPhone are two different tutorials, and the customer only ever
+    // sees one category at a time. Duplicates in the SAME category are still
+    // refused, since nothing on screen could tell them apart.
+    $help_dupe = 0;
+    foreach (select("help", "*", null, null, "fetchAll") ?: [] as $help_exist) {
+        $help_exist_cat = trim((string) ($help_exist['category'] ?? ''));
+        $help_exist_cat = ($help_exist_cat === '' || $help_exist_cat === '0') ? '0' : $help_exist_cat;
+        if ((string) $help_exist['name_os'] === $text && $help_exist_cat === $help_pending_cat) {
+            $help_dupe++;
+        }
+    }
+    if ($help_dupe != 0) {
+        sendmessage($from_id, $textbotlang['Admin']['Help']['nameExists'], null, 'HTML');
+        return;
+    }
+    // Media_os / type_Media_os / Description_os are NOT NULL with no default and
+    // the server runs in STRICT_TRANS_TABLES, so they have to be given here. The
+    // old code hid that behind INSERT IGNORE, which also hid every other insert
+    // error; filling them explicitly keeps real failures visible.
+    $stmt = $pdo->prepare("INSERT INTO help (name_os, category, Media_os, type_Media_os, Description_os) VALUES (?, ?, '', '', '')");
+    $stmt->execute([$text, $help_pending_cat]);
+    // every later step keys off this id, not the name - with names no longer
+    // unique, "update ... where name_os = ?" would write to both rows
+    $help_new_id = (int) $pdo->lastInsertId();
+    clearSelectCache('help');
+    update("user", "Processing_value", (string) $help_new_id, "id", $from_id);
     update("user", "Processing_value_four", "0", "id", $from_id);
     sendmessage($from_id, $textbotlang['Admin']['Help']['getAddDesc'], $backadmin, 'HTML');
     step('add_dec', $from_id);
@@ -9325,30 +9697,32 @@ elseif ($datain == "systemsms") {
     sendmessage($from_id, $textbotlang['Admin']['Help']['getAddDesc'], $backadmin, 'HTML');
     step('add_dec', $from_id);
 } elseif ($user['step'] == "add_dec") {
+    // Processing_value holds the new row's id (see add_name_help)
+    $help_row_id = (string) $user['Processing_value'];
     if ($photo) {
         if (isset($photoid))
-            update("help", "Media_os", $photoid, "name_os", $user['Processing_value']);
+            update("help", "Media_os", $photoid, "id", $help_row_id);
         if (isset($caption))
-            update("help", "Description_os", $caption, "name_os", $user['Processing_value']);
-        update("help", "type_Media_os", "photo", "name_os", $user['Processing_value']);
-        update("help", "entities_os", json_encode($update['message']['caption_entities'] ?? null), "name_os", $user['Processing_value']);
+            update("help", "Description_os", $caption, "id", $help_row_id);
+        update("help", "type_Media_os", "photo", "id", $help_row_id);
+        update("help", "entities_os", json_encode($update['message']['caption_entities'] ?? null), "id", $help_row_id);
     } elseif ($text) {
-        update("help", "Description_os", $text, "name_os", $user['Processing_value']);
-        update("help", "entities_os", json_encode($update['message']['entities'] ?? null), "name_os", $user['Processing_value']);
+        update("help", "Description_os", $text, "id", $help_row_id);
+        update("help", "entities_os", json_encode($update['message']['entities'] ?? null), "id", $help_row_id);
     } elseif ($video) {
         if (isset($videoid))
-            update("help", "Media_os", $videoid, "name_os", $user['Processing_value']);
+            update("help", "Media_os", $videoid, "id", $help_row_id);
         if (isset($caption))
-            update("help", "Description_os", $caption, "name_os", $user['Processing_value']);
-        update("help", "type_Media_os", "video", "name_os", $user['Processing_value']);
-        update("help", "entities_os", json_encode($update['message']['caption_entities'] ?? null), "name_os", $user['Processing_value']);
+            update("help", "Description_os", $caption, "id", $help_row_id);
+        update("help", "type_Media_os", "video", "id", $help_row_id);
+        update("help", "entities_os", json_encode($update['message']['caption_entities'] ?? null), "id", $help_row_id);
     } elseif ($document) {
         if (isset($fileid))
-            update("help", "Media_os", $fileid, "name_os", $user['Processing_value']);
+            update("help", "Media_os", $fileid, "id", $help_row_id);
         if (isset($caption))
-            update("help", "Description_os", $caption, "name_os", $user['Processing_value']);
-        update("help", "type_Media_os", "document", "name_os", $user['Processing_value']);
-        update("help", "entities_os", json_encode($update['message']['caption_entities'] ?? null), "name_os", $user['Processing_value']);
+            update("help", "Description_os", $caption, "id", $help_row_id);
+        update("help", "type_Media_os", "document", "id", $help_row_id);
+        update("help", "entities_os", json_encode($update['message']['caption_entities'] ?? null), "id", $help_row_id);
     }
     $help_kb = help_list_payload('fa', $textbotlang);
     $help_caption = strtr($textbotlang['Admin']['Help']['listCaption'], ['{lang}' => $textbotlang['bottext']['langs']['fa']]);
@@ -9358,9 +9732,25 @@ elseif ($datain == "systemsms") {
     sendmessage($from_id, $textbotlang['Admin']['Help']['selectName'], $json_list_helpkey, 'HTML');
     step('remove_help', $from_id);
 } elseif ($user['step'] == "remove_help") {
+    // names are only unique within a category now, so a name can match more than
+    // one tutorial - deleting by name would take all of them. When it is
+    // ambiguous, send the admin to the list, where deleting is per row (by id).
+    $help_matches = [];
+    foreach (select("help", "*", null, null, "fetchAll") ?: [] as $help_cand) {
+        if ((string) $help_cand['name_os'] === (string) $text) {
+            $help_matches[] = $help_cand;
+        }
+    }
+    if (count($help_matches) > 1) {
+        $help_kb = help_list_payload('fa', $textbotlang);
+        sendmessage($from_id, "⚠️ چند آموزش با این اسم توی دسته‌های مختلف هست. از لیست زیر همونی که می‌خوای رو باز کن و از داخل خودش حذفش کن.", $help_kb, 'HTML');
+        step('home', $from_id);
+        return;
+    }
     $stmt = $pdo->prepare("DELETE FROM help WHERE name_os = :name_os");
     $stmt->bindParam(':name_os', $text, PDO::PARAM_STR);
     $stmt->execute();
+    clearSelectCache('help');
     sendmessage($from_id, $textbotlang['Admin']['Help']['removeHelp'], $keyboardhelpadmin, 'HTML');
     step('home', $from_id);
 } elseif (preg_match('/Response_(\w+)/', $datain, $dataget) && ($adminrulecheck['rule'] == "administrator" || $adminrulecheck['rule'] == "support")) {
@@ -20366,19 +20756,92 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     $help_lang = $help_m[1];
     list($help_caption, $help_kb) = help_home_payload($help_lang, $textbotlang);
     Editmessagetext($from_id, $message_id, $help_caption, $help_kb, 'HTML');
+} elseif (preg_match('/^help_cats:(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
+    list($help_caption, $help_kb) = help_categories_payload($help_m[1], $textbotlang);
+    Editmessagetext($from_id, $message_id, $help_caption, $help_kb, 'HTML');
+} elseif (preg_match('/^help_catview:(fa|en|ru|zh|tk):(\d{1,4})$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
+    list($help_caption, $help_kb) = help_category_items_payload($help_m[1], (int) $help_m[2], $textbotlang);
+    Editmessagetext($from_id, $message_id, $help_caption, $help_kb, 'HTML');
+} elseif (preg_match('/^help_pickcat:(fa|en|ru|zh|tk):(add|\d+):(none|\d{1,4})$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
+    $help_lang = $help_m[1];
+    $help_target = $help_m[2];
+    $help_cat_names = array_keys(help_category_list());
+    // "0" is the sentinel the tutorial rows already use for "no category"
+    $help_chosen = ($help_m[3] === 'none') ? '0' : ($help_cat_names[(int) $help_m[3]] ?? '0');
+    if ($help_target === 'add') {
+        update("user", "Processing_value_four", $help_chosen, "id", $from_id);
+        deletemessage($from_id, $message_id);
+        sendmessage($from_id, $textbotlang['Admin']['Help']['getAddName'], $backadmin, 'HTML');
+        step('add_name_help', $from_id);
+    } else {
+        update("help", "category", $help_chosen, "id", $help_target);
+        clearSelectCache('help');
+        list($help_info, $help_kb) = help_item_menu_payload($help_target, $help_lang, $textbotlang);
+        Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['categorySaved'] . "\n\n" . $help_info, $help_kb, 'HTML');
+    }
+} elseif (preg_match('/^help_defaults:(fa|en|ru|zh|tk):([01])$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
+    // nothing is deleted here - only the flag that decides whether the SHIPPED
+    // tutorials are rendered, so turning it back on brings them all back
+    help_defaults_set($help_m[2] !== '1');
+    list($help_caption, $help_kb) = help_home_payload($help_m[1], $textbotlang);
+    Editmessagetext($from_id, $message_id, $help_caption, $help_kb, 'HTML');
+} elseif (preg_match('/^help_delcat:(fa|en|ru|zh|tk):(\d{1,4})$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
+    $help_lang = $help_m[1];
+    $help_cats_now = help_category_list();
+    $help_names_now = array_keys($help_cats_now);
+    $help_del = $help_names_now[(int) $help_m[2]] ?? null;
+    // refuse if it filled up between rendering and tapping - deleting the name
+    // would orphan those tutorials' category string
+    if ($help_del === null || ($help_cats_now[$help_del] ?? 0) > 0) {
+        telegram('answerCallbackQuery', [
+            'callback_query_id' => $callback_query_id,
+            'text' => 'این دسته آموزش داره و حذف نمی‌شه. اول آموزش‌هاش رو به دسته‌ی دیگه ببر یا بدون دسته کن.',
+            'show_alert' => true,
+        ]);
+        return;
+    }
+    help_category_store_save(array_values(array_diff(help_category_store(), [$help_del])));
+    list($help_caption, $help_kb) = help_categories_payload($help_lang, $textbotlang);
+    Editmessagetext($from_id, $message_id, "🗑 دسته‌ی «" . htmlspecialchars($help_del, ENT_QUOTES, 'UTF-8') . "» حذف شد.\n\n" . $help_caption, $help_kb, 'HTML');
+} elseif (preg_match('/^help_newcat:(fa|en|ru|zh|tk):(add|list|\d+)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
+    update("user", "Processing_value", $help_m[1] . '|' . $help_m[2], "id", $from_id);
+    sendmessage($from_id, "🗂 اسم دسته‌بندی جدید رو بفرست:", $backadmin, 'HTML');
+    step('help_new_cat', $from_id);
+} elseif ($user['step'] == "help_new_cat" && $adminrulecheck['rule'] == "administrator") {
+    $help_np = explode('|', (string) $user['Processing_value'], 2);
+    $help_lang = $help_np[0] ?: 'fa';
+    $help_target = $help_np[1] ?? 'list';
+    if ($text === '' || $text === null || mb_strlen($text) >= 150) {
+        sendmessage($from_id, $textbotlang['Admin']['Help']['nameTooLong'], $backadmin, 'HTML');
+        return;
+    }
+    help_category_store_add($text);
+    step('home', $from_id);
+    if ($help_target === 'list') {
+        list($help_caption, $help_kb) = help_categories_payload($help_lang, $textbotlang);
+    } else {
+        if ($help_target === 'add') {
+            update("user", "Processing_value_four", trim($text), "id", $from_id);
+        } else {
+            update("help", "category", trim($text), "id", $help_target);
+            clearSelectCache('help');
+        }
+        list($help_caption, $help_kb) = help_category_picker_payload($help_lang, $help_target, $textbotlang);
+    }
+    sendmessage($from_id, "✅ دسته‌بندی «" . htmlspecialchars($text, ENT_QUOTES, 'UTF-8') . "» ساخته شد.\n\n" . $help_caption, $help_kb, 'HTML');
 } elseif (preg_match('/^help_disp:(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
     $help_lang = $help_m[1];
     $help_kb = help_display_hub_payload($help_lang, $textbotlang);
     $help_caption = strtr($textbotlang['Admin']['Help']['displayCaption'], ['{lang}' => $textbotlang['bottext']['langs'][$help_lang]]);
     Editmessagetext($from_id, $message_id, $help_caption, $help_kb, 'HTML');
-} elseif (preg_match('/^help_disp_cat:(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^help_disp_cat:(fa|en|ru|zh|tk)(?::(bt))?$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
     $help_lang = $help_m[1];
-    $help_kb = help_disp_cat_hub_payload($help_lang, $textbotlang);
+    $help_kb = help_disp_cat_hub_payload($help_lang, $textbotlang, $help_m[2] ?? '');
     $help_caption = strtr($textbotlang['Admin']['Help']['catSubCaption'], ['{lang}' => $textbotlang['bottext']['langs'][$help_lang]]);
     Editmessagetext($from_id, $message_id, $help_caption, $help_kb, 'HTML');
-} elseif (preg_match('/^help_disp_tut:(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^help_disp_tut:(fa|en|ru|zh|tk)(?::(bt))?$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
     $help_lang = $help_m[1];
-    $help_kb = help_disp_tut_hub_payload($help_lang, $textbotlang);
+    $help_kb = help_disp_tut_hub_payload($help_lang, $textbotlang, $help_m[2] ?? '');
     $help_caption = strtr($textbotlang['Admin']['Help']['tutSubCaption'], ['{lang}' => $textbotlang['bottext']['langs'][$help_lang]]);
     Editmessagetext($from_id, $message_id, $help_caption, $help_kb, 'HTML');
 } elseif (preg_match('/^help_col:(categories|tutorials|panel|product|category|gateway|langpick):(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
@@ -20745,10 +21208,28 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     $help_kb = help_list_payload($help_lang, $textbotlang);
     $help_caption = strtr($textbotlang['Admin']['Help']['listCaption'], ['{lang}' => $textbotlang['bottext']['langs'][$help_lang]]);
     Editmessagetext($from_id, $message_id, $help_caption, $help_kb, 'HTML');
-} elseif (preg_match('/^help_preview:(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^help_preview:(fa|en|ru|zh|tk)(?::(\d{1,4}))?$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
     $help_lang = $help_m[1];
-    $help_kb = help_preview_list_payload($help_lang, $textbotlang);
+    list($help_kb, $help_hidden, $help_ncats, $help_nitems) = help_preview_list_payload($help_lang, $textbotlang);
     $help_caption = strtr($textbotlang['Admin']['Help']['previewCaption'], ['{lang}' => $textbotlang['bottext']['langs'][$help_lang]]);
+    $help_caption .= "\n\n" . ($help_ncats > 0
+        ? "📂 چون حداقل یه آموزش دسته داره، کاربر اول دسته‌ها رو می‌بینه ({$help_ncats} دسته)."
+        : "📄 چون هیچ آموزشی دسته نداره، کاربر مستقیم لیست آموزش‌ها رو می‌بینه ({$help_nitems} آموزش).");
+    if ($help_hidden > 0) {
+        $help_caption .= "\n🚫 {$help_hidden} دکمه مخفیه و اینجا هم مثل دید کاربر نشون داده نمی‌شه.";
+    }
+    Editmessagetext($from_id, $message_id, $help_caption, $help_kb, 'HTML');
+} elseif (preg_match('/^help_prev_cat:(fa|en|ru|zh|tk):(\d{1,4})$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
+    $help_lang = $help_m[1];
+    list($help_kb, $help_hidden, , $help_nitems) = help_preview_list_payload($help_lang, $textbotlang, (int) $help_m[2]);
+    $help_cats_now = help_preview_categories(select("help", "*", null, null, "fetchAll") ?: [], $help_lang);
+    $help_cat_label = array_values($help_cats_now)[(int) $help_m[2]] ?? '';
+    $help_caption = "👁 <b>پیش‌نمایش دسته</b>\n\n"
+        . "دسته: <b>" . htmlspecialchars($help_cat_label, ENT_QUOTES, 'UTF-8') . "</b>\n"
+        . "این دقیقاً چیزیه که کاربر بعد از زدن این دسته می‌بینه ({$help_nitems} آموزش).";
+    if ($help_hidden > 0) {
+        $help_caption .= "\n🚫 {$help_hidden} آموزش مخفیه و نشون داده نمی‌شه.";
+    }
     Editmessagetext($from_id, $message_id, $help_caption, $help_kb, 'HTML');
 } elseif (preg_match('/^help_prev_item:(\d+):(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
     $help_row = select("help", "*", "id", $help_m[1], "select");
@@ -20760,13 +21241,11 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
         help_send_content($from_id, $help_view, $help_back_kb);
     }
 } elseif ($datain == "help_add" && $adminrulecheck['rule'] == "administrator") {
-    if ($setting['categoryhelp'] == "1") {
-        sendmessage($from_id, $textbotlang['Admin']['Help']['askCategoryName'], $backadmin, 'HTML');
-        step('add_category_help', $from_id);
-    } else {
-        sendmessage($from_id, $textbotlang['Admin']['Help']['getAddName'], $backadmin, 'HTML');
-        step('add_name_help', $from_id);
-    }
+    // the ➕ button on the manager screen lands here (the reply-text path above
+    // is the other way in) - both now open the category picker first
+    update("user", "Processing_value_four", "0", "id", $from_id);
+    list($help_pick_caption, $help_pick_kb) = help_category_picker_payload('fa', 'add', $textbotlang);
+    Editmessagetext($from_id, $message_id, $help_pick_caption, $help_pick_kb, 'HTML');
 } elseif (preg_match('/^help_name:(\d+):(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
     update("user", "Processing_value", $help_m[1] . ':' . $help_m[2], "id", $from_id);
     sendmessage($from_id, $textbotlang['Admin']['Help']['askOnlyName'], $backadmin, 'HTML');
@@ -20790,9 +21269,10 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     sendmessage($from_id, $textbotlang['Admin']['Help']['nameSaved'] . "\n\n" . $help_info, $help_kb, 'HTML');
     step('home', $from_id);
 } elseif (preg_match('/^help_cat:(\d+):(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
-    update("user", "Processing_value", $help_m[1] . ':' . $help_m[2], "id", $from_id);
-    sendmessage($from_id, $textbotlang['Admin']['Help']['askOnlyCategory'], $backadmin, 'HTML');
-    step('help_edit_cat', $from_id);
+    // picker instead of free text - same list the add flow offers, plus
+    // "هیچ‌کدام", which is how a tutorial gets taken OUT of its category
+    list($help_caption, $help_kb) = help_category_picker_payload($help_m[2], $help_m[1], $textbotlang);
+    Editmessagetext($from_id, $message_id, $help_caption, $help_kb, 'HTML');
 } elseif ($user['step'] == "help_edit_cat") {
     $help_parts = explode(':', (string) $user['Processing_value']);
     if (count($help_parts) < 2) {

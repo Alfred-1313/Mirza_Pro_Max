@@ -362,9 +362,16 @@ return array (
         'group' => 'buyflow',
       ),
       array (
+        'label' => '⛔️ پیام «سرویسی برای فروش نیست»',
+        'key' => 'users.sell.nullPanel',
+        'group' => 'buyflow',
+        'section' => 'panel',
+      ),
+      array (
         'label' => '⛔️ پیام «هیچ درگاهی فعال نیست»',
         'key' => 'users.sell.noPaymentMethod',
-        'group' => 'buyflow',
+        'group' => 'topup',
+        'section' => 'topup_flow',
       ),
       array (
         'label' => '📜 فاکتور تمدید سرویس',
@@ -1768,6 +1775,8 @@ n2  = نماینده با قابلیت های بیشتر',
     array (
       'btninlinebuy' => '📚 مشاهده آموزش استفاده ',
       'disablehelp' => 'کاربر گرامی بخش آموزش درحال حاضر غیرفعال است. 😔',
+      'backToCategoriesBtn' => '🔙 بازگشت به دسته‌بندی آموزش',
+      'backToCategoryListBtn' => '🔙 بازگشت به لیست دسته‌بندی آموزش',
       // the two tutorial screens' own captions. Their defaults are byte-for-byte
       // the sentences these screens already showed (users.sell.selectCategoryShort
       // and users.selectoption), which they used to borrow from other flows.
@@ -1882,7 +1891,7 @@ n2  = نماینده با قابلیت های بیشتر',
       'nullProduct' => '⭕️ محصولی یافت نشد برای رفع مشکل با پشتیبانی در ارتباط باشید',
       'panelCapacityFull' => '❌  متاسفانه ظرفیت ساخت اکانت در این پنل به پایان رسیده است از پنل دیگری استفاده نمایید',
       'capacityFull' => '❌  متاسفانه ظرفیت ساخت اکانت به پایان رسیده است  ساعاتی دیگر مجددا امتحان کنید.',
-      'nullPanel' => '⭕️ موقعیتی یافت نشد برای رفع مشکل با پشتیبانی در ارتباط باشید',
+      'nullPanel' => '⛔️ فعلاً سرویسی برای فروش موجود نیست. لطفاً بعداً دوباره سر بزنید.',
       'selectDuration' => '📌 مدت زمان سرویس را انتخاب نمایید',
       'purchaseError' => '❌ خرید با خطا مواجه گردید مراحل را مجدد انجام  دهید.',
       'stockFinished' => '❌ موجودی این سرویس به پایان رسیده.',
@@ -2232,6 +2241,7 @@ n2  = نماینده با قابلیت های بیشتر',
       'errorcreat' => '❌ خطایی در ساخت اشتراک رخ داده است برای رفع مشکل با پشتیبانی در ارتباط باشد.',
       'limitwarning' => '⚠️ محدودیت ساخت اشتراک تست شما به پایان رسید.',
       'unavailable' => '📌 سرویس تست در حال حاضر در دسترس نیست .',
+      'noPanel' => '⛔️ اکانت تست موقتاً غیرفعال است.',
       'selectUsernamePrompt' => '🎁 زمان اکانت تست: {testtime} ساعت
 💾 حجم اکانت تست: {testvolume} مگابایت
 

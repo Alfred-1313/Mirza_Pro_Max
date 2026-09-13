@@ -797,7 +797,9 @@ function outputlink($text)
  */
 function menu_tap_capture($from_id, $user)
 {
-    $mt = (string) ($user['menu_tap_id'] ?? '');
+    // stored as "id" (older rows) or "id:section" (keyboard.php writes the
+    // section too, so a re-opening glass tap can keep the id alive)
+    $mt = explode(':', (string) ($user['menu_tap_id'] ?? ''), 2)[0];
     if (ctype_digit($mt) && intval($mt) > 0) {
         update("user", "menu_tap_id", "0", "id", $from_id);
         return intval($mt);
@@ -8333,6 +8335,13 @@ if (!function_exists('mainmenu_appearance_reset')) {
     // bottext_reset_keys().
     // $parts: any of 'sticker', 'color', 'emoji', 'visibility'. Defaults to all
     // four, so callers that want a full wipe need not spell it out.
+    // table.php's factory keyboardmain ships these keys with "hidden":true, so
+    // "reset to default" means restoring THAT - not making every button visible,
+    // which is what both reset paths used to do.
+    function mainmenu_default_hidden_keys()
+    {
+        return ['text_extend', 'text_wheel_luck', 'text_Tariff_list', 'text_support', 'text_change_language', 'text_affiliates'];
+    }
     function mainmenu_appearance_reset(array $parts = ['sticker', 'color', 'emoji', 'visibility'])
     {
         $mmFields = [];
@@ -8371,6 +8380,19 @@ if (!function_exists('mainmenu_appearance_reset')) {
                 }
                 foreach ($mmFields as $mm_f) {
                     unset($layout['keyboard'][$mm_r][$mm_c][$mm_f]);
+                }
+            }
+        }
+        if (in_array('visibility', $parts, true)) {
+            $mm_def_hidden = mainmenu_default_hidden_keys();
+            foreach ($layout['keyboard'] as $mm_r => $mm_row) {
+                if (!is_array($mm_row)) {
+                    continue;
+                }
+                foreach ($mm_row as $mm_c => $mm_btn) {
+                    if (is_array($mm_btn) && isset($mm_btn['text']) && in_array($mm_btn['text'], $mm_def_hidden, true)) {
+                        $layout['keyboard'][$mm_r][$mm_c]['hidden'] = true;
+                    }
                 }
             }
         }
@@ -8461,7 +8483,12 @@ if (!function_exists('bt_reset_counts')) {
                     if (isset($btn['emoji']) || isset($btn['emoji_pos']) || isset($btn['icon_emoji'])) {
                         $c['mm_emoji']++;
                     }
-                    if (isset($btn['hidden']) || isset($btn['custom_text'])) {
+                    // only a DIFFERENCE from the factory default counts: some
+                    // keys ship hidden (mainmenu_default_hidden_keys()), so a
+                    // plain "isset" here reported them as customized forever
+                    // and made every reset claim it had undone something
+                    $mm_def_hidden = in_array($btn['text'] ?? '', mainmenu_default_hidden_keys(), true);
+                    if (!empty($btn['hidden']) !== $mm_def_hidden || isset($btn['custom_text'])) {
                         $c['mm_visibility']++;
                     }
                 }
@@ -9047,6 +9074,22 @@ if (!function_exists('bt_section_meta')) {
                 'label' => '🔘 دکمه‌های بخش آموزش',
                 'alert' => 'دکمه‌ی ❌ بستنِ لیست دسته‌بندی آموزش‌ها - متن و رنگش از اینجا تنظیم می‌شه.',
             ],
+            'help_defaults' => [
+                'label' => '📦 آموزش‌های آماده‌ی ربات',
+                'alert' => 'آموزش‌هایی که ربات باهاشون نصب می‌شه. خاموش‌کردنشون هیچی رو پاک نمی‌کنه - فقط از دید کاربر برداشته می‌شن تا فقط آموزش‌های خودت نمایش داده بشن، و هر وقت روشنش کنی دوباره برمی‌گردن.',
+            ],
+            'help_cats' => [
+                'label' => '🗂 دسته‌بندی‌ها',
+                'alert' => 'ساخت و مدیریت دسته‌ها. هر آموزش می‌تونه توی یکی از این‌ها باشه یا بدون دسته بمونه.',
+            ],
+            'help_items' => [
+                'label' => '📚 آموزش‌ها',
+                'alert' => 'خودِ آموزش‌ها - افزودن، ویرایش محتوا، و جابه‌جایی بین دسته‌ها.',
+            ],
+            'help_manage' => [
+                'label' => '🗂 مدیریت محتوای آموزش‌ها',
+                'alert' => 'افزودن، ویرایش، حذف و ترجمه‌ی خود آموزش‌ها - نه متن پیام‌ها یا ظاهر دکمه‌ها.',
+            ],
             'help_style' => [
                 'label' => '🎨 ظاهر دکمه‌های آموزش',
                 'alert' => 'ترتیب، عرض، رنگ، ایموجی و نمایش/مخفی‌بودن دکمه‌های دسته‌بندی و آموزش‌ها - نه متن پیام‌ها.',
@@ -9127,6 +9170,12 @@ if (!function_exists('genbtn_alias_map')) {
             'ac' => 'bottext.btnCloseAccount',
             'ts' => 'bottext.btnCloseTest',
             'he' => 'bottext.btnCloseHelp',
+            // own-key trick again - the tutorial list inside a category owns the
+            // one button under it, the "back to the category list" row
+            'hb' => 'users.help.listCaption',
+            // and the category caption owns the back button of the screen that
+            // shows one tutorial's own content
+            'hv' => 'users.help.categoryCaption',
         ];
     }
 }
@@ -9237,6 +9286,12 @@ if (!function_exists('genbtn_defs')) {
         }
         if ($alias === 'he') {
             return [0 => ['name' => '❌ دکمه بستن (آموزش)', 'text' => $textbotlang['bottext']['btnCloseHelp'], 'style' => 'danger', 'callback_data' => 'none']];
+        }
+        if ($alias === 'hb') {
+            return [0 => ['name' => '🔙 دکمه بازگشت به دسته‌بندی آموزش', 'text' => $textbotlang['users']['help']['backToCategoriesBtn'], 'style' => 'danger', 'callback_data' => 'helpbtns']];
+        }
+        if ($alias === 'hv') {
+            return [0 => ['name' => '🔙 دکمه بازگشت (زیر محتوای آموزش)', 'text' => $textbotlang['users']['help']['backToCategoryListBtn'], 'style' => 'danger', 'callback_data' => 'helpbtns']];
         }
         return [];
     }
@@ -9539,7 +9594,7 @@ if (!function_exists('genbtn_list_payload')) {
         // 'cf' points at textbot.preInvoice (the normal-purchase تأیید خرید) -
         // it used to point at users.sell.preInvoice, the discount-code variant,
         // which was removed along with that whole dead feature
-        $backKeyMap = ['su' => 'users.sell.selectUsernamePrompt', 'cf' => 'textbot.preInvoice', 'ns' => 'users.sell.service_not_available', 'te' => 'textbot.testExpired', 'sc' => 'users.sell.service_sell', 'bc' => 'users.Balance.chargeSuccess', 'rn' => 'users.extend.invoiceCreated', 'cl' => 'users.changeLink.warnchange', 'td' => 'users.Balance.topupDiscPrompt'];
+        $backKeyMap = ['su' => 'users.sell.selectUsernamePrompt', 'cf' => 'textbot.preInvoice', 'ns' => 'users.sell.service_not_available', 'te' => 'textbot.testExpired', 'sc' => 'users.sell.service_sell', 'bc' => 'users.Balance.chargeSuccess', 'rn' => 'users.extend.invoiceCreated', 'cl' => 'users.changeLink.warnchange', 'td' => 'users.Balance.topupDiscPrompt', 'hb' => 'users.help.listCaption', 'hv' => 'users.help.categoryCaption'];
         $backKey = ($origin === 'u') ? 'users.usertest.selectUsernamePrompt' : ($backKeyMap[$alias] ?? 'users.sell.selectUsernamePrompt');
         $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "bt_edit|{$lang}|{$backKey}", 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
@@ -12900,6 +12955,40 @@ if (!function_exists('help_lang_has_content')) {
         return false;
     }
 }
+if (!function_exists('help_defaults_on')) {
+    // The tutorials this bot SHIPS with (help.is_default = 1) are a starting
+    // point, not a commitment: an admin who wants to publish only their own can
+    // switch ours off. Nothing is deleted - the rows stay and come back the
+    // moment it is switched on again - so this is a display filter, not a purge.
+    function help_defaults_on()
+    {
+        $setting = select("setting", "*", null, null, "select");
+        return (string) ($setting['help_defaults_on'] ?? '1') !== '0';
+    }
+    function help_defaults_set($on)
+    {
+        update("setting", "help_defaults_on", $on ? '1' : '0', null, null);
+    }
+    // every customer-facing tutorial screen reads the list through here, so the
+    // switch cannot be honoured on one screen and forgotten on another
+    function help_rows_for_user($category = null)
+    {
+        $rows = ($category === null)
+            ? select("help", "*", null, null, "fetchAll")
+            : select("help", "*", "category", $category, "fetchAll");
+        $rows = is_array($rows) ? $rows : [];
+        if (help_defaults_on()) {
+            return $rows;
+        }
+        $own = [];
+        foreach ($rows as $r) {
+            if ((string) ($r['is_default'] ?? '0') !== '1') {
+                $own[] = $r;
+            }
+        }
+        return $own;
+    }
+}
 if (!function_exists('help_layout_get')) {
     function help_layout_get()
     {
@@ -13535,6 +13624,29 @@ if (!function_exists('help_layout_chunk_rows')) {
     }
 }
 
+if (!function_exists('bt_default_stickers')) {
+    // Stickers a message ships WITH, as opposed to one an admin attached. Kept
+    // out of setting.keyboardmain's text_stickers on purpose: everything in that
+    // store counts as "customized" (green row, cleared by a reset), and a
+    // factory sticker is neither.
+    function bt_default_stickers()
+    {
+        return [
+            'users.sell.noPaymentMethod' => 'CAACAgQAAxkBAAJyomqmL8XWREbwt2BPYfm8fToL4HqdAAKGDwACnQVRU0jlv2uEhl4wPQQ',
+        ];
+    }
+    function bt_default_sticker($key)
+    {
+        return bt_default_stickers()[$key] ?? '';
+    }
+    // what actually gets sent: the admin's sticker when there is one, otherwise
+    // whatever the message ships with
+    function bt_effective_sticker($map, $key, $lang)
+    {
+        $own = function_exists('bt_media_lookup') ? bt_media_lookup($map, $key, $lang) : '';
+        return $own !== '' ? $own : bt_default_sticker($key);
+    }
+}
 if (!function_exists('bt_media_lookup')) {
     // reads a per-language sticker/reaction value, falling back to a shared
     // '_default' (or a legacy flat string, from before this became per-language)
