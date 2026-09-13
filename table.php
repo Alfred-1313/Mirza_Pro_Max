@@ -1476,6 +1476,15 @@ $pdo->query("ALTER TABLE `invoice` CHANGE `Service_location` `Service_location` 
 $pdo->query("ALTER TABLE `invoice` CHANGE `time_sell` `time_sell` VARCHAR(200)");
 $pdo->query("ALTER TABLE marzban_panel MODIFY password_panel TEXT COLLATE utf8mb4_bin");
 $pdo->query("ALTER TABLE marzban_panel MODIFY name_panel VARCHAR(255) COLLATE utf8mb4_bin");
+try {
+    $check = $pdo->query("SHOW COLUMNS FROM `marzban_panel` LIKE 'lang'");
+} catch (Exception $e) {
+    error_log("[CHECK:marzban_panel] error - " . $e->getMessage());
+    exit;
+}
+if ($check && $check->rowCount() == 0) {
+    $pdo->exec("ALTER TABLE `marzban_panel` ADD COLUMN `lang` VARCHAR(100) NULL");
+}
 $pdo->query("ALTER TABLE product MODIFY name_product VARCHAR(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin");
 $pdo->query("ALTER TABLE help MODIFY name_os VARCHAR(500) COLLATE utf8mb4_bin");
 try {
