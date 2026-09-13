@@ -12911,17 +12911,25 @@ if (!function_exists('help_send_content')) {
             } else {
                 $send['parse_mode'] = 'HTML';
             }
-            if ($resolved['media_type'] === 'video') {
-                $send['video'] = $resolved['media'];
-                return telegram('sendvideo', $send);
-            }
-            if ($resolved['media_type'] === 'document') {
-                $send['document'] = $resolved['media'];
-                return telegram('sendDocument', $send);
-            }
-            if ($resolved['media_type'] === 'photo') {
-                $send['photo'] = $resolved['media'];
-                return telegram('sendphoto', $send);
+            $help_send_methods = [
+                'video' => ['sendvideo', 'video'],
+                'document' => ['sendDocument', 'document'],
+                'photo' => ['sendphoto', 'photo'],
+            ];
+            if (isset($help_send_methods[$resolved['media_type']])) {
+                list($help_send_method, $help_send_field) = $help_send_methods[$resolved['media_type']];
+                $send[$help_send_field] = $resolved['media'];
+                $help_send_res = telegram($help_send_method, $send);
+                if (is_array($help_send_res) && !empty($help_send_res['ok'])) {
+                    return $help_send_res;
+                }
+                // A file_id only works for the bot that received the file.
+                // A database restored into a different bot, or a row that came
+                // with the project, is rejected with "wrong file identifier".
+                // The caller has already deleted the menu message by this
+                // point, so returning the failure left the customer looking at
+                // an empty chat with no way back. Fall through to the text, so
+                // a tutorial is never a dead end.
             }
         }
         return sendmessage($chat_id, $resolved['description'], $keyboard, 'HTML', null, $resolved['entities']);
