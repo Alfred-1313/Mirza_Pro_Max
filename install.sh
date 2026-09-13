@@ -881,7 +881,9 @@ webhook_section() {
         _kv "Webhook" "$(_dot bad) ${C_BAD}not set${CR} ${C_DIM}· Telegram has nowhere to deliver${CR}"
         return
     fi
-    if [ -n "$err" ]; then
+    # Telegram keeps last_error_* after it recovers; with nothing pending the
+    # error is history, not a current delivery problem.
+    if [ -n "$err" ] && [ "${pending:-0}" -gt 0 ] 2>/dev/null; then
         when=""
         [ -n "$errdate" ] && when=$(date -d "@$errdate" '+%d %b %H:%M' 2>/dev/null)
         _kv "Webhook" "$(_dot warn) ${C_WARN}delivering with errors${CR} ${C_DIM}· ${pending} pending${CR}"
@@ -2188,6 +2190,8 @@ EOF
         fi
         run_step "Initializing database tables" "cd '$BOT_DIR' && php${PHP_VER} table.php" \
             || { show_step_error; install_pause "Initializing database tables"; }
+        # table.php ran as root; files it created (log.txt) must stay writable by Apache
+        chown -R www-data:www-data "$BOT_DIR" 2>/dev/null
         # Only now - Apache is up and the schema is migrated - tell Telegram
         # about the webhook and invite the admin to send /start. Doing this
         # earlier risked a real update arriving before table.php had run.
@@ -2431,6 +2435,8 @@ EOF
     local proto="http"; [ "$ssl_ok" -eq 1 ] && proto="https"
     run_step "Initializing database tables" "cd '$NEW_BOT_DIR' && php table.php" \
         || { show_step_error; echo -e "\033[31mtable.php failed - see the details above.\033[0m"; }
+    # table.php ran as root; files it created (log.txt) must stay writable by Apache
+    chown -R www-data:www-data "$NEW_BOT_DIR" 2>/dev/null
     run_step "Setting Telegram webhook" \
         "curl -s -F \"url=${proto}://${DOMAIN_NAME}/index.php\" -F \"secret_token=${secrettoken}\" \"https://api.telegram.org/bot${YOUR_BOT_TOKEN}/setWebhook\"" \
         || show_step_error
