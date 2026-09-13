@@ -2604,13 +2604,17 @@ function update_bot() {
     local DOMAIN_URL DOMAIN_NAME
     DOMAIN_URL=$(grep "^\$domainhosts" "$CONFIG_PATH" | cut -d"'" -f2)
     DOMAIN_NAME=$(echo "$DOMAIN_URL" | cut -d'/' -f1)
+    local DB_STATE=""
     if ( cd "$BOT_DIR" && php table.php >/dev/null 2>&1 ); then
         printf "    ${C_OK}✔${CR} ${C_DIM}Database schema updated${CR}\n"
+        DB_STATE="به‌روزرسانی شد"
     elif [ -n "$DOMAIN_URL" ] && curl -fsS --max-time 60 "https://${DOMAIN_URL}/table.php" >/dev/null 2>&1; then
         printf "    ${C_OK}✔${CR} ${C_DIM}Database schema updated (over HTTPS)${CR}\n"
+        DB_STATE="به‌روزرسانی شد"
     else
         printf "    ${C_WARN}!${CR} ${C_WARN}Could not run table.php automatically.${CR}\n"
         printf "      ${C_DIM}Open https://${DOMAIN_URL}/table.php once in a browser.${CR}\n"
+        DB_STATE="به‌روزرسانی نشد - table.php رو یک بار توی مرورگر باز کن"
     fi
 
     # ── 7. Apache: only fix what is actually missing ─────────
@@ -2642,6 +2646,82 @@ function update_bot() {
     rm -rf "$TEMP_DIR"
 
     local newver; newver=$(get_installed_version); [ -z "$newver" ] && newver="$TARGET_LABEL"
+
+    # ── 10. Tell the bot's admins it was updated ───────────────
+    # Best effort on purpose: the update has already succeeded by this point,
+    # so a message that cannot be delivered must never turn it into a failure.
+    if [ -f "$BOT_DIR/config.php" ]; then
+        cat > /tmp/mirza_notify.php <<'NOTIFYEOF'
+<?php
+// Announce a finished update to every admin in the bot's own admin table.
+// Run from inside the bot directory so config.php resolves; every value it
+// reports comes in through the environment, so nothing needs quoting twice.
+require 'config.php';
+
+$old    = getenv('MIRZA_OLD') ?: '?';
+$new    = getenv('MIRZA_NEW') ?: '?';
+$domain = getenv('MIRZA_DOMAIN') ?: '';
+$db     = getenv('MIRZA_DB') ?: '';
+$backup = getenv('MIRZA_BACKUP') ?: '';
+$esc = function ($v) { return htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8'); };
+
+$lines = ["✅ <b>ربات آپدیت شد</b>", ""];
+if ($domain !== '') {
+    $lines[] = "دامنه: <code>" . $esc($domain) . "</code>";
+}
+$lines[] = "نسخه: <b>" . $esc($old) . "</b> ← <b>" . $esc($new) . "</b>";
+$lines[] = "زمان: " . date('Y-m-d H:i');
+if ($db !== '') {
+    $lines[] = "دیتابیس: " . $esc($db);
+}
+if ($backup !== '') {
+    $lines[] = "";
+    $lines[] = "بکاپ نسخه‌ی قبلی:";
+    $lines[] = "<code>" . $esc($backup) . "</code>";
+}
+$text = implode("\n", $lines);
+
+$ids = [];
+try {
+    foreach ($pdo->query("SELECT id_admin FROM admin") as $row) {
+        $id = trim((string) ($row['id_admin'] ?? ''));
+        if ($id !== '' && ctype_digit($id)) {
+            $ids[$id] = true;
+        }
+    }
+} catch (Exception $e) {
+    // no admin table, or no database: there is simply nobody to tell
+}
+
+$sent = 0;
+foreach (array_keys($ids) as $id) {
+    $ch = curl_init("https://api.telegram.org/bot{$APIKEY}/sendMessage");
+    if ($ch === false) {
+        continue;
+    }
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, ['chat_id' => $id, 'text' => $text, 'parse_mode' => 'HTML']);
+    $res = json_decode((string) curl_exec($ch), true);
+    curl_close($ch);
+    if (!empty($res['ok'])) {
+        $sent++;
+    }
+}
+echo $sent;
+NOTIFYEOF
+        local SENT
+        SENT=$( cd "$BOT_DIR" && MIRZA_OLD="$flavour" MIRZA_NEW="$newver" \
+            MIRZA_DOMAIN="$DOMAIN_NAME" MIRZA_DB="$DB_STATE" MIRZA_BACKUP="$ROLLBACK" \
+            php /tmp/mirza_notify.php 2>/dev/null )
+        rm -f /tmp/mirza_notify.php
+        if [ -n "$SENT" ] && [ "$SENT" -gt 0 ] 2>/dev/null; then
+            printf "    ${C_OK}✔${CR} ${C_DIM}Update announced to ${SENT} admin(s) in Telegram${CR}\n"
+        else
+            printf "    ${C_DIM}· Could not announce the update in Telegram${CR}\n"
+        fi
+    fi
     echo ""
     _sec "Done"
     _kv "Was"      "${C_DIM}${flavour}${CR}"
