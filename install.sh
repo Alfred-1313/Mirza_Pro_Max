@@ -1069,11 +1069,16 @@ function renew_ssl() {
     banner
     _sec "Renew SSL certificate"
 
-    # 1) Detect the bot domain: prefer config.php, then saved install state
-    local cfg="/var/www/html/mirzaprobotconfig/config.php"
+    # 1) Detect the bot domain: the registry (name + domain, prompts only
+    #    when more than one bot exists), then config.php, then saved state
     local domain=""
-    if [ -f "$cfg" ]; then
-        domain=$(grep -E "\\\$domainhosts" "$cfg" 2>/dev/null | head -1 | cut -d"'" -f2)
+    if pick_bot_instance "renew the certificate for"; then
+        domain="$PICKED_DOMAIN"
+        [ "$domain" = "null" ] && domain=""
+    fi
+    if [ -z "$domain" ]; then
+        local cfg="/var/www/html/mirzaprobotconfig/config.php"
+        [ -f "$cfg" ] && domain=$(grep -E "\\\$domainhosts" "$cfg" 2>/dev/null | head -1 | cut -d"'" -f2)
     fi
     [ -z "$domain" ] && domain="$(state_get DOMAIN)"
     if [ -z "$domain" ]; then
@@ -1135,7 +1140,14 @@ function backup_bot() {
     banner
     _sec "Backup Database"
 
-    CONFIG_PATH="/var/www/html/mirzaprobotconfig/config.php"
+    if ! pick_bot_instance "back up"; then
+        echo ""
+        printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "
+        read -r _
+        show_menu
+        return 1
+    fi
+    CONFIG_PATH="$PICKED_DIR/config.php"
     if [ ! -f "$CONFIG_PATH" ]; then
         printf "    ${C_BAD}●${CR} ${C_BAD}Mirza is not installed. config.php not found.${CR}\n"
         echo ""
@@ -1213,7 +1225,14 @@ function import_bot() {
     banner
     _sec "Import Database"
 
-    CONFIG_PATH="/var/www/html/mirzaprobotconfig/config.php"
+    if ! pick_bot_instance "restore"; then
+        echo ""
+        printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "
+        read -r _
+        show_menu
+        return 1
+    fi
+    CONFIG_PATH="$PICKED_DIR/config.php"
     if [ ! -f "$CONFIG_PATH" ]; then
         printf "    ${C_BAD}●${CR} ${C_BAD}Mirza is not installed. config.php not found.${CR}\n"
         echo ""
@@ -1536,7 +1555,104 @@ validate_token() {
 valid_db_ident() { [[ "$1" =~ ^[A-Za-z0-9_]{1,32}$ ]]; }
 valid_db_pass()  { [[ "$1" =~ ^[A-Za-z0-9_]{6,64}$ ]]; }
 
+# ── Multi-bot registry ────────────────────────────────────────
+# Tracks every bot installed on this server (name, directory, domain) so
+# Update/Remove/Renew SSL/Backup/Restore can ask which one to act on. A
+# server that only ever had the one bot never sees any of this - the
+# registry silently carries a single entry and every picker below returns
+# it without a prompt, exactly like before this existed.
+BOTS_REGISTRY="/root/confmirza/bots.json"
+
+_ensure_jq() {
+    command -v jq >/dev/null 2>&1 || apt-get install -y jq >/dev/null 2>&1
+}
+
+# Make sure the registry file exists and, for a server that predates it,
+# seed it from whatever is already installed at the default path.
+bots_registry_ensure() {
+    _ensure_jq
+    mkdir -p /root/confmirza
+    [ -f "$BOTS_REGISTRY" ] || echo '[]' > "$BOTS_REGISTRY"
+    if [ "$(jq 'length' "$BOTS_REGISTRY" 2>/dev/null)" = "0" ] \
+        && [ -f "$BOT_DIR_DEFAULT/config.php" ]; then
+        local name domain
+        name=$(grep '^\$usernamebot' "$BOT_DIR_DEFAULT/config.php" 2>/dev/null | cut -d"'" -f2)
+        [ -z "$name" ] && name="Bot 1"
+        domain=$(grep '^\$domainhosts' "$BOT_DIR_DEFAULT/config.php" 2>/dev/null | cut -d"'" -f2 | cut -d'/' -f1)
+        bots_registry_add "$name" "$BOT_DIR_DEFAULT" "$domain"
+    fi
+}
+
+# bots_registry_add NAME DIR DOMAIN - insert, or update if DIR is already
+# registered (so re-running install on the same directory does not duplicate).
+bots_registry_add() {
+    local name="$1" dir="$2" domain="$3"
+    _ensure_jq
+    mkdir -p /root/confmirza
+    [ -f "$BOTS_REGISTRY" ] || echo '[]' > "$BOTS_REGISTRY"
+    local tmp; tmp=$(mktemp)
+    jq --arg name "$name" --arg dir "$dir" --arg domain "$domain" '
+        (map(.dir) | index($dir)) as $i
+        | if $i != null then .[$i] = {name:$name,dir:$dir,domain:$domain}
+          else . + [{name:$name,dir:$dir,domain:$domain}]
+          end
+    ' "$BOTS_REGISTRY" > "$tmp" && mv "$tmp" "$BOTS_REGISTRY"
+}
+
+bots_registry_remove_by_dir() {
+    local dir="$1"
+    _ensure_jq
+    [ -f "$BOTS_REGISTRY" ] || return 0
+    local tmp; tmp=$(mktemp)
+    jq --arg dir "$dir" '[.[] | select(.dir != $dir)]' "$BOTS_REGISTRY" > "$tmp" && mv "$tmp" "$BOTS_REGISTRY"
+}
+
+bots_registry_count() {
+    bots_registry_ensure
+    jq 'length' "$BOTS_REGISTRY" 2>/dev/null || echo 0
+}
+
+# Sets PICKED_NAME / PICKED_DIR / PICKED_DOMAIN. Prompts only when more than
+# one bot is registered; a single bot (or a legacy server with none
+# registered yet) is picked automatically, no prompt, same as before.
+# $1 = a short label for the prompt, e.g. "update".
+# Returns 1 if there is nothing to act on, or the user backs out.
+pick_bot_instance() {
+    local action="${1:-manage}"
+    bots_registry_ensure
+    local count; count=$(jq 'length' "$BOTS_REGISTRY" 2>/dev/null)
+    if [ -z "$count" ] || [ "$count" = "0" ]; then
+        printf "    ${C_BAD}●${CR} ${C_BAD}No Mirza bot found on this server.${CR}\n"
+        return 1
+    fi
+    if [ "$count" = "1" ]; then
+        PICKED_NAME=$(jq -r '.[0].name' "$BOTS_REGISTRY")
+        PICKED_DIR=$(jq -r '.[0].dir' "$BOTS_REGISTRY")
+        PICKED_DOMAIN=$(jq -r '.[0].domain' "$BOTS_REGISTRY")
+        return 0
+    fi
+    _sec "Which bot do you want to $action?"
+    local i=1
+    while IFS=$'\t' read -r name domain; do
+        printf "    ${C_KEY}[%d]${CR} ${C_TXT}%s${CR}  ${C_DIM}%s${CR}\n" "$i" "$name" "$domain"
+        i=$((i + 1))
+    done < <(jq -r '.[] | "\(.name)\t\(.domain)"' "$BOTS_REGISTRY")
+    printf "    ${C_KEY}[0]${CR} ${C_TXT}Back to menu${CR}\n"
+    echo ""
+    printf "  ${C_PROMPT}❯${CR} Choose ${C_DIM}[0-%d]${CR}: " "$((count))"
+    local pick; read -r pick
+    if ! [[ "$pick" =~ ^[0-9]+$ ]] || [ "$pick" -lt 1 ] || [ "$pick" -gt "$count" ]; then
+        return 1
+    fi
+    local idx=$((pick - 1))
+    PICKED_NAME=$(jq -r ".[$idx].name" "$BOTS_REGISTRY")
+    PICKED_DIR=$(jq -r ".[$idx].dir" "$BOTS_REGISTRY")
+    PICKED_DOMAIN=$(jq -r ".[$idx].domain" "$BOTS_REGISTRY")
+    return 0
+}
+
 # Whole-server pre-flight before installing
+
 preflight() {
     local ok=1
     _sec "Pre-flight checks"
@@ -2042,6 +2158,16 @@ EOF
         state_set BOTNAME "$YOUR_BOTNAME"
     fi
 
+    YOUR_BOTLABEL="$(state_get BOTLABEL)"
+    if [ -n "$YOUR_BOTLABEL" ]; then
+        echo -e "\e[33m[+] \e[36mBot name (resumed):\e[0m ${YOUR_BOTLABEL}"
+    else
+        printf "\e[33m[+] \e[36mName for this bot ${CR}${C_DIM}[default: ${YOUR_BOTNAME}]${CR}: "
+        read YOUR_BOTLABEL
+        [ -z "$YOUR_BOTLABEL" ] && YOUR_BOTLABEL="$YOUR_BOTNAME"
+        state_set BOTLABEL "$YOUR_BOTLABEL"
+    fi
+
     ROOT_PASSWORD=$(cat /root/confmirza/dbrootmirza.txt | grep '$pass' | cut -d"'" -f2)
     ROOT_USER="root"
     echo "SELECT 1" | mysql -u$ROOT_USER -p$ROOT_PASSWORD 2>/dev/null || {
@@ -2188,6 +2314,7 @@ EOF
 
     # ── Done ──
     mark_phase COMPLETE
+    bots_registry_add "$YOUR_BOTLABEL" "$BOT_DIR" "$YOUR_DOMAIN"
     clear 2>/dev/null || true
     banner
     _sec "Installation complete"
@@ -2195,6 +2322,7 @@ EOF
     printf "    ${C_DIM}Open Telegram and send ${CR}${C_KEY}/start${CR}${C_DIM} to your bot.${CR}\n"
 
     _sec "Access"
+    _kv "Name" "${C_DIM}${YOUR_BOTLABEL}${CR}"
     _kv "Bot URL" "${C_DIM}https://${YOUR_DOMAIN}${CR}"
     _kv "phpMyAdmin" "${C_DIM}https://${YOUR_DOMAIN}/phpmyadmin${CR}"
 
@@ -2282,6 +2410,10 @@ function install_second_bot() {
     fi
     printf "\e[33m[+] \e[36mChat id: \033[0m"; read YOUR_CHAT_ID
     printf "\e[33m[+] \e[36musernamebot: \033[0m"; read YOUR_BOTNAME
+    local YOUR_BOTLABEL
+    printf "\e[33m[+] \e[36mName for this bot ${CR}${C_DIM}[default: ${YOUR_BOTNAME}]${CR}: "
+    read YOUR_BOTLABEL
+    [ -z "$YOUR_BOTLABEL" ] && YOUR_BOTLABEL="$YOUR_BOTNAME"
 
     # ── Download & extract ────────────────────────────────────
     print_header "Downloading Bot Files"
@@ -2414,21 +2546,22 @@ EOF
         "curl -s -F \"url=${proto}://${DOMAIN_NAME}/index.php\" -F \"secret_token=${secrettoken}\" \"https://api.telegram.org/bot${YOUR_BOT_TOKEN}/setWebhook\"" \
         || show_step_error
     curl -s -X POST "https://api.telegram.org/bot${YOUR_BOT_TOKEN}/sendMessage" -d chat_id="${YOUR_CHAT_ID}" -d text="✅ The Mirza bot is installed! for start the bot send /start command." > /dev/null 2>&1
+    bots_registry_add "$YOUR_BOTLABEL" "$NEW_BOT_DIR" "$DOMAIN_NAME"
 
     clear 2>/dev/null || true
     banner
     _sec "Another bot installed"
     printf "    ${C_OK}●${CR} ${C_OK}Set up alongside the bot(s) already on this server.${CR}\n"
     echo ""
+    _kv "Name"       "${C_DIM}${YOUR_BOTLABEL}${CR}"
     _kv "Bot URL"    "${C_DIM}${proto}://${DOMAIN_NAME}${CR}"
     _kv "Directory"  "${C_DIM}${NEW_BOT_DIR}${CR}"
     _kv "Database"   "${C_KEY}${NEW_DB}${CR}"
     _kv "DB User"    "${C_KEY}${dbuser}${CR}"
     _kv "DB Pass"    "${C_KEY}${dbpass}${CR}"
     echo ""
-    printf "    ${C_WARN}!${CR} ${C_DIM}Save these credentials. Update/Backup/Remove in this menu${CR}\n"
-    printf "    ${C_DIM}currently manage only the first bot - for this one, run those${CR}\n"
-    printf "    ${C_DIM}steps manually inside ${CR}${C_KEY}${NEW_BOT_DIR}${CR}${C_DIM}.${CR}\n"
+    printf "    ${C_WARN}!${CR} ${C_DIM}Save these credentials. Update/Backup/Remove/Renew SSL now${CR}\n"
+    printf "    ${C_DIM}ask which bot when more than one is installed.${CR}\n"
     echo ""
     printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "
     read -r _
@@ -2437,7 +2570,14 @@ EOF
 function update_bot() {
     clear 2>/dev/null || true
     banner
-    BOT_DIR="/var/www/html/mirzaprobotconfig"
+    if ! pick_bot_instance "update"; then
+        _sec "Update"
+        printf "    ${C_BAD}●${CR} ${C_BAD}Mirza is not installed here. Use option 1 to install it first.${CR}\n"
+        sleep 2
+        show_menu
+        return 1
+    fi
+    BOT_DIR="$PICKED_DIR"
     if [ ! -d "$BOT_DIR" ]; then
         _sec "Update"
         printf "    ${C_BAD}●${CR} ${C_BAD}Mirza is not installed here. Use option 1 to install it first.${CR}\n"
@@ -2717,7 +2857,79 @@ EOF
     fi
 }
 
+
+# Remove exactly one bot - its directory, its own database and DB user, its
+# own Apache vhost files, its own SSL certificate - and leave MySQL, Apache
+# itself, phpMyAdmin and every other bot on this server untouched. Used only
+# when more than one bot is registered; a single-bot server keeps the old
+# whole-server removal below.
+remove_bot_scoped() {
+    local name="$1" dir="$2" domain="$3"
+    echo -e "\e[33mRemoving \"$name\" ($domain) only - other bots on this server are not touched.\033[0m"
+    read -p "Are you sure? (y/n): " choice
+    if [[ ! "$choice" =~ ^[Yy]$ ]]; then
+        echo "Aborting..."
+        return 0
+    fi
+
+    local cfg="$dir/config.php"
+    local dbname dbuser dbhost
+    if [ -f "$cfg" ]; then
+        dbname=$(grep '^\$dbname' "$cfg" | cut -d"'" -f2)
+        dbuser=$(grep '^\$usernamedb' "$cfg" | cut -d"'" -f2)
+        dbhost=$(grep '^\$dbhost' "$cfg" | cut -d"'" -f2)
+    fi
+    [ -z "$dbhost" ] && dbhost="localhost"
+
+    if [ -n "$dbname" ]; then
+        local ROOT_PASS
+        ROOT_PASS=$(grep '$pass' /root/confmirza/dbrootmirza.txt 2>/dev/null | cut -d"'" -f2)
+        if [ -n "$ROOT_PASS" ]; then
+            mysql -u root -p"$ROOT_PASS" -e "DROP DATABASE IF EXISTS \`$dbname\`;" 2>/dev/null \
+                && echo -e "\e[92mDatabase removed: $dbname\033[0m" \
+                || echo -e "\e[91mCould not drop database $dbname (continuing).\033[0m"
+            if [ -n "$dbuser" ]; then
+                mysql -u root -p"$ROOT_PASS" -e "DROP USER IF EXISTS '$dbuser'@'localhost'; DROP USER IF EXISTS '$dbuser'@'%';" 2>/dev/null
+            fi
+        else
+            echo -e "\e[91mCould not read the MySQL root password - skipping database removal.\033[0m"
+        fi
+    fi
+
+    if [ -n "$domain" ] && [ "$domain" != "null" ]; then
+        a2dissite "${domain}.conf" >/dev/null 2>&1
+        a2dissite "${domain}-ssl.conf" >/dev/null 2>&1
+        rm -f "/etc/apache2/sites-available/${domain}.conf" "/etc/apache2/sites-available/${domain}-ssl.conf"
+        rm -f "/etc/apache2/sites-enabled/${domain}.conf" "/etc/apache2/sites-enabled/${domain}-ssl.conf"
+        systemctl reload apache2 >/dev/null 2>&1
+        command -v certbot >/dev/null 2>&1 && certbot delete --cert-name "$domain" --non-interactive >/dev/null 2>&1
+        echo -e "\e[92mVirtual host and certificate for $domain removed.\033[0m"
+    fi
+
+    if [ -d "$dir" ]; then
+        rm -rf "$dir" && echo -e "\e[92mBot directory removed: $dir\033[0m" \
+            || echo -e "\e[91mFailed to remove $dir.\033[0m"
+    fi
+
+    bots_registry_remove_by_dir "$dir"
+    echo -e "\e[92m\"$name\" has been removed.\033[0m"
+}
 function remove_bot() {
+    bots_registry_ensure
+    local _bot_count; _bot_count=$(jq 'length' "$BOTS_REGISTRY" 2>/dev/null)
+    if [ -n "$_bot_count" ] && [ "$_bot_count" -gt 1 ]; then
+        clear 2>/dev/null || true
+        banner
+        if pick_bot_instance "remove"; then
+            remove_bot_scoped "$PICKED_NAME" "$PICKED_DIR" "$PICKED_DOMAIN"
+        fi
+        echo ""
+        printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "
+        read -r _
+        show_menu
+        return 0
+    fi
+
     echo -e "\e[33mStarting Mirza Bot removal process...\033[0m"
     LOG_FILE="/var/log/remove_bot.log"
     echo "Log file: $LOG_FILE" > "$LOG_FILE"
