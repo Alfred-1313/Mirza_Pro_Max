@@ -8145,17 +8145,12 @@ if (in_array($text, $textadmin) || $datain == "admin") {    if ($datain == "admi
     activecron();
     $text_admin = sprintf($text_panel_admin_login_template, $version, $version_mini_app);
     sendmessage($from_id, $text_admin, $keyboardadmin, 'HTML');
-    $miniAppInstructionHidden = isset($user['hide_mini_app_instruction']) ? (string) $user['hide_mini_app_instruction'] : '0';
-    if ($miniAppInstructionHidden !== '1') {
-        $miniAppInstructionKeyboard = json_encode([
-            'inline_keyboard' => [
-                [
-                    ['text' => $textbotlang['Admin']['report']['btnDontShowAgain'], 'callback_data' => 'hide_mini_app_instruction'],
-                ],
-            ],
-        ]);
-        sendmessage($from_id, $miniAppInstructionText, $miniAppInstructionKeyboard, 'HTML');
-    }
+    // The mini app setup instructions used to be pushed here, as a second
+    // message on every trip into the panel until the admin dismissed them.
+    // They still live on the mini app's own screen, which is where someone
+    // setting it up is already looking. The hide_mini_app_instruction handler
+    // below is kept so the dismiss button on any message already sent still
+    // works.
 } elseif ($text == $textbotlang['Admin']['backAdminBtn']) {
     if ($buyreport == "0" || $otherservice == "0" || $otherreport == "0" || $paymentreports == "0" || $reporttest == "0" || $errorreport == "0") {
         sendmessage($from_id, $textbotlang['Admin']['activeBotText'], $active_panell, 'HTML');
