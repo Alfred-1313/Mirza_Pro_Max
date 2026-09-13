@@ -880,7 +880,7 @@ try {
         ['maxbalanceiranpay', $max],
         ['minbalancenowpayment', $main],
         ['maxbalancenowpayment', $max],
-        ['statusiranpay3', 'oniranpay3'],
+        ['statusiranpay3', 'offiranpay3'],
         ['apiiranpay', '0'],
         ['chashbackiranpay3', '0'],
         ['helpcart', '2'],
