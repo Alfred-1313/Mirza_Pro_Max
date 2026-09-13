@@ -1898,6 +1898,13 @@ function install_bot() {
             install_pause "phpMyAdmin symlink"
         }
 
+        # PHP defaults to a 2M upload limit, which rejects the bot's own DB backups
+        # in phpMyAdmin ("No data was received to import") once the site has any real data.
+        BUMP_PHP_LIMITS_CMD="for f in \"/etc/php/${PHP_VER}/apache2/php.ini\" \"/etc/php/${PHP_VER}/fpm/php.ini\"; do [ -f \"\$f\" ] || continue; sed -i 's/^upload_max_filesize = .*/upload_max_filesize = 200M/' \"\$f\"; sed -i 's/^post_max_size = .*/post_max_size = 200M/' \"\$f\"; sed -i 's/^memory_limit = .*/memory_limit = 256M/' \"\$f\"; sed -i 's/^max_execution_time = .*/max_execution_time = 300/' \"\$f\"; sed -i 's/^max_input_time = .*/max_input_time = 300/' \"\$f\"; done; systemctl restart apache2; systemctl restart php${PHP_VER}-fpm 2>/dev/null || true"
+        run_step "Raising PHP upload/post size limits (so phpMyAdmin backup restores don't fail)" \
+            "$BUMP_PHP_LIMITS_CMD" \
+            || { show_step_error; install_pause "Raising PHP upload limits"; }
+
         run_step "Installing extra modules (php-soap, php-ssh2, libssh2)" \
             "DEBIAN_FRONTEND=noninteractive apt-get install -y php${PHP_VER}-soap php${PHP_VER}-ssh2 libssh2-1-dev libssh2-1" \
             || { show_step_error; install_pause "Installing extra PHP modules"; }
