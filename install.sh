@@ -304,7 +304,6 @@ self_update_script "$@"
 BOT_DIR_DEFAULT="/var/www/html/mirzaprobotconfig"
 CONFIG_FILE_DEFAULT="$BOT_DIR_DEFAULT/config.php"
 GIT_REPO="Alfred-1313/Mirza_Pro_Max"
-LATEST_CACHE="/tmp/.mirza_latest_version"
 IP_CACHE="/tmp/.mirza_server_ip"
 
 # ── Resumable-install state engine ───────────────────────────
@@ -777,118 +776,16 @@ get_installed_version() {
     fi
 }
 
-# Get latest version (newest git tag) from GitHub, cached for 1 hour
-get_latest_version() {
-    if [ -f "$LATEST_CACHE" ] && [ $(( $(date +%s) - $(stat -c %Y "$LATEST_CACHE" 2>/dev/null || echo 0) )) -lt 3600 ]; then
-        cat "$LATEST_CACHE"
-        return
-    fi
-    local tags v
-    tags=$(curl -fsSL --max-time 6 "https://api.github.com/repos/${GIT_REPO}/tags" 2>/dev/null)
-    if [ -n "$tags" ]; then
-        if command -v jq >/dev/null 2>&1; then
-            v=$(echo "$tags" | jq -r '.[].name' 2>/dev/null | sort -V | tail -1)
-        else
-            v=$(echo "$tags" | grep -oE '"name"[[:space:]]*:[[:space:]]*"[^"]+"' | sed -E 's/.*"([^"]+)".*/\1/' | sort -V | tail -1)
-        fi
-    fi
-    if [ -n "$v" ]; then
-        echo "$v" > "$LATEST_CACHE"
-        echo "$v"
-    fi
-}
-
-# Print all release tags, newest first (one per line)
-list_tags_desc() {
-    local tags
-    tags=$(curl -fsSL --max-time 8 "https://api.github.com/repos/${GIT_REPO}/tags" 2>/dev/null)
-    [ -z "$tags" ] && return 1
-    if command -v jq >/dev/null 2>&1; then
-        echo "$tags" | jq -r '.[].name' 2>/dev/null | sort -Vr
-    else
-        echo "$tags" | grep -oE '"name"[[:space:]]*:[[:space:]]*"[^"]+"' | sed -E 's/.*"([^"]+)".*/\1/' | sort -Vr
-    fi
-}
-
 # Choose which source to download.
 # Sets globals: SRC_ZIP_URL, SRC_LABEL
-# Honors flags ARG_CHANNEL (beta|release|auto) and ARG_VERSION (tag) for non-interactive use.
-# Returns: 0 = chosen, 1 = error, 2 = back to menu
+# There is one source: the current code on master. Release tags used to be an
+# option, and that is exactly what went wrong - the newest tag could sit well
+# behind master, so "latest stable" quietly installed old code. No prompt now.
+# Returns: 0 = chosen (it cannot fail)
 choose_source() {
-    SRC_ZIP_URL=""; SRC_LABEL=""
-    local beta="https://github.com/${GIT_REPO}/archive/refs/heads/master.zip"
-    local tagbase="https://github.com/${GIT_REPO}/archive/refs/tags"
-
-    # ── Non-interactive (flags) ──────────────────────────────
-    if [ -n "$ARG_VERSION" ]; then
-        # Verify the requested tag actually exists (when the list is reachable)
-        local _avail; _avail=$(list_tags_desc)
-        if [ -n "$_avail" ] && ! echo "$_avail" | grep -qx "$ARG_VERSION"; then
-            echo -e "    ${C_BAD}●${CR} ${C_BAD}Version '${ARG_VERSION}' not found.${CR}"
-            echo -e "    ${C_DIM}Available:${CR} $(echo "$_avail" | tr '\n' ' ')"
-            return 1
-        fi
-        SRC_ZIP_URL="${tagbase}/${ARG_VERSION}.zip"; SRC_LABEL="Release ${ARG_VERSION}"; return 0
-    fi
-    if [ -n "$ARG_CHANNEL" ]; then
-        case "$ARG_CHANNEL" in
-            beta|main)      SRC_ZIP_URL="$beta"; SRC_LABEL="Beta (main)"; return 0 ;;
-            release|auto|latest|stable)
-                local l; l=$(get_latest_version)
-                if [ -n "$l" ]; then SRC_ZIP_URL="${tagbase}/${l}.zip"; SRC_LABEL="Release ${l}";
-                else SRC_ZIP_URL="$beta"; SRC_LABEL="Beta (main)"; fi
-                return 0 ;;
-            *) echo -e "    ${C_BAD}Unknown channel: ${ARG_CHANNEL}${CR}"; return 1 ;;
-        esac
-    fi
-
-    # ── Interactive ──────────────────────────────────────────
-    _sec "Select version"
-    _mi "1" "Automatic  ${C_DIM}(latest stable release)${CR}"
-    _mi "2" "Choose a specific release version"
-    _mi "3" "Beta       ${C_DIM}(latest main branch - may be unstable)${CR}"
-    _mi "0" "Back to menu"
-    echo ""
-    printf "  ${C_PROMPT}❯${CR} Select ${C_DIM}[0-3]${CR}: "
-    local S; read -r S
-    case "$S" in
-        0) return 2 ;;
-        1)
-            local l; l=$(get_latest_version)
-            if [ -n "$l" ]; then SRC_ZIP_URL="${tagbase}/${l}.zip"; SRC_LABEL="Release ${l}";
-            else
-                echo -e "    ${C_WARN}Could not detect latest release; falling back to Beta.${CR}"
-                SRC_ZIP_URL="$beta"; SRC_LABEL="Beta (main)"
-            fi
-            return 0 ;;
-        2)
-            echo ""
-            echo -e "  ${C_DIM}Fetching available versions...${CR}"
-            local TAGS=(); mapfile -t TAGS < <(list_tags_desc)
-            if [ "${#TAGS[@]}" -eq 0 ]; then
-                echo -e "    ${C_BAD}●${CR} ${C_BAD}Could not fetch release list (offline or rate-limited).${CR}"
-                return 1
-            fi
-            _sec "Available versions"
-            local i=1 t
-            for t in "${TAGS[@]}"; do
-                if [ "$i" -eq 1 ]; then _mi "$i" "${t}  ${C_OK}(latest)${CR}"; else _mi "$i" "$t"; fi
-                i=$((i+1))
-            done
-            _mi "0" "Back to menu"
-            echo ""
-            printf "  ${C_PROMPT}❯${CR} Select version ${C_DIM}[default: 1]${CR}: "
-            local V; read -r V; [ -z "$V" ] && V=1
-            [ "$V" = "0" ] && return 2
-            if ! [[ "$V" =~ ^[0-9]+$ ]] || [ "$V" -lt 1 ] || [ "$V" -gt "${#TAGS[@]}" ]; then
-                echo -e "    ${C_BAD}Invalid selection.${CR}"; return 1
-            fi
-            local c="${TAGS[$((V-1))]}"
-            SRC_ZIP_URL="${tagbase}/${c}.zip"; SRC_LABEL="Release ${c}"
-            return 0 ;;
-        3) SRC_ZIP_URL="$beta"; SRC_LABEL="Beta (main)"; return 0 ;;
-        *) echo -e "    ${C_BAD}Invalid selection.${CR}"; return 1 ;;
-    esac
+    SRC_ZIP_URL="https://github.com/${GIT_REPO}/archive/refs/heads/master.zip"
+    SRC_LABEL="Latest"
+    return 0
 }
 
 # Get public server IP, cached for 1 hour (falls back to local IP)
@@ -908,24 +805,13 @@ get_server_ip() {
 
 # ── Dashboard sections ───────────────────────────────────────
 version_section() {
-    local inst latest
+    local inst
     inst=$(get_installed_version)
-    latest=$(get_latest_version)
     _sec "Bot"
     if [ -n "$inst" ]; then
-        if [ -n "$latest" ] && [ "$inst" != "$latest" ]; then
-            _kv "Version" "$(_dot warn) ${C_WARN}${inst}${CR} ${C_DIM}→ ${latest} available${CR}"
-        elif [ -n "$latest" ]; then
-            _kv "Version" "$(_dot ok) ${C_OK}${inst}${CR} ${C_DIM}· up to date${CR}"
-        else
-            _kv "Version" "$(_dot ok) ${C_OK}${inst}${CR}"
-        fi
+        _kv "Version" "$(_dot ok) ${C_OK}${inst}${CR}"
     else
-        if [ -n "$latest" ]; then
-            _kv "Version" "$(_dot none) ${C_DIM}not installed · ${latest} available${CR}"
-        else
-            _kv "Version" "$(_dot none) ${C_DIM}not installed${CR}"
-        fi
+        _kv "Version" "$(_dot none) ${C_DIM}not installed${CR}"
     fi
 }
 
@@ -1379,7 +1265,7 @@ function show_help_screen() {
 
     _sec "Commands"
     _kv "install" "${C_DIM}Install Mirza${CR}"
-    _kv "update" "${C_DIM}Update Mirza (choose channel / version)${CR}"
+    _kv "update" "${C_DIM}Update Mirza to the latest code${CR}"
     _kv "remove" "${C_DIM}Remove Mirza and its services${CR}"
     _kv "migrate" "${C_DIM}Migrate an original Mirza to Pro Max${CR}"
     _kv "addbot" "${C_DIM}Install a second, independent bot on this server${CR}"
@@ -1396,17 +1282,13 @@ function show_help_screen() {
     _kv "--db-user" "${C_DIM}Database username${CR}"
     _kv "--db-pass" "${C_DIM}Database password${CR}"
 
-    _sec "Source parameters"
-    _kv "--version" "${C_DIM}Specific release tag (e.g. 0.1.7)${CR}"
-    _kv "--channel" "${C_DIM}beta | release | auto${CR}"
     _kv "-h, --help" "${C_DIM}Show CLI help and exit${CR}"
 
     _sec "Examples"
-    printf "    ${C_KEY}mirza install --channel auto${CR}\n"
+    printf "    ${C_KEY}mirza install${CR}\n"
     printf "    ${C_KEY}mirza install --name myvpnbot --token 123:ABC \\\\${CR}\n"
-    printf "    ${C_DIM}            --admin 111 --domain bot.example.com --version 0.1.7${CR}\n"
-    printf "    ${C_KEY}mirza update --version 0.1.6${CR}\n"
-    printf "    ${C_KEY}mirza update --channel release${CR}\n"
+    printf "    ${C_DIM}            --admin 111 --domain bot.example.com${CR}\n"
+    printf "    ${C_KEY}mirza update${CR}\n"
     printf "    ${C_KEY}mirza remove${CR}\n"
     printf "    ${C_KEY}mirza backup${CR}\n"
     printf "    ${C_KEY}mirza import${CR}\n"
@@ -2639,34 +2521,21 @@ function update_bot() {
     local ZIP_URL="$SRC_ZIP_URL" TARGET_LABEL="$SRC_LABEL"
 
     # ── Confirm before touching anything ─────────────────────
-    # Skipped when the run was driven by flags (--channel / --version):
-    # that is already an explicit instruction, and prompting would
-    # break unattended use.
-    if [ -z "$ARG_CHANNEL" ] && [ -z "$ARG_VERSION" ]; then
-        local latest_v; latest_v=$(get_latest_version)
-        _sec "Ready to update"
-        _kv "Installed" "${C_OK}${flavour}${CR}"
-        _kv "Target" "${C_KEY}${TARGET_LABEL}${CR}"
-        if [ -n "$latest_v" ] && [ "$current" = "$latest_v" ]; then
-            _kv "Status" "$(_dot ok) ${C_DIM}already the newest release - this reinstalls it${CR}"
-        elif [ -n "$latest_v" ] && [ "$current" != "original" ] && [ "$current" != "unknown" ]; then
-            _kv "Status" "$(_dot warn) ${C_WARN}${latest_v} is newer than ${current}${CR}"
-        else
-            _kv "Status" "$(_dot warn) ${C_WARN}an update is available${CR}"
-        fi
-        echo ""
-        printf "  ${C_PROMPT}❯${CR} Update now? ${C_DIM}[y/N]${CR}: "
-        local confirm; read -r confirm
-        case "$confirm" in
-            y|Y|yes|YES|Yes) ;;
-            *)
-                printf "\n    ${C_DIM}Nothing was changed.${CR}\n"
-                sleep 1
-                show_menu
-                return 0
-                ;;
-        esac
-    fi
+    _sec "Ready to update"
+    _kv "Installed" "${C_OK}${flavour}${CR}"
+    _kv "Target" "${C_KEY}${TARGET_LABEL}${CR}"
+    echo ""
+    printf "  ${C_PROMPT}❯${CR} Update now? ${C_DIM}[y/N]${CR}: "
+    local confirm; read -r confirm
+    case "$confirm" in
+        y|Y|yes|YES|Yes) ;;
+        *)
+            printf "\n    ${C_DIM}Nothing was changed.${CR}\n"
+            sleep 1
+            show_menu
+            return 0
+            ;;
+    esac
 
     print_header "Updating Mirza"
 
@@ -3254,7 +3123,7 @@ EOF
 # ── Command-line argument parsing ────────────────────────────
 # Globals filled from flags (consumed by install/update where relevant)
 ARG_NAME=""     ARG_TOKEN=""   ARG_ADMIN=""    ARG_DOMAIN=""
-ARG_DBUSER=""   ARG_DBPASS=""  ARG_VERSION=""  ARG_CHANNEL=""
+ARG_DBUSER=""   ARG_DBPASS=""
 
 print_usage() {
     cat <<USAGE
@@ -3288,20 +3157,13 @@ print_usage() {
     --domain  <fqdn>   Domain already pointed at this server, e.g. bot.example.com
     --db-user <user>   Database user to create
     --db-pass <pass>   Database password (letters, digits, underscore; 6-64)
-    --version <tag>    Install or update to a specific release, e.g. 1.0.0
-    --channel <name>   Where to take the code from:
-                         release  newest published release (recommended)
-                         beta     current master branch, may be unstable
-                         auto     release if one exists, otherwise beta
     -h, --help         Show this help
 
   Examples:
-    mirza install --channel release
+    mirza install
     mirza install --name myvpnbot --token 123456:ABC --admin 111222333 \\
                   --domain bot.example.com --db-user mirza --db-pass s3cret_1
-    mirza update                         # interactive: pick the source
-    mirza update --channel release       # unattended
-    mirza update --version 1.0.0         # pin to one release
+    mirza update
 
   Notes:
     - Run as root.
@@ -3333,8 +3195,6 @@ process_arguments() {
             --domain)  ARG_DOMAIN="$2";  shift 2 ;;
             --db-user) ARG_DBUSER="$2";  shift 2 ;;
             --db-pass) ARG_DBPASS="$2";  shift 2 ;;
-            --version) ARG_VERSION="$2"; shift 2 ;;
-            --channel) ARG_CHANNEL="$2"; shift 2 ;;
             -h|--help) print_usage; exit 0 ;;
             *) echo -e "\e[91mUnknown option: $1\033[0m"; print_usage; exit 1 ;;
         esac
