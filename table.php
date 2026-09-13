@@ -115,47 +115,46 @@ try {
         // 1 = shipped with the bot, 0 = added by this shop's admin. Only the
         // shipped ones follow the 📦 آموزش‌های آماده switch.
         addFieldToTable("help", "is_default", "0", "VARCHAR(5)");
+    }
 
-        // Starter tutorials. Seeded only when this install does not already have
-        // a row with the same name in the same category, so running it again -
-        // which every update does - can never duplicate or overwrite what a shop
-        // has built. They are marked is_default = 1 and the switch that shows
-        // them (setting.help_defaults_on) ships at 0, so an existing shop sees
-        // no change at all until an admin turns them on.
-        $help_seed_file = __DIR__ . '/help_seed.php';
-        if (is_file($help_seed_file)) {
-            $help_seed = require $help_seed_file;
-            if (is_array($help_seed) && !empty($help_seed['tutorials'])) {
-                $help_seed_stmt = $pdo->prepare(
-                    "INSERT INTO help (name_os, category, Media_os, type_Media_os, Description_os, translations, entities_os, is_default)"
-                    . " SELECT ?, ?, ?, ?, ?, ?, ?, '1' FROM DUAL"
-                    . " WHERE NOT EXISTS (SELECT 1 FROM (SELECT * FROM help) h WHERE h.name_os = ? AND h.category = ?)"
-                );
-                foreach ($help_seed['tutorials'] as $help_seed_row) {
-                    $help_seed_stmt->execute([
-                        $help_seed_row['name'],
-                        $help_seed_row['category'],
-                        $help_seed_row['media'],
-                        $help_seed_row['media_type'],
-                        $help_seed_row['description'],
-                        $help_seed_row['translations'],
-                        $help_seed_row['entities'],
-                        $help_seed_row['name'],
-                        $help_seed_row['category'],
-                    ]);
-                }
-                // the category NAMES live in their own store; merge rather than
-                // replace, so a shop's own categories survive
-                $help_seed_setting = select("setting", "*", null, null, "select");
-                $help_seed_cats = json_decode((string) ($help_seed_setting['help_categories'] ?? ''), true);
-                $help_seed_cats = is_array($help_seed_cats) ? $help_seed_cats : [];
-                foreach (($help_seed['categories'] ?? []) as $help_seed_cat) {
-                    if (!in_array($help_seed_cat, $help_seed_cats, true)) {
-                        $help_seed_cats[] = $help_seed_cat;
-                    }
-                }
-                update("setting", "help_categories", json_encode($help_seed_cats, JSON_UNESCAPED_UNICODE), null, null);
+    // Starter tutorials, seeded on a fresh install AND on an update - it sits
+    // outside the if/else on purpose, because a fresh install takes the CREATE
+    // TABLE arm. A row is only inserted when this shop has nothing by that name
+    // in that category, so repeat runs add nothing and overwrite nothing.
+    // They are marked is_default = 1 and setting.help_defaults_on ships at 0, so
+    // an existing shop sees no change until an admin switches them on.
+    $help_seed_file = __DIR__ . '/help_seed.php';
+    if (is_file($help_seed_file)) {
+        $help_seed = require $help_seed_file;
+        if (is_array($help_seed) && !empty($help_seed['tutorials'])) {
+            $help_seed_stmt = $pdo->prepare(
+                "INSERT INTO help (name_os, category, Media_os, type_Media_os, Description_os, translations, entities_os, is_default)"
+                . " SELECT ?, ?, ?, ?, ?, ?, ?, '1' FROM DUAL"
+                . " WHERE NOT EXISTS (SELECT 1 FROM (SELECT * FROM help) h WHERE h.name_os = ? AND h.category = ?)"
+            );
+            foreach ($help_seed['tutorials'] as $help_seed_row) {
+                $help_seed_stmt->execute([
+                    $help_seed_row['name'],
+                    $help_seed_row['category'],
+                    $help_seed_row['media'],
+                    $help_seed_row['media_type'],
+                    $help_seed_row['description'],
+                    $help_seed_row['translations'],
+                    $help_seed_row['entities'],
+                    $help_seed_row['name'],
+                    $help_seed_row['category'],
+                ]);
             }
+            // merge the category names into their own store, never replace it
+            $help_seed_setting = select("setting", "*", null, null, "select");
+            $help_seed_cats = json_decode((string) ($help_seed_setting['help_categories'] ?? ''), true);
+            $help_seed_cats = is_array($help_seed_cats) ? $help_seed_cats : [];
+            foreach (($help_seed['categories'] ?? []) as $help_seed_cat) {
+                if (!in_array($help_seed_cat, $help_seed_cats, true)) {
+                    $help_seed_cats[] = $help_seed_cat;
+                }
+            }
+            update("setting", "help_categories", json_encode($help_seed_cats, JSON_UNESCAPED_UNICODE), null, null);
         }
     }
 } catch (Exception $e) {
