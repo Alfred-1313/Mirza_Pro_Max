@@ -266,14 +266,14 @@ Lotteryagent,statusfirstwheel,statuslimitchangeloc,limitnumber,
 Debtsettlement,Dice,keyboardmain,statusnoteforf,statuscopycart,
 timeauto_not_verify,status_keyboard_config,cron_status
 ) VALUES (
-'botstatuson','rolleon','offAuthenticationphone','1','offAuthenticationiran','offnotuser',
+'botstatuson','rolleoff','offAuthenticationphone','1','offAuthenticationiran','offnotuser',
 'offaffiliates','0','0','1','offcategory',
-'0','onnewuser','onrequestagent','2','offinline',
+'0','onnewuser','offrequestagent','2','offinline',
 'offverify','offpvsupport','offnamecustom','offcategorys',
-'0','5','onbulk','4','offverify',
+'0','5','offbulk','4','offverify',
 '0','$DATAAWARD','0','0','2',
 '0','0','0',
-'0','1','1','$limitlist',
+'0','0','0','$limitlist',
 '0','0','$keyboardmain','0','0',
 '1','0','$status_cron'
 )");
