@@ -3566,7 +3566,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         ]);
     }
 } elseif ($text == $textbotlang['textbot']['help'] || $datain == "helpbtn" || $datain == "helpbtns" || $text == "/help" || $text == "help") {
-    if (!check_active_btn($setting['keyboardmain'], "text_help")) {
+    if (!check_active_btn($setting['keyboardmain'], "text_help") || !help_section_on()) {
         sendmessage($from_id, $textbotlang['users']['help']['disablehelp'], null, 'HTML');
         return;
     }

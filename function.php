@@ -9075,8 +9075,8 @@ if (!function_exists('bt_section_meta')) {
                 'alert' => 'دکمه‌ی ❌ بستنِ لیست دسته‌بندی آموزش‌ها - متن و رنگش از اینجا تنظیم می‌شه.',
             ],
             'help_defaults' => [
-                'label' => '📦 آموزش‌های آماده‌ی ربات',
-                'alert' => 'آموزش‌هایی که ربات باهاشون نصب می‌شه. خاموش‌کردنشون هیچی رو پاک نمی‌کنه - فقط از دید کاربر برداشته می‌شن تا فقط آموزش‌های خودت نمایش داده بشن، و هر وقت روشنش کنی دوباره برمی‌گردن.',
+                'label' => '🔌 وضعیت بخش آموزش',
+                'alert' => 'روشن یا خاموش بودن کل بخش آموزش برای کاربر. خاموش که باشه دکمه‌ی آموزش از منوی کاربر برداشته می‌شه؛ آموزش‌ها و دسته‌بندی‌ها و تنظیمات نمایششون دست‌نخورده سر جاشون می‌مونن.',
             ],
             'help_cats' => [
                 'label' => '🗂 دسته‌بندی‌ها',
@@ -12963,38 +12963,28 @@ if (!function_exists('help_lang_has_content')) {
         return false;
     }
 }
-if (!function_exists('help_defaults_on')) {
-    // The tutorials this bot SHIPS with (help.is_default = 1) are a starting
-    // point, not a commitment: an admin who wants to publish only their own can
-    // switch ours off. Nothing is deleted - the rows stay and come back the
-    // moment it is switched on again - so this is a display filter, not a purge.
-    function help_defaults_on()
+if (!function_exists('help_section_on')) {
+    // One switch for the whole education section. Off means the customer is
+    // never offered it: the main menu button goes, and the handler turns them
+    // away. Nothing is deleted - every tutorial, category and display setting
+    // stays exactly as it was, ready for the moment it is switched back on.
+    function help_section_on()
     {
         $setting = select("setting", "*", null, null, "select");
-        return (string) ($setting['help_defaults_on'] ?? '0') !== '0';
+        return (string) ($setting['help_status'] ?? 'onhelp') !== 'offhelp';
     }
-    function help_defaults_set($on)
+    function help_section_set($on)
     {
-        update("setting", "help_defaults_on", $on ? '1' : '0', null, null);
+        update("setting", "help_status", $on ? 'onhelp' : 'offhelp', null, null);
     }
-    // every customer-facing tutorial screen reads the list through here, so the
-    // switch cannot be honoured on one screen and forgotten on another
+    // every customer-facing tutorial screen reads the list through here, so one
+    // screen can never disagree with another about what a customer can see
     function help_rows_for_user($category = null)
     {
         $rows = ($category === null)
             ? select("help", "*", null, null, "fetchAll")
             : select("help", "*", "category", $category, "fetchAll");
-        $rows = is_array($rows) ? $rows : [];
-        if (help_defaults_on()) {
-            return $rows;
-        }
-        $own = [];
-        foreach ($rows as $r) {
-            if ((string) ($r['is_default'] ?? '0') !== '1') {
-                $own[] = $r;
-            }
-        }
-        return $own;
+        return is_array($rows) ? $rows : [];
     }
 }
 if (!function_exists('help_layout_get')) {

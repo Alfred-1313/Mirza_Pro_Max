@@ -1615,21 +1615,12 @@ if (!function_exists('help_home_payload')) {
         $kb['inline_keyboard'][] = [['text' => bt_section_meta('help_items')['label'], 'callback_data' => 'bt_sep|help_items']];
         $kb['inline_keyboard'][] = [['text' => $help_add_label, 'callback_data' => 'help_add', 'style' => 'success']];
         $kb['inline_keyboard'][] = [['text' => $help_list_label . ' (' . count($help_all) . ')', 'callback_data' => "help_view_list:{$lang}", 'style' => $help_style]];
-        $help_def_on = help_defaults_on();
-        $help_def_count = 0;
-        $help_own_count = 0;
-        foreach ($help_all as $r) {
-            if ((string) ($r['is_default'] ?? '0') === '1') {
-                $help_def_count++;
-            } else {
-                $help_own_count++;
-            }
-        }
+        $help_sec_on = help_section_on();
         $kb['inline_keyboard'][] = [['text' => bt_section_meta('help_defaults')['label'], 'callback_data' => 'bt_sep|help_defaults']];
         $kb['inline_keyboard'][] = [[
-            'text' => ($help_def_on ? '✅ آموزش‌های آماده روشن است' : '❌ آموزش‌های آماده خاموش است') . " ({$help_def_count})",
-            'callback_data' => "help_defaults:{$lang}:" . ($help_def_on ? '1' : '0'),
-            'style' => $help_def_on ? 'success' : 'danger',
+            'text' => $help_sec_on ? '✅ بخش آموزش روشن است' : '❌ بخش آموزش خاموش است',
+            'callback_data' => "help_status:{$lang}:" . ($help_sec_on ? '1' : '0'),
+            'style' => $help_sec_on ? 'success' : 'danger',
         ]];
         // 🎨 نمایش دسته‌بندی و آموزش‌ها is reached from 🎨 شخصی‌سازی پیام‌های ربات ←
         // 📚 پیام و دکمه‌های آموزش now; a second copy here just split one setting
@@ -1639,11 +1630,11 @@ if (!function_exists('help_home_payload')) {
         $help_caption_tpl = $help_tab_texts['Admin']['Help']['homeCaption'] ?? $textbotlang['Admin']['Help']['homeCaption'];
         $help_caption = strtr($help_caption_tpl, ['{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang]);
         $help_caption .= "\n\n📊 <b>وضعیت فعلی</b>"
-            . "\n• آموزش‌ها: <b>" . count($help_all) . "</b> (آماده: <b>{$help_def_count}</b> · خودت: <b>{$help_own_count}</b> · بدون دسته: <b>" . $help_uncat . "</b>)"
+            . "\n• آموزش‌ها: <b>" . count($help_all) . "</b> (بدون دسته: <b>" . $help_uncat . "</b>)"
             . "\n• دسته‌بندی‌ها: <b>" . count($help_cats) . "</b>"
-            . "\n• آموزش‌های آماده: <b>" . ($help_def_on ? 'روشن (کاربر می‌بیندشون)' : 'خاموش (فقط آموزش‌های خودت)') . "</b>"
+            . "\n• بخش آموزش: <b>" . ($help_sec_on ? 'روشن' : 'خاموش') . "</b>"
             . "\n\n📌 دسته‌بندی‌ها رو از «🗂 دسته‌بندی‌ها» می‌سازی. موقع افزودن هر آموزش هم ازت پرسیده می‌شه توی کدوم دسته باشه - و «هیچ‌کدام» یعنی بدون دسته نمایش داده بشه."
-            . "\n📦 آموزش‌های آماده همون‌هایی‌ان که ربات باهاشون نصب می‌شه. خاموش‌کردنشون پاکشون نمی‌کنه - فقط از دید کاربر برداشته می‌شن.";
+            . "\n🔌 خاموش‌کردن بخش آموزش هیچی رو پاک نمی‌کنه - فقط دکمه‌ی آموزش از منوی کاربر برداشته می‌شه.";
         return [$help_caption, json_encode($kb)];
     }
 }
@@ -4859,16 +4850,6 @@ if (!function_exists('feature_status_lang_payload')) {
             ['text' => $roll_Status_v == 'rolleon' ? $on : $off, 'callback_data' => $tog('role', $roll_Status_v)],
             ['text' => $tx['Admin']['Status']['statusRole'], 'callback_data' => "stautsrolee"],
         ];
-        // ⚙️ picks which country's dial code this language accepts. It lives on
-        // the phone-verification row itself now: turning verification on for a
-        // language is what enforces that language's own country, so the second
-        // "require country code" toggle this screen used to carry was both
-        // redundant and Iran-shaped for every market.
-        $rows[] = [
-            ['text' => $tx['keyboard']['settings'], 'callback_data' => "flsec:{$lang}:phone"],
-            ['text' => $get_number_v == 'onAuthenticationphone' ? $on : $off, 'callback_data' => $tog('Authenticationphone', $get_number_v)],
-            ['text' => $tx['Admin']['Status']['Authenticationphone'], 'callback_data' => "Authenticationphone"],
-        ];
         $rows[] = [
             ['text' => $verifystart_v == 'onverify' ? $on : $off, 'callback_data' => $tog('verifystart', $verifystart_v)],
             ['text' => $tx['keyboard']['authenticate'], 'callback_data' => "verify"],
@@ -4916,6 +4897,16 @@ if (!function_exists('feature_status_lang_payload')) {
         $rows[] = [
             ['text' => $statuscopycart_v == '1' ? $on : $off, 'callback_data' => $tog('compycart', $statuscopycart_v)],
             ['text' => $tx['keyboard']['copyCard'], 'callback_data' => "copycart"],
+        ];
+        // ⚙️ picks which country's dial code this language accepts. It lives on
+        // the phone-verification row itself now: turning verification on for a
+        // language is what enforces that language's own country, so the second
+        // "require country code" toggle this screen used to carry was both
+        // redundant and Iran-shaped for every market.
+        $rows[] = [
+            ['text' => $tx['keyboard']['settings'], 'callback_data' => "flsec:{$lang}:phone"],
+            ['text' => $get_number_v == 'onAuthenticationphone' ? $on : $off, 'callback_data' => $tog('Authenticationphone', $get_number_v)],
+            ['text' => $tx['Admin']['Status']['Authenticationphone'], 'callback_data' => "Authenticationphone"],
         ];
         // the ⚙️ تنظیمات cells open their section inline, in this same message
         // and in this same language (flsec:), instead of the old reply-keyboard
@@ -5603,7 +5594,7 @@ if (!function_exists('help_preview_list_payload')) {
             $color = $tutSec['color'][(string) $r['id']] ?? '';
             $tutBtns[(string) $r['id']] = [
                 'text' => ($emoji !== '' ? $emoji . ' ' : '') . $view['name'],
-                'callback_data' => "help_prev_item:{$r['id']}:{$lang}",
+                'callback_data' => "help_prev_item:{$r['id']}:{$lang}" . ($catIdx === null ? '' : ":{$catIdx}"),
                 'style' => in_array($color, $ok, true) ? $color : 'success',
             ];
         }
@@ -20774,10 +20765,10 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
         list($help_info, $help_kb) = help_item_menu_payload($help_target, $help_lang, $textbotlang);
         Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['categorySaved'] . "\n\n" . $help_info, $help_kb, 'HTML');
     }
-} elseif (preg_match('/^help_defaults:(fa|en|ru|zh|tk):([01])$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
-    // nothing is deleted here - only the flag that decides whether the SHIPPED
-    // tutorials are rendered, so turning it back on brings them all back
-    help_defaults_set($help_m[2] !== '1');
+} elseif (preg_match('/^help_status:(fa|en|ru|zh|tk):([01])$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
+    // nothing is deleted here - only whether the customer is offered the
+    // section at all, so switching it back on restores every tutorial as it was
+    help_section_set($help_m[2] !== '1');
     list($help_caption, $help_kb) = help_home_payload($help_m[1], $textbotlang);
     Editmessagetext($from_id, $message_id, $help_caption, $help_kb, 'HTML');
 } elseif (preg_match('/^help_delcat:(fa|en|ru|zh|tk):(\d{1,4})$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
@@ -21226,10 +21217,17 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
         $help_caption .= "\n🚫 {$help_hidden} آموزش مخفیه و نشون داده نمی‌شه.";
     }
     Editmessagetext($from_id, $message_id, $help_caption, $help_kb, 'HTML');
-} elseif (preg_match('/^help_prev_item:(\d+):(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^help_prev_item:(\d+):(fa|en|ru|zh|tk)(?::(\d{1,4}))?$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
     $help_row = select("help", "*", "id", $help_m[1], "select");
     $help_lang = $help_m[2];
-    $help_back_kb = json_encode(['inline_keyboard' => [[['text' => $textbotlang['Admin']['Help']['backToListBtn'], 'callback_data' => "help_preview:{$help_lang}"]]]]);
+    // back goes where the admin came FROM: the category's own preview when the
+    // tutorial was opened inside one, the preview root otherwise. It used to
+    // always jump to the root, so stepping into Android and opening a tutorial
+    // left no way back to Android.
+    $help_back_cb = isset($help_m[3]) && $help_m[3] !== ''
+        ? "help_prev_cat:{$help_lang}:{$help_m[3]}"
+        : "help_preview:{$help_lang}";
+    $help_back_kb = json_encode(['inline_keyboard' => [[['text' => $textbotlang['Admin']['Help']['backToListBtn'], 'callback_data' => $help_back_cb]]]]);
     if ($help_row !== false) {
         $help_view = help_resolve_lang($help_row, $help_lang);
         sendmessage($from_id, $textbotlang['Admin']['Help']['previewNote'], null, 'HTML');

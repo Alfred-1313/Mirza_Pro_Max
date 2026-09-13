@@ -165,6 +165,21 @@ if (!function_exists('build_main_keyboard')) {
             }
             $keyboard = ['inline_keyboard' => []];
             $keyboardcustom = $trace_keyboard;
+            // the education section's own switch (📚 مدیریت آموزش‌ها ← 🔌 وضعیت
+            // بخش آموزش). Reuses the hidden flag the renderer already honours,
+            // so there is one code path deciding what reaches the customer.
+            if (function_exists('help_section_on') && !help_section_on()) {
+                foreach ($keyboardcustom as $kb_hrow_i => $kb_hrow) {
+                    if (!is_array($kb_hrow)) {
+                        continue;
+                    }
+                    foreach ($kb_hrow as $kb_hbtn_i => $kb_hbtn) {
+                        if (is_array($kb_hbtn) && ($kb_hbtn['text'] ?? '') === 'text_help') {
+                            $keyboardcustom[$kb_hrow_i][$kb_hbtn_i]['hidden'] = 1;
+                        }
+                    }
+                }
+            }
             $keyboardcustom = json_decode(strtr(strval(json_encode($keyboardcustom)), $replacements), true);
             $keyboardfiltered = [];
             foreach ($keyboardcustom as $kb_r => $kb_row) {
@@ -223,6 +238,19 @@ if (!function_exists('build_main_keyboard')) {
             }
             $keyboard = ['keyboard' => [], 'resize_keyboard' => true];
             $keyboardcustom = $keyboardRows;
+            // same education switch as the reply keyboard above
+            if (function_exists('help_section_on') && !help_section_on()) {
+                foreach ($keyboardcustom as $kb_hrow_i => $kb_hrow) {
+                    if (!is_array($kb_hrow)) {
+                        continue;
+                    }
+                    foreach ($kb_hrow as $kb_hbtn_i => $kb_hbtn) {
+                        if (is_array($kb_hbtn) && ($kb_hbtn['text'] ?? '') === 'text_help') {
+                            $keyboardcustom[$kb_hrow_i][$kb_hbtn_i]['hidden'] = 1;
+                        }
+                    }
+                }
+            }
             $keyboardcustom = json_decode(strtr(strval(json_encode($keyboardcustom)), $replacements), true);
             $keyboardfiltered = [];
             foreach ($keyboardcustom as $kb_r => $kb_row) {

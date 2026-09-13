@@ -112,57 +112,13 @@ try {
 
     // Columns added after the CREATE TABLE above was written. They run whether
     // the table was just made or already existed: a fresh install takes the
-    // CREATE arm, and while these sat in an else they were never added to it -
-    // is_default was missing, so the seeding below failed on every new shop.
+    // CREATE arm, and while these sat in an else they were never added to it.
     // addFieldToTable returns at once when the column is there, so an update
     // pays nothing for this.
     addFieldToTable("help", "category", null, "TEXT");
     addFieldToTable("help", "translations", null, "TEXT");
     addFieldToTable("help", "entities_os", null, "TEXT");
-    // 1 = shipped with the bot, 0 = added by this shop's admin. Only the
-    // shipped ones follow the 📦 آموزش‌های آماده switch.
-    addFieldToTable("help", "is_default", "0", "VARCHAR(5)");
 
-    // Starter tutorials, seeded on a fresh install AND on an update - it sits
-    // outside the if/else on purpose, because a fresh install takes the CREATE
-    // TABLE arm. A row is only inserted when this shop has nothing by that name
-    // in that category, so repeat runs add nothing and overwrite nothing.
-    // They are marked is_default = 1 and setting.help_defaults_on ships at 0, so
-    // an existing shop sees no change until an admin switches them on.
-    $help_seed_file = __DIR__ . '/help_seed.php';
-    if (is_file($help_seed_file)) {
-        $help_seed = require $help_seed_file;
-        if (is_array($help_seed) && !empty($help_seed['tutorials'])) {
-            $help_seed_stmt = $pdo->prepare(
-                "INSERT INTO help (name_os, category, Media_os, type_Media_os, Description_os, translations, entities_os, is_default)"
-                . " SELECT ?, ?, ?, ?, ?, ?, ?, '1' FROM DUAL"
-                . " WHERE NOT EXISTS (SELECT 1 FROM (SELECT * FROM help) h WHERE h.name_os = ? AND h.category = ?)"
-            );
-            foreach ($help_seed['tutorials'] as $help_seed_row) {
-                $help_seed_stmt->execute([
-                    $help_seed_row['name'],
-                    $help_seed_row['category'],
-                    $help_seed_row['media'],
-                    $help_seed_row['media_type'],
-                    $help_seed_row['description'],
-                    $help_seed_row['translations'],
-                    $help_seed_row['entities'],
-                    $help_seed_row['name'],
-                    $help_seed_row['category'],
-                ]);
-            }
-            // merge the category names into their own store, never replace it
-            $help_seed_setting = select("setting", "*", null, null, "select");
-            $help_seed_cats = json_decode((string) ($help_seed_setting['help_categories'] ?? ''), true);
-            $help_seed_cats = is_array($help_seed_cats) ? $help_seed_cats : [];
-            foreach (($help_seed['categories'] ?? []) as $help_seed_cat) {
-                if (!in_array($help_seed_cat, $help_seed_cats, true)) {
-                    $help_seed_cats[] = $help_seed_cat;
-                }
-            }
-            update("setting", "help_categories", json_encode($help_seed_cats, JSON_UNESCAPED_UNICODE), null, null);
-        }
-    }
 } catch (Exception $e) {
     file_put_contents('error_log', $e->getMessage());
 }
@@ -274,7 +230,7 @@ timeauto_not_verify,status_keyboard_config,cron_status
 '0','$DATAAWARD','0','0','2',
 '0','0','0',
 '0','0','0','$limitlist',
-'0','0','$keyboardmain','0','0',
+'0','0','$keyboardmain','0','1',
 '1','0','$status_cron'
 )");
         $stmt->execute();
@@ -309,7 +265,7 @@ timeauto_not_verify,status_keyboard_config,cron_status
         addFieldToTable("setting", "configDeliveryMode", null, "TEXT");
         addFieldToTable("setting", "statusnoteforf", "1", "varchar(20)");
         addFieldToTable("setting", "timeauto_not_verify", "4", "varchar(20)");
-        addFieldToTable("setting", "statuscopycart", "0", "varchar(20)");
+        addFieldToTable("setting", "statuscopycart", "1", "varchar(20)");
         addFieldToTable("setting", "miniapp_status", "offminiapp", "VARCHAR(20)");
         addFieldToTable("setting", "miniapp_bot_logo", "0", "VARCHAR(10)");
         addFieldToTable("setting", "miniapp_bot_name", "", "VARCHAR(60)");
@@ -327,8 +283,8 @@ timeauto_not_verify,status_keyboard_config,cron_status
         // tutorial uses it - the rows' own category column only knows the ones
         // currently in use
         addFieldToTable("setting", "help_categories", "[]", "TEXT");
-        // the shipped tutorials can be switched off without being deleted
-        addFieldToTable("setting", "help_defaults_on", "0", "VARCHAR(5)");
+        // one switch for the whole education section, on by default
+        addFieldToTable("setting", "help_status", "onhelp", "VARCHAR(20)");
         addFieldToTable("setting", "daywarn", "2", "varchar(45)");
         addFieldToTable("setting", "btn_status_extned", "0", "varchar(45)");
         addFieldToTable("setting", "wheelـluck_price", "0", "varchar(45)");
