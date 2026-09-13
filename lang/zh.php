@@ -162,6 +162,11 @@ return [
                             'key' => 'keyboard.acceptRules',
                             'group' => 'verify',
                         ],
+                        'bt_23' => [
+                            'label' => '规则已接受提示',
+                            'key' => 'users.Rules',
+                            'group' => 'verify',
+                        ],
                         'bt_7' => [
                             'label' => '🎉 中奖消息',
                             'key' => 'users.wheelLuck.winnerCongratulations',

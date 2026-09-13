@@ -8240,6 +8240,12 @@ Häzirki dil: <b>{lang}</b>',
         'key' => 'keyboard.acceptRules',
         'group' => 'verify',
       ),
+      'bt_23' => 
+      array (
+        'label' => '✅ Düzgünler tassyklanan habar',
+        'key' => 'users.Rules',
+        'group' => 'verify',
+      ),
       'bt_7' => 
       array (
         'label' => '🎉 Ýeňiji habary',

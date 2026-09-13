@@ -162,6 +162,11 @@ Current language: <b>{lang}</b>',
                             'key' => 'keyboard.acceptRules',
                             'group' => 'verify',
                         ],
+                        'bt_23' => [
+                            'label' => 'Rules accepted message',
+                            'key' => 'users.Rules',
+                            'group' => 'verify',
+                        ],
                         'bt_7' => [
                             'label' => '🎉 Winner message',
                             'key' => 'users.wheelLuck.winnerCongratulations',

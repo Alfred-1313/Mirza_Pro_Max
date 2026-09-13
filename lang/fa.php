@@ -689,6 +689,12 @@ return array (
         'key' => 'keyboard.acceptRules',
         'group' => 'verify',
       ),
+      'bt_23' => 
+      array (
+        'label' => '✅ پیام تایید قوانین',
+        'key' => 'users.Rules',
+        'group' => 'verify',
+      ),
       'bt_7' => 
       array (
         'label' => '🎉 پیام برنده شدن',

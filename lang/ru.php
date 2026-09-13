@@ -162,6 +162,11 @@ return [
                             'key' => 'keyboard.acceptRules',
                             'group' => 'verify',
                         ],
+                        'bt_23' => [
+                            'label' => 'Сообщение о принятии правил',
+                            'key' => 'users.Rules',
+                            'group' => 'verify',
+                        ],
                         'bt_7' => [
                             'label' => '🎉 Сообщение о выигрыше',
                             'key' => 'users.wheelLuck.winnerCongratulations',
