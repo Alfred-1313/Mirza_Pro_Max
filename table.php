@@ -272,7 +272,7 @@ timeauto_not_verify,status_keyboard_config,cron_status
         addFieldToTable("setting", "scorestatus", "0", "VARCHAR(100)");
         addFieldToTable("setting", "verifybucodeuser", "offverify", "VARCHAR(100)");
         addFieldToTable("setting", "on_hold_day", "4", "VARCHAR(100)");
-        addFieldToTable("setting", "bulkbuy", "onbulk", "VARCHAR(100)");
+        addFieldToTable("setting", "bulkbuy", "offbulk", "VARCHAR(100)");
         addFieldToTable("setting", "statuscategorygenral", "oncategorys", "VARCHAR(100)");
     // default ON: keeps today's live behaviour (panel picker always shown,
     // hardcoded via `false &&` in index.php) unchanged unless the admin flips it
@@ -285,7 +285,7 @@ timeauto_not_verify,status_keyboard_config,cron_status
         addFieldToTable("setting", "affiliatespercentage", "0", "VARCHAR(600)");
         addFieldToTable("setting", "inlinebtnmain", "offinline", "VARCHAR(200)");
         addFieldToTable("setting", "volumewarn", "2", "VARCHAR(200)");
-        addFieldToTable("setting", "statusagentrequest", "onrequestagent", "VARCHAR(600)");
+        addFieldToTable("setting", "statusagentrequest", "offrequestagent", "VARCHAR(600)");
         addFieldToTable("setting", "statusnewuser", "onnewuser", "VARCHAR(600)");
         addFieldToTable("setting", "numbercount", "0", "VARCHAR(600)");
         addFieldToTable("setting", "statuscategory", "offcategory", "VARCHAR(600)");
@@ -299,7 +299,7 @@ timeauto_not_verify,status_keyboard_config,cron_status
     addFieldToTable("setting", "usertest_auto_reset", "{}", "JSON");
         addFieldToTable("setting", "Channel_Report", "0", "VARCHAR(200)");
         addFieldToTable("setting", "Bot_Status", "botstatuson", "VARCHAR(200)");
-        addFieldToTable("setting", "roll_Status", "rolleon", "VARCHAR(200)");
+        addFieldToTable("setting", "roll_Status", "rolleoff", "VARCHAR(200)");
         addFieldToTable("setting", "verifystart", "offverify", "VARCHAR(200)");
     }
 } catch (Exception $e) {
@@ -762,7 +762,7 @@ try {
     $main = 20000;
     $max = 1000000;
     $settings = [
-        ['Cartstatus', 'oncard'],
+        ['Cartstatus', 'offcard'],
         ['CartDirect', '@cart'],
         ['cardnumber', '603700000000'],
         ['namecard', $textbotlang['db_defaults']['namecardNotSet']],
