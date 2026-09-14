@@ -10852,11 +10852,11 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     step("cardlegacyhelp:{$cl_m[1]}:{$message_id}:{$cl_promptId}", $from_id);
 } elseif (preg_match('/^cardlegacyhelp:([a-z]{2}):([0-9]+):([0-9]+)$/', (string) $user['step'], $cl_m) && $datain == '') {
     if ($text) {
-        $cl_data = json_encode(['type' => 'text', 'text' => $text]);
+        $cl_data = json_encode(['type' => 'text', 'text' => topup_caption_text_from_update($text, $update)]);
     } elseif ($photo) {
-        $cl_data = json_encode(['type' => 'photo', 'text' => $caption, 'photoid' => $photoid]);
+        $cl_data = json_encode(['type' => 'photo', 'text' => premium_emoji_html_from_entities($update['message']['caption'] ?? $caption, $update['message']['caption_entities'] ?? []), 'photoid' => $photoid]);
     } elseif ($video) {
-        $cl_data = json_encode(['type' => 'video', 'text' => $caption, 'videoid' => $videoid]);
+        $cl_data = json_encode(['type' => 'video', 'text' => premium_emoji_html_from_entities($update['message']['caption'] ?? $caption, $update['message']['caption_entities'] ?? []), 'videoid' => $videoid]);
     } else {
         sendmessage($from_id, $textbotlang['Admin']['Help']['invalidContent'], null, 'HTML');
         return;
@@ -15865,6 +15865,9 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     step('changedeshelp', $from_id);
 } elseif ($user['step'] == "changedeshelp") {
     update("help", "Description_os", $text, "name_os", $user['Processing_value']);
+    // its formatting (premium emoji, bold...) goes with it: left behind, the
+    // old description's entities were applied to the new text
+    update("help", "entities_os", json_encode($update['message']['entities'] ?? null), "name_os", $user['Processing_value']);
     sendmessage($from_id, $textbotlang['Admin']['Help']['descUpdated'], $helpedit, 'HTML');
     step('home', $from_id);
 } elseif ($text == $textbotlang['keyboard']['editMedia'] && $adminrulecheck['rule'] == "administrator") {
@@ -17852,21 +17855,21 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         } else {
             $data = json_encode(array(
                 'type' => "text",
-                'text' => $text
+                'text' => topup_caption_text_from_update($text, $update)
             ));
             update("PaySetting", "ValuePay", $data, "NamePay", "helpnowpayment");
         }
     } elseif ($photo) {
         $data = json_encode(array(
             'type' => "photo",
-            'text' => $caption,
+            'text' => premium_emoji_html_from_entities($update['message']['caption'] ?? $caption, $update['message']['caption_entities'] ?? []),
             'photoid' => $photoid
         ));
         update("PaySetting", "ValuePay", $data, "NamePay", "helpnowpayment");
     } elseif ($video) {
         $data = json_encode(array(
             'type' => "video",
-            'text' => $caption,
+            'text' => premium_emoji_html_from_entities($update['message']['caption'] ?? $caption, $update['message']['caption_entities'] ?? []),
             'videoid' => $videoid
         ));
         update("PaySetting", "ValuePay", $data, "NamePay", "helpnowpayment");
@@ -17886,21 +17889,21 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         } else {
             $data = json_encode(array(
                 'type' => "text",
-                'text' => $text
+                'text' => topup_caption_text_from_update($text, $update)
             ));
             update("PaySetting", "ValuePay", $data, "NamePay", "helpperfectmony");
         }
     } elseif ($photo) {
         $data = json_encode(array(
             'type' => "photo",
-            'text' => $caption,
+            'text' => premium_emoji_html_from_entities($update['message']['caption'] ?? $caption, $update['message']['caption_entities'] ?? []),
             'photoid' => $photoid
         ));
         update("PaySetting", "ValuePay", $data, "NamePay", "helpperfectmony");
     } elseif ($video) {
         $data = json_encode(array(
             'type' => "video",
-            'text' => $caption,
+            'text' => premium_emoji_html_from_entities($update['message']['caption'] ?? $caption, $update['message']['caption_entities'] ?? []),
             'videoid' => $videoid
         ));
         update("PaySetting", "ValuePay", $data, "NamePay", "helpperfectmony");
@@ -17920,21 +17923,21 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         } else {
             $data = json_encode(array(
                 'type' => "text",
-                'text' => $text
+                'text' => topup_caption_text_from_update($text, $update)
             ));
             update("PaySetting", "ValuePay", $data, "NamePay", "helpplisio");
         }
     } elseif ($photo) {
         $data = json_encode(array(
             'type' => "photo",
-            'text' => $caption,
+            'text' => premium_emoji_html_from_entities($update['message']['caption'] ?? $caption, $update['message']['caption_entities'] ?? []),
             'photoid' => $photoid
         ));
         update("PaySetting", "ValuePay", $data, "NamePay", "helpplisio");
     } elseif ($video) {
         $data = json_encode(array(
             'type' => "video",
-            'text' => $caption,
+            'text' => premium_emoji_html_from_entities($update['message']['caption'] ?? $caption, $update['message']['caption_entities'] ?? []),
             'videoid' => $videoid
         ));
         update("PaySetting", "ValuePay", $data, "NamePay", "helpplisio");
@@ -17954,21 +17957,21 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         } else {
             $data = json_encode(array(
                 'type' => "text",
-                'text' => $text
+                'text' => topup_caption_text_from_update($text, $update)
             ));
             update("PaySetting", "ValuePay", $data, "NamePay", "helpiranpay1");
         }
     } elseif ($photo) {
         $data = json_encode(array(
             'type' => "photo",
-            'text' => $caption,
+            'text' => premium_emoji_html_from_entities($update['message']['caption'] ?? $caption, $update['message']['caption_entities'] ?? []),
             'photoid' => $photoid
         ));
         update("PaySetting", "ValuePay", $data, "NamePay", "helpiranpay1");
     } elseif ($video) {
         $data = json_encode(array(
             'type' => "video",
-            'text' => $caption,
+            'text' => premium_emoji_html_from_entities($update['message']['caption'] ?? $caption, $update['message']['caption_entities'] ?? []),
             'videoid' => $videoid
         ));
         update("PaySetting", "ValuePay", $data, "NamePay", "helpiranpay1");
@@ -17988,21 +17991,21 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         } else {
             $data = json_encode(array(
                 'type' => "text",
-                'text' => $text
+                'text' => topup_caption_text_from_update($text, $update)
             ));
             update("PaySetting", "ValuePay", $data, "NamePay", "helpiranpay2");
         }
     } elseif ($photo) {
         $data = json_encode(array(
             'type' => "photo",
-            'text' => $caption,
+            'text' => premium_emoji_html_from_entities($update['message']['caption'] ?? $caption, $update['message']['caption_entities'] ?? []),
             'photoid' => $photoid
         ));
         update("PaySetting", "ValuePay", $data, "NamePay", "helpiranpay2");
     } elseif ($video) {
         $data = json_encode(array(
             'type' => "video",
-            'text' => $caption,
+            'text' => premium_emoji_html_from_entities($update['message']['caption'] ?? $caption, $update['message']['caption_entities'] ?? []),
             'videoid' => $videoid
         ));
         update("PaySetting", "ValuePay", $data, "NamePay", "helpiranpay2");
@@ -18022,21 +18025,21 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         } else {
             $data = json_encode(array(
                 'type' => "text",
-                'text' => $text
+                'text' => topup_caption_text_from_update($text, $update)
             ));
             update("PaySetting", "ValuePay", $data, "NamePay", "helpiranpay3");
         }
     } elseif ($photo) {
         $data = json_encode(array(
             'type' => "photo",
-            'text' => $caption,
+            'text' => premium_emoji_html_from_entities($update['message']['caption'] ?? $caption, $update['message']['caption_entities'] ?? []),
             'photoid' => $photoid
         ));
         update("PaySetting", "ValuePay", $data, "NamePay", "helpiranpay3");
     } elseif ($video) {
         $data = json_encode(array(
             'type' => "video",
-            'text' => $caption,
+            'text' => premium_emoji_html_from_entities($update['message']['caption'] ?? $caption, $update['message']['caption_entities'] ?? []),
             'videoid' => $videoid
         ));
         update("PaySetting", "ValuePay", $data, "NamePay", "helpiranpay3");
@@ -18056,21 +18059,21 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         } else {
             $data = json_encode(array(
                 'type' => "text",
-                'text' => $text
+                'text' => topup_caption_text_from_update($text, $update)
             ));
             update("PaySetting", "ValuePay", $data, "NamePay", "helpaqayepardakht");
         }
     } elseif ($photo) {
         $data = json_encode(array(
             'type' => "photo",
-            'text' => $caption,
+            'text' => premium_emoji_html_from_entities($update['message']['caption'] ?? $caption, $update['message']['caption_entities'] ?? []),
             'photoid' => $photoid
         ));
         update("PaySetting", "ValuePay", $data, "NamePay", "helpaqayepardakht");
     } elseif ($video) {
         $data = json_encode(array(
             'type' => "video",
-            'text' => $caption,
+            'text' => premium_emoji_html_from_entities($update['message']['caption'] ?? $caption, $update['message']['caption_entities'] ?? []),
             'videoid' => $videoid
         ));
         update("PaySetting", "ValuePay", $data, "NamePay", "helpaqayepardakht");
@@ -18090,21 +18093,21 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         } else {
             $data = json_encode(array(
                 'type' => "text",
-                'text' => $text
+                'text' => topup_caption_text_from_update($text, $update)
             ));
             update("PaySetting", "ValuePay", $data, "NamePay", "helpzarinpal");
         }
     } elseif ($photo) {
         $data = json_encode(array(
             'type' => "photo",
-            'text' => $caption,
+            'text' => premium_emoji_html_from_entities($update['message']['caption'] ?? $caption, $update['message']['caption_entities'] ?? []),
             'photoid' => $photoid
         ));
         update("PaySetting", "ValuePay", $data, "NamePay", "helpzarinpal");
     } elseif ($video) {
         $data = json_encode(array(
             'type' => "video",
-            'text' => $caption,
+            'text' => premium_emoji_html_from_entities($update['message']['caption'] ?? $caption, $update['message']['caption_entities'] ?? []),
             'videoid' => $videoid
         ));
         update("PaySetting", "ValuePay", $data, "NamePay", "helpzarinpal");
@@ -18124,21 +18127,21 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         } else {
             $data = json_encode(array(
                 'type' => "text",
-                'text' => $text
+                'text' => topup_caption_text_from_update($text, $update)
             ));
             update("PaySetting", "ValuePay", $data, "NamePay", "helpofflinearze");
         }
     } elseif ($photo) {
         $data = json_encode(array(
             'type' => "photo",
-            'text' => $caption,
+            'text' => premium_emoji_html_from_entities($update['message']['caption'] ?? $caption, $update['message']['caption_entities'] ?? []),
             'photoid' => $photoid
         ));
         update("PaySetting", "ValuePay", $data, "NamePay", "helpofflinearze");
     } elseif ($video) {
         $data = json_encode(array(
             'type' => "video",
-            'text' => $caption,
+            'text' => premium_emoji_html_from_entities($update['message']['caption'] ?? $caption, $update['message']['caption_entities'] ?? []),
             'videoid' => $videoid
         ));
         update("PaySetting", "ValuePay", $data, "NamePay", "helpofflinearze");
@@ -20051,21 +20054,21 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
         } else {
             $data = json_encode(array(
                 'type' => "text",
-                'text' => $text
+                'text' => topup_caption_text_from_update($text, $update)
             ));
             update("PaySetting", "ValuePay", $data, "NamePay", "helpstar");
         }
     } elseif ($photo) {
         $data = json_encode(array(
             'type' => "photo",
-            'text' => $caption,
+            'text' => premium_emoji_html_from_entities($update['message']['caption'] ?? $caption, $update['message']['caption_entities'] ?? []),
             'photoid' => $photoid
         ));
         update("PaySetting", "ValuePay", $data, "NamePay", "helpstar");
     } elseif ($video) {
         $data = json_encode(array(
             'type' => "video",
-            'text' => $caption,
+            'text' => premium_emoji_html_from_entities($update['message']['caption'] ?? $caption, $update['message']['caption_entities'] ?? []),
             'videoid' => $videoid
         ));
         update("PaySetting", "ValuePay", $data, "NamePay", "helpstar");
