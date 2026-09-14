@@ -3530,6 +3530,10 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     $output_config_link = "";
     $config = "";
     $output_config_link = $marzban_list_get['sublink'] == "onsublink" ? $dataoutput['subscription_url'] : "";
+    // the QR gets the subscription link alone, like the purchase flow - the
+    // text below appends every config to $output_config_link, and a QR of all
+    // of them is too much data to build, so no QR was ever sent
+    $usertest_sub_link = $output_config_link;
     if ($marzban_list_get['config'] == "onconfig" && is_array($dataoutput['configs'])) {
         for ($i = 0; $i < count($dataoutput['configs']); ++$i) {
             $output_config_link .= "\n" . $dataoutput['configs'][$i];
@@ -3559,7 +3563,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         $textcreatuser = str_replace('{password}', $dataoutput['subscription_url'], $textcreatuser);
         update("invoice", "user_info", $dataoutput['subscription_url'], "id_invoice", $randomString);
     }
-    sendMessageService($marzban_list_get, $dataoutput['configs'], $output_config_link, $dataoutput['username'], $usertestinfo, $textcreatuser, $randomString, kind: 'usertest');
+    sendMessageService($marzban_list_get, $dataoutput['configs'], $usertest_sub_link, $dataoutput['username'], $usertestinfo, $textcreatuser, $randomString, kind: 'usertest');
     step('home', $from_id);
     if ($marzban_list_get['MethodUsername'] == $textbotlang['keyboard']['customTextSequential'] || $marzban_list_get['MethodUsername'] == $textbotlang['keyboard']['usernameSequential'] || $marzban_list_get['MethodUsername'] == $textbotlang['keyboard']['numericIdSequential'] || $marzban_list_get['MethodUsername'] == $textbotlang['keyboard']['agentCustomTextSequential']) {
         $value = intval($user['number_username']) + 1;
