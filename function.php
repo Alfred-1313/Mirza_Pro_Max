@@ -9020,7 +9020,7 @@ if (!function_exists('bt_section_meta')) {
             ],
             'genbtn_actions' => [
                 'label' => '⚙️ عملیات',
-                'alert' => 'دکمه‌های بالاتر فقط پیش‌نمایشن - روشون بزن تا ویرایش بشن. دکمه‌های پایین (ریست/بازگشت/بستن) کار واقعی انجام می‌دن.',
+                'alert' => 'ابزارهای بالا (چیدمان، رنگ‌بندی، ایموجی، نام سفارشی) هرکدوم همه‌ی دکمه‌های این بخش رو نشون می‌دن. دکمه‌های پایین (ریست/بازگشت/بستن) کار واقعی انجام می‌دن.',
             ],
             'genbtn_visibility' => [
                 'label' => '👁 نمایش و پنهان کردن',
@@ -9478,8 +9478,16 @@ if (!function_exists('genbtn_set_text')) {
         if (!is_array($be)) {
             $be = [];
         }
-        $be[$lang][$key][$idx]['text'] = $text;
-        update("setting", "button_edit", json_encode($be, JSON_UNESCAPED_UNICODE), null, null);
+        if ($text === null || $text === '') {
+            // ✏️ نام سفارشی "0": back to the default text
+            unset($be[$lang][$key][$idx]['text']);
+            if (empty($be[$lang][$key][$idx])) {
+                unset($be[$lang][$key][$idx]);
+            }
+        } else {
+            $be[$lang][$key][$idx]['text'] = $text;
+        }
+        update("setting", "button_edit", empty($be) ? null : json_encode($be, JSON_UNESCAPED_UNICODE), null, null);
     }
 }
 if (!function_exists('genbtn_set_style')) {
@@ -9494,6 +9502,9 @@ if (!function_exists('genbtn_set_style')) {
         }
         if ($style !== null && in_array($style, ['primary', 'success', 'danger'], true)) {
             $be[$lang][$key][$idx]['style'] = $style;
+        } elseif ($style === '') {
+            // ⚪ پیش‌فرض: back to the button's own colour
+            unset($be[$lang][$key][$idx]['style']);
         }
         if ($emoji !== null) {
             if ($emoji === '') {
@@ -9511,11 +9522,19 @@ if (!function_exists('genbtn_set_style')) {
             }
             unset($be[$lang][$key][$idx]['emoji']);
         }
-        if ($pos !== null && in_array($pos, ['left', 'right'], true)) {
-            $be[$lang][$key][$idx]['pos'] = $pos;
+        // right side and simple mode off are what an unset button already
+        // does, so they are not stored (a group only turns green for a change)
+        if ($pos === 'left') {
+            $be[$lang][$key][$idx]['pos'] = 'left';
+        } elseif ($pos === 'right') {
+            unset($be[$lang][$key][$idx]['pos']);
         }
         if ($simple !== null) {
-            $be[$lang][$key][$idx]['simple'] = (bool) $simple;
+            if ($simple) {
+                $be[$lang][$key][$idx]['simple'] = true;
+            } else {
+                unset($be[$lang][$key][$idx]['simple']);
+            }
         }
         if ($hidden !== null) {
             if ($hidden === 'shown') {
@@ -9657,9 +9676,10 @@ if (!function_exists('sell_selectUsername_kb')) {
             if (!empty($ov['hidden']) && genbtn_hideable('su', $idx)) {
                 continue;
             }
-            $buttons[] = genbtn_render($d, $ov, $d['callback_data']);
+            $buttons[$idx] = genbtn_render($d, $ov, $d['callback_data']);
         }
-        return json_encode(['inline_keyboard' => [$buttons]]);
+        // order and width from 📐 چیدمان; with none saved, the same one row as before
+        return json_encode(['inline_keyboard' => genbtn_group_rows('su', $lang, $buttons, $textbotlang)]);
     }
 }
 if (!function_exists('sell_confirm_kb')) {
@@ -9673,9 +9693,10 @@ if (!function_exists('sell_confirm_kb')) {
         $buttons = [];
         foreach ($defs as $idx => $d) {
             $ov = genbtn_override($lang, 'users.sell.confirmButtons', $idx);
-            $buttons[] = genbtn_render($d, $ov, $cbs[$idx]);
+            $buttons[$idx] = genbtn_render($d, $ov, $cbs[$idx]);
         }
-        return json_encode(['inline_keyboard' => [$buttons]]);
+        // order and width from 📐 چیدمان; with none saved, the same one row as before
+        return json_encode(['inline_keyboard' => genbtn_group_rows('cf', $lang, $buttons, $textbotlang)]);
     }
 }
 if (!function_exists('sell_noservice_kb')) {
@@ -9765,56 +9786,12 @@ if (!function_exists('notify_test_expired')) {
     }
 }
 if (!function_exists('genbtn_list_payload')) {
-    // $origin: '' = opened from the alias's own caption item (default), 'u' =
-    // opened from the 🔑 تنظیم اکانت تست screen. Only affects where 🔙 بازگشت
-    // goes; it is threaded through every sub-screen so an edit round-trip
-    // cannot lose it.
+    // The per-group button list and the per-button detail screen were replaced
+    // by one hub per group (genbtn_hub_payload, 001). Both stay as thin
+    // wrappers, so a caller that still asks for them lands on that hub.
     function genbtn_list_payload($alias, $lang, $textbotlang, $origin = '')
     {
-        $key = genbtn_alias_to_key($alias);
-        $gb_sfx = ($origin === 'u') ? '|u' : '';
-        $defs = genbtn_defs($alias, $textbotlang);
-        $titles = ['su' => '🔘 دکمه‌های نام‌گذاری سرویس', 'cf' => '🔘 دکمه‌های تأیید خرید', 'ns' => '🔘 دکمه‌ی نداشتن سرویس فعال', 'te' => '🔘 دکمه‌ی پیام اتمام اکانت تست', 'sc' => '🔘 دکمه‌ی بستن (سرویس‌های من)', 'bc' => '🔘 دکمه‌ی تهیه اشتراک (شارژ کیف پول)', 'rn' => '🔘 دکمه‌های فاکتور تمدید سرویس', 'cl' => '🔘 دکمه‌های تغییر لینک اتصال', 'td' => '🔘 دکمه‌های کد تخفیف شارژ', 'ab' => '📚 دکمه‌ی مشاهده آموزش (پیام بعد از خرید)', 'ut' => '📚 دکمه‌ی مشاهده آموزش (اکانت تست)'];
-        $notes = [
-            'su' => 'این ۲ دکمه، زیر پیام انتخاب نام سرویس (مرحله‌ی خرید) به کاربر نشون داده می‌شن.',
-            'cf' => 'این ۲ دکمه، زیر صفحه‌ی تأیید نهایی خرید نشون داده می‌شن - هر سه حالت (عادی/تخفیف‌دار/حجم دلخواه) از این یکی استفاده می‌کنن، پس ویرایششون روی هر سه اثر می‌ذاره.',
-            'ns' => 'این ۱ دکمه، زیر پیامِ "سرویس فعالی ندارید" (وقتی 🛍 سرویس‌های من خالیه) به کاربر نشون داده می‌شه.',
-            'te' => 'این ۱ دکمه، زیر پیامِ «اکانت تست شما به پایان رسید» به کاربر نشون داده می‌شه (همون پیامی که کرون موقع تموم‌شدن اعتبار اکانت تست می‌فرسته).',
-            'sc' => 'این ۱ دکمه، زیر لیست سرویس‌های فعال کاربر (وقتی 🛍 سرویس‌های من حداقل یک سرویس داره) نشون داده می‌شه.',
-            'bc' => 'این ۱ دکمه، زیر پیام تایید نهاییِ شارژ کیف پول (هر روش پرداختی) نشون داده می‌شه.',
-            'rn' => 'دکمه‌ی ۱ و ۲ زیر فاکتور تمدید سرویس نشون داده می‌شن (دکمه‌ی «افزایش موجودی» بینشون از تنظیمات مشترک همون دکمه میاد، جدا نیست). دکمه‌ی ۳ وقتی کاربر روی «افزایش موجودی» بزنه، زیر لیست روش‌های پرداخت میاد و با تپ روش، برمی‌گردونه به همون فاکتور تمدید.',
-            'cl' => 'این ۲ دکمه، زیر پیام هشدار «تغییر لینک اتصال» (قبل از تایید نهایی) نشون داده می‌شن.',
-            'td' => 'دکمه‌ی ۱ («کد تخفیف دارم») زیر لیست روش‌های پرداختِ 💰 افزایش موجودی میاد - ولی فقط وقتی که برای این زبان حداقل یک کد تخفیف شارژ ساخته باشی، وگرنه اصلاً نشون داده نمی‌شه. دکمه‌ی ۲ زیر همون صفحه‌ی وارد کردن کد میاد. اگر کاربر یه کد رو فعال کرده باشه، دکمه‌ی ۱ دیگه بهش نشون داده نمی‌شه (چون خود کپشن تخفیف فعال رو نوشته).',
-            'ab' => 'این ۱ دکمه، زیر پیام «✅ سرویس با موفقیت ایجاد شد» (بعد از خرید) نشون داده می‌شه - برای همه‌ی نوع پنل‌ها، خرید چندتایی، پرداخت آنلاین و سفارشی که ادمین برای کاربر ثبت می‌کنه. پیش‌فرض مخفیه؛ برای نمایش، روی دکمه بزن و «👁 نمایش دادن» رو انتخاب کن.',
-            'ut' => 'این ۱ دکمه، زیر پیام «✅ سرویس با موفقیت ایجاد شد» بعد از گرفتن اکانت تست نشون داده می‌شه. پیش‌فرض مخفیه؛ برای نمایش، روی دکمه بزن و «👁 نمایش دادن» رو انتخاب کن.',
-        ];
-        $info = ($titles[$alias] ?? '🔘 دکمه‌ها') . "\n➖➖➖➖➖➖➖➖➖➖\n" . ($notes[$alias] ?? '') . "\n";
-        $info .= "➖➖➖➖➖➖➖➖➖➖\n👁 پیش‌نمایش زنده - روی هرکدوم بزن تا ویرایشش کنی 👇";
-        $kb = ['inline_keyboard' => []];
-        foreach ($defs as $idx => $d) {
-            $ov = genbtn_override($lang, $key, $idx);
-            list($curText, $curStyle) = genbtn_current($d, $ov);
-            $gb_row = ['text' => (genbtn_is_hidden($d, $ov) ? '🚫 ' : '') . $curText, 'callback_data' => "gbtn|open|{$lang}|{$alias}|{$idx}{$gb_sfx}"];
-            // 'ab' ships unstyled - an empty style key is left out, like genbtn_render() does
-            if ($curStyle !== '') {
-                $gb_row['style'] = $curStyle;
-            }
-            $kb['inline_keyboard'][] = [$gb_row];
-        }
-        // white, non-navigating divider - without it, the last preview button
-        // (often red, e.g. 'cl' and 'rn's back buttons) blends visually into
-        // the real action buttons below (reset/back/close), which look the
-        // same color but do something completely different when tapped
-        $kb['inline_keyboard'][] = [['text' => bt_section_meta('genbtn_actions')['label'], 'callback_data' => 'bt_sep|genbtn_actions']];
-        $kb['inline_keyboard'][] = [['text' => '🔁 ریست همه به پیش‌فرض', 'callback_data' => "gbtn|rstall|{$lang}|{$alias}{$gb_sfx}", 'style' => 'danger']];
-        // 'cf' points at textbot.preInvoice (the normal-purchase تأیید خرید) -
-        // it used to point at users.sell.preInvoice, the discount-code variant,
-        // which was removed along with that whole dead feature
-        $backKeyMap = ['su' => 'users.sell.selectUsernamePrompt', 'cf' => 'textbot.preInvoice', 'ns' => 'users.sell.service_not_available', 'te' => 'textbot.testExpired', 'sc' => 'users.sell.service_sell', 'bc' => 'users.Balance.chargeSuccess', 'rn' => 'users.extend.invoiceCreated', 'cl' => 'users.changeLink.warnchange', 'td' => 'users.Balance.topupDiscPrompt', 'hb' => 'users.help.listCaption', 'hv' => 'users.help.categoryCaption', 'ab' => 'textbot.afterPay', 'ut' => 'textbot.afterText'];
-        $backKey = ($origin === 'u') ? 'users.usertest.selectUsernamePrompt' : ($backKeyMap[$alias] ?? 'users.sell.selectUsernamePrompt');
-        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "bt_edit|{$lang}|{$backKey}", 'style' => 'danger']];
-        $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
-        return [$info, json_encode($kb)];
+        return genbtn_hub_payload($alias, $lang, $textbotlang, $origin);
     }
 }
 if (!function_exists('genbtn_detail_payload')) {
@@ -9831,62 +9808,266 @@ if (!function_exists('genbtn_detail_payload')) {
         return in_array($csKey, close_sticker_keys(), true) ? $csKey : '';
     }
     // $csNote: the "🖼 استیکر دکمه بستن" change that just happened, shown inside
-    // this screen's own caption quote instead of on a separate settings screen.
+    // the hub's own caption quote
     function genbtn_detail_payload($alias, $lang, $idx, $textbotlang, $origin = '', $csNote = '')
     {
-        $key = genbtn_alias_to_key($alias);
-        $gb_sfx = ($origin === 'u') ? '|u' : '';
+        return genbtn_hub_payload($alias, $lang, $textbotlang, $origin, $csNote);
+    }
+}
+if (!function_exists('genbtn_hub_payload')) {
+    // ---- one hub per button group, like «🎨 ظاهر دکمه‌های پنل» (001) ----
+    // 📐 چیدمان / 🎨 رنگ‌بندی / 🎭 ایموجی / ✏️ نام سفارشی, each showing the whole
+    // group and acting on one tap. The store (button_edit) and the customer
+    // renderer (genbtn_render) are the same as before, so nothing saved earlier
+    // looks any different.
+
+    function genbtn_group_title($alias, $textbotlang)
+    {
+        $titles = ['su' => '🔘 دکمه‌های نام‌گذاری سرویس', 'cf' => '🔘 دکمه‌های تأیید خرید', 'ns' => '🔘 دکمه‌ی نداشتن سرویس فعال', 'te' => '🔘 دکمه‌ی پیام اتمام اکانت تست', 'sc' => '🔘 دکمه‌ی بستن (سرویس‌های من)', 'bc' => '🔘 دکمه‌ی تهیه اشتراک (شارژ کیف پول)', 'rn' => '🔘 دکمه‌های فاکتور تمدید سرویس', 'cl' => '🔘 دکمه‌های تغییر لینک اتصال', 'td' => '🔘 دکمه‌های کد تخفیف شارژ', 'hb' => '🔘 دکمه‌ی بازگشت به دسته‌بندی آموزش', 'hv' => '🔘 دکمه‌ی بازگشت (زیر محتوای آموزش)', 'ab' => '📚 دکمه‌ی مشاهده آموزش (پیام بعد از خرید)', 'ut' => '📚 دکمه‌ی مشاهده آموزش (اکانت تست)'];
+        if (isset($titles[$alias])) {
+            return $titles[$alias];
+        }
+        // the button-only items: their one button's own name
         $defs = genbtn_defs($alias, $textbotlang);
-        if (!isset($defs[$idx])) {
-            return genbtn_list_payload($alias, $lang, $textbotlang, $origin);
+        return '🔘 ' . ($defs[0]['name'] ?? 'دکمه‌ها');
+    }
+    function genbtn_group_note($alias, $textbotlang)
+    {
+        $notes = [
+            'su' => 'این ۲ دکمه، زیر پیام انتخاب نام سرویس (مرحله‌ی خرید) به کاربر نشون داده می‌شن.',
+            'cf' => 'این ۲ دکمه، زیر صفحه‌ی تأیید نهایی خرید نشون داده می‌شن - هر سه حالت (عادی/تخفیف‌دار/حجم دلخواه) از این یکی استفاده می‌کنن، پس ویرایششون روی هر سه اثر می‌ذاره.',
+            'ns' => 'این ۱ دکمه، زیر پیامِ «سرویس فعالی ندارید» (وقتی 🛍 سرویس‌های من خالیه) به کاربر نشون داده می‌شه.',
+            'te' => 'این ۱ دکمه، زیر پیامِ «اکانت تست شما به پایان رسید» به کاربر نشون داده می‌شه (همون پیامی که کرون موقع تموم‌شدن اعتبار اکانت تست می‌فرسته).',
+            'sc' => 'این ۱ دکمه، زیر لیست سرویس‌های فعال کاربر (وقتی 🛍 سرویس‌های من حداقل یک سرویس داره) نشون داده می‌شه.',
+            'bc' => 'این ۱ دکمه، زیر پیام تایید نهاییِ شارژ کیف پول (هر روش پرداختی) نشون داده می‌شه.',
+            'rn' => 'دکمه‌ی ۱ و ۲ زیر فاکتور تمدید سرویس نشون داده می‌شن (دکمه‌ی «افزایش موجودی» بینشون از تنظیمات مشترک همون دکمه میاد، جدا نیست). دکمه‌ی ۳ وقتی کاربر روی «افزایش موجودی» بزنه، زیر لیست روش‌های پرداخت میاد و با تپ روش، برمی‌گردونه به همون فاکتور تمدید.',
+            'cl' => 'این ۲ دکمه، زیر پیام هشدار «تغییر لینک اتصال» (قبل از تایید نهایی) نشون داده می‌شن.',
+            'td' => 'دکمه‌ی ۱ («کد تخفیف دارم») زیر لیست روش‌های پرداختِ 💰 افزایش موجودی میاد - ولی فقط وقتی که برای این زبان حداقل یک کد تخفیف شارژ ساخته باشی، وگرنه اصلاً نشون داده نمی‌شه. دکمه‌ی ۲ زیر همون صفحه‌ی وارد کردن کد میاد. اگر کاربر یه کد رو فعال کرده باشه، دکمه‌ی ۱ دیگه بهش نشون داده نمی‌شه (چون خود کپشن تخفیف فعال رو نوشته).',
+            'ab' => 'این ۱ دکمه، زیر پیام «✅ سرویس با موفقیت ایجاد شد» (بعد از خرید) نشون داده می‌شه - برای همه‌ی نوع پنل‌ها، خرید چندتایی، پرداخت آنلاین و سفارشی که ادمین برای کاربر ثبت می‌کنه. پیش‌فرض مخفیه؛ برای نمایش، «👁 نمایش دادن این دکمه» رو بزن.',
+            'ut' => 'این ۱ دکمه، زیر پیام «✅ سرویس با موفقیت ایجاد شد» بعد از گرفتن اکانت تست نشون داده می‌شه. پیش‌فرض مخفیه؛ برای نمایش، «👁 نمایش دادن این دکمه» رو بزن.',
+        ];
+        if (isset($notes[$alias])) {
+            return $notes[$alias];
         }
-        $d = $defs[$idx];
-        $ov = genbtn_override($lang, $key, $idx);
-        list($curText, $curStyle) = genbtn_current($d, $ov);
-        $curPos = (isset($ov['pos']) && $ov['pos'] === 'left') ? 'left' : 'right';
-        $curSimple = !empty($ov['simple']);
-        $hasEmoji = !empty($ov['emoji']) || !empty($ov['emojiIcon']);
-        $previewBtn = genbtn_render($d, $ov, 'none');
-        // hidden is only offered where genbtn_hideable() allows it (see the
-        // toggle row below) - marking the preview keeps the state visible
-        // without having to scroll to that row
-        $gb_hidden = genbtn_is_hidden($d, $ov);
-        if ($gb_hidden) {
-            $previewBtn['text'] = '🚫 ' . $previewBtn['text'];
+        $defs = genbtn_defs($alias, $textbotlang);
+        return (string) ($defs[0]['note'] ?? '');
+    }
+    // where 🔙 on a group's hub goes - the same targets the old screens used
+    function genbtn_hub_back_cb($alias, $lang, $origin = '')
+    {
+        $key = genbtn_alias_to_key($alias);
+        if ($key !== null && function_exists('bt_btnitem_keys') && in_array($key, bt_btnitem_keys(), true) && function_exists('bt_btnitem_back_cb')) {
+            return bt_btnitem_back_cb($key, $lang);
         }
-        $csKey = genbtn_close_sticker_key($alias, $key, $idx);
-        $info = "🔘 <b>ویرایش {$d['name']}</b>\n➖➖➖➖➖➖➖➖➖➖\n";
-        if (!empty($d['note'])) {
-            $info .= "ℹ️ {$d['note']}\n➖➖➖➖➖➖➖➖➖➖\n";
+        // 'cf' points at textbot.preInvoice (the normal-purchase تأیید خرید)
+        $backKeyMap = ['su' => 'users.sell.selectUsernamePrompt', 'cf' => 'textbot.preInvoice', 'ns' => 'users.sell.service_not_available', 'te' => 'textbot.testExpired', 'sc' => 'users.sell.service_sell', 'bc' => 'users.Balance.chargeSuccess', 'rn' => 'users.extend.invoiceCreated', 'cl' => 'users.changeLink.warnchange', 'td' => 'users.Balance.topupDiscPrompt', 'hb' => 'users.help.listCaption', 'hv' => 'users.help.categoryCaption', 'ab' => 'textbot.afterPay', 'ut' => 'textbot.afterText'];
+        $backKey = ($origin === 'u') ? 'users.usertest.selectUsernamePrompt' : ($backKeyMap[$alias] ?? 'users.sell.selectUsernamePrompt');
+        return "bt_edit|{$lang}|{$backKey}";
+    }
+
+    // Groups whose buttons sit together on ONE customer screen get 📐 چیدمان;
+    // the value is the width all of them have today. rn (its confirm button
+    // shares a row with the shared «افزایش موجودی» button) and td (two
+    // different screens) have none.
+    function genbtn_layout_default($alias)
+    {
+        return ['su' => 'half', 'cf' => 'half', 'cl' => 'full'][$alias] ?? null;
+    }
+    // {order: [idx...], width: {idx: half|full}} - what is stored, over the
+    // defaults; a group without layout gets its buttons in index order
+    function genbtn_layout_get($lang, $alias, $textbotlang)
+    {
+        $idxs = array_map('strval', array_keys(genbtn_defs($alias, $textbotlang)));
+        $defWidth = genbtn_layout_default($alias);
+        if ($defWidth === null) {
+            return ['order' => $idxs, 'width' => []];
+        }
+        $setting = select("setting", "*", null, null, "select");
+        $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
+        $stored = (is_array($be) && is_array($be[$lang][genbtn_alias_to_key($alias)]['layout'] ?? null)) ? $be[$lang][genbtn_alias_to_key($alias)]['layout'] : [];
+        $storedOrder = is_array($stored['order'] ?? null) ? array_map('strval', $stored['order']) : [];
+        $width = [];
+        foreach ($idxs as $i) {
+            $w = $stored['width'][$i] ?? null;
+            $width[$i] = in_array($w, ['half', 'full'], true) ? $w : $defWidth;
+        }
+        return ['order' => help_layout_apply_order($idxs, $storedOrder), 'width' => $width];
+    }
+    // a layout that equals the default is not stored at all, so the group's
+    // entry only turns green for a real change
+    function genbtn_layout_set($lang, $alias, array $order, array $width, $textbotlang)
+    {
+        $key = genbtn_alias_to_key($alias);
+        $idxs = array_map('strval', array_keys(genbtn_defs($alias, $textbotlang)));
+        $defWidth = genbtn_layout_default($alias);
+        $order = array_values(array_map('strval', $order));
+        $isDefault = ($order === $idxs);
+        $w = [];
+        foreach ($idxs as $i) {
+            $w[$i] = in_array($width[$i] ?? null, ['half', 'full'], true) ? $width[$i] : $defWidth;
+            if ($w[$i] !== $defWidth) {
+                $isDefault = false;
+            }
+        }
+        $setting = select("setting", "*", null, null, "select");
+        $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
+        if (!is_array($be)) {
+            $be = [];
+        }
+        if ($isDefault) {
+            unset($be[$lang][$key]['layout']);
+        } else {
+            $be[$lang][$key]['layout'] = ['order' => array_map('intval', $order), 'width' => (object) $w];
+        }
+        if (isset($be[$lang][$key]) && empty($be[$lang][$key])) {
+            unset($be[$lang][$key]);
+        }
+        if (isset($be[$lang]) && empty($be[$lang])) {
+            unset($be[$lang]);
+        }
+        update("setting", "button_edit", empty($be) ? null : json_encode($be, JSON_UNESCAPED_UNICODE), null, null);
+    }
+    // the rows a customer gets for a group's VISIBLE buttons ($buttonsByIdx
+    // holds only those), in its order and width - with nothing stored these are
+    // exactly the rows each keyboard had before
+    function genbtn_group_rows($alias, $lang, array $buttonsByIdx, $textbotlang)
+    {
+        $lay = genbtn_layout_get($lang, $alias, $textbotlang);
+        if (genbtn_layout_default($alias) === null) {
+            $rows = [];
+            foreach ($lay['order'] as $i) {
+                if (isset($buttonsByIdx[$i])) {
+                    $rows[] = [$buttonsByIdx[$i]];
+                }
+            }
+            return $rows;
+        }
+        return help_layout_chunk_rows($lay['order'], $buttonsByIdx, $lay['width']);
+    }
+    function genbtn_layout_swap($lang, $alias, $i, $j, $textbotlang)
+    {
+        $lay = genbtn_layout_get($lang, $alias, $textbotlang);
+        $a = array_search((string) $i, $lay['order'], true);
+        $b = array_search((string) $j, $lay['order'], true);
+        if ($a === false || $b === false || $a === $b) {
+            return false;
+        }
+        $tmp = $lay['order'][$a];
+        $lay['order'][$a] = $lay['order'][$b];
+        $lay['order'][$b] = $tmp;
+        genbtn_layout_set($lang, $alias, $lay['order'], $lay['width'], $textbotlang);
+        return true;
+    }
+    // the same one-tap pair/unpair rule as 📐 چیدمان in «🎨 ظاهر دکمه‌های پنل»
+    function genbtn_layout_toggle_width($lang, $alias, $i, $textbotlang)
+    {
+        $lay = genbtn_layout_get($lang, $alias, $textbotlang);
+        $order = $lay['order'];
+        $width = $lay['width'];
+        $k = (string) $i;
+        if (($width[$k] ?? 'full') === 'half') {
+            $partner = null;
+            foreach (help_layout_chunk_rows($order, array_combine($order, $order), $width) as $r) {
+                if (count($r) === 2 && in_array($k, $r, true)) {
+                    $partner = ($r[0] === $k) ? $r[1] : $r[0];
+                    break;
+                }
+            }
+            $width[$k] = 'full';
+            if ($partner !== null) {
+                $width[$partner] = 'full';
+            }
+        } else {
+            $pos = array_search($k, $order, true);
+            $partner = null;
+            if ($pos !== false) {
+                if (isset($order[$pos + 1]) && ($width[$order[$pos + 1]] ?? 'full') === 'full') {
+                    $partner = $order[$pos + 1];
+                } elseif (isset($order[$pos - 1]) && ($width[$order[$pos - 1]] ?? 'full') === 'full') {
+                    $partner = $order[$pos - 1];
+                }
+            }
+            $width[$k] = 'half';
+            if ($partner !== null) {
+                $width[$partner] = 'half';
+            }
+        }
+        genbtn_layout_set($lang, $alias, $order, $width, $textbotlang);
+    }
+
+    // the group's buttons exactly as a customer sees them (text, colour, emoji,
+    // order, width), 🚫 on hidden ones; $mk turns each into this tool's button
+    function genbtn_tool_rows($alias, $lang, $textbotlang, callable $mk)
+    {
+        $key = genbtn_alias_to_key($alias);
+        $btns = [];
+        foreach (genbtn_defs($alias, $textbotlang) as $idx => $d) {
+            $ov = genbtn_override($lang, $key, $idx);
+            $b = genbtn_render($d, $ov, 'none');
+            if (genbtn_is_hidden($d, $ov)) {
+                $b['text'] = '🚫 ' . $b['text'];
+            }
+            $btns[$idx] = $mk((int) $idx, $b, $d, $ov);
+        }
+        return genbtn_group_rows($alias, $lang, $btns, $textbotlang);
+    }
+    function genbtn_tool_back_row($alias, $lang, $textbotlang, $sfx)
+    {
+        return [['text' => $textbotlang['Admin']['LangScope']['backToHubBtn'], 'callback_data' => "gbs|hub|{$lang}|{$alias}{$sfx}", 'style' => 'danger']];
+    }
+
+    function genbtn_hub_payload($alias, $lang, $textbotlang, $origin = '', $note = '')
+    {
+        $key = (string) genbtn_alias_to_key($alias);
+        $sfx = ($origin === 'u') ? '|u' : '';
+        $defs = genbtn_defs($alias, $textbotlang);
+        $h = $textbotlang['Admin']['Help'];
+        $hasLayout = genbtn_layout_default($alias) !== null;
+        $csKey = genbtn_close_sticker_key($alias, $key, 0);
+        $info = '<b>' . genbtn_group_title($alias, $textbotlang) . "</b>\n➖➖➖➖➖➖➖➖➖➖\n";
+        $groupNote = genbtn_group_note($alias, $textbotlang);
+        if ($groupNote !== '') {
+            $info .= "ℹ️ {$groupNote}\n";
         }
         if ($csKey !== '') {
-            $info .= close_sticker_caption_block($csKey, $csNote);
+            $info .= close_sticker_caption_block($csKey, $note);
+        } elseif ($note !== '') {
+            $info .= "<blockquote>{$note}</blockquote>\n";
         }
-        $info .= $gb_hidden
-            ? "🚫 <b>این دکمه الان مخفیه</b> - کاربر اصلاً نمی‌بینتش.\n"
-            : "👁 پیش‌نمایش زنده 👇";
+        $info .= "\n" . strtr($h['curLangLine'], ['{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang]);
         $kb = ['inline_keyboard' => []];
-        $kb['inline_keyboard'][] = [$previewBtn];
-        $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش متن', 'callback_data' => "gbtn|text|{$lang}|{$alias}|{$idx}{$gb_sfx}", 'style' => 'primary']];
+        if ($hasLayout) {
+            $kb['inline_keyboard'][] = [['text' => $h['layoutBtn'], 'callback_data' => "gbs|lay|{$lang}|{$alias}{$sfx}"]];
+        }
+        // a button that can only show its label gets only the tool that works on it
         if (!genbtn_text_only($alias)) {
-            $kb['inline_keyboard'][] = [
-                ['text' => ($curStyle === 'primary' ? '✅ ' : '') . '🔵 آبی', 'callback_data' => "gbtn|style|{$lang}|{$alias}|{$idx}|primary{$gb_sfx}", 'style' => 'primary'],
-                ['text' => ($curStyle === 'success' ? '✅ ' : '') . '🟢 سبز', 'callback_data' => "gbtn|style|{$lang}|{$alias}|{$idx}|success{$gb_sfx}", 'style' => 'success'],
-                ['text' => ($curStyle === 'danger' ? '✅ ' : '') . '🔴 قرمز', 'callback_data' => "gbtn|style|{$lang}|{$alias}|{$idx}|danger{$gb_sfx}", 'style' => 'danger'],
-            ];
-            $kb['inline_keyboard'][] = [['text' => ($hasEmoji ? '✅ ' : '') . '💎 ایموجی دکمه', 'callback_data' => "gbtn|emoji|{$lang}|{$alias}|{$idx}{$gb_sfx}", 'style' => 'primary']];
-            $kb['inline_keyboard'][] = [['text' => ($curSimple ? '✅ ' : '') . '🎭 حالت ساده (بدون ایموجی)', 'callback_data' => "gbtn|simple|{$lang}|{$alias}|{$idx}{$gb_sfx}", 'style' => 'primary']];
-            $kb['inline_keyboard'][] = [
-                ['text' => ($curPos === 'right' ? '✅ ' : '') . '➡️ راست', 'callback_data' => "gbtn|pos|{$lang}|{$alias}|{$idx}|right{$gb_sfx}", 'style' => 'primary'],
-                ['text' => ($curPos === 'left' ? '✅ ' : '') . '⬅️ چپ', 'callback_data' => "gbtn|pos|{$lang}|{$alias}|{$idx}|left{$gb_sfx}", 'style' => 'primary'],
-            ];
+            $kb['inline_keyboard'][] = [['text' => $h['colorBtn'], 'callback_data' => "gbs|col|{$lang}|{$alias}{$sfx}"]];
+            $kb['inline_keyboard'][] = [['text' => $h['emojiBtn'], 'callback_data' => "gbs|emo|{$lang}|{$alias}{$sfx}"]];
+        }
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['BtnStyle']['renameBtn'], 'callback_data' => "gbs|ren|{$lang}|{$alias}{$sfx}"]];
+        // 👁/🚫 - inside 📐 چیدمان for a group that has one, here otherwise
+        if (!$hasLayout) {
+            $hideRows = [];
+            foreach ($defs as $idx => $d) {
+                if (!genbtn_hideable($alias, $idx)) {
+                    continue;
+                }
+                $ov = genbtn_override($lang, $key, $idx);
+                $hidden = genbtn_is_hidden($d, $ov);
+                $label = count($defs) === 1
+                    ? ($hidden ? $h['showBtn'] : $h['hideBtn'])
+                    : sprintf($hidden ? $h['showItemBtn'] : $h['hideItemBtn'], genbtn_current($d, $ov)[0]);
+                $hideRows[] = [['text' => $label, 'callback_data' => "gbs|hide|{$lang}|{$alias}|{$idx}{$sfx}", 'style' => $hidden ? 'success' : 'danger']];
+            }
+            if (!empty($hideRows)) {
+                $kb['inline_keyboard'][] = [['text' => bt_section_meta('genbtn_visibility')['label'], 'callback_data' => 'bt_sep|genbtn_visibility']];
+                foreach ($hideRows as $r) {
+                    $kb['inline_keyboard'][] = $r;
+                }
+            }
         }
         // 🖼 استیکر دکمه بستن - only the six ❌ بستن buttons close_sticker_keys()
-        // knows about get these rows (servclose/سرویس‌های من, plus the five
-        // bt_btnitem_keys() close buttons); every other alias/idx opens or
-        // navigates something, it doesn't close anything. They used to be one
-        // row opening a settings screen of their own - two screens for one
-        // button - so they now sit right here under a white divider instead.
+        // knows about
         if ($csKey !== '') {
             $sc_alias = close_sticker_key_to_alias($csKey);
             $sc_cs = close_sticker_settings($csKey);
@@ -9909,31 +10090,99 @@ if (!function_exists('genbtn_detail_payload')) {
                 ]];
             }
         }
-        // 👁/🚫 - close/back buttons and optional extras (genbtn_hideable()).
-        // Confirm/pay/cancel buttons have no other way forward; hiding one of
-        // those would break the screen it lives on, so the toggle is not
-        // offered there at all.
-        if (genbtn_hideable($alias, $idx)) {
-            $kb['inline_keyboard'][] = [['text' => bt_section_meta('genbtn_visibility')['label'], 'callback_data' => 'bt_sep|genbtn_visibility']];
-            $kb['inline_keyboard'][] = [[
-                'text' => $gb_hidden ? '👁 نمایش دادن این دکمه' : '🚫 مخفی کردن این دکمه',
-                'callback_data' => "gbtn|hide|{$lang}|{$alias}|{$idx}{$gb_sfx}",
-                'style' => $gb_hidden ? 'success' : 'danger',
-            ]];
-        }
-        $kb['inline_keyboard'][] = [['text' => bt_section_meta('genbtn_detail_actions')['label'], 'callback_data' => 'bt_sep|genbtn_detail_actions']];
-        $kb['inline_keyboard'][] = [['text' => '🔁 ریست این دکمه', 'callback_data' => "gbtn|rst|{$lang}|{$alias}|{$idx}{$gb_sfx}", 'style' => 'danger']];
-        // the seven bt_btnitem_keys() buttons return to their own real screen
-        // (a bt_group|... or bt_edit|... target) instead of genbtn's generic
-        // "list of buttons under this alias" screen - none of them share their
-        // alias with a sibling button, so that list would only ever hold this
-        // one row and lead nowhere useful
-        $backCb = (function_exists('bt_btnitem_keys') && in_array($key, bt_btnitem_keys(), true) && function_exists('bt_btnitem_back_cb'))
-            ? bt_btnitem_back_cb($key, $lang)
-            : "gbtn|list|{$lang}|{$alias}{$gb_sfx}";
-        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => $backCb, 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => bt_section_meta('genbtn_actions')['label'], 'callback_data' => 'bt_sep|genbtn_actions']];
+        $kb['inline_keyboard'][] = [['text' => '🔁 ریست همه به پیش‌فرض', 'callback_data' => "gbs|rstall|{$lang}|{$alias}{$sfx}", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['backToHubBtn'], 'callback_data' => genbtn_hub_back_cb($alias, $lang, $origin), 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
         return [$info, json_encode($kb)];
+    }
+
+    // 🎨 رنگ‌بندی: ⚪ پیش‌فرض (the button's own colour) -> 🔵 -> 🟢 -> 🔴 -> ⚪
+    function genbtn_color_payload($alias, $lang, $textbotlang, $origin = '')
+    {
+        $sfx = ($origin === 'u') ? '|u' : '';
+        $marks = ['' => '⚪', 'primary' => '🔵', 'success' => '🟢', 'danger' => '🔴'];
+        $rows = genbtn_tool_rows($alias, $lang, $textbotlang, function ($idx, $b, $d, $ov) use ($alias, $lang, $sfx, $marks) {
+            $cur = (isset($ov['style']) && isset($marks[$ov['style']])) ? $ov['style'] : '';
+            $b['text'] .= ' ' . $marks[$cur];
+            $b['callback_data'] = "gbs|colp|{$lang}|{$alias}|{$idx}{$sfx}";
+            return $b;
+        });
+        $rows[] = genbtn_tool_back_row($alias, $lang, $textbotlang, $sfx);
+        return json_encode(['inline_keyboard' => $rows]);
+    }
+    // 🎭 ایموجی: tap a button to send its emoji; simple mode and the emoji side
+    // are written to every button of the group
+    function genbtn_emoji_payload($alias, $lang, $textbotlang, $origin = '')
+    {
+        $sfx = ($origin === 'u') ? '|u' : '';
+        $key = genbtn_alias_to_key($alias);
+        $h = $textbotlang['Admin']['Help'];
+        $rows = genbtn_tool_rows($alias, $lang, $textbotlang, function ($idx, $b) use ($alias, $lang, $sfx) {
+            $b['callback_data'] = "gbs|emop|{$lang}|{$alias}|{$idx}{$sfx}";
+            return $b;
+        });
+        $allSimple = true;
+        $allLeft = true;
+        foreach (array_keys(genbtn_defs($alias, $textbotlang)) as $idx) {
+            $ov = genbtn_override($lang, $key, $idx);
+            if (empty($ov['simple'])) {
+                $allSimple = false;
+            }
+            if (($ov['pos'] ?? 'right') !== 'left') {
+                $allLeft = false;
+            }
+        }
+        $state = $allSimple ? $textbotlang['Admin']['Status']['statuson'] : $textbotlang['Admin']['Status']['statusoff'];
+        $rows[] = [['text' => strtr($h['simpleModeBtn'], ['{state}' => $state]), 'callback_data' => "gbs|emos|{$lang}|{$alias}{$sfx}"]];
+        $rows[] = [['text' => strtr($h['emojiSideBtn'], ['{side}' => $allLeft ? $h['emojiSideLeft'] : $h['emojiSideRight']]), 'callback_data' => "gbs|emod|{$lang}|{$alias}{$sfx}"]];
+        $rows[] = [['text' => $h['resetEmojiBtn'], 'callback_data' => "gbs|emor|{$lang}|{$alias}{$sfx}"]];
+        $rows[] = genbtn_tool_back_row($alias, $lang, $textbotlang, $sfx);
+        return json_encode(['inline_keyboard' => $rows]);
+    }
+    // ✏️ نام سفارشی: tap a button to send its new text
+    function genbtn_rename_payload($alias, $lang, $textbotlang, $origin = '')
+    {
+        $sfx = ($origin === 'u') ? '|u' : '';
+        $rows = genbtn_tool_rows($alias, $lang, $textbotlang, function ($idx, $b, $d, $ov) use ($alias, $lang, $sfx) {
+            if (isset($ov['text']) && $ov['text'] !== '') {
+                $b['text'] .= ' ✏️';
+            }
+            $b['callback_data'] = "gbs|renp|{$lang}|{$alias}|{$idx}{$sfx}";
+            return $b;
+        });
+        $rows[] = [['text' => $textbotlang['Admin']['BtnStyle']['resetRenameBtn'], 'callback_data' => "gbs|renr|{$lang}|{$alias}{$sfx}"]];
+        $rows[] = genbtn_tool_back_row($alias, $lang, $textbotlang, $sfx);
+        return json_encode(['inline_keyboard' => $rows]);
+    }
+    // 📐 چیدمان: tap one, then the destination to swap them; width and hide act
+    // on the picked button
+    function genbtn_layout_payload($alias, $lang, $textbotlang, $origin = '', $picked = null)
+    {
+        $sfx = ($origin === 'u') ? '|u' : '';
+        $h = $textbotlang['Admin']['Help'];
+        $rows = genbtn_tool_rows($alias, $lang, $textbotlang, function ($idx, $b) use ($alias, $lang, $sfx, $picked) {
+            if ($picked === null) {
+                $b['callback_data'] = "gbs|layp|{$lang}|{$alias}|{$idx}{$sfx}";
+            } elseif ($idx === $picked) {
+                $b['text'] = '🔵 ' . $b['text'];
+                $b['callback_data'] = "gbs|layc|{$lang}|{$alias}{$sfx}";
+            } else {
+                $b['callback_data'] = "gbs|lays|{$lang}|{$alias}|{$picked}|{$idx}{$sfx}";
+            }
+            return $b;
+        });
+        if ($picked !== null) {
+            $rows[] = [['text' => $h['toggleWidthBtn'], 'callback_data' => "gbs|layw|{$lang}|{$alias}|{$picked}{$sfx}"]];
+            if (genbtn_hideable($alias, $picked)) {
+                $d = genbtn_defs($alias, $textbotlang)[$picked] ?? [];
+                $hidden = genbtn_is_hidden($d, genbtn_override($lang, genbtn_alias_to_key($alias), $picked));
+                $rows[] = [['text' => $hidden ? $h['showBtn'] : $h['hideBtn'], 'callback_data' => "gbs|hide|{$lang}|{$alias}|{$picked}{$sfx}", 'style' => $hidden ? 'success' : 'danger']];
+            }
+        }
+        $rows[] = [['text' => $h['resetLayoutBtn'], 'callback_data' => "gbs|layr|{$lang}|{$alias}{$sfx}"]];
+        $rows[] = genbtn_tool_back_row($alias, $lang, $textbotlang, $sfx);
+        return json_encode(['inline_keyboard' => $rows]);
     }
 }
 if (!function_exists('usertest_prompt_button_defs')) {

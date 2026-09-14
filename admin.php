@@ -400,7 +400,7 @@ if (!function_exists('bottext_item_menu_payload')) {
         // function's "📋 کپشن پیش‌فرض / ✏️ ویرایش کپشن" wording, which used to
         // describe them as if they were.
         if (function_exists('bt_btnitem_keys') && in_array($bt_key, bt_btnitem_keys(), true) && function_exists('genbtn_key_to_alias')) {
-            return genbtn_detail_payload(genbtn_key_to_alias($bt_key), $bt_lang, 0, $textbotlang, '');
+            return genbtn_hub_payload(genbtn_key_to_alias($bt_key), $bt_lang, $textbotlang);
         }
         $bt_label = $bt_key;
         $bt_item_group = '';
@@ -699,46 +699,46 @@ if (!function_exists('bottext_item_menu_payload')) {
             $kb['inline_keyboard'][] = [['text' => '⛔️ پیام «اکانت تست غیرفعال است»', 'callback_data' => "bt_edit|{$bt_lang}|users.usertest.noPanel", 'style' => 'primary']];
             $kb['inline_keyboard'][] = [['text' => '📦 پیام بعد از دریافت اکانت تست', 'callback_data' => "bt_edit|{$bt_lang}|textbot.afterText", 'style' => 'primary']];
             $kb['inline_keyboard'][] = [['text' => '⏰ پیام اتمام اکانت تست', 'callback_data' => "bt_edit|{$bt_lang}|textbot.testExpired", 'style' => 'primary']];
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌ی پیام اتمام اکانت تست', 'callback_data' => "gbtn|list|{$bt_lang}|te|u", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌ی پیام اتمام اکانت تست', 'callback_data' => "gbs|hub|{$bt_lang}|te|u", 'style' => 'primary']];
             $kb['inline_keyboard'][] = [['text' => '📌 نحوه‌ی نمایش کانفیگ', 'callback_data' => "cfgdeliv|list|{$bt_lang}|u", 'style' => 'primary']];
         } elseif ($bt_key === 'users.Balance.insufficientBalanceSimple') {
             $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه افزایش موجودی', 'callback_data' => "btact|bbtn|{$bt_lang}", 'style' => 'primary']];
         } elseif ($bt_key === 'users.sell.selectUsernamePrompt') {
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های انصراف/پیش‌فرض', 'callback_data' => "gbtn|list|{$bt_lang}|su", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های انصراف/پیش‌فرض', 'callback_data' => "gbs|hub|{$bt_lang}|su", 'style' => 'primary']];
         } elseif (in_array($bt_key, ['users.sell.preInvoice', 'users.sell.preInvoice2', 'textbot.preInvoice'], true)) {
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های تأیید خرید', 'callback_data' => "gbtn|list|{$bt_lang}|cf", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های تأیید خرید', 'callback_data' => "gbs|hub|{$bt_lang}|cf", 'style' => 'primary']];
         } elseif ($bt_key === 'users.sell.service_not_available') {
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه تهیه اشتراک', 'callback_data' => "gbtn|list|{$bt_lang}|ns", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه تهیه اشتراک', 'callback_data' => "gbs|hub|{$bt_lang}|ns", 'style' => 'primary']];
         } elseif ($bt_key === 'textbot.testExpired') {
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه خرید سرویس', 'callback_data' => "gbtn|list|{$bt_lang}|te", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه خرید سرویس', 'callback_data' => "gbs|hub|{$bt_lang}|te", 'style' => 'primary']];
         } elseif ($bt_key === 'users.sell.service_sell') {
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه بستن', 'callback_data' => "gbtn|list|{$bt_lang}|sc", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه بستن', 'callback_data' => "gbs|hub|{$bt_lang}|sc", 'style' => 'primary']];
         } elseif ($bt_key === 'users.status.infoFull') {
             $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های صفحه‌ی وضعیت', 'callback_data' => "statusbtn|list|{$bt_lang}", 'style' => 'primary']];
         } elseif ($bt_key === 'users.Balance.chargeSuccess') {
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه تهیه اشتراک', 'callback_data' => "gbtn|list|{$bt_lang}|bc", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه تهیه اشتراک', 'callback_data' => "gbs|hub|{$bt_lang}|bc", 'style' => 'primary']];
             $kb['inline_keyboard'][] = [['text' => '🎁 ویرایش متن بلوک تخفیف', 'callback_data' => "bt_edit|{$bt_lang}|users.Balance.chargeSuccessDiscount", 'style' => 'primary']];
         } elseif ($bt_key === 'textbot.channel') {
             $kb['inline_keyboard'][] = [['text' => '📯 ویرایش دکمه‌های کانال‌ها', 'callback_data' => "chnbtn_hub", 'style' => 'primary']];
         } elseif ($bt_key === 'users.extend.invoiceCreated') {
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های تأیید تمدید/بازگشت', 'callback_data' => "gbtn|list|{$bt_lang}|rn", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های تأیید تمدید/بازگشت', 'callback_data' => "gbs|hub|{$bt_lang}|rn", 'style' => 'primary']];
             $kb['inline_keyboard'][] = [['text' => '💰 ویرایش دکمه‌ی افزایش موجودی', 'callback_data' => "bt_edit|{$bt_lang}|users.Balance.insufficientBalanceSimple", 'style' => 'primary']];
         } elseif ($bt_key === 'users.changeLink.warnchange') {
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های تغییر لینک', 'callback_data' => "gbtn|list|{$bt_lang}|cl", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های تغییر لینک', 'callback_data' => "gbs|hub|{$bt_lang}|cl", 'style' => 'primary']];
         } elseif ($bt_key === 'textbot.afterPay') {
-            $kb['inline_keyboard'][] = [['text' => '📚 ویرایش دکمه مشاهده آموزش', 'callback_data' => "gbtn|list|{$bt_lang}|ab", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '📚 ویرایش دکمه مشاهده آموزش', 'callback_data' => "gbs|hub|{$bt_lang}|ab", 'style' => 'primary']];
         } elseif ($bt_key === 'textbot.afterText') {
-            $kb['inline_keyboard'][] = [['text' => '📚 ویرایش دکمه مشاهده آموزش', 'callback_data' => "gbtn|list|{$bt_lang}|ut", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '📚 ویرایش دکمه مشاهده آموزش', 'callback_data' => "gbs|hub|{$bt_lang}|ut", 'style' => 'primary']];
         } elseif ($bt_key === 'users.help.listCaption') {
             // the one button under the tutorial list ('hb' alias, own-key trick)
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه بازگشت به دسته‌بندی', 'callback_data' => "gbtn|list|{$bt_lang}|hb", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه بازگشت به دسته‌بندی', 'callback_data' => "gbs|hub|{$bt_lang}|hb", 'style' => 'primary']];
         } elseif ($bt_key === 'users.help.categoryCaption') {
             // and the one under a tutorial's own content screen ('hv' alias)
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه بازگشت به لیست دسته‌بندی', 'callback_data' => "gbtn|list|{$bt_lang}|hv", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه بازگشت به لیست دسته‌بندی', 'callback_data' => "gbs|hub|{$bt_lang}|hv", 'style' => 'primary']];
         } elseif ($bt_key === 'users.Balance.topupDiscPrompt') {
             // the 'td' alias was wired everywhere except here, so this item's
             // label promised "+ دکمه‌هایش" while the screen offered no way in
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های کد تخفیف', 'callback_data' => "gbtn|list|{$bt_lang}|td", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های کد تخفیف', 'callback_data' => "gbs|hub|{$bt_lang}|td", 'style' => 'primary']];
             $kb['inline_keyboard'][] = [['text' => '❌ ویرایش متن کد نامعتبر', 'callback_data' => "bt_edit|{$bt_lang}|users.Balance.topupDiscInvalid", 'style' => 'primary']];
             $kb['inline_keyboard'][] = [['text' => '✅ ویرایش متن فعال شدن کد', 'callback_data' => "bt_edit|{$bt_lang}|users.Balance.topupDiscActivated", 'style' => 'primary']];
         }
@@ -1160,7 +1160,7 @@ if (!function_exists('close_sticker_screen')) {
     // re-renders that screen, with $note carried into its caption quote.
     function close_sticker_screen($lang, $key, $textbotlang, $note = '')
     {
-        return genbtn_detail_payload(close_sticker_genbtn_alias($key), $lang, 0, $textbotlang, '', $note);
+        return genbtn_hub_payload(close_sticker_genbtn_alias($key), $lang, $textbotlang, '', $note);
     }
 }
 if (!function_exists('rename_editor_payload')) {
@@ -7100,128 +7100,211 @@ if (preg_match('/^btact\|bbtnpos\|([a-z]{2})\|(left|right)$/', $datain, $btm) &&
     Editmessagetext($from_id, $message_id, $bb_text, $bb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|list\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|td|hb|hv|ab|ut)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
-    list($gb_text, $gb_kb) = genbtn_list_payload($gb_m[2], $gb_m[1], $textbotlang, $gb_m[3] ?? '');
-    Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
-    return;
-}
-if (preg_match('/^gbtn\|open\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv|ab|ut|sp|ar|mg|sl)\|([0-9])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
-    list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], (int) $gb_m[3], $textbotlang, $gb_m[4] ?? '');
-    Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
-    return;
-}
-if (preg_match('/^gbtn\|text\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv|ab|ut|sp|ar|mg|sl)\|([0-9])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
-    savedata("clear", "bt_msgid", $message_id);
-    $gb_o = $gb_m[4] ?? '';
-    $gb_sfx = ($gb_o !== '') ? "|{$gb_o}" : '';
-    step("gbtntxt-{$gb_m[1]}-{$gb_m[2]}-{$gb_m[3]}" . (($gb_o !== '') ? "-{$gb_o}" : ''), $from_id);
-    $gb_cancel_kb = json_encode(['inline_keyboard' => [
-        [['text' => '❌ انصراف', 'callback_data' => "gbtn|open|{$gb_m[1]}|{$gb_m[2]}|{$gb_m[3]}{$gb_sfx}"]],
-    ]]);
-    Editmessagetext($from_id, $message_id, "✏️ متن جدید دکمه رو بفرست ✍️", $gb_cancel_kb, 'HTML');
-    return;
-}
-if (preg_match('/^gbtn\|style\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv|ab|ut|ar|mg)\|([0-9])\|(primary|success|danger)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
-    $gb_key = genbtn_alias_to_key($gb_m[2]);
-    genbtn_set_style($gb_m[1], $gb_key, (int) $gb_m[3], $gb_m[4]);
-    list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], (int) $gb_m[3], $textbotlang, $gb_m[5] ?? '');
-    Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
-    return;
-}
-if (preg_match('/^gbtn\|emoji\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv|ab|ut|ar|mg)\|([0-9])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
-    $gb_o = $gb_m[4] ?? '';
-    $gb_sfx = ($gb_o !== '') ? "|{$gb_o}" : '';
-    step("gbtnemo-{$gb_m[1]}-{$gb_m[2]}-{$gb_m[3]}" . (($gb_o !== '') ? "-{$gb_o}" : ''), $from_id);
-    $gb_kb = json_encode(['inline_keyboard' => [
-        [['text' => '❌ انصراف', 'callback_data' => "gbtn|open|{$gb_m[1]}|{$gb_m[2]}|{$gb_m[3]}{$gb_sfx}"]],
-    ]]);
-    $gb_prompt = "💎 یه ایموجی (ساده یا پریمیوم) بفرست، کنار متن دکمه نشون داده می‌شه 👇\n\n";
-    $gb_prompt .= "📌 ایموجی پریمیوم به‌خاطر محدودیت تلگرام همیشه سمت راست (ابتدای متن) قرار می‌گیره.\n";
-    $gb_prompt .= "برای ایموجی ساده، جای قرارگیریش (چپ/راست) از دکمه‌های صفحه‌ی قبل قابل تغییره.";
-    Editmessagetext($from_id, $message_id, $gb_prompt, $gb_kb, 'HTML');
-    return;
-}
-if (preg_match('/^gbtn\|simple\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv|ab|ut|ar|mg)\|([0-9])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
-    $gb_key = genbtn_alias_to_key($gb_m[2]);
-    $gb_ov = genbtn_override($gb_m[1], $gb_key, (int) $gb_m[3]);
-    genbtn_set_style($gb_m[1], $gb_key, (int) $gb_m[3], null, null, null, null, empty($gb_ov['simple']));
-    list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], (int) $gb_m[3], $textbotlang, $gb_m[4] ?? '');
-    Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
-    return;
-}
-if (preg_match('/^gbtn\|pos\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv|ab|ut|ar|mg)\|([0-9])\|(left|right)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
-    $gb_key = genbtn_alias_to_key($gb_m[2]);
-    genbtn_set_style($gb_m[1], $gb_key, (int) $gb_m[3], null, null, null, $gb_m[4], null);
-    list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], (int) $gb_m[3], $textbotlang, $gb_m[5] ?? '');
-    Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
-    return;
-}
-// 👁/🚫 نمایش و پنهان کردن - deliberately NOT the full alias list: close/back
-// buttons and optional extras only (genbtn_hideable()). Confirm/pay/cancel
-// buttons have no alternative path around them, so hiding one would strand
-// the customer - this pattern is what stops that from being reachable at all.
-if (preg_match('/^gbtn\|hide\|([a-z]{2})\|(rc|rp|bu|tp|ac|ts|he|hb|hv|ab|ut|bc|ns|te|sc|td|su|mg|sl)\|([0-9])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
-    $gb_key = genbtn_alias_to_key($gb_m[2]);
-    if ($gb_key === null || !genbtn_hideable($gb_m[2], (int) $gb_m[3])) {
+//----------------[  button group hub (gbs|), like «🎨 ظاهر دکمه‌های پنل»  ]----------------
+// One hub per group (genbtn_hub_payload) with the four tools. Every op checks
+// the alias, the button index and the language again, and colour/emoji ops are
+// not reachable for the label-only buttons (genbtn_text_only()).
+if (preg_match('/^gbs\|(hub|lay|layp|layc|lays|layw|layr|col|colp|emo|emop|emos|emod|emor|ren|renp|renr|hide|rstall)\|([a-z]{2})\|([a-z]{2})((?:\|[0-9])*)(\|u)?$/', $datain, $gs_m) && $adminrulecheck['rule'] == "administrator") {
+    $gs_op = $gs_m[1];
+    $gs_lang = $gs_m[2];
+    $gs_alias = $gs_m[3];
+    $gs_idx = array_map('intval', array_values(array_filter(explode('|', (string) $gs_m[4]), 'strlen')));
+    $gs_origin = !empty($gs_m[5]) ? 'u' : '';
+    $gs_sfx = ($gs_origin === 'u') ? '|u' : '';
+    $gs_key = genbtn_alias_to_key($gs_alias);
+    $gs_defs = ($gs_key !== null) ? genbtn_defs($gs_alias, $textbotlang) : [];
+    if (empty($gs_defs)) {
         return;
     }
-    $gb_ov = genbtn_override($gb_m[1], $gb_key, (int) $gb_m[3]);
-    $gb_def = genbtn_defs($gb_m[2], $textbotlang)[(int) $gb_m[3]] ?? [];
-    $gb_nowHidden = !genbtn_is_hidden($gb_def, $gb_ov);
-    // a button that ships hidden needs an explicit "shown", not just no flag
-    genbtn_set_style($gb_m[1], $gb_key, (int) $gb_m[3], null, null, null, null, null, $gb_nowHidden ? true : (!empty($gb_def['hidden']) ? 'shown' : false));
-    if ($gb_nowHidden) {
-        // hiding a close/back button takes away the only way OFF that screen -
-        // say so once, on the tap that does it, rather than leaving the shop to
-        // discover it from a customer
-        $gb_isExit = in_array($gb_m[2], ['rc', 'rp', 'bu', 'tp', 'ac', 'ts', 'he', 'hb', 'hv', 'sc'], true) || ($gb_m[2] === 'td' && (int) $gb_m[3] === 1);
-        telegram('answerCallbackQuery', [
-            'callback_query_id' => $callback_query_id,
-            'text' => '🚫 این دکمه دیگه به کاربر نشون داده نمی‌شه.' . ($gb_isExit ? ' اگه تنها راه بستن/برگشت اون صفحه بوده، کاربر باید از منوی اصلی یا /start بیرون بیاد.' : ''),
-            'show_alert' => true,
-        ]);
+    foreach ($gs_idx as $gs_i) {
+        if (!isset($gs_defs[$gs_i])) {
+            return;
+        }
     }
-    list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], (int) $gb_m[3], $textbotlang, $gb_m[4] ?? '');
+    $gs_hasLayout = genbtn_layout_default($gs_alias) !== null;
+    // a button left over from a differently shaped screen just opens the hub
+    if ((genbtn_text_only($gs_alias) && in_array($gs_op, ['col', 'colp', 'emo', 'emop', 'emos', 'emod', 'emor'], true))
+        || (!$gs_hasLayout && in_array($gs_op, ['lay', 'layp', 'layc', 'lays', 'layw', 'layr'], true))
+        || (in_array($gs_op, ['colp', 'emop', 'renp', 'layp', 'layw', 'hide'], true) && count($gs_idx) !== 1)
+        || ($gs_op === 'lays' && count($gs_idx) !== 2)) {
+        $gs_op = 'hub';
+    }
+    // any tap here also ends a prompt the admin walked away from
+    step('home', $from_id);
+    $gs_h = $textbotlang['Admin']['Help'];
+    $gs_screen = $gs_op;
+    $gs_picked = null;
+    $gs_note = '';
+    if ($gs_op === 'colp') {
+        // ⚪ پیش‌فرض -> 🔵 -> 🟢 -> 🔴 -> ⚪
+        $gs_order = ['', 'primary', 'success', 'danger'];
+        $gs_ov = genbtn_override($gs_lang, $gs_key, $gs_idx[0]);
+        $gs_pos = array_search((string) ($gs_ov['style'] ?? ''), $gs_order, true);
+        genbtn_set_style($gs_lang, $gs_key, $gs_idx[0], $gs_order[(($gs_pos === false ? 0 : $gs_pos) + 1) % count($gs_order)]);
+        $gs_screen = 'col';
+    } elseif ($gs_op === 'emos' || $gs_op === 'emod') {
+        // group-wide: "on" only when every button already is
+        $gs_all = true;
+        foreach (array_keys($gs_defs) as $gs_i) {
+            $gs_ov = genbtn_override($gs_lang, $gs_key, $gs_i);
+            if ($gs_op === 'emos' ? empty($gs_ov['simple']) : (($gs_ov['pos'] ?? 'right') !== 'left')) {
+                $gs_all = false;
+            }
+        }
+        foreach (array_keys($gs_defs) as $gs_i) {
+            if ($gs_op === 'emos') {
+                genbtn_set_style($gs_lang, $gs_key, $gs_i, null, null, null, null, !$gs_all);
+            } else {
+                genbtn_set_style($gs_lang, $gs_key, $gs_i, null, null, null, $gs_all ? 'right' : 'left');
+            }
+        }
+        $gs_screen = 'emo';
+    } elseif ($gs_op === 'emor') {
+        foreach (array_keys($gs_defs) as $gs_i) {
+            genbtn_set_style($gs_lang, $gs_key, $gs_i, null, '');
+        }
+        $gs_screen = 'emo';
+    } elseif ($gs_op === 'renr') {
+        foreach (array_keys($gs_defs) as $gs_i) {
+            genbtn_set_text($gs_lang, $gs_key, $gs_i, '');
+        }
+        $gs_screen = 'ren';
+    } elseif ($gs_op === 'emop' || $gs_op === 'renp') {
+        // the tool message itself becomes the prompt, with its own way back
+        savedata("clear", "bt_msgid", $message_id);
+        $gs_isEmo = ($gs_op === 'emop');
+        $gs_name = genbtn_current($gs_defs[$gs_idx[0]], genbtn_override($gs_lang, $gs_key, $gs_idx[0]))[0];
+        step(($gs_isEmo ? 'gbtnemo-' : 'gbtntxt-') . "{$gs_lang}-{$gs_alias}-{$gs_idx[0]}" . ($gs_origin === 'u' ? '-u' : ''), $from_id);
+        $gs_prompt = $gs_isEmo
+            ? sprintf($gs_h['askEmojiForItem'], $gs_name)
+            : sprintf($textbotlang['Admin']['BtnStyle']['askRenameForItem'], $gs_name) . "\n\n⚠️ متن باید بین ۱ تا ۶۴ حرف باشه.";
+        $gs_kb = json_encode(['inline_keyboard' => [
+            [['text' => '❌ انصراف', 'callback_data' => 'gbs|' . ($gs_isEmo ? 'emo' : 'ren') . "|{$gs_lang}|{$gs_alias}{$gs_sfx}", 'style' => 'danger']],
+        ]]);
+        Editmessagetext($from_id, $message_id, $gs_prompt, $gs_kb, 'HTML');
+        return;
+    } elseif ($gs_op === 'layp') {
+        $gs_picked = $gs_idx[0];
+        $gs_screen = 'lay';
+    } elseif ($gs_op === 'layc') {
+        $gs_screen = 'lay';
+    } elseif ($gs_op === 'lays') {
+        if (genbtn_layout_swap($gs_lang, $gs_alias, $gs_idx[0], $gs_idx[1], $textbotlang)) {
+            telegram('answerCallbackQuery', [
+                'callback_query_id' => $callback_query_id,
+                'text' => $gs_h['layoutSwapDone'],
+                'show_alert' => false,
+                'cache_time' => 1,
+            ]);
+        }
+        $gs_screen = 'lay';
+    } elseif ($gs_op === 'layw') {
+        genbtn_layout_toggle_width($gs_lang, $gs_alias, $gs_idx[0], $textbotlang);
+        $gs_screen = 'lay';
+    } elseif ($gs_op === 'layr') {
+        // hidden goes with order and width: all three are 📐 چیدمان
+        genbtn_layout_set($gs_lang, $gs_alias, array_keys($gs_defs), [], $textbotlang);
+        foreach (array_keys($gs_defs) as $gs_i) {
+            if (genbtn_hideable($gs_alias, $gs_i)) {
+                genbtn_set_style($gs_lang, $gs_key, $gs_i, null, null, null, null, null, false);
+            }
+        }
+        $gs_screen = 'lay';
+    } elseif ($gs_op === 'hide') {
+        $gs_i = $gs_idx[0];
+        $gs_screen = $gs_hasLayout ? 'lay' : 'hub';
+        $gs_picked = $gs_hasLayout ? $gs_i : null;
+        if (genbtn_hideable($gs_alias, $gs_i)) {
+            $gs_def = $gs_defs[$gs_i];
+            $gs_nowHidden = !genbtn_is_hidden($gs_def, genbtn_override($gs_lang, $gs_key, $gs_i));
+            if ($gs_nowHidden && $gs_hasLayout) {
+                // buttons on one screen: refuse hiding the last one left
+                $gs_visible = 0;
+                foreach ($gs_defs as $gs_j => $gs_d) {
+                    if (!genbtn_is_hidden($gs_d, genbtn_override($gs_lang, $gs_key, $gs_j))) {
+                        $gs_visible++;
+                    }
+                }
+                if ($gs_visible <= 1) {
+                    telegram('answerCallbackQuery', [
+                        'callback_query_id' => $callback_query_id,
+                        'text' => $gs_h['hideLastAlert'],
+                        'show_alert' => true,
+                    ]);
+                    return;
+                }
+            }
+            // a button that ships hidden needs an explicit "shown", not just no flag
+            genbtn_set_style($gs_lang, $gs_key, $gs_i, null, null, null, null, null, $gs_nowHidden ? true : (!empty($gs_def['hidden']) ? 'shown' : false));
+            if ($gs_nowHidden) {
+                // hiding a close/back button takes away the only way OFF that
+                // screen - say so once, on the tap that does it
+                $gs_isExit = in_array($gs_alias, ['rc', 'rp', 'bu', 'tp', 'ac', 'ts', 'he', 'hb', 'hv', 'sc'], true) || ($gs_alias === 'td' && $gs_i === 1);
+                telegram('answerCallbackQuery', [
+                    'callback_query_id' => $callback_query_id,
+                    'text' => '🚫 این دکمه دیگه به کاربر نشون داده نمی‌شه.' . ($gs_isExit ? ' اگه تنها راه بستن/برگشت اون صفحه بوده، کاربر باید از منوی اصلی یا /start بیرون بیاد.' : ''),
+                    'show_alert' => true,
+                ]);
+            }
+        }
+    } elseif ($gs_op === 'rstall') {
+        genbtn_reset_all($gs_lang, $gs_key);
+        // 🖼 استیکر دکمه بستن sits on this hub too, so it goes back to factory as well
+        $gs_csKey = genbtn_close_sticker_key($gs_alias, $gs_key, 0);
+        if ($gs_csKey !== '') {
+            close_sticker_save($gs_csKey, ['enabled' => true, 'file_id' => close_sticker_default_file_id(), 'duration' => close_sticker_default_duration()]);
+        }
+        $gs_note = '🔁 همه‌ی تنظیمات این دکمه‌ها به پیش‌فرض برگشت.';
+        $gs_screen = 'hub';
+    }
+    $gs_title = '<b>' . genbtn_group_title($gs_alias, $textbotlang) . "</b>\n\n";
+    if ($gs_screen === 'col') {
+        $gs_caption = $gs_title . $gs_h['colorCaption'];
+        $gs_kb = genbtn_color_payload($gs_alias, $gs_lang, $textbotlang, $gs_origin);
+    } elseif ($gs_screen === 'emo') {
+        $gs_caption = $gs_title . $gs_h['emojiCaption'];
+        $gs_kb = genbtn_emoji_payload($gs_alias, $gs_lang, $textbotlang, $gs_origin);
+    } elseif ($gs_screen === 'ren') {
+        $gs_caption = $gs_title . $textbotlang['Admin']['BtnStyle']['renameCaption'];
+        $gs_kb = genbtn_rename_payload($gs_alias, $gs_lang, $textbotlang, $gs_origin);
+    } elseif ($gs_screen === 'lay') {
+        $gs_caption = $gs_title . $gs_h['layoutCaption'];
+        $gs_kb = genbtn_layout_payload($gs_alias, $gs_lang, $textbotlang, $gs_origin, $gs_picked);
+    } else {
+        list($gs_caption, $gs_kb) = genbtn_hub_payload($gs_alias, $gs_lang, $textbotlang, $gs_origin, $gs_note);
+    }
+    Editmessagetext($from_id, $message_id, $gs_caption, $gs_kb, 'HTML');
+    return;
+}
+// The per-button screens became the group hub - a tap on an old message opens
+// the hub for that group instead of a screen that no longer exists.
+if (preg_match('/^gbtn\|[a-z]+\|([a-z]{2})\|([a-z]{2})(\|.*)?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+    if (genbtn_alias_to_key($gb_m[2]) === null) {
+        return;
+    }
+    step('home', $from_id);
+    list($gb_text, $gb_kb) = genbtn_hub_payload($gb_m[2], $gb_m[1], $textbotlang, substr($datain, -2) === '|u' ? 'u' : '');
     Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
-    return;
-}
-if (preg_match('/^gbtn\|rst\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv|ab|ut|sp|ar|mg|sl)\|([0-9])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
-    $gb_key = genbtn_alias_to_key($gb_m[2]);
-    genbtn_reset($gb_m[1], $gb_key, (int) $gb_m[3]);
-    // 🖼 استیکر دکمه بستن sits on this same screen now, so "ریست این دکمه" has to
-    // take it back to factory too - otherwise the screen is only half reset
-    $gb_csKey = genbtn_close_sticker_key($gb_m[2], $gb_key, (int) $gb_m[3]);
-    if ($gb_csKey !== '') {
-        close_sticker_save($gb_csKey, ['enabled' => true, 'file_id' => close_sticker_default_file_id(), 'duration' => close_sticker_default_duration()]);
-    }
-    list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], (int) $gb_m[3], $textbotlang, $gb_m[4] ?? '');
-    Editmessagetext($from_id, $message_id, "🔁 این دکمه به پیش‌فرض برگشت.\n\n" . $gb_text, $gb_kb, 'HTML');
-    return;
-}
-if (preg_match('/^gbtn\|rstall\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|td|hb|hv|ab|ut)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
-    $gb_key = genbtn_alias_to_key($gb_m[2]);
-    genbtn_reset_all($gb_m[1], $gb_key);
-    list($gb_text, $gb_kb) = genbtn_list_payload($gb_m[2], $gb_m[1], $textbotlang, $gb_m[3] ?? '');
-    Editmessagetext($from_id, $message_id, "🔁 همه دکمه‌ها به پیش‌فرض برگشتن.\n\n" . $gb_text, $gb_kb, 'HTML');
     return;
 }
 if (preg_match('/^gbtntxt-([a-z]{2})-(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv|ab|ut|sp|ar|mg|sl)-([0-9])(?:-(u))?$/', (string) $user['step'], $gb_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     $gb_newtext = trim((string) $text);
-    if ($gb_newtext === '' || mb_strlen($gb_newtext) > 64) {
-        sendmessage($from_id, "⚠️ متن باید بین ۱ تا ۶۴ حرف باشه 😅", $backadmin, 'HTML');
+    if ($gb_newtext !== '0' && ($gb_newtext === '' || mb_strlen($gb_newtext) > 64)) {
+        sendmessage($from_id, "⚠️ متن باید بین ۱ تا ۶۴ حرف باشه 😅", null, 'HTML');
         return;
     }
-    genbtn_set_text($gb_m[1], $gb_key, (int) $gb_m[3], $gb_newtext);
+    // "0" brings back the default text
+    genbtn_set_text($gb_m[1], $gb_key, (int) $gb_m[3], $gb_newtext === '0' ? '' : $gb_newtext);
     step('home', $from_id);
-    list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], (int) $gb_m[3], $textbotlang, $gb_m[4] ?? '');
     $gb_msgid = intval(json_decode((string) ($user['Processing_value'] ?? ''), true)['bt_msgid'] ?? 0);
-    $gb_done_msg = "✅ متن دکمه ذخیره شد!\n\n" . $gb_text;
+    $gb_caption = $textbotlang['Admin']['BtnStyle']['renameSaved'] . "\n\n<b>" . genbtn_group_title($gb_m[2], $textbotlang) . "</b>\n\n" . $textbotlang['Admin']['BtnStyle']['renameCaption'];
+    $gb_kb = genbtn_rename_payload($gb_m[2], $gb_m[1], $textbotlang, $gb_m[4] ?? '');
     deletemessage($from_id, $message_id);
     if ($gb_msgid > 0) {
-        Editmessagetext($from_id, $gb_msgid, $gb_done_msg, $gb_kb, 'HTML');
+        Editmessagetext($from_id, $gb_msgid, $gb_caption, $gb_kb, 'HTML');
     } else {
-        sendmessage($from_id, $gb_done_msg, $gb_kb, 'HTML');
+        sendmessage($from_id, $gb_caption, $gb_kb, 'HTML');
     }
     return;
 }
@@ -7240,20 +7323,30 @@ if (preg_match('/^gbtnemo-([a-z]{2})-(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|
     if ($gb_icon_id !== '') {
         genbtn_set_style($gb_m[1], $gb_key, $gb_idx, null, null, $gb_icon_id, null, null);
         $gb_msg = "✅ ایموجی پریمیوم ذخیره شد! 💎";
+    } elseif (trim((string) $text) === '0') {
+        // "0" removes the emoji
+        genbtn_set_style($gb_m[1], $gb_key, $gb_idx, null, '');
+        $gb_msg = "🗑 ایموجی حذف شد";
     } else {
         preg_match('/^\X/u', trim((string) $text), $gb_em);
         $gb_emoji = $gb_em[0] ?? '';
         if ($gb_emoji === '' || preg_match('/^[0-9a-zA-Z]$/', $gb_emoji)) {
-            sendmessage($from_id, "⚠️ لطفاً فقط یه ایموجی بفرست 😅", $backadmin, 'HTML');
+            sendmessage($from_id, "⚠️ لطفاً فقط یه ایموجی بفرست 😅", null, 'HTML');
             return;
         }
         genbtn_set_style($gb_m[1], $gb_key, $gb_idx, null, $gb_emoji, null, null, null);
         $gb_msg = "✅ ایموجی {$gb_emoji} ذخیره شد!";
     }
     step('home', $from_id);
-    list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], $gb_idx, $textbotlang, $gb_m[4] ?? '');
+    $gb_msgid = intval(json_decode((string) ($user['Processing_value'] ?? ''), true)['bt_msgid'] ?? 0);
+    $gb_caption = $gb_msg . "\n\n<b>" . genbtn_group_title($gb_m[2], $textbotlang) . "</b>\n\n" . $textbotlang['Admin']['Help']['emojiCaption'];
+    $gb_kb = genbtn_emoji_payload($gb_m[2], $gb_m[1], $textbotlang, $gb_m[4] ?? '');
     deletemessage($from_id, $message_id);
-    sendmessage($from_id, $gb_msg . "\n\n" . $gb_text, $gb_kb, 'HTML');
+    if ($gb_msgid > 0) {
+        Editmessagetext($from_id, $gb_msgid, $gb_caption, $gb_kb, 'HTML');
+    } else {
+        sendmessage($from_id, $gb_caption, $gb_kb, 'HTML');
+    }
     return;
 }
 if (preg_match('/^btact\|bbtnrst\|([a-z]{2})$/', $datain, $btm) && $adminrulecheck['rule'] == "administrator") {

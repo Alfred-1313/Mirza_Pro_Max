@@ -2536,6 +2536,12 @@ n2',
 روی هر کدوم بزن تا رنگش عوض بشه 👇
 ⚪ پیش‌فرض ← 🔵 آبی ← 🟢 سبز ← 🔴 قرمز',
       'simpleModeBtn' => '🔲 حالت ساده: {state}',
+      'emojiSideBtn' => '↔️ جای ایموجی: {side}',
+      'emojiSideRight' => 'راست ➡️',
+      'emojiSideLeft' => '⬅️ چپ',
+      'curLangLine' => 'زبان فعلی: <b>{lang}</b>',
+      'hideItemBtn' => '🚫 مخفی کردن «%s»',
+      'showItemBtn' => '👁 نمایش دادن «%s»',
     ),
     'Payment' => 
     array (

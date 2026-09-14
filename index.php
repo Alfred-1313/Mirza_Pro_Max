@@ -2335,11 +2335,9 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $cl_lang = $user['lang'] ?? 'fa';
     $cl_confirmBtn = genbtn_render($cl_defs[0], genbtn_override($cl_lang, 'users.changeLink.warnchange', 0), "confirmchange_" . $nameloc['id_invoice']);
     $cl_backBtn = genbtn_render($cl_defs[1], genbtn_override($cl_lang, 'users.changeLink.warnchange', 1), "product_" . $nameloc['id_invoice']);
+    // order and width from 📐 چیدمان; with none saved, one row each as before
     $keyboardextend = json_encode([
-        'inline_keyboard' => [
-            [$cl_confirmBtn],
-            [$cl_backBtn],
-        ]
+        'inline_keyboard' => genbtn_group_rows('cl', $cl_lang, [0 => $cl_confirmBtn, 1 => $cl_backBtn], $textbotlang),
     ]);
     // The service screen is a QR photo, and a photo cannot be edited into a text
     // message - so take it away and send this one. Doing it explicitly rather
