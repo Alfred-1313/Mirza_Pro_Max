@@ -255,6 +255,10 @@ timeauto_not_verify,status_keyboard_config,cron_status
         addFieldToTable("setting", "backup_bot_enabled", "1", "VARCHAR(1)");
         addFieldToTable("setting", "backup_interval_hours", "5", "VARCHAR(2)");
         addFieldToTable("setting", "topup_disc_admin_selftest", "0", "VARCHAR(1)");
+        // 🛡 دسترسی ادمین: admins keep unlimited test accounts (today's behaviour)
+        // and pay for purchases until free purchases are switched on
+        addFieldToTable("setting", "admin_test_unlimited", "1", "VARCHAR(1)");
+        addFieldToTable("setting", "admin_buy_free", "0", "VARCHAR(1)");
         addFieldToTable("setting", "configGetBtnStyle", null, "VARCHAR(20)");
         // the automatic language picker is off on a fresh install - it used to
         // rely on this column being NULL and the reader defaulting to '0', which

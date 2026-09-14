@@ -142,6 +142,10 @@ $admin_ids = select("admin", "id_admin", null, null, "FETCH_COLUMN");
 if (!is_array($admin_ids)) {
     $admin_ids = [];
 }
+// 🛡 دسترسی ادمین (🎨 شخصی‌سازی): an admin's own test accounts skip the
+// per-user limit (default on) and their purchases cost nothing (default off)
+$admin_test_free = in_array($from_id, $admin_ids) && (string) ($setting['admin_test_unlimited'] ?? '1') !== '0';
+$admin_buy_free = in_array($from_id, $admin_ids) && (string) ($setting['admin_buy_free'] ?? '0') === '1';
 $helpdata = select("help", "*");
 $id_invoice = select("invoice", "id_invoice", null, null, "FETCH_COLUMN");
 $usernameinvoice = select("invoice", "username", null, null, "FETCH_COLUMN");
@@ -2001,6 +2005,9 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         $pricelastextend = $pricelastextend - $result;
         sendmessage($from_id, sprintf($textbotlang['users']['Discount']['discountapplied'], $user['pricediscount']), null, 'HTML');
     }
+    if ($admin_buy_free) {
+        $pricelastextend = 0;
+    }
     if ($user['Balance'] < $pricelastextend && $user['agent'] != "n2" && intval($pricelastextend) != 0) {
         $marzbandirectpay = shop_feature_value('paydirect', $user['lang'] ?? 'fa', select('shopSetting', "*", "Namevalue", "statusdirectpabuy", "select")['value']);
         if ($marzbandirectpay == "offdirectbuy") {
@@ -2421,7 +2428,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $marzban_list_get = select("marzban_panel", "*", "name_panel", $nameloc['Service_location'], "select");
     $eextraprice = json_decode($marzban_list_get['priceextravolume'], true);
     $extrapricevalue = $eextraprice[$user['agent']];
-    if ($user['Balance'] < $volume && $user['agent'] != "n2") {
+    if ($user['Balance'] < $volume && $user['agent'] != "n2" && !$admin_buy_free) {
         $marzbandirectpay = shop_feature_value('paydirect', $user['lang'] ?? 'fa', select('shopSetting', "*", "Namevalue", "statusdirectpabuy", "select")['value']);
         if ($marzbandirectpay == "offdirectbuy") {
             $minbalance = number_format(json_decode(select("PaySetting", "*", "NamePay", "minbalance", "select")['ValuePay'], true)[$user['agent']]);
@@ -2464,6 +2471,11 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             sendmessage($from_id, $textbotlang['users']['Balance']['maxpurchasereached'], null, 'HTML');
             return;
         }
+    }
+    // $volume is also what the GB amount is worked out from, so only the
+    // charged price is zeroed for a free admin purchase
+    if ($admin_buy_free) {
+        $volumepricelast = 0;
     }
     $Balance_Low_user = $user['Balance'] - $volumepricelast;
     update("user", "Balance", $Balance_Low_user, "id", $from_id);
@@ -3006,7 +3018,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $marzban_list_get = select("marzban_panel", "*", "name_panel", $nameloc['Service_location'], "select");
     $eextraprice = json_decode($marzban_list_get['priceextratime'], true);
     $extratimepricevalue = $eextraprice[$user['agent']];
-    if ($user['Balance'] < $tmieextra && $user['agent'] != "n2") {
+    if ($user['Balance'] < $tmieextra && $user['agent'] != "n2" && !$admin_buy_free) {
         $marzbandirectpay = shop_feature_value('paydirect', $user['lang'] ?? 'fa', select('shopSetting', "*", "Namevalue", "statusdirectpabuy", "select")['value']);
         if ($marzbandirectpay == "offdirectbuy") {
             $minbalance = number_format(json_decode(select("PaySetting", "*", "NamePay", "minbalance", "select")['ValuePay'], true)[$user['agent']]);
@@ -3044,6 +3056,10 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         $result = ($tmieextra * $user['pricediscount']) / 100;
         $pricelasttime = $tmieextra - $result;
         sendmessage($from_id, sprintf($textbotlang['users']['Discount']['discountapplied'], $user['pricediscount']), null, 'HTML');
+    }
+    // $tmieextra still gives the number of days; only the charge is zeroed
+    if ($admin_buy_free) {
+        $pricelasttime = 0;
     }
     $Balance_Low_user = $user['Balance'] - $pricelasttime;
     if (intval($user['maxbuyagent']) != 0 and $user['agent'] == "n2") {
@@ -3327,7 +3343,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         }
         if ($user['number'] == "none" && feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone")
             return;
-        if ($user['limit_usertest'] <= 0 && !in_array($from_id, $admin_ids)) {
+        if ($user['limit_usertest'] <= 0 && !$admin_test_free) {
             sendmessage($from_id, $textbotlang['users']['usertest']['limitwarning'], $keyboard_buy, 'html');
             return;
         }
@@ -3363,7 +3379,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         return;
     }
     $userlimit = select("user", "*", "id", $from_id, "select");
-    if ($userlimit['limit_usertest'] <= 0 && !in_array($from_id, $admin_ids)) {
+    if ($userlimit['limit_usertest'] <= 0 && !$admin_test_free) {
         sendmessage($from_id, $textbotlang['users']['usertest']['limitwarning'], $keyboard_buy, 'html');
         return;
     }
@@ -3459,8 +3475,12 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
             return;
         }
     }
-    $limit_usertest = $userlimit['limit_usertest'] - 1;
-    update("user", "limit_usertest", $limit_usertest, "id", $from_id);
+    // an unlimited admin's own counter is left alone, so switching the limit
+    // back on does not start them below zero
+    if (!$admin_test_free) {
+        $limit_usertest = $userlimit['limit_usertest'] - 1;
+        update("user", "limit_usertest", $limit_usertest, "id", $from_id);
+    }
     $randomString = bin2hex(random_bytes(4));
     $text = strtolower($text);
     $marzban_list_get = select("marzban_panel", "*", "code_panel", $name_panel, "select");
@@ -4428,6 +4448,9 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     if (!isset($info_product['price_product']))
         return;
     $priceproduct = $info_product['price_product'];
+    if ($admin_buy_free) {
+        $priceproduct = 0;
+    }
     $username_ac = strtolower($user['Processing_value_tow']);
     $DataUserOut = $ManagePanel->DataUser($marzban_list_get['name_panel'], $username_ac);
     if (isset($DataUserOut['username']) || in_array($username_ac, $usernameinvoice)) {
@@ -4661,7 +4684,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         return;
     }
     $PaySetting = select("PaySetting", "*", "NamePay", "minbalancebuybulk", "select")['ValuePay'];
-    if ($user['Balance'] < $PaySetting) {
+    if ($user['Balance'] < $PaySetting && !$admin_buy_free) {
         sendmessage($from_id, strtr($textbotlang['users']['Major']['minBalance'], ['{PaySetting}' => $PaySetting]), null, 'HTML');
         return;
     }
@@ -4896,6 +4919,9 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     if (empty($info_product['price_product']) || empty($info_product['price_product']))
         return;
     $priceproduct = $info_product['price_product'] * $user['Processing_value_four'];
+    if ($admin_buy_free) {
+        $priceproduct = 0;
+    }
     Editmessagetext($from_id, $message_id, $text_inline, null);
     $username_ac = $user['Processing_value_tow'];
     $date = time();
@@ -4904,7 +4930,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         $priceproduct = $priceproduct - $result;
         sendmessage($from_id, sprintf($textbotlang['users']['Discount']['discountapplied'], $user['pricediscount']), null, 'HTML');
     }
-    if ($priceproduct > $user['Balance'] && $user['agent'] != "n2") {
+    if ($priceproduct > $user['Balance'] && $user['agent'] != "n2" && !$admin_buy_free) {
         $bakinfos = balancebtn_kb($user['lang'] ?? 'fa', $textbotlang);
         Editmessagetext($from_id, $message_id, $textbotlang['users']['Balance']['insufficientBalanceSimple'], $bakinfos, 'HTML');
         step('home', $from_id);
@@ -6177,7 +6203,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     step('home', $from_id);
 } elseif (preg_match('/confirmaextras_(\w+)/', $datain, $dataget)) {
     $volume = $dataget[1];
-    if ($user['Balance'] < $volume && $user['agent'] != "n2") {
+    if ($user['Balance'] < $volume && $user['agent'] != "n2" && !$admin_buy_free) {
         $marzbandirectpay = shop_feature_value('paydirect', $user['lang'] ?? 'fa', select('shopSetting', "*", "Namevalue", "statusdirectpabuy", "select")['value']);
         if ($marzbandirectpay == "offdirectbuy") {
             $minbalance = number_format(json_decode(select("PaySetting", "*", "NamePay", "minbalance", "select")['ValuePay'], true)[$user['agent']]);
@@ -6237,7 +6263,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
         ':value' => $value,
         ':type' => $type,
         ':time' => $dateacc,
-        ':price' => $volume,
+        ':price' => $admin_buy_free ? 0 : $volume,
     ]);
     $data_limit_new = (intval($volume) / intval($extrapricevalue));
     $extra_volume = $ManagePanel->extra_volume($user['Processing_value'], $marzban_list_get['code_panel'], $data_limit_new);
@@ -6255,7 +6281,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
         }
         return;
     }
-    $Balance_Low_user = $user['Balance'] - $volume;
+    $Balance_Low_user = $user['Balance'] - ($admin_buy_free ? 0 : $volume);
     update("user", "Balance", $Balance_Low_user, "id", $from_id);
     $back = json_encode([
         'inline_keyboard' => [
@@ -6894,7 +6920,7 @@ if (isset($update['message']['successful_payment'])) {
         sendmessage($from_id, $textbotlang['users']['extend']['renewalerror'], $keyboard, 'HTML');
         return;
     }
-    if ($user['Balance'] < $prodcut['price_product'] && $user['agent'] != "n2") {
+    if ($user['Balance'] < $prodcut['price_product'] && $user['agent'] != "n2" && !$admin_buy_free) {
         $marzbandirectpay = shop_feature_value('paydirect', $user['lang'] ?? 'fa', select('shopSetting', "*", "Namevalue", "statusdirectpabuy", "select")['value']);
         if ($marzbandirectpay == "offdirectbuy") {
             $minbalance = number_format(json_decode(select("PaySetting", "*", "NamePay", "minbalance", "select")['ValuePay'], true)[$user['agent']]);
@@ -6932,6 +6958,9 @@ if (isset($update['message']['successful_payment'])) {
         $result = ($prodcut['price_product'] * $user['pricediscount']) / 100;
         $prodcut['price_product'] = $prodcut['price_product'] - $result;
         sendmessage($from_id, sprintf($textbotlang['users']['Discount']['discountapplied'], $user['pricediscount']), null, 'HTML');
+    }
+    if ($admin_buy_free) {
+        $prodcut['price_product'] = 0;
     }
     $Balance_Low_user = $user['Balance'] - $prodcut['price_product'];
     update("user", "Balance", $Balance_Low_user, "id", $from_id);

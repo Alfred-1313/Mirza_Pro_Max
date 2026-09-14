@@ -2583,6 +2583,8 @@ function keyboard_list_text($lang, $groupFilter = null)
         // off - their messages had no row here at all until now, so they were
         // the only customer-facing flows with no way to reword them
         'home_features' => [],
+        // 🛡 what admins' own test accounts and purchases are held to
+        'home_admin' => [],
     ];
     $bt_home_sectioned_keys = array_merge(...array_values($bt_home_sections));
     foreach ($bt_home_sections as $bt_sec_key => $bt_sec_items) {
@@ -2669,6 +2671,11 @@ function keyboard_list_text($lang, $groupFilter = null)
                 'callback_data' => "bt_group|$lang|{$bt_sec_group[0]}",
                 'style' => $bt_sub_custom ? 'success' : 'primary',
             ]];
+        }
+        if ($bt_sec_key === 'home_admin') {
+            // green once either switch is away from its default
+            $bt_adm_custom = (string) ($bt_list_setting['admin_test_unlimited'] ?? '1') === '0' || (string) ($bt_list_setting['admin_buy_free'] ?? '0') === '1';
+            $keyboard_text['inline_keyboard'][] = [['text' => '🛡 اکانت تست و خرید ادمین', 'callback_data' => "admperm|open|$lang", 'style' => $bt_adm_custom ? 'success' : 'primary']];
         }
     }
     // Anything ungrouped that isn't in one of the sections above still needs to

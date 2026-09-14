@@ -5848,6 +5848,17 @@ if (preg_match('/^cfgdeliv\|set\|([a-z]{2})\|([^|]+)\|(purchase|usertest)\|(1|2)
     Editmessagetext($from_id, $message_id, $cd_text, $cd_kb, 'HTML');
     return;
 }
+if (preg_match('/^admperm\|(open|test|buy)\|([a-z]{2})$/', $datain, $ap_m) && $adminrulecheck['rule'] == "administrator") {
+    $ap_setting = select("setting", "*", null, null, "select");
+    if ($ap_m[1] === 'test') {
+        update("setting", "admin_test_unlimited", ((string) ($ap_setting['admin_test_unlimited'] ?? '1') !== '0') ? '0' : '1', null, null);
+    } elseif ($ap_m[1] === 'buy') {
+        update("setting", "admin_buy_free", ((string) ($ap_setting['admin_buy_free'] ?? '0') === '1') ? '0' : '1', null, null);
+    }
+    list($ap_text, $ap_kb) = admin_perm_payload($ap_m[2]);
+    Editmessagetext($from_id, $message_id, $ap_text, $ap_kb, 'HTML');
+    return;
+}
 if (preg_match('/^cfgdeliv\|qr\|([a-z]{2})\|([^|]+)\|(purchase|usertest)\|([bu])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
     config_delivery_set_qr($cd_m[3], $cd_m[2], !config_delivery_qr_on($cd_m[3], $cd_m[2]));
     list($cd_text, $cd_kb) = config_delivery_panel_payload($cd_m[1], $cd_m[2], $cd_m[4]);

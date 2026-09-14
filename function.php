@@ -9125,6 +9125,10 @@ if (!function_exists('bt_section_meta')) {
                 'label' => '🎨 ظاهر دکمه‌های آموزش',
                 'alert' => 'ترتیب، عرض، رنگ، ایموجی و نمایش/مخفی‌بودن دکمه‌های دسته‌بندی و آموزش‌ها - نه متن پیام‌ها.',
             ],
+            'home_admin' => [
+                'label' => '🛡 دسترسی ادمین',
+                'alert' => 'محدودیت‌هایی که روی خود ادمین‌ها اعمال می‌شه: تعداد اکانت تست و پرداخت هزینه‌ی خرید. روی کاربرها اثری نداره.',
+            ],
             'home_features' => [
                 'label' => '🎯 قابلیت‌های ربات',
                 'alert' => 'پیام‌ها و دکمه‌های قابلیت‌هایی که از «🌐 وضعیت قابلیت‌ها (هر زبان)» روشن/خاموش می‌شن: احراز شماره و قوانین، گردونه شانس، و زیرمجموعه‌گیری.',
@@ -13114,6 +13118,31 @@ if (!function_exists('help_layout_save')) {
     function help_layout_save($data)
     {
         update("setting", "help_layout", json_encode($data, JSON_UNESCAPED_UNICODE), null, null);
+    }
+}
+if (!function_exists('admin_perm_payload')) {
+    // 🛡 دسترسی ادمین: what an admin's own test accounts and purchases are held
+    // to. Both switches are bot-wide, not per language - $lang only threads the
+    // customization screen's back button.
+    function admin_perm_payload($lang)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $testFree = (string) ($setting['admin_test_unlimited'] ?? '1') !== '0';
+        $buyFree = (string) ($setting['admin_buy_free'] ?? '0') === '1';
+        $info = "🛡 <b>دسترسی ادمین</b>\n➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= "این تنظیمات فقط روی حساب ادمین‌ها اثر داره، نه کاربرها.\n\n";
+        $info .= "🔑 <b>اکانت تست بدون محدودیت:</b> " . ($testFree ? "روشن ✅" : "خاموش ❌") . "\n";
+        $info .= ($testFree ? "ادمین هر چندتا بخواد اکانت تست می‌گیره." : "ادمین هم مثل کاربرها محدودیت تعداد اکانت تست داره.") . "\n\n";
+        $info .= "🛍 <b>خرید رایگان:</b> " . ($buyFree ? "روشن ✅" : "خاموش ❌") . "\n";
+        $info .= $buyFree
+            ? "خرید سرویس، خرید چندتایی، تمدید و حجم/زمان اضافه برای ادمین رایگانه و از موجودیش چیزی کم نمی‌شه."
+            : "ادمین هم مثل کاربرها هزینه‌ی خرید رو از موجودیش پرداخت می‌کنه.";
+        $kb = ['inline_keyboard' => []];
+        $kb['inline_keyboard'][] = [['text' => '🔑 اکانت تست بدون محدودیت: ' . ($testFree ? 'روشن ✅' : 'خاموش ❌'), 'callback_data' => "admperm|test|{$lang}", 'style' => $testFree ? 'success' : 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '🛍 خرید رایگان: ' . ($buyFree ? 'روشن ✅' : 'خاموش ❌'), 'callback_data' => "admperm|buy|{$lang}", 'style' => $buyFree ? 'success' : 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '🔙 برگشت به لیست', 'callback_data' => "btact|back|{$lang}", 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
+        return [$info, json_encode($kb)];
     }
 }
 if (!function_exists('bt_button')) {
