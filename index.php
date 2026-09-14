@@ -675,10 +675,30 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     // ❌ under the "حداقل/حداکثر مبلغ" notice - same deferred-together removal
     // as every other ❌ بستن, using 💰 افزایش موجودی's own sticker setting since
     // this notice belongs to that same flow; end the top-up session right
-    // away, the notice itself goes with close_sticker_play()
+    // away, the notice itself goes with close_sticker_play(). Every gateway's
+    // refusal shares this one button (topup_amount_notice).
+    //
+    // It closes the whole top-up screen, not just the notice: the
+    // "💵 مبلغ دلخواه" prompt above it, the customer's own "💰 افزایش موجودی"
+    // tap and its sticker - left behind, the prompt kept asking for an amount
+    // nobody was going to type.
+    $tr_toDelete = [(int) $message_id];
+    $tr_prompt = (int) ($user['topup_custom_msg_id'] ?? 0);
+    if ($tr_prompt > 0) {
+        $tr_toDelete[] = $tr_prompt;
+        update("user", "topup_custom_msg_id", "0", "id", $from_id);
+    }
+    if (ctype_digit((string) ($user['menu_sticker_id'] ?? '')) && intval($user['menu_sticker_id']) > 0) {
+        $tr_toDelete[] = intval($user['menu_sticker_id']);
+        update("user", "menu_sticker_id", "0", "id", $from_id);
+    }
+    $tr_tap = menu_tap_capture($from_id, $user);
+    if ($tr_tap > 0) {
+        $tr_toDelete[] = $tr_tap;
+    }
     update("user", "topup_range_msg_id", "0", "id", $from_id);
     step('home', $from_id);
-    close_sticker_play($from_id, 'bottext.btnCloseTopup', [(int) $message_id]);
+    close_sticker_play($from_id, 'bottext.btnCloseTopup', $tr_toDelete);
 } elseif ($datain == "sellclose") {
     // closes the panel picker and takes the buy-button sticker that was sent
     // with it along with it. Processing_value_tow is the right field to read
