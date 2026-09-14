@@ -893,13 +893,7 @@ function DirectPayment($order_id, $image = 'images.jpg')
             }
             return;
         }
-        $Shoppinginfo = json_encode([
-            'inline_keyboard' => [
-                [
-                    ['text' => $textbotlang['keyboard']['viewTutorial'], 'callback_data' => "helpbtn"],
-                ]
-            ]
-        ]);
+        $Shoppinginfo = json_encode(afterpay_help_kb($Balance_id['lang'] ?? 'fa', $textbotlang));
         $output_config_link = "";
         $config = "";
         if ($marzban_list_get['config'] == "onconfig" && is_array($dataoutput['configs'])) {
@@ -9176,6 +9170,9 @@ if (!function_exists('genbtn_alias_map')) {
             // and the category caption owns the back button of the screen that
             // shows one tutorial's own content
             'hv' => 'users.help.categoryCaption',
+            // own-key trick again - the one 📚 button under the post-purchase
+            // message (afterPay and its manual/WGDashboard/ibsng variants)
+            'ab' => 'textbot.afterPay',
         ];
     }
 }
@@ -9292,6 +9289,12 @@ if (!function_exists('genbtn_defs')) {
         }
         if ($alias === 'hv') {
             return [0 => ['name' => '🔙 دکمه بازگشت (زیر محتوای آموزش)', 'text' => $textbotlang['users']['help']['backToCategoryListBtn'], 'style' => 'danger', 'callback_data' => 'helpbtns']];
+        }
+        if ($alias === 'ab') {
+            // no default style: the button has always gone out unstyled.
+            // trim(): the lang string ends in a space, and split_leading_emoji()
+            // counts that space as emoji length ("📚 م مشاهده...")
+            return [0 => ['name' => '📚 دکمه مشاهده آموزش', 'text' => trim($textbotlang['users']['help']['btninlinebuy']), 'style' => '', 'callback_data' => 'helpbtn']];
         }
         return [];
     }
@@ -9444,6 +9447,15 @@ if (!function_exists('myservices_close_btn')) {
         return genbtn_render($defs[0], $ov, $defs[0]['callback_data']);
     }
 }
+if (!function_exists('afterpay_help_kb')) {
+    // the keyboard under the post-purchase message - genbtn alias 'ab'
+    function afterpay_help_kb($lang, $textbotlang)
+    {
+        $defs = genbtn_defs('ab', $textbotlang);
+        $ov = genbtn_override($lang, 'textbot.afterPay', 0);
+        return ['inline_keyboard' => [[genbtn_render($defs[0], $ov, $defs[0]['callback_data'])]]];
+    }
+}
 if (!function_exists('sell_selectUsername_kb')) {
     // renders the buy flow's OWN copy of the cancel/use-default keyboard - the
     // usertest flow keeps using its separate usertest_selectUsername_kb(), so
@@ -9565,7 +9577,7 @@ if (!function_exists('genbtn_list_payload')) {
         $key = genbtn_alias_to_key($alias);
         $gb_sfx = ($origin === 'u') ? '|u' : '';
         $defs = genbtn_defs($alias, $textbotlang);
-        $titles = ['su' => '🔘 دکمه‌های نام‌گذاری سرویس', 'cf' => '🔘 دکمه‌های تأیید خرید', 'ns' => '🔘 دکمه‌ی نداشتن سرویس فعال', 'te' => '🔘 دکمه‌ی پیام اتمام اکانت تست', 'sc' => '🔘 دکمه‌ی بستن (سرویس‌های من)', 'bc' => '🔘 دکمه‌ی تهیه اشتراک (شارژ کیف پول)', 'rn' => '🔘 دکمه‌های فاکتور تمدید سرویس', 'cl' => '🔘 دکمه‌های تغییر لینک اتصال', 'td' => '🔘 دکمه‌های کد تخفیف شارژ'];
+        $titles = ['su' => '🔘 دکمه‌های نام‌گذاری سرویس', 'cf' => '🔘 دکمه‌های تأیید خرید', 'ns' => '🔘 دکمه‌ی نداشتن سرویس فعال', 'te' => '🔘 دکمه‌ی پیام اتمام اکانت تست', 'sc' => '🔘 دکمه‌ی بستن (سرویس‌های من)', 'bc' => '🔘 دکمه‌ی تهیه اشتراک (شارژ کیف پول)', 'rn' => '🔘 دکمه‌های فاکتور تمدید سرویس', 'cl' => '🔘 دکمه‌های تغییر لینک اتصال', 'td' => '🔘 دکمه‌های کد تخفیف شارژ', 'ab' => '📚 دکمه‌ی مشاهده آموزش (پیام بعد از خرید)'];
         $notes = [
             'su' => 'این ۲ دکمه، زیر پیام انتخاب نام سرویس (مرحله‌ی خرید) به کاربر نشون داده می‌شن.',
             'cf' => 'این ۲ دکمه، زیر صفحه‌ی تأیید نهایی خرید نشون داده می‌شن - هر سه حالت (عادی/تخفیف‌دار/حجم دلخواه) از این یکی استفاده می‌کنن، پس ویرایششون روی هر سه اثر می‌ذاره.',
@@ -9576,6 +9588,7 @@ if (!function_exists('genbtn_list_payload')) {
             'rn' => 'دکمه‌ی ۱ و ۲ زیر فاکتور تمدید سرویس نشون داده می‌شن (دکمه‌ی «افزایش موجودی» بینشون از تنظیمات مشترک همون دکمه میاد، جدا نیست). دکمه‌ی ۳ وقتی کاربر روی «افزایش موجودی» بزنه، زیر لیست روش‌های پرداخت میاد و با تپ روش، برمی‌گردونه به همون فاکتور تمدید.',
             'cl' => 'این ۲ دکمه، زیر پیام هشدار «تغییر لینک اتصال» (قبل از تایید نهایی) نشون داده می‌شن.',
             'td' => 'دکمه‌ی ۱ («کد تخفیف دارم») زیر لیست روش‌های پرداختِ 💰 افزایش موجودی میاد - ولی فقط وقتی که برای این زبان حداقل یک کد تخفیف شارژ ساخته باشی، وگرنه اصلاً نشون داده نمی‌شه. دکمه‌ی ۲ زیر همون صفحه‌ی وارد کردن کد میاد. اگر کاربر یه کد رو فعال کرده باشه، دکمه‌ی ۱ دیگه بهش نشون داده نمی‌شه (چون خود کپشن تخفیف فعال رو نوشته).',
+            'ab' => 'این ۱ دکمه، زیر پیام «✅ سرویس با موفقیت ایجاد شد» (بعد از خرید) نشون داده می‌شه - برای همه‌ی نوع پنل‌ها، خرید چندتایی، پرداخت آنلاین و سفارشی که ادمین برای کاربر ثبت می‌کنه.',
         ];
         $info = ($titles[$alias] ?? '🔘 دکمه‌ها') . "\n➖➖➖➖➖➖➖➖➖➖\n" . ($notes[$alias] ?? '') . "\n";
         $info .= "➖➖➖➖➖➖➖➖➖➖\n👁 پیش‌نمایش زنده - روی هرکدوم بزن تا ویرایشش کنی 👇";
@@ -9583,7 +9596,12 @@ if (!function_exists('genbtn_list_payload')) {
         foreach ($defs as $idx => $d) {
             $ov = genbtn_override($lang, $key, $idx);
             list($curText, $curStyle) = genbtn_current($d, $ov);
-            $kb['inline_keyboard'][] = [['text' => $curText, 'callback_data' => "gbtn|open|{$lang}|{$alias}|{$idx}{$gb_sfx}", 'style' => $curStyle]];
+            $gb_row = ['text' => $curText, 'callback_data' => "gbtn|open|{$lang}|{$alias}|{$idx}{$gb_sfx}"];
+            // 'ab' ships unstyled - an empty style key is left out, like genbtn_render() does
+            if ($curStyle !== '') {
+                $gb_row['style'] = $curStyle;
+            }
+            $kb['inline_keyboard'][] = [$gb_row];
         }
         // white, non-navigating divider - without it, the last preview button
         // (often red, e.g. 'cl' and 'rn's back buttons) blends visually into
@@ -9594,7 +9612,7 @@ if (!function_exists('genbtn_list_payload')) {
         // 'cf' points at textbot.preInvoice (the normal-purchase تأیید خرید) -
         // it used to point at users.sell.preInvoice, the discount-code variant,
         // which was removed along with that whole dead feature
-        $backKeyMap = ['su' => 'users.sell.selectUsernamePrompt', 'cf' => 'textbot.preInvoice', 'ns' => 'users.sell.service_not_available', 'te' => 'textbot.testExpired', 'sc' => 'users.sell.service_sell', 'bc' => 'users.Balance.chargeSuccess', 'rn' => 'users.extend.invoiceCreated', 'cl' => 'users.changeLink.warnchange', 'td' => 'users.Balance.topupDiscPrompt', 'hb' => 'users.help.listCaption', 'hv' => 'users.help.categoryCaption'];
+        $backKeyMap = ['su' => 'users.sell.selectUsernamePrompt', 'cf' => 'textbot.preInvoice', 'ns' => 'users.sell.service_not_available', 'te' => 'textbot.testExpired', 'sc' => 'users.sell.service_sell', 'bc' => 'users.Balance.chargeSuccess', 'rn' => 'users.extend.invoiceCreated', 'cl' => 'users.changeLink.warnchange', 'td' => 'users.Balance.topupDiscPrompt', 'hb' => 'users.help.listCaption', 'hv' => 'users.help.categoryCaption', 'ab' => 'textbot.afterPay'];
         $backKey = ($origin === 'u') ? 'users.usertest.selectUsernamePrompt' : ($backKeyMap[$alias] ?? 'users.sell.selectUsernamePrompt');
         $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "bt_edit|{$lang}|{$backKey}", 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];

@@ -4491,13 +4491,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         'username' => $username,
         'type' => 'buy'
     );
-    $Shoppinginfo = [
-        'inline_keyboard' => [
-            [
-                ['text' => $textbotlang['users']['help']['btninlinebuy'], 'callback_data' => "helpbtn"],
-            ]
-        ]
-    ];
+    $Shoppinginfo = afterpay_help_kb($user['lang'] ?? 'fa', $textbotlang);
     $dataoutput = $ManagePanel->createUser($marzban_list_get['name_panel'], $info_product['code_product'], $username_ac, $datac);
     if (!isset($dataoutput['username']) || $dataoutput['username'] === null || $dataoutput['username'] === '') {
         $errorMessage = $dataoutput['msg'] ?? 'unknown error';
@@ -4949,13 +4943,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         'volume' => false,
         'time' => false,
     ));
-    $Shoppinginfo = json_encode([
-        'inline_keyboard' => [
-            [
-                ['text' => $textbotlang['users']['help']['btninlinebuy'], 'callback_data' => "helpbtn"],
-            ]
-        ]
-    ]);
+    $Shoppinginfo = json_encode(afterpay_help_kb($user['lang'] ?? 'fa', $textbotlang));
     for ($i = 0; $i < $user['Processing_value_four']; $i++) {
         $random_number = rand(1000000, 9999999);
         $username_acc = $username_ac . "_" . $i;

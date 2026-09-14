@@ -26,6 +26,8 @@ class ServiceMonitor
         $this->setting = select("setting", "*");
         $this->status_cron = json_decode($this->setting['cron_status'], true);
         $this->textBotLang = languagechange(dirname(__DIR__));
+        // formatBytes() reads the global - without it the volume notice lost its unit ("1.5 " not "1.5 گیگابایت")
+        $GLOBALS['textbotlang'] = $this->textBotLang;
         $this->text_Purchased_services = $this->textBotLang['textbot']['purchasedServices'] ?? '';
     }
 
