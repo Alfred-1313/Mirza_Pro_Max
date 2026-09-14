@@ -83,14 +83,37 @@ if (!function_exists('bottext_resolve_key')) {
         return is_string($node) ? $node : '';
     }
 }
+if (!function_exists('bottext_receiver_lang')) {
+    // The language of whoever a message goes to. Usually the current user, but a
+    // referral gift or commission goes to the referrer - their sticker, not the
+    // sender's. Looked up once per chat id per request.
+    function bottext_receiver_lang($chat_id)
+    {
+        global $user, $from_id;
+        static $bts_langs = [];
+        if ($chat_id === null || (string) $chat_id === (string) ($from_id ?? '') || (string) $chat_id === (string) ($user['id'] ?? '')) {
+            return $user['lang'] ?? 'fa';
+        }
+        $bts_cid = (string) $chat_id;
+        if (!isset($bts_langs[$bts_cid])) {
+            $bts_row = select("user", "lang", "id", $bts_cid, "select");
+            $bts_langs[$bts_cid] = (is_array($bts_row) && !empty($bts_row['lang'])) ? $bts_row['lang'] : 'fa';
+        }
+        return $bts_langs[$bts_cid];
+    }
+}
 if (!function_exists('bottext_extras_for_text')) {
-    function bottext_extras_for_text($text)
+    // $chat_id: who the text goes to - their language picks the sticker and
+    // reaction (null = the current user)
+    function bottext_extras_for_text($text, $chat_id = null)
     {
         $text = (string) $text;
         if (trim($text) === '') {
             return null;
         }
         static $bts_cache = null;
+        static $bts_st = [];
+        static $bts_re = [];
         if ($bts_cache === null) {
             $bts_cache = [];
             $bts_setting = select("setting", "*", null, null, "select");
@@ -100,42 +123,64 @@ if (!function_exists('bottext_extras_for_text')) {
             // keys with only a FACTORY sticker have no row in either override
             // map, so they have to be added here or their sticker never fires
             $bts_def = function_exists('bt_default_stickers') ? array_keys(bt_default_stickers()) : [];
+            // blocks and temporary texts never send a sticker, even a stored one
+            $bts_skip = function_exists('bt_nosticker_keys') ? bt_nosticker_keys() : [];
             foreach (array_unique(array_merge(array_keys($bts_st), array_keys($bts_re), $bts_def)) as $bts_k) {
+                if (in_array($bts_k, $bts_skip, true)) {
+                    continue;
+                }
                 $bts_val = bottext_resolve_key($bts_k);
                 if (trim($bts_val) === '') {
                     continue;
                 }
-                // match against the literal segments around sprintf placeholders
-                $bts_segs = preg_split('/%[-+0-9.]*[a-zA-Z]/', $bts_val);
+                // match against the literal segments around sprintf AND {token}
+                // placeholders - a token near the start used to stay inside
+                // seg0, so the filled-in text could never start with it
+                $bts_segs = preg_split('/%[-+0-9.]*[a-zA-Z]|\{[A-Za-z0-9_]+\}/', $bts_val);
                 $bts_seg0 = trim($bts_segs[0] ?? '');
                 $bts_seg1 = trim($bts_segs[1] ?? '');
                 $bts_seg0 = mb_substr($bts_seg0, 0, 40);
                 $bts_seg1 = mb_substr($bts_seg1, 0, 40);
-                if (mb_strlen($bts_seg0) < 3 && $bts_seg1 === '') {
-                    continue;
-                }
-                // stickers/reactions are stored PER LANGUAGE by bt_media_set()
-                // ({key: {fa: id}}), so they have to be read back through
-                // bt_media_lookup(). Casting the entry straight to string
-                // yielded the literal "Array" as the file_id, which Telegram
-                // rejects - every sticker silently failed to send.
-                global $user;
-                $bts_lang = $user['lang'] ?? 'fa';
-                $bts_cache[] = [
+                $bts_cache[$bts_k] = [
                     'key' => $bts_k,
                     'seg0' => $bts_seg0,
                     'seg1' => $bts_seg1,
-                    'sticker' => function_exists('bt_effective_sticker') ? bt_effective_sticker($bts_st, $bts_k, $bts_lang) : (function_exists('bt_media_lookup') ? bt_media_lookup($bts_st, $bts_k, $bts_lang) : ''),
-                    'reaction' => function_exists('bt_media_lookup') ? bt_media_lookup($bts_re, $bts_k, $bts_lang) : '',
+                    // too little wording to recognise safely; a key hint can still reach it
+                    'hintOnly' => mb_strlen($bts_seg0) < 3 && $bts_seg1 === '',
                 ];
             }
         }
-        foreach ($bts_cache as $bts_it) {
-            if (($bts_it['seg0'] === '' || mb_strpos($text, $bts_it['seg0']) === 0) && ($bts_it['seg1'] === '' || mb_strpos($text, $bts_it['seg1']) !== false)) {
-                return $bts_it;
+        $bts_hit = null;
+        $bts_hint = function_exists('bottext_extras_key_hint') ? bottext_extras_key_hint() : null;
+        if ($bts_hint !== null && isset($bts_cache[$bts_hint])) {
+            $bts_hit = $bts_cache[$bts_hint];
+        } else {
+            // seg0 is trimmed, so the text is too: faqDesc, rules and the channel
+            // message start with a blank line and never matched
+            $bts_probe = ltrim($text);
+            foreach ($bts_cache as $bts_it) {
+                if ($bts_it['hintOnly']) {
+                    continue;
+                }
+                if (($bts_it['seg0'] === '' || mb_strpos($bts_probe, $bts_it['seg0']) === 0) && ($bts_it['seg1'] === '' || mb_strpos($bts_probe, $bts_it['seg1']) !== false)) {
+                    $bts_hit = $bts_it;
+                    break;
+                }
             }
         }
-        return null;
+        if ($bts_hit === null) {
+            return null;
+        }
+        // stickers/reactions are stored PER LANGUAGE by bt_media_set()
+        // ({key: {fa: id}}), so they have to be read back through
+        // bt_media_lookup(). Casting the entry straight to string
+        // yielded the literal "Array" as the file_id, which Telegram
+        // rejects - every sticker silently failed to send.
+        $bts_lang = bottext_receiver_lang($chat_id);
+        $bts_k = $bts_hit['key'];
+        $bts_hit['sticker'] = function_exists('bt_effective_sticker') ? bt_effective_sticker($bts_st, $bts_k, $bts_lang) : (function_exists('bt_media_lookup') ? bt_media_lookup($bts_st, $bts_k, $bts_lang) : '');
+        $bts_hit['reaction'] = function_exists('bt_media_lookup') ? bt_media_lookup($bts_re, $bts_k, $bts_lang) : '';
+        return $bts_hit;
     }
 }
 if (!function_exists('bottext_send_extras')) {
@@ -153,7 +198,7 @@ if (!function_exists('bottext_send_extras')) {
     function bottext_send_extras($chat_id, $text, $bot_token = null)
     {
         static $bts_sent = [];
-        $bts_extras = bottext_extras_for_text($text);
+        $bts_extras = bottext_extras_for_text($text, $chat_id);
         if ($bts_extras === null) {
             return 0;
         }
@@ -215,19 +260,28 @@ function forwardMessage($chat_id,$message_id,$chat_id_user){
         'chat_id'=> $chat_id_user,
     ]);
 }
-function sendphoto($chat_id,$photoid,$caption){
-    telegram('sendphoto',[
+// $parse_mode is optional: existing calls keep sending the caption as plain text
+function sendphoto($chat_id,$photoid,$caption,$parse_mode = null){
+    $sp_data = [
         'chat_id' => $chat_id,
         'photo'=> $photoid,
         'caption'=> $caption,
-    ]);
+    ];
+    if ($parse_mode !== null) {
+        $sp_data['parse_mode'] = $parse_mode;
+    }
+    telegram('sendphoto',$sp_data);
 }
-function sendvideo($chat_id,$videoid,$caption){
-    telegram('sendvideo',[
+function sendvideo($chat_id,$videoid,$caption,$parse_mode = null){
+    $sv_data = [
         'chat_id' => $chat_id,
         'video'=> $videoid,
         'caption'=> $caption,
-    ]);
+    ];
+    if ($parse_mode !== null) {
+        $sv_data['parse_mode'] = $parse_mode;
+    }
+    telegram('sendvideo',$sv_data);
 }
 function senddocumentsid($chat_id,$documentid,$caption){
     telegram('sendDocument',[

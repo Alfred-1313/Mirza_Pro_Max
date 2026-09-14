@@ -592,6 +592,10 @@ if (!function_exists('bottext_item_menu_payload')) {
         // or a document caption instead, which never reaches that path - so the
         // setting sat there doing nothing.
         $bt_nosticker = $bt_inline || in_array($bt_key, bt_media_message_keys(), true);
+        // blocks and temporary texts whose sticker could never be useful
+        if (function_exists('bt_nosticker_keys') && in_array($bt_key, bt_nosticker_keys(), true)) {
+            $bt_nosticker = true;
+        }
         // NOTE: users.status.getConfigHintBuy deliberately does NOT go in this
         // list - like its usertest counterpart users.status.getConfigHint, its
         // "buttons" aren't genbtn-shaped (button_edit[lang][key]) but the
@@ -1117,6 +1121,23 @@ if (!function_exists('lang_switch_settings_payload')) {
     }
 }
 
+if (!function_exists('limit_conflict_text')) {
+    // A minimum above the maximum (or a maximum below the minimum) leaves no
+    // amount a customer can pay. Returns the refusal to show, or null when the
+    // value fits; 0 or empty on either side means "no limit" and never conflicts.
+    function limit_conflict_text($isMin, $value, $other, $lang, $textbotlang)
+    {
+        if ((float) $value <= 0 || (float) $other <= 0 || ($isMin ? (float) $value <= (float) $other : (float) $value >= (float) $other)) {
+            return null;
+        }
+        $code = currency_for_lang($lang);
+        return strtr($textbotlang['Admin']['TopupPkg'][$isMin ? 'minAboveMax' : 'maxBelowMin'], [
+            '{max}' => number_format((float) $other),
+            '{min}' => number_format((float) $other),
+            '{currency}' => currency_get($code)['title'] ?? $code,
+        ]);
+    }
+}
 if (!function_exists('gwfld_cancel_kb')) {
     // The ❌ on a "send me the new value" prompt. Without one the only way out
     // was to send something, so an admin who opened it by mistake had to type a
@@ -3276,6 +3297,10 @@ if (!function_exists('topup_gwcap_kinds')) {
             'inv' => $t['askInvoiceCaption'],
             'exp' => $t['askExpCaption'],
         ][$kind] ?? $t['askCaption'];
+        // popups are plain text - say so where the admin types one
+        if (in_array($kind, ['paidalert', 'notseen'], true)) {
+            $prompt .= $t['popupPlainNote'] ?? '';
+        }
         return $prompt . topup_gwcap_placeholders($kind, $key, $textbotlang);
     }
 }
@@ -11149,7 +11174,9 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     list($gc_cap, $gc_kb) = topup_after_edit_screen($gc_m[2], $gc_m[3], $textbotlang);
     Editmessagetext($from_id, (int) $gc_m[4], $gc_cap, $gc_kb, 'HTML');
 } elseif (preg_match('/^gwcapedit:(range|notnumber|inv|exp|paidalert|notseen|noaddress|askhash|hashbad):([a-z]{2}):([a-z0-9]+):([0-9]+):([0-9]+)$/', (string) $user['step'], $gc_m) && $datain == '') {
-    topup_gwcap_set($gc_m[1], $gc_m[2], $gc_m[3], topup_caption_text_from_update($text, $update));
+    // popups are plain text: a <tg-emoji> saved into one showed up as code
+    $gc_text = in_array($gc_m[1], ['paidalert', 'notseen'], true) ? trim((string) $text) : topup_caption_text_from_update($text, $update);
+    topup_gwcap_set($gc_m[1], $gc_m[2], $gc_m[3], $gc_text);
     step('home', $from_id);
     deletemessage($from_id, $message_id);
     deletemessage($from_id, (int) $gc_m[5]);
@@ -11462,7 +11489,8 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     list($tp_cap2, $tp_kb2) = topup_after_edit_screen($tp_m[1], $tp_m[2], $textbotlang);
     Editmessagetext($from_id, (int) $tp_m[3], $tp_cap2, $tp_kb2, 'HTML');
 } elseif (preg_match('/^topuplinkmsgedit:([a-z]{2}):([a-z0-9]+):([0-9]+):([0-9]+)$/', (string) $user['step'], $tp_m) && $datain == '') {
-    topup_linkmsg_set($tp_m[1], $tp_m[2], trim((string) $text));
+    // premium emoji were dropped here entirely before
+    topup_linkmsg_set($tp_m[1], $tp_m[2], topup_caption_text_from_update($text, $update));
     step('home', $from_id);
     deletemessage($from_id, $message_id);
     deletemessage($from_id, (int) $tp_m[4]);
@@ -11600,17 +11628,8 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     list($tp_cap2, $tp_kb2) = topup_after_edit_screen($tp_m[1], $tp_m[2], $textbotlang);
     Editmessagetext($from_id, (int) $tp_m[3], $tp_cap2, $tp_kb2, 'HTML');
 } elseif (preg_match('/^topupcapedit:([a-z]{2}):([a-z0-9]+):([0-9]+):([0-9]+)$/', (string) $user['step'], $tp_m) && $datain == '') {
-    $tp_text = trim((string) $text);
-    // a premium emoji is only recognised as a caption-leading prefix - one
-    // entity, right at offset 0 - never elsewhere in the text, so there is
-    // no ambiguity about which character it replaces
-    $tp_capEnts = $update['message']['entities'] ?? [];
-    if (!empty($tp_capEnts[0]) && ($tp_capEnts[0]['type'] ?? '') === 'custom_emoji' && ($tp_capEnts[0]['offset'] ?? -1) === 0 && !empty($tp_capEnts[0]['custom_emoji_id'])) {
-        preg_match('/^\X/u', $tp_text, $tp_capLead);
-        $tp_capLeadChar = $tp_capLead[0] ?? '';
-        $tp_capRest = mb_substr($tp_text, mb_strlen($tp_capLeadChar, 'UTF-8'), null, 'UTF-8');
-        $tp_text = '<tg-emoji emoji-id="' . htmlspecialchars((string) $tp_capEnts[0]['custom_emoji_id'], ENT_QUOTES) . '">' . $tp_capLeadChar . '</tg-emoji>' . $tp_capRest;
-    }
+    // every premium emoji is kept, wherever it sits in the caption
+    $tp_text = topup_caption_text_from_update($text, $update);
     topup_caption_set($tp_m[1], $tp_m[2], $tp_text);
     step("home", $from_id);
     deletemessage($from_id, $message_id);
@@ -11716,16 +11735,8 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     list($tp_cap2, $tp_kb2) = topup_after_edit_screen($tp_m[1], $tp_m[2], $textbotlang);
     Editmessagetext($from_id, (int) $tp_m[3], $tp_cap2, $tp_kb2, 'HTML');
 } elseif (preg_match('/^topupcustomcapedit:([a-z]{2}):([a-z0-9]+):([0-9]+):([0-9]+)$/', (string) $user['step'], $tp_m) && $datain == '') {
-    $tp_text = trim((string) $text);
-    // same premium-emoji-leading-entity handling as topupcapedit: - one
-    // entity, right at offset 0, never elsewhere in the text
-    $tp_capEnts = $update['message']['entities'] ?? [];
-    if (!empty($tp_capEnts[0]) && ($tp_capEnts[0]['type'] ?? '') === 'custom_emoji' && ($tp_capEnts[0]['offset'] ?? -1) === 0 && !empty($tp_capEnts[0]['custom_emoji_id'])) {
-        preg_match('/^\X/u', $tp_text, $tp_capLead);
-        $tp_capLeadChar = $tp_capLead[0] ?? '';
-        $tp_capRest = mb_substr($tp_text, mb_strlen($tp_capLeadChar, 'UTF-8'), null, 'UTF-8');
-        $tp_text = '<tg-emoji emoji-id="' . htmlspecialchars((string) $tp_capEnts[0]['custom_emoji_id'], ENT_QUOTES) . '">' . $tp_capLeadChar . '</tg-emoji>' . $tp_capRest;
-    }
+    // same as topupcapedit: - every premium emoji is kept
+    $tp_text = topup_caption_text_from_update($text, $update);
     topup_custom_caption_set($tp_m[1], $tp_m[2], $tp_text);
     step("home", $from_id);
     deletemessage($from_id, $message_id);
@@ -11940,15 +11951,19 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     $tp_t = $textbotlang['Admin']['TopupPkg'];
     deletemessage($from_id, $message_id);
     $tp_txt = trim((string) $text);
+    // an online gateway cannot go under a dollar, so neither can its minimum
+    $tp_floor = topup_usd_floor_toman($tp_m[1], $tp_m[2]);
     if ($tp_txt !== '0' && !money_valid($tp_txt, currency_for_lang($tp_m[1]))) {
         $tp_minmaxCancelKb = json_encode(['inline_keyboard' => [
             [['text' => $tp_t['closePromptBtn'], 'callback_data' => "topupminmaxcancel:{$tp_m[1]}:{$tp_m[2]}:{$tp_m[3]}", 'style' => 'danger']],
         ]]);
-        Editmessagetext($from_id, (int) $tp_m[4], $tp_t['invalidAmount'] . "\n\n" . strtr($tp_t['askMin'], ['{currency}' => currency_get(currency_for_lang($tp_m[1]))['title'] ?? currency_for_lang($tp_m[1])]), $tp_minmaxCancelKb, 'HTML');
+        // re-asked with the same wording as the first time, dollar floor included
+        Editmessagetext($from_id, (int) $tp_m[4], $tp_t['invalidAmount'] . "\n\n" . strtr($tp_t[$tp_floor !== null ? 'askMinOnline' : 'askMin'], [
+            '{currency}' => currency_get(currency_for_lang($tp_m[1]))['title'] ?? currency_for_lang($tp_m[1]),
+            '{minprice}' => $tp_floor !== null ? number_format($tp_floor) : '—',
+        ]), $tp_minmaxCancelKb, 'HTML');
         return;
     }
-    // an online gateway cannot go under a dollar, so neither can its minimum
-    $tp_floor = topup_usd_floor_toman($tp_m[1], $tp_m[2]);
     $tp_wanted = $tp_txt === '0' ? '' : money_normalize($tp_txt);
     if ($tp_floor !== null && ($tp_wanted === '' || (float) $tp_wanted < $tp_floor)) {
         $tp_curTitle = currency_get(currency_for_lang($tp_m[1]))['title'] ?? currency_for_lang($tp_m[1]);
@@ -11956,6 +11971,15 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
             [['text' => $tp_t['closePromptBtn'], 'callback_data' => "topupminmaxcancel:{$tp_m[1]}:{$tp_m[2]}:{$tp_m[3]}", 'style' => 'danger']],
         ]]);
         Editmessagetext($from_id, (int) $tp_m[4], strtr($tp_t['minBelowFloor'], ['{price}' => number_format($tp_floor), '{currency}' => $tp_curTitle]), $tp_minmaxCancelKb, 'HTML');
+        return;
+    }
+    // a minimum above the maximum in force would refuse every amount
+    [, $tp_effMax] = topup_effective_limits($tp_m[1], $tp_m[2]);
+    if ($tp_wanted !== '' && $tp_effMax !== null && (float) $tp_wanted > (float) $tp_effMax) {
+        $tp_minmaxCancelKb = json_encode(['inline_keyboard' => [
+            [['text' => $tp_t['closePromptBtn'], 'callback_data' => "topupminmaxcancel:{$tp_m[1]}:{$tp_m[2]}:{$tp_m[3]}", 'style' => 'danger']],
+        ]]);
+        Editmessagetext($from_id, (int) $tp_m[4], strtr($tp_t['minAboveMax'], ['{max}' => number_format((float) $tp_effMax), '{currency}' => currency_get(currency_for_lang($tp_m[1]))['title'] ?? currency_for_lang($tp_m[1])]), $tp_minmaxCancelKb, 'HTML');
         return;
     }
     [, $tp_curMax] = topup_minmax_for($tp_m[1], $tp_m[2]);
@@ -11980,6 +12004,15 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
             [['text' => $tp_t['closePromptBtn'], 'callback_data' => "topupminmaxcancel:{$tp_m[1]}:{$tp_m[2]}:{$tp_m[3]}", 'style' => 'danger']],
         ]]);
         Editmessagetext($from_id, (int) $tp_m[4], $tp_t['invalidAmount'] . "\n\n" . strtr($tp_t['askMax'], ['{currency}' => currency_get(currency_for_lang($tp_m[1]))['title'] ?? currency_for_lang($tp_m[1])]), $tp_minmaxCancelKb, 'HTML');
+        return;
+    }
+    // a maximum below the minimum in force would refuse every amount
+    [$tp_effMin] = topup_effective_limits($tp_m[1], $tp_m[2]);
+    if ($tp_txt !== '0' && $tp_effMin !== null && (float) money_normalize($tp_txt) < (float) $tp_effMin) {
+        $tp_minmaxCancelKb = json_encode(['inline_keyboard' => [
+            [['text' => $tp_t['closePromptBtn'], 'callback_data' => "topupminmaxcancel:{$tp_m[1]}:{$tp_m[2]}:{$tp_m[3]}", 'style' => 'danger']],
+        ]]);
+        Editmessagetext($from_id, (int) $tp_m[4], strtr($tp_t['maxBelowMin'], ['{min}' => number_format((float) $tp_effMin), '{currency}' => currency_get(currency_for_lang($tp_m[1]))['title'] ?? currency_for_lang($tp_m[1])]), $tp_minmaxCancelKb, 'HTML');
         return;
     }
     [$tp_curMin, ] = topup_minmax_for($tp_m[1], $tp_m[2]);
@@ -15120,7 +15153,6 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     update("affiliates", "price_Discount", $text);
     step('home', $from_id);
 } elseif ($datain == "mainbalanceaccount" && $adminrulecheck['rule'] == "administrator") {
-    $PaySetting = json_decode(select("PaySetting", "ValuePay", "NamePay", "minbalance", "select")[$user['agent']], true);
     $textmin = $textbotlang['Admin']['Balance']['askMinCharge'];
     sendmessage($from_id, $textmin, $backadmin, 'HTML');
     step('minbalance', $from_id);
@@ -15140,7 +15172,17 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     }
     step('home', $from_id);
     $balancemaax = json_decode(select("PaySetting", "ValuePay", "NamePay", "minbalance", "select")['ValuePay'], true);
-    $balancemaax[$text] = $user['Processing_value'];
+    $agentOther = json_decode(select("PaySetting", "ValuePay", "NamePay", "maxbalance", "select")['ValuePay'], true);
+    // "allusers" was stored under its own key, which the top-up step never
+    // reads - it means every group
+    foreach ($text === "allusers" ? ["f", "n", "n2"] : [$text] as $agentKey) {
+        $agentErr = limit_conflict_text(true, $user['Processing_value'], $agentOther[$agentKey] ?? 0, 'fa', $textbotlang);
+        if ($agentErr !== null) {
+            sendmessage($from_id, $agentErr, $keyboardadmin, 'HTML');
+            return;
+        }
+        $balancemaax[$agentKey] = $user['Processing_value'];
+    }
     $balancemaax = json_encode($balancemaax);
     sendmessage($from_id, $textbotlang['Admin']['SettingnowPayment']['saveApi'], $keyboardadmin, 'HTML');
     update("PaySetting", "ValuePay", $balancemaax, "NamePay", "minbalance");
@@ -15165,7 +15207,15 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     }
     step('home', $from_id);
     $balancemaax = json_decode(select("PaySetting", "ValuePay", "NamePay", "maxbalance", "select")['ValuePay'], true);
-    $balancemaax[$text] = $user['Processing_value'];
+    $agentOther = json_decode(select("PaySetting", "ValuePay", "NamePay", "minbalance", "select")['ValuePay'], true);
+    foreach ($text === "allusers" ? ["f", "n", "n2"] : [$text] as $agentKey) {
+        $agentErr = limit_conflict_text(false, $user['Processing_value'], $agentOther[$agentKey] ?? 0, 'fa', $textbotlang);
+        if ($agentErr !== null) {
+            sendmessage($from_id, $agentErr, $keyboardadmin, 'HTML');
+            return;
+        }
+        $balancemaax[$agentKey] = $user['Processing_value'];
+    }
     $balancemaax = json_encode($balancemaax);
     sendmessage($from_id, $textbotlang['Admin']['SettingnowPayment']['saveApi'], $keyboardadmin, 'HTML');
     update("PaySetting", "ValuePay", $balancemaax, "NamePay", "maxbalance");
@@ -16013,6 +16063,10 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     sendmessage($from_id, $textmin, $backadmin, 'HTML');
     step('minbalancebulk', $from_id);
 } elseif ($user['step'] == "minbalancebulk") {
+    if (!ctype_digit($text)) {
+        sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
+        return;
+    }
     sendmessage($from_id, $textbotlang['Admin']['SettingnowPayment']['saveApi'], $shopkeyboard, 'HTML');
     update("shopSetting", "value", $text, "Namevalue", "minbalancebuybulk");
     step('home', $from_id);
@@ -17325,6 +17379,11 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
         return;
     }
+    $limitErr = limit_conflict_text(true, $text, pay_value("maxbalancecart", null, ''), 'fa', $textbotlang);
+    if ($limitErr !== null) {
+        sendmessage($from_id, $limitErr, $backadmin, 'HTML');
+        return;
+    }
     sendmessage($from_id, $textbotlang['Admin']['Balance']['minDepositSaved'], $CartManage, 'HTML');
     step("home", $from_id);
     update("PaySetting", "ValuePay", $text, "NamePay", "minbalancecart");
@@ -17334,6 +17393,11 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
 } elseif ($user['step'] == "getmaxcart") {
     if (!ctype_digit($text)) {
         sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
+        return;
+    }
+    $limitErr = limit_conflict_text(false, $text, pay_value("minbalancecart", null, ''), 'fa', $textbotlang);
+    if ($limitErr !== null) {
+        sendmessage($from_id, $limitErr, $backadmin, 'HTML');
         return;
     }
     sendmessage($from_id, $textbotlang['Admin']['Balance']['maxDepositSaved'], $CartManage, 'HTML');
@@ -17347,6 +17411,11 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
         return;
     }
+    $limitErr = limit_conflict_text(true, $text, pay_value("maxbalanceplisio", null, ''), 'fa', $textbotlang);
+    if ($limitErr !== null) {
+        sendmessage($from_id, $limitErr, $backadmin, 'HTML');
+        return;
+    }
     sendmessage($from_id, $textbotlang['Admin']['Balance']['minDepositSaved'], $NowPaymentsManage, 'HTML');
     step("home", $from_id);
     update("PaySetting", "ValuePay", $text, "NamePay", "minbalanceplisio");
@@ -17356,6 +17425,11 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
 } elseif ($user['step'] == "getmaxplisio") {
     if (!ctype_digit($text)) {
         sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
+        return;
+    }
+    $limitErr = limit_conflict_text(false, $text, pay_value("minbalanceplisio", null, ''), 'fa', $textbotlang);
+    if ($limitErr !== null) {
+        sendmessage($from_id, $limitErr, $backadmin, 'HTML');
         return;
     }
     sendmessage($from_id, $textbotlang['Admin']['Balance']['maxDepositSaved'], $NowPaymentsManage, 'HTML');
@@ -17369,6 +17443,11 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
         return;
     }
+    $limitErr = limit_conflict_text(true, $text, pay_value("maxbalancedigitaltron", null, ''), 'fa', $textbotlang);
+    if ($limitErr !== null) {
+        sendmessage($from_id, $limitErr, $backadmin, 'HTML');
+        return;
+    }
     sendmessage($from_id, $textbotlang['Admin']['Balance']['minDepositSaved'], $tronnowpayments, 'HTML');
     step("home", $from_id);
     update("PaySetting", "ValuePay", $text, "NamePay", "minbalancedigitaltron");
@@ -17378,6 +17457,11 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
 } elseif ($user['step'] == "getmaxdigitaltron") {
     if (!ctype_digit($text)) {
         sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
+        return;
+    }
+    $limitErr = limit_conflict_text(false, $text, pay_value("minbalancedigitaltron", null, ''), 'fa', $textbotlang);
+    if ($limitErr !== null) {
+        sendmessage($from_id, $limitErr, $backadmin, 'HTML');
         return;
     }
     sendmessage($from_id, $textbotlang['Admin']['Balance']['maxDepositSaved'], $tronnowpayments, 'HTML');
@@ -17391,6 +17475,11 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
         return;
     }
+    $limitErr = limit_conflict_text(true, $text, pay_value("maxbalanceiranpay1", null, ''), 'fa', $textbotlang);
+    if ($limitErr !== null) {
+        sendmessage($from_id, $limitErr, $backadmin, 'HTML');
+        return;
+    }
     sendmessage($from_id, $textbotlang['Admin']['Balance']['minDepositSaved'], $Swapinokey, 'HTML');
     step("home", $from_id);
     update("PaySetting", "ValuePay", $text, "NamePay", "minbalanceiranpay1");
@@ -17400,6 +17489,11 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
 } elseif ($user['step'] == "getmaaxiranpay1") {
     if (!ctype_digit($text)) {
         sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
+        return;
+    }
+    $limitErr = limit_conflict_text(false, $text, pay_value("minbalanceiranpay1", null, ''), 'fa', $textbotlang);
+    if ($limitErr !== null) {
+        sendmessage($from_id, $limitErr, $backadmin, 'HTML');
         return;
     }
     sendmessage($from_id, $textbotlang['Admin']['Balance']['maxDepositSaved'], $Swapinokey, 'HTML');
@@ -17413,6 +17507,11 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
         return;
     }
+    $limitErr = limit_conflict_text(true, $text, pay_value("maxbalanceiranpay2", null, ''), 'fa', $textbotlang);
+    if ($limitErr !== null) {
+        sendmessage($from_id, $limitErr, $backadmin, 'HTML');
+        return;
+    }
     sendmessage($from_id, $textbotlang['Admin']['Balance']['minDepositSaved'], $trnado, 'HTML');
     step("home", $from_id);
     update("PaySetting", "ValuePay", $text, "NamePay", "minbalanceiranpay2");
@@ -17422,6 +17521,11 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
 } elseif ($user['step'] == "getmaaxiranpay2") {
     if (!ctype_digit($text)) {
         sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
+        return;
+    }
+    $limitErr = limit_conflict_text(false, $text, pay_value("minbalanceiranpay2", null, ''), 'fa', $textbotlang);
+    if ($limitErr !== null) {
+        sendmessage($from_id, $limitErr, $backadmin, 'HTML');
         return;
     }
     sendmessage($from_id, $textbotlang['Admin']['Balance']['maxDepositSaved'], $Swapinokey, 'HTML');
@@ -17435,6 +17539,11 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
         return;
     }
+    $limitErr = limit_conflict_text(true, $text, pay_value("maxbalanceaqayepardakht", null, ''), 'fa', $textbotlang);
+    if ($limitErr !== null) {
+        sendmessage($from_id, $limitErr, $backadmin, 'HTML');
+        return;
+    }
     sendmessage($from_id, $textbotlang['Admin']['Balance']['minDepositSaved'], $aqayepardakht, 'HTML');
     step("home", $from_id);
     update("PaySetting", "ValuePay", $text, "NamePay", "minbalanceaqayepardakht");
@@ -17444,6 +17553,11 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
 } elseif ($user['step'] == "getmaaxaqayepardakht") {
     if (!ctype_digit($text)) {
         sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
+        return;
+    }
+    $limitErr = limit_conflict_text(false, $text, pay_value("minbalanceaqayepardakht", null, ''), 'fa', $textbotlang);
+    if ($limitErr !== null) {
+        sendmessage($from_id, $limitErr, $backadmin, 'HTML');
         return;
     }
     sendmessage($from_id, $textbotlang['Admin']['Balance']['maxDepositSaved'], $aqayepardakht, 'HTML');
@@ -17457,6 +17571,11 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
         return;
     }
+    $limitErr = limit_conflict_text(true, $text, pay_value("maxbalancezarinpal", null, ''), 'fa', $textbotlang);
+    if ($limitErr !== null) {
+        sendmessage($from_id, $limitErr, $backadmin, 'HTML');
+        return;
+    }
     sendmessage($from_id, $textbotlang['Admin']['Balance']['minDepositSaved'], $aqayepardakht, 'HTML');
     step("home", $from_id);
     update("PaySetting", "ValuePay", $text, "NamePay", "minbalancezarinpal");
@@ -17466,6 +17585,11 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
 } elseif ($user['step'] == "getmaaxzarinpal") {
     if (!ctype_digit($text)) {
         sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
+        return;
+    }
+    $limitErr = limit_conflict_text(false, $text, pay_value("minbalancezarinpal", null, ''), 'fa', $textbotlang);
+    if ($limitErr !== null) {
+        sendmessage($from_id, $limitErr, $backadmin, 'HTML');
         return;
     }
     sendmessage($from_id, $textbotlang['Admin']['Balance']['maxDepositSaved'], $aqayepardakht, 'HTML');
@@ -17497,6 +17621,11 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
         return;
     }
+    $limitErr = limit_conflict_text(true, $text, pay_value("maxbalanceiranpay", null, ''), 'fa', $textbotlang);
+    if ($limitErr !== null) {
+        sendmessage($from_id, $limitErr, $backadmin, 'HTML');
+        return;
+    }
     sendmessage($from_id, $textbotlang['Admin']['Balance']['minDepositSaved'], $iranpaykeyboard, 'HTML');
     step("home", $from_id);
     update("PaySetting", "ValuePay", $text, "NamePay", "minbalanceiranpay");
@@ -17506,6 +17635,11 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
 } elseif ($user['step'] == "maxbalanceiranpay") {
     if (!ctype_digit($text)) {
         sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
+        return;
+    }
+    $limitErr = limit_conflict_text(false, $text, pay_value("minbalanceiranpay", null, ''), 'fa', $textbotlang);
+    if ($limitErr !== null) {
+        sendmessage($from_id, $limitErr, $backadmin, 'HTML');
         return;
     }
     sendmessage($from_id, $textbotlang['Admin']['Balance']['maxDepositSaved'], $iranpaykeyboard, 'HTML');
@@ -17681,23 +17815,24 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         if (intval($text) == 2) {
             update("PaySetting", "ValuePay", "2", "NamePay", "helpcart");
         } else {
+            // premium emoji kept as <tg-emoji>, like every other caption editor
             $data = json_encode(array(
                 'type' => "text",
-                'text' => $text
+                'text' => premium_emoji_html_from_entities($update['message']['text'] ?? $text, $update['message']['entities'] ?? [])
             ));
             update("PaySetting", "ValuePay", $data, "NamePay", "helpcart");
         }
     } elseif ($photo) {
         $data = json_encode(array(
             'type' => "photo",
-            'text' => $caption,
+            'text' => premium_emoji_html_from_entities($update['message']['caption'] ?? $caption, $update['message']['caption_entities'] ?? []),
             'photoid' => $photoid
         ));
         update("PaySetting", "ValuePay", $data, "NamePay", "helpcart");
     } elseif ($video) {
         $data = json_encode(array(
             'type' => "video",
-            'text' => $caption,
+            'text' => premium_emoji_html_from_entities($update['message']['caption'] ?? $caption, $update['message']['caption_entities'] ?? []),
             'videoid' => $videoid
         ));
         update("PaySetting", "ValuePay", $data, "NamePay", "helpcart");
@@ -19850,6 +19985,11 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
         sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
         return;
     }
+    $limitErr = limit_conflict_text(true, $text, pay_value("maxbalancestar", null, ''), 'fa', $textbotlang);
+    if ($limitErr !== null) {
+        sendmessage($from_id, $limitErr, $backadmin, 'HTML');
+        return;
+    }
     sendmessage($from_id, $textbotlang['Admin']['Balance']['minDepositSaved'], $Startelegram, 'HTML');
     step("home", $from_id);
     update("PaySetting", "ValuePay", $text, "NamePay", "minbalancestar");
@@ -19859,6 +19999,11 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
 } elseif ($user['step'] == "maxbalancestar") {
     if (!ctype_digit($text)) {
         sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
+        return;
+    }
+    $limitErr = limit_conflict_text(false, $text, pay_value("minbalancestar", null, ''), 'fa', $textbotlang);
+    if ($limitErr !== null) {
+        sendmessage($from_id, $limitErr, $backadmin, 'HTML');
         return;
     }
     sendmessage($from_id, $textbotlang['Admin']['Balance']['maxDepositSaved'], $Startelegram, 'HTML');
@@ -19872,6 +20017,11 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
         sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
         return;
     }
+    $limitErr = limit_conflict_text(true, $text, pay_value("maxbalancenowpayment", null, ''), 'fa', $textbotlang);
+    if ($limitErr !== null) {
+        sendmessage($from_id, $limitErr, $backadmin, 'HTML');
+        return;
+    }
     sendmessage($from_id, $textbotlang['Admin']['Balance']['minDepositSaved'], $nowpayment_setting_keyboard, 'HTML');
     step("home", $from_id);
     update("PaySetting", "ValuePay", $text, "NamePay", "minbalancenowpayment");
@@ -19881,6 +20031,11 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
 } elseif ($user['step'] == "maxbalancenowpayment") {
     if (!ctype_digit($text)) {
         sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
+        return;
+    }
+    $limitErr = limit_conflict_text(false, $text, pay_value("minbalancenowpayment", null, ''), 'fa', $textbotlang);
+    if ($limitErr !== null) {
+        sendmessage($from_id, $limitErr, $backadmin, 'HTML');
         return;
     }
     sendmessage($from_id, $textbotlang['Admin']['Balance']['maxDepositSaved'], $nowpayment_setting_keyboard, 'HTML');

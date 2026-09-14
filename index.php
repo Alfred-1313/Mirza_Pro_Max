@@ -4680,7 +4680,9 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         sendmessage($from_id, $textbotlang['users']['Major']['disabled'], null, 'HTML');
         return;
     }
-    $PaySetting = select("PaySetting", "*", "NamePay", "minbalancebuybulk", "select")['ValuePay'];
+    // the admin saves this in shopSetting (and table.php seeds it there); it was
+    // read from PaySetting, where no such row exists, so it never applied
+    $PaySetting = select("shopSetting", "value", "Namevalue", "minbalancebuybulk", "select")['value'] ?? 0;
     if ($user['Balance'] < $PaySetting && !$admin_buy_free) {
         sendmessage($from_id, strtr($textbotlang['users']['Major']['minBalance'], ['{PaySetting}' => $PaySetting]), null, 'HTML');
         return;
@@ -5315,12 +5317,13 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     deletemessage($from_id, $user['Processing_value']);
     if (!is_numeric($text))
         return sendmessage($from_id, $textbotlang['users']['Balance']['errorprice'], null, 'HTML');
-    $minbalance = json_decode(select("PaySetting", "*", "NamePay", "minbalance", "select")['ValuePay'], true)[$user['agent']];
-    $maxbalance = json_decode(select("PaySetting", "*", "NamePay", "maxbalance", "select")['ValuePay'], true)[$user['agent']];
+    $minbalance = json_decode(select("PaySetting", "*", "NamePay", "minbalance", "select")['ValuePay'], true)[$user['agent']] ?? null;
+    $maxbalance = json_decode(select("PaySetting", "*", "NamePay", "maxbalance", "select")['ValuePay'], true)[$user['agent']] ?? null;
     $balancelast = $text;
-    if ($text > $maxbalance or $text < $minbalance) {
-        $minbalance = number_format($minbalance);
-        $maxbalance = number_format($maxbalance);
+    // a group with no saved limit is not limited - comparing with null refused every amount
+    if (topup_amount_out_of_range($text, $minbalance, $maxbalance)) {
+        $minbalance = number_format((float) $minbalance);
+        $maxbalance = number_format((float) $maxbalance);
         sendmessage($from_id, sprintf($textbotlang['users']['Balance']['amountRangeError'], $minbalance, $maxbalance), null, 'HTML');
         return;
     }

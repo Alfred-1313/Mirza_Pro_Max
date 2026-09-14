@@ -23,9 +23,8 @@ if (!isset($from_id, $datain)) {
             sendmessage($from_id, $textbotlang['users']['Balance']['zarinpal'], null, 'HTML');
             return;
         }
-        $mainbalance = pay_value("minbalanceaqayepardakht", $user['lang'] ?? null);
-        $maxbalance = pay_value("maxbalanceaqayepardakht", $user['lang'] ?? null);
-        if ($user['Processing_value'] < $mainbalance || $user['Processing_value'] > $maxbalance) {
+        [$mainbalance, $maxbalance] = topup_checkout_limits($user['lang'] ?? 'fa', 'aqayepardakht');
+        if (topup_amount_out_of_range($user['Processing_value'], $mainbalance, $maxbalance)) {
             topup_range_notice($from_id, $user['lang'] ?? 'fa', 'aqayepardakht', $mainbalance, $maxbalance, $textbotlang);
             return;
         }
@@ -71,9 +70,8 @@ if (!isset($from_id, $datain)) {
             sendmessage($from_id, $textbotlang['users']['Balance']['zarinpal'], null, 'HTML');
             return;
         }
-        $mainbalance = pay_value("minbalancezarinpal", $user['lang'] ?? null);
-        $maxbalance = pay_value("maxbalancezarinpal", $user['lang'] ?? null);
-        if ($user['Processing_value'] < $mainbalance || $user['Processing_value'] > $maxbalance) {
+        [$mainbalance, $maxbalance] = topup_checkout_limits($user['lang'] ?? 'fa', 'zarinpal');
+        if (topup_amount_out_of_range($user['Processing_value'], $mainbalance, $maxbalance)) {
             topup_range_notice($from_id, $user['lang'] ?? 'fa', 'zarinpal', $mainbalance, $maxbalance, $textbotlang);
             return;
         }
@@ -117,9 +115,8 @@ if (!isset($from_id, $datain)) {
     } elseif ($datain == "plisio") {
         topup_plisio_invoice_generate($from_id, $user, $message_id, $textbotlang, $setting);
     } elseif ($datain == "nowpayment") {
-        $mainbalance = topup_effective_gateway_min($user['lang'] ?? 'fa', 'nowpayment', pay_value("minbalancenowpayment", $user['lang'] ?? null));
-        $maxbalance = topup_effective_gateway_max($user['lang'] ?? 'fa', 'nowpayment', pay_value("maxbalancenowpayment", $user['lang'] ?? null));
-        if ($user['Processing_value'] < $mainbalance || $user['Processing_value'] > $maxbalance) {
+        [$mainbalance, $maxbalance] = topup_checkout_limits($user['lang'] ?? 'fa', 'nowpayment');
+        if (topup_amount_out_of_range($user['Processing_value'], $mainbalance, $maxbalance)) {
             topup_range_notice($from_id, $user['lang'] ?? 'fa', 'nowpayment', $mainbalance, $maxbalance, $textbotlang);
             return;
         }
@@ -162,9 +159,8 @@ if (!isset($from_id, $datain)) {
         $usd = $rates['USD'];
         $trxprice = round($user['Processing_value'] / $trx, 2);
         $usdprice = $user['Processing_value'] / $usd;
-        $mainbalance = pay_value("minbalanceiranpay1", $user['lang'] ?? null);
-        $maxbalance = pay_value("maxbalanceiranpay1", $user['lang'] ?? null);
-        if ($user['Processing_value'] < $mainbalance || $user['Processing_value'] > $maxbalance) {
+        [$mainbalance, $maxbalance] = topup_checkout_limits($user['lang'] ?? 'fa', 'iranpay1');
+        if (topup_amount_out_of_range($user['Processing_value'], $mainbalance, $maxbalance)) {
             topup_range_notice($from_id, $user['lang'] ?? 'fa', 'iranpay1', $mainbalance, $maxbalance, $textbotlang);
             return;
         }
@@ -220,9 +216,8 @@ if (!isset($from_id, $datain)) {
         $usd = $rates['USD'];
         $trxprice = $user['Processing_value'] / $trx;
         $usdprice = $user['Processing_value'] / $usd;
-        $mainbalance = pay_value("minbalanceiranpay2", $user['lang'] ?? null);
-        $maxbalance = pay_value("maxbalanceiranpay2", $user['lang'] ?? null);
-        if ($user['Processing_value'] < $mainbalance || $user['Processing_value'] > $maxbalance) {
+        [$mainbalance, $maxbalance] = topup_checkout_limits($user['lang'] ?? 'fa', 'iranpay2');
+        if (topup_amount_out_of_range($user['Processing_value'], $mainbalance, $maxbalance)) {
             topup_range_notice($from_id, $user['lang'] ?? 'fa', 'iranpay2', $mainbalance, $maxbalance, $textbotlang);
             return;
         }
@@ -286,9 +281,8 @@ if (!isset($from_id, $datain)) {
         $usd = $rates['USD'];
         $trxprice = $user['Processing_value'] / $trx;
         $usdprice = $user['Processing_value'] / $usd;
-        $mainbalance = pay_value("minbalanceiranpay", $user['lang'] ?? null);
-        $maxbalance = pay_value("maxbalanceiranpay", $user['lang'] ?? null);
-        if ($user['Processing_value'] < $mainbalance || $user['Processing_value'] > $maxbalance) {
+        [$mainbalance, $maxbalance] = topup_checkout_limits($user['lang'] ?? 'fa', 'iranpay3');
+        if (topup_amount_out_of_range($user['Processing_value'], $mainbalance, $maxbalance)) {
             topup_range_notice($from_id, $user['lang'] ?? 'fa', 'iranpay3', $mainbalance, $maxbalance, $textbotlang);
             return;
         }
@@ -350,9 +344,8 @@ if (!isset($from_id, $datain)) {
             sendmessage($from_id, $textbotlang['users']['Balance']['changeto'], null, 'HTML');
             return;
         }
-        $mainbalancedigitaltron = pay_value("minbalancedigitaltron", $user['lang'] ?? null);
-        $maxbalancedigitaltron = pay_value("maxbalancedigitaltron", $user['lang'] ?? null);
-        if ($user['Processing_value'] < $mainbalancedigitaltron || $user['Processing_value'] > $maxbalancedigitaltron) {
+        [$mainbalancedigitaltron, $maxbalancedigitaltron] = topup_checkout_limits($user['lang'] ?? 'fa', 'digitaltron');
+        if (topup_amount_out_of_range($user['Processing_value'], $mainbalancedigitaltron, $maxbalancedigitaltron)) {
             topup_range_notice($from_id, $user['lang'] ?? 'fa', 'digitaltron', $mainbalancedigitaltron, $maxbalancedigitaltron, $textbotlang);
             return;
         }
@@ -378,9 +371,8 @@ if (!isset($from_id, $datain)) {
         topup_linkmsg_help($from_id, 'helpofflinearze');
         topup_track_invoice_message($randomString, topup_linkmsg_finish($from_id, $textnowpayments, $paymentkeyboard));
     } elseif ($datain == "ton") {
-        $mainbalance = topup_effective_gateway_min($user['lang'] ?? 'fa', 'ton', pay_value("minbalanceton", $user['lang'] ?? null));
-        $maxbalance = topup_effective_gateway_max($user['lang'] ?? 'fa', 'ton', pay_value("maxbalanceton", $user['lang'] ?? null));
-        if ($user['Processing_value'] < $mainbalance || $user['Processing_value'] > $maxbalance) {
+        [$mainbalance, $maxbalance] = topup_checkout_limits($user['lang'] ?? 'fa', 'ton');
+        if (topup_amount_out_of_range($user['Processing_value'], $mainbalance, $maxbalance)) {
             topup_range_notice($from_id, $user['lang'] ?? 'fa', 'ton', $mainbalance, $maxbalance, $textbotlang);
             return;
         }
@@ -409,9 +401,8 @@ if (!isset($from_id, $datain)) {
         topup_linkmsg_help($from_id, 'helpton');
         topup_track_invoice_message($built['randomString'], topup_linkmsg_finish($from_id, $built['text'], $built['keyboard']));
     } elseif ($datain == "trx") {
-        $mainbalance = topup_effective_gateway_min($user['lang'] ?? 'fa', 'trx', pay_value("minbalancetrx", $user['lang'] ?? null));
-        $maxbalance = topup_effective_gateway_max($user['lang'] ?? 'fa', 'trx', pay_value("maxbalancetrx", $user['lang'] ?? null));
-        if ($user['Processing_value'] < $mainbalance || $user['Processing_value'] > $maxbalance) {
+        [$mainbalance, $maxbalance] = topup_checkout_limits($user['lang'] ?? 'fa', 'trx');
+        if (topup_amount_out_of_range($user['Processing_value'], $mainbalance, $maxbalance)) {
             topup_range_notice($from_id, $user['lang'] ?? 'fa', 'trx', $mainbalance, $maxbalance, $textbotlang);
             return;
         }
@@ -434,9 +425,8 @@ if (!isset($from_id, $datain)) {
         topup_linkmsg_help($from_id, 'helptrx');
         topup_track_invoice_message($built['randomString'], topup_linkmsg_finish($from_id, $built['text'], $built['keyboard']));
     } elseif ($datain == "usdtbep") {
-        $mainbalance = topup_effective_gateway_min($user['lang'] ?? 'fa', 'usdtbep', pay_value("minbalanceusdtbep", $user['lang'] ?? null));
-        $maxbalance = topup_effective_gateway_max($user['lang'] ?? 'fa', 'usdtbep', pay_value("maxbalanceusdtbep", $user['lang'] ?? null));
-        if ($user['Processing_value'] < $mainbalance || $user['Processing_value'] > $maxbalance) {
+        [$mainbalance, $maxbalance] = topup_checkout_limits($user['lang'] ?? 'fa', 'usdtbep');
+        if (topup_amount_out_of_range($user['Processing_value'], $mainbalance, $maxbalance)) {
             topup_range_notice($from_id, $user['lang'] ?? 'fa', 'usdtbep', $mainbalance, $maxbalance, $textbotlang);
             return;
         }
@@ -466,9 +456,8 @@ if (!isset($from_id, $datain)) {
         }
         topup_track_invoice_message($built['randomString'], topup_linkmsg_finish($from_id, $built['text'], $built['keyboard']));
     } elseif ($datain == "startelegrams") {
-        $mainbalance = topup_effective_gateway_min($user['lang'] ?? 'fa', 'startelegrams', pay_value("minbalancestar", $user['lang'] ?? null));
-        $maxbalance = topup_effective_gateway_max($user['lang'] ?? 'fa', 'startelegrams', pay_value("maxbalancestar", $user['lang'] ?? null));
-        if ($user['Processing_value'] < $mainbalance || $user['Processing_value'] > $maxbalance) {
+        [$mainbalance, $maxbalance] = topup_checkout_limits($user['lang'] ?? 'fa', 'startelegrams');
+        if (topup_amount_out_of_range($user['Processing_value'], $mainbalance, $maxbalance)) {
             topup_range_notice($from_id, $user['lang'] ?? 'fa', 'startelegrams', $mainbalance, $maxbalance, $textbotlang);
             return;
         }

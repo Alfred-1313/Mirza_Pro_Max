@@ -2392,6 +2392,10 @@ function keyboard_list_text($lang, $groupFilter = null)
         if ($sticker !== '' && function_exists('bt_default_sticker') && $sticker === bt_default_sticker($key)) {
             $sticker = '';
         }
+        // nor is one stored on a message that never sends it (bt_nosticker_keys())
+        if ($sticker !== '' && function_exists('bt_nosticker_keys') && in_array($key, bt_nosticker_keys(), true)) {
+            $sticker = '';
+        }
         $react = in_array($key, $bt_can_react_keys, true) ? bt_media_lookup($bt_list_re, $key, $lang) : '';
         $buttons = is_array($bt_list_be) && !empty($bt_list_be[$lang][$key]);
         if (!$buttons && isset($bt_extra_stores[$key])) {

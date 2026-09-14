@@ -3298,9 +3298,8 @@ if (!function_exists('topup_card_invoice_generate')) {
             sendmessage($from_id, $textbotlang['users']['Balance']['pendingPayment'], null, 'HTML');
             return;
         }
-        $mainbalance = pay_value("minbalancecart", $user['lang'] ?? null);
-        $maxbalance = pay_value("maxbalancecart", $user['lang'] ?? null);
-        if ($user['Processing_value'] < $mainbalance || $user['Processing_value'] > $maxbalance) {
+        [$mainbalance, $maxbalance] = topup_checkout_limits($user['lang'] ?? 'fa', 'card');
+        if (topup_amount_out_of_range($user['Processing_value'], $mainbalance, $maxbalance)) {
             topup_range_notice($from_id, $user['lang'] ?? 'fa', 'card', $mainbalance, $maxbalance, $textbotlang);
             return;
         }
@@ -3318,9 +3317,10 @@ if (!function_exists('topup_card_invoice_generate')) {
             if ($data['type'] == "text") {
                 sendmessage($from_id, $data['text'], null, 'HTML');
             } elseif ($data['type'] == "photo") {
-                sendphoto($from_id, $data['photoid'], $data['text']);
+                // HTML like the text variant, so tags and premium emoji render
+                sendphoto($from_id, $data['photoid'], $data['text'], 'HTML');
             } elseif ($data['type'] == "video") {
-                sendvideo($from_id, $data['videoid'], $data['text']);
+                sendvideo($from_id, $data['videoid'], $data['text'], 'HTML');
             }
         }
         $newMessageId = telegram('sendmessage', [
@@ -3341,9 +3341,8 @@ if (!function_exists('topup_plisio_invoice_generate')) {
     function topup_plisio_invoice_generate($from_id, array $user, $message_id, $textbotlang, array $setting)
     {
         global $pdo, $keyboard, $username, $errorreport;
-        $mainbalanceplisio = topup_effective_gateway_min($user['lang'] ?? 'fa', 'plisio', pay_value("minbalanceplisio", $user['lang'] ?? null));
-        $maxbalanceplisio = topup_effective_gateway_max($user['lang'] ?? 'fa', 'plisio', pay_value("maxbalanceplisio", $user['lang'] ?? null));
-        if ($user['Processing_value'] < $mainbalanceplisio || $user['Processing_value'] > $maxbalanceplisio) {
+        [$mainbalanceplisio, $maxbalanceplisio] = topup_checkout_limits($user['lang'] ?? 'fa', 'plisio');
+        if (topup_amount_out_of_range($user['Processing_value'], $mainbalanceplisio, $maxbalanceplisio)) {
             topup_range_notice($from_id, $user['lang'] ?? 'fa', 'plisio', $mainbalanceplisio, $maxbalanceplisio, $textbotlang);
             return;
         }
@@ -3506,23 +3505,55 @@ if (!function_exists('topup_linkmsg_show')) {
         }
     }
 }
+if (!function_exists('premium_emoji_html_from_entities')) {
+    // A premium (custom) emoji does not arrive in the text - only its fallback
+    // character does, with a custom_emoji entity alongside it - so it has to be
+    // folded back in as a <tg-emoji> tag or the saved text silently loses it.
+    // Same algorithm as the 🎨 text editor in admin.php: every entity, UTF-16
+    // offsets, last to first so the earlier offsets stay valid.
+    function premium_emoji_html_from_entities($text, $entities)
+    {
+        $text = (string) $text;
+        $ents = [];
+        foreach ((is_array($entities) ? $entities : []) as $ent) {
+            if (($ent['type'] ?? '') === 'custom_emoji' && !empty($ent['custom_emoji_id']) && isset($ent['offset'], $ent['length'])) {
+                $ents[] = $ent;
+            }
+        }
+        if (empty($ents)) {
+            return trim($text);
+        }
+        usort($ents, function ($a, $b) {
+            return intval($b['offset']) <=> intval($a['offset']);
+        });
+        $utf16 = mb_convert_encoding($text, 'UTF-16LE', 'UTF-8');
+        foreach ($ents as $ent) {
+            $bo = intval($ent['offset']) * 2;
+            $bl = intval($ent['length']) * 2;
+            $char = substr($utf16, $bo, $bl);
+            if ($char === '' || $char === false) {
+                continue;
+            }
+            $tag = '<tg-emoji emoji-id="' . htmlspecialchars((string) $ent['custom_emoji_id'], ENT_QUOTES) . '">' . mb_convert_encoding($char, 'UTF-8', 'UTF-16LE') . '</tg-emoji>';
+            $utf16 = substr($utf16, 0, $bo) . mb_convert_encoding($tag, 'UTF-16LE', 'UTF-8') . substr($utf16, $bo + $bl);
+        }
+        return trim(mb_convert_encoding($utf16, 'UTF-8', 'UTF-16LE'));
+    }
+}
 if (!function_exists('topup_caption_text_from_update')) {
-    // An admin can start a caption with a Telegram premium emoji. It does not
-    // arrive in the text - it comes as a custom_emoji entity alongside it - so
-    // it has to be folded back in as a <tg-emoji> tag or the caption silently
-    // loses it. One entity, at offset 0 only; anywhere else it is left alone.
+    // The text an admin just sent to a caption/message prompt, with every premium
+    // emoji kept wherever it sits (it used to keep only one at offset 0). Entity
+    // offsets refer to the raw message, so that is what gets converted.
     function topup_caption_text_from_update($text, $update)
     {
-        $text = trim((string) $text);
-        $ents = $update['message']['entities'] ?? [];
-        if (empty($ents[0]) || ($ents[0]['type'] ?? '') !== 'custom_emoji'
-            || ($ents[0]['offset'] ?? -1) !== 0 || empty($ents[0]['custom_emoji_id'])) {
-            return $text;
+        $msg = $update['message'] ?? [];
+        if (!empty($msg['entities'])) {
+            return premium_emoji_html_from_entities($msg['text'] ?? $text, $msg['entities']);
         }
-        preg_match('/^\\X/u', $text, $lead);
-        $leadChar = $lead[0] ?? '';
-        $rest = mb_substr($text, mb_strlen($leadChar, 'UTF-8'), null, 'UTF-8');
-        return '<tg-emoji emoji-id="' . htmlspecialchars((string) $ents[0]['custom_emoji_id'], ENT_QUOTES) . '">' . $leadChar . '</tg-emoji>' . $rest;
+        if (!empty($msg['caption_entities'])) {
+            return premium_emoji_html_from_entities($msg['caption'] ?? $text, $msg['caption_entities']);
+        }
+        return trim((string) $text);
     }
 }
 if (!function_exists('topup_range_caption_map')) {
@@ -4669,6 +4700,28 @@ if (!function_exists('topup_usd_rate')) {
         topup_amount_notice($chat_id, topup_notnumber_caption_for($lang, $key, $textbotlang['users']['Balance']['errorprice']), $textbotlang, $typedMessageId);
     }
 }
+if (!function_exists('topup_checkout_limits')) {
+    // The range a gateway's checkout holds an amount to. An amount typed on the
+    // custom-amount step was already checked against that step's own range
+    // (topup_effective_limits, which prefers «حداقل و حداکثر مبلغ دلخواه»), so it
+    // is held to the very same numbers here - checkouts used to re-check it
+    // against the raw 💎 مالی value instead, refusing it a second time with other
+    // figures, and refusing everything when that value was empty. Package
+    // buttons and the method list keep the gateway's own range, with the same
+    // defaults and dollar floor the amount screen quotes.
+    function topup_checkout_limits($lang, $key)
+    {
+        if (strpos((string) ($GLOBALS['topup_amount_origin_step'] ?? ''), 'topup_custom:') === 0) {
+            return topup_effective_limits($lang, $key);
+        }
+        return [topup_gateway_min($lang, $key), topup_gateway_max($lang, $key)];
+    }
+    // a null bound is no bound; compared as numbers, never as strings
+    function topup_amount_out_of_range($amount, $min, $max)
+    {
+        return ($min !== null && (float) $amount < (float) $min) || ($max !== null && (float) $amount > (float) $max);
+    }
+}
 if (!function_exists('topup_minusd_caption_for')) {
     // the $1 floor message and the alert an already-paid invoice answers
     // with - per gateway, same contract as every other caption here
@@ -4687,7 +4740,8 @@ if (!function_exists('topup_minusd_caption_for')) {
     }
     function topup_paid_alert_for($lang, $key, $default)
     {
-        $v = trim((string) (topup_gwstore_map('topup_paid_alerts')[$lang][$key] ?? ''));
+        // a popup is plain text: a <tg-emoji> saved here before showed up as code
+        $v = trim(strip_tags((string) (topup_gwstore_map('topup_paid_alerts')[$lang][$key] ?? '')));
         return $v !== '' ? $v : $default;
     }
     function topup_paid_alert_has_override($lang, $key)
@@ -4737,7 +4791,8 @@ if (!function_exists('topup_notseen_caption_for')) {
     // no wallet behind it. Same contract as every other per-gateway text.
     function topup_notseen_caption_for($lang, $key, $default)
     {
-        $v = trim((string) (topup_gwstore_map('topup_notseen_captions')[$lang][$key] ?? ''));
+        // shown as a popup (plain text) - see topup_paid_alert_for()
+        $v = trim(strip_tags((string) (topup_gwstore_map('topup_notseen_captions')[$lang][$key] ?? '')));
         return $v !== '' ? $v : $default;
     }
     function topup_notseen_caption_has_override($lang, $key)
@@ -10922,6 +10977,11 @@ if (!function_exists('topup_disc_prompt_payload')) {
         $defs = genbtn_defs('td', $textbotlang);
         $ov = genbtn_override($lang, 'users.Balance.topupDiscPrompt', 1);
         $kb = !empty($ov['hidden']) ? null : json_encode(['inline_keyboard' => [[genbtn_render($defs[1], $ov, 'topup_disc_cancel')]]]);
+        if ($error !== null && function_exists('bottext_extras_key_hint')) {
+            // the text starts with the filled-in reason, so it cannot be
+            // recognised by its wording - name the key for its sticker
+            bottext_extras_key_hint('users.Balance.topupDiscInvalid');
+        }
         return [$caption, $kb];
     }
 }
@@ -13793,6 +13853,39 @@ if (!function_exists('help_layout_chunk_rows')) {
     }
 }
 
+if (!function_exists('bt_nosticker_keys')) {
+    // Messages whose 🖼 استیکر can never do anything useful - hidden on their
+    // editing screen and skipped when stickers are sent. A sticker stored on
+    // one earlier is left where it is, just never used.
+    function bt_nosticker_keys()
+    {
+        return [
+            // blocks pasted into the referral screen, never a message of their own
+            'users.affiliates.membershipGiftInfo',
+            'users.affiliates.purchaseCommissionInfo',
+            // temporary text replaced within seconds - its sticker stayed behind
+            'users.sell.creating',
+            // temporary too, and reworded per gateway so it rarely even matched
+            'users.Balance.linkpayments',
+        ];
+    }
+}
+if (!function_exists('bottext_extras_key_hint')) {
+    // For a text that starts with a filled-in value and has no wording of its
+    // own to be recognised by: the caller names the key, and the next sticker
+    // lookup uses it once. Called with no argument it reads and clears it.
+    function bottext_extras_key_hint($key = null)
+    {
+        static $pending = null;
+        if ($key !== null) {
+            $pending = (string) $key;
+            return null;
+        }
+        $k = $pending;
+        $pending = null;
+        return $k;
+    }
+}
 if (!function_exists('bt_default_stickers')) {
     // Stickers a message ships WITH, as opposed to one an admin attached. Kept
     // out of setting.keyboardmain's text_stickers on purpose: everything in that
