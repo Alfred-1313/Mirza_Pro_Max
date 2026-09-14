@@ -9214,6 +9214,8 @@ if (!function_exists('genbtn_alias_map')) {
             // own-key trick again - the one 📚 button under the post-purchase
             // message (afterPay and its manual/WGDashboard/ibsng variants)
             'ab' => 'textbot.afterPay',
+            // and its twin under the test-account message
+            'ut' => 'textbot.afterText',
         ];
     }
 }
@@ -9239,7 +9241,7 @@ if (!function_exists('genbtn_alias_to_key')) {
         if ($key !== null && function_exists('bt_btnitem_keys') && in_array($key, bt_btnitem_keys(), true)) {
             return true;
         }
-        $extras = ['ab' => [0], 'bc' => [0], 'ns' => [0], 'te' => [0], 'sc' => [0], 'hb' => [0], 'hv' => [0], 'td' => [0, 1], 'su' => [1]];
+        $extras = ['ab' => [0], 'ut' => [0], 'bc' => [0], 'ns' => [0], 'te' => [0], 'sc' => [0], 'hb' => [0], 'hv' => [0], 'td' => [0, 1], 'su' => [1]];
         return in_array((int) $idx, $extras[$alias] ?? [], true);
     }
 }
@@ -9343,11 +9345,12 @@ if (!function_exists('genbtn_defs')) {
         if ($alias === 'hv') {
             return [0 => ['name' => '🔙 دکمه بازگشت (زیر محتوای آموزش)', 'text' => $textbotlang['users']['help']['backToCategoryListBtn'], 'style' => 'danger', 'callback_data' => 'helpbtns']];
         }
-        if ($alias === 'ab') {
+        if ($alias === 'ab' || $alias === 'ut') {
             // no default style: the button has always gone out unstyled.
             // trim(): the lang string ends in a space, and split_leading_emoji()
-            // counts that space as emoji length ("📚 م مشاهده...")
-            return [0 => ['name' => '📚 دکمه مشاهده آموزش', 'text' => trim($textbotlang['users']['help']['btninlinebuy']), 'style' => '', 'callback_data' => 'helpbtn']];
+            // counts that space as emoji length ("📚 م مشاهده...").
+            // 'hidden' => true: ships switched off, shown from its own screen
+            return [0 => ['name' => '📚 دکمه مشاهده آموزش', 'text' => trim($textbotlang['users']['help']['btninlinebuy']), 'style' => '', 'callback_data' => 'helpbtn', 'hidden' => true]];
         }
         return [];
     }
@@ -9410,7 +9413,10 @@ if (!function_exists('genbtn_set_style')) {
             $be[$lang][$key][$idx]['simple'] = (bool) $simple;
         }
         if ($hidden !== null) {
-            if ($hidden) {
+            if ($hidden === 'shown') {
+                // for a button that ships hidden: "no flag" would mean hidden
+                $be[$lang][$key][$idx]['hidden'] = false;
+            } elseif ($hidden) {
                 $be[$lang][$key][$idx]['hidden'] = true;
             } else {
                 unset($be[$lang][$key][$idx]['hidden']);
@@ -9462,6 +9468,14 @@ if (!function_exists('genbtn_current')) {
         return [$text, $style];
     }
 }
+if (!function_exists('genbtn_is_hidden')) {
+    // an explicit override wins either way; with none, a def may ship hidden
+    // ('ab'/'ut') - which is why "shown" is stored as hidden => false there
+    function genbtn_is_hidden(array $def, array $ov)
+    {
+        return array_key_exists('hidden', $ov) ? !empty($ov['hidden']) : !empty($def['hidden']);
+    }
+}
 if (!function_exists('genbtn_render')) {
     // the button as it is actually sent to a real user - same emoji-baking
     // algorithm as volumepct_tier_kb(), generalized to any def/override pair
@@ -9507,7 +9521,19 @@ if (!function_exists('afterpay_help_kb')) {
     {
         $defs = genbtn_defs('ab', $textbotlang);
         $ov = genbtn_override($lang, 'textbot.afterPay', 0);
-        if (!empty($ov['hidden'])) {
+        if (genbtn_is_hidden($defs[0], $ov)) {
+            return null;
+        }
+        return json_encode(['inline_keyboard' => [[genbtn_render($defs[0], $ov, $defs[0]['callback_data'])]]]);
+    }
+}
+if (!function_exists('usertest_help_kb')) {
+    // the same 📚 button under the test-account message - genbtn alias 'ut'
+    function usertest_help_kb($lang, $textbotlang)
+    {
+        $defs = genbtn_defs('ut', $textbotlang);
+        $ov = genbtn_override($lang, 'textbot.afterText', 0);
+        if (genbtn_is_hidden($defs[0], $ov)) {
             return null;
         }
         return json_encode(['inline_keyboard' => [[genbtn_render($defs[0], $ov, $defs[0]['callback_data'])]]]);
@@ -9643,7 +9669,7 @@ if (!function_exists('genbtn_list_payload')) {
         $key = genbtn_alias_to_key($alias);
         $gb_sfx = ($origin === 'u') ? '|u' : '';
         $defs = genbtn_defs($alias, $textbotlang);
-        $titles = ['su' => '🔘 دکمه‌های نام‌گذاری سرویس', 'cf' => '🔘 دکمه‌های تأیید خرید', 'ns' => '🔘 دکمه‌ی نداشتن سرویس فعال', 'te' => '🔘 دکمه‌ی پیام اتمام اکانت تست', 'sc' => '🔘 دکمه‌ی بستن (سرویس‌های من)', 'bc' => '🔘 دکمه‌ی تهیه اشتراک (شارژ کیف پول)', 'rn' => '🔘 دکمه‌های فاکتور تمدید سرویس', 'cl' => '🔘 دکمه‌های تغییر لینک اتصال', 'td' => '🔘 دکمه‌های کد تخفیف شارژ', 'ab' => '📚 دکمه‌ی مشاهده آموزش (پیام بعد از خرید)'];
+        $titles = ['su' => '🔘 دکمه‌های نام‌گذاری سرویس', 'cf' => '🔘 دکمه‌های تأیید خرید', 'ns' => '🔘 دکمه‌ی نداشتن سرویس فعال', 'te' => '🔘 دکمه‌ی پیام اتمام اکانت تست', 'sc' => '🔘 دکمه‌ی بستن (سرویس‌های من)', 'bc' => '🔘 دکمه‌ی تهیه اشتراک (شارژ کیف پول)', 'rn' => '🔘 دکمه‌های فاکتور تمدید سرویس', 'cl' => '🔘 دکمه‌های تغییر لینک اتصال', 'td' => '🔘 دکمه‌های کد تخفیف شارژ', 'ab' => '📚 دکمه‌ی مشاهده آموزش (پیام بعد از خرید)', 'ut' => '📚 دکمه‌ی مشاهده آموزش (اکانت تست)'];
         $notes = [
             'su' => 'این ۲ دکمه، زیر پیام انتخاب نام سرویس (مرحله‌ی خرید) به کاربر نشون داده می‌شن.',
             'cf' => 'این ۲ دکمه، زیر صفحه‌ی تأیید نهایی خرید نشون داده می‌شن - هر سه حالت (عادی/تخفیف‌دار/حجم دلخواه) از این یکی استفاده می‌کنن، پس ویرایششون روی هر سه اثر می‌ذاره.',
@@ -9654,7 +9680,8 @@ if (!function_exists('genbtn_list_payload')) {
             'rn' => 'دکمه‌ی ۱ و ۲ زیر فاکتور تمدید سرویس نشون داده می‌شن (دکمه‌ی «افزایش موجودی» بینشون از تنظیمات مشترک همون دکمه میاد، جدا نیست). دکمه‌ی ۳ وقتی کاربر روی «افزایش موجودی» بزنه، زیر لیست روش‌های پرداخت میاد و با تپ روش، برمی‌گردونه به همون فاکتور تمدید.',
             'cl' => 'این ۲ دکمه، زیر پیام هشدار «تغییر لینک اتصال» (قبل از تایید نهایی) نشون داده می‌شن.',
             'td' => 'دکمه‌ی ۱ («کد تخفیف دارم») زیر لیست روش‌های پرداختِ 💰 افزایش موجودی میاد - ولی فقط وقتی که برای این زبان حداقل یک کد تخفیف شارژ ساخته باشی، وگرنه اصلاً نشون داده نمی‌شه. دکمه‌ی ۲ زیر همون صفحه‌ی وارد کردن کد میاد. اگر کاربر یه کد رو فعال کرده باشه، دکمه‌ی ۱ دیگه بهش نشون داده نمی‌شه (چون خود کپشن تخفیف فعال رو نوشته).',
-            'ab' => 'این ۱ دکمه، زیر پیام «✅ سرویس با موفقیت ایجاد شد» (بعد از خرید) نشون داده می‌شه - برای همه‌ی نوع پنل‌ها، خرید چندتایی، پرداخت آنلاین و سفارشی که ادمین برای کاربر ثبت می‌کنه.',
+            'ab' => 'این ۱ دکمه، زیر پیام «✅ سرویس با موفقیت ایجاد شد» (بعد از خرید) نشون داده می‌شه - برای همه‌ی نوع پنل‌ها، خرید چندتایی، پرداخت آنلاین و سفارشی که ادمین برای کاربر ثبت می‌کنه. پیش‌فرض مخفیه؛ برای نمایش، روی دکمه بزن و «👁 نمایش دادن» رو انتخاب کن.',
+            'ut' => 'این ۱ دکمه، زیر پیام «✅ سرویس با موفقیت ایجاد شد» بعد از گرفتن اکانت تست نشون داده می‌شه. پیش‌فرض مخفیه؛ برای نمایش، روی دکمه بزن و «👁 نمایش دادن» رو انتخاب کن.',
         ];
         $info = ($titles[$alias] ?? '🔘 دکمه‌ها') . "\n➖➖➖➖➖➖➖➖➖➖\n" . ($notes[$alias] ?? '') . "\n";
         $info .= "➖➖➖➖➖➖➖➖➖➖\n👁 پیش‌نمایش زنده - روی هرکدوم بزن تا ویرایشش کنی 👇";
@@ -9662,7 +9689,7 @@ if (!function_exists('genbtn_list_payload')) {
         foreach ($defs as $idx => $d) {
             $ov = genbtn_override($lang, $key, $idx);
             list($curText, $curStyle) = genbtn_current($d, $ov);
-            $gb_row = ['text' => (!empty($ov['hidden']) ? '🚫 ' : '') . $curText, 'callback_data' => "gbtn|open|{$lang}|{$alias}|{$idx}{$gb_sfx}"];
+            $gb_row = ['text' => (genbtn_is_hidden($d, $ov) ? '🚫 ' : '') . $curText, 'callback_data' => "gbtn|open|{$lang}|{$alias}|{$idx}{$gb_sfx}"];
             // 'ab' ships unstyled - an empty style key is left out, like genbtn_render() does
             if ($curStyle !== '') {
                 $gb_row['style'] = $curStyle;
@@ -9678,7 +9705,7 @@ if (!function_exists('genbtn_list_payload')) {
         // 'cf' points at textbot.preInvoice (the normal-purchase تأیید خرید) -
         // it used to point at users.sell.preInvoice, the discount-code variant,
         // which was removed along with that whole dead feature
-        $backKeyMap = ['su' => 'users.sell.selectUsernamePrompt', 'cf' => 'textbot.preInvoice', 'ns' => 'users.sell.service_not_available', 'te' => 'textbot.testExpired', 'sc' => 'users.sell.service_sell', 'bc' => 'users.Balance.chargeSuccess', 'rn' => 'users.extend.invoiceCreated', 'cl' => 'users.changeLink.warnchange', 'td' => 'users.Balance.topupDiscPrompt', 'hb' => 'users.help.listCaption', 'hv' => 'users.help.categoryCaption', 'ab' => 'textbot.afterPay'];
+        $backKeyMap = ['su' => 'users.sell.selectUsernamePrompt', 'cf' => 'textbot.preInvoice', 'ns' => 'users.sell.service_not_available', 'te' => 'textbot.testExpired', 'sc' => 'users.sell.service_sell', 'bc' => 'users.Balance.chargeSuccess', 'rn' => 'users.extend.invoiceCreated', 'cl' => 'users.changeLink.warnchange', 'td' => 'users.Balance.topupDiscPrompt', 'hb' => 'users.help.listCaption', 'hv' => 'users.help.categoryCaption', 'ab' => 'textbot.afterPay', 'ut' => 'textbot.afterText'];
         $backKey = ($origin === 'u') ? 'users.usertest.selectUsernamePrompt' : ($backKeyMap[$alias] ?? 'users.sell.selectUsernamePrompt');
         $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "bt_edit|{$lang}|{$backKey}", 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
@@ -9718,7 +9745,7 @@ if (!function_exists('genbtn_detail_payload')) {
         // hidden is only offered where genbtn_hideable() allows it (see the
         // toggle row below) - marking the preview keeps the state visible
         // without having to scroll to that row
-        $gb_hidden = !empty($ov['hidden']);
+        $gb_hidden = genbtn_is_hidden($d, $ov);
         if ($gb_hidden) {
             $previewBtn['text'] = '🚫 ' . $previewBtn['text'];
         }

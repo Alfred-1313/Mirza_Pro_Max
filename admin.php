@@ -598,7 +598,7 @@ if (!function_exists('bottext_item_menu_payload')) {
         // separate configDisplayBuy/configColOrderBuy pair, so it gets its own
         // forward link straight from the myservices list (keyboard.php) instead
         // of the generic $bt_btn_label/$bt_btn_custom status line below.
-        $bt_has_buttons = in_array($bt_key, ['users.usertest.selectUsernamePrompt', 'users.Balance.insufficientBalanceSimple', 'users.sell.selectUsernamePrompt', 'users.sell.preInvoice', 'users.sell.preInvoice2', 'textbot.preInvoice', 'users.sell.service_not_available', 'textbot.testExpired', 'users.sell.service_sell', 'users.status.infoFull', 'users.Balance.chargeSuccess', 'textbot.channel', 'users.extend.invoiceCreated', 'users.changeLink.warnchange', 'textbot.afterPay'], true);
+        $bt_has_buttons = in_array($bt_key, ['users.usertest.selectUsernamePrompt', 'users.Balance.insufficientBalanceSimple', 'users.sell.selectUsernamePrompt', 'users.sell.preInvoice', 'users.sell.preInvoice2', 'textbot.preInvoice', 'users.sell.service_not_available', 'textbot.testExpired', 'users.sell.service_sell', 'users.status.infoFull', 'users.Balance.chargeSuccess', 'textbot.channel', 'users.extend.invoiceCreated', 'users.changeLink.warnchange', 'textbot.afterPay', 'textbot.afterText'], true);
         $info = "📝 <b>{$bt_label}</b>\n➖➖➖➖➖➖➖➖➖➖\n{$bt_extra_note}";
         $info .= "✏️ متن: " . ($bt_custom ? "سفارشی ✅" : "پیش‌فرض") . "\n";
         if (!$bt_nosticker) {
@@ -630,7 +630,7 @@ if (!function_exists('bottext_item_menu_payload')) {
                 $bt_btn_label = '🔘 دکمه‌های تأیید تمدید/بازگشت';
             } elseif ($bt_key === 'users.changeLink.warnchange') {
                 $bt_btn_label = '🔘 دکمه‌های تایید/بازگشت';
-            } elseif ($bt_key === 'textbot.afterPay') {
+            } elseif (in_array($bt_key, ['textbot.afterPay', 'textbot.afterText'], true)) {
                 $bt_btn_label = '📚 دکمه مشاهده آموزش';
             }
             // 'cf' is shared across three caption screens - checked here so its
@@ -723,6 +723,8 @@ if (!function_exists('bottext_item_menu_payload')) {
             $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های تغییر لینک', 'callback_data' => "gbtn|list|{$bt_lang}|cl", 'style' => 'primary']];
         } elseif ($bt_key === 'textbot.afterPay') {
             $kb['inline_keyboard'][] = [['text' => '📚 ویرایش دکمه مشاهده آموزش', 'callback_data' => "gbtn|list|{$bt_lang}|ab", 'style' => 'primary']];
+        } elseif ($bt_key === 'textbot.afterText') {
+            $kb['inline_keyboard'][] = [['text' => '📚 ویرایش دکمه مشاهده آموزش', 'callback_data' => "gbtn|list|{$bt_lang}|ut", 'style' => 'primary']];
         } elseif ($bt_key === 'users.help.listCaption') {
             // the one button under the tutorial list ('hb' alias, own-key trick)
             $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه بازگشت به دسته‌بندی', 'callback_data' => "gbtn|list|{$bt_lang}|hb", 'style' => 'primary']];
@@ -7073,17 +7075,17 @@ if (preg_match('/^btact\|bbtnpos\|([a-z]{2})\|(left|right)$/', $datain, $btm) &&
     Editmessagetext($from_id, $message_id, $bb_text, $bb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|list\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|td|hb|hv|ab)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|list\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|td|hb|hv|ab|ut)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     list($gb_text, $gb_kb) = genbtn_list_payload($gb_m[2], $gb_m[1], $textbotlang, $gb_m[3] ?? '');
     Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|open\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv|ab)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|open\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv|ab|ut)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], (int) $gb_m[3], $textbotlang, $gb_m[4] ?? '');
     Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|text\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv|ab)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|text\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv|ab|ut)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     savedata("clear", "bt_msgid", $message_id);
     $gb_o = $gb_m[4] ?? '';
     $gb_sfx = ($gb_o !== '') ? "|{$gb_o}" : '';
@@ -7094,14 +7096,14 @@ if (preg_match('/^gbtn\|text\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|a
     Editmessagetext($from_id, $message_id, "✏️ متن جدید دکمه رو بفرست ✍️", $gb_cancel_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|style\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv|ab)\|([01])\|(primary|success|danger)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|style\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv|ab|ut)\|([01])\|(primary|success|danger)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     genbtn_set_style($gb_m[1], $gb_key, (int) $gb_m[3], $gb_m[4]);
     list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], (int) $gb_m[3], $textbotlang, $gb_m[5] ?? '');
     Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|emoji\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv|ab)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|emoji\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv|ab|ut)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     $gb_o = $gb_m[4] ?? '';
     $gb_sfx = ($gb_o !== '') ? "|{$gb_o}" : '';
     step("gbtnemo-{$gb_m[1]}-{$gb_m[2]}-{$gb_m[3]}" . (($gb_o !== '') ? "-{$gb_o}" : ''), $from_id);
@@ -7114,7 +7116,7 @@ if (preg_match('/^gbtn\|emoji\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|
     Editmessagetext($from_id, $message_id, $gb_prompt, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|simple\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv|ab)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|simple\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv|ab|ut)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     $gb_ov = genbtn_override($gb_m[1], $gb_key, (int) $gb_m[3]);
     genbtn_set_style($gb_m[1], $gb_key, (int) $gb_m[3], null, null, null, null, empty($gb_ov['simple']));
@@ -7122,7 +7124,7 @@ if (preg_match('/^gbtn\|simple\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp
     Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|pos\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv|ab)\|([01])\|(left|right)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|pos\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv|ab|ut)\|([01])\|(left|right)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     genbtn_set_style($gb_m[1], $gb_key, (int) $gb_m[3], null, null, null, $gb_m[4], null);
     list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], (int) $gb_m[3], $textbotlang, $gb_m[5] ?? '');
@@ -7133,14 +7135,16 @@ if (preg_match('/^gbtn\|pos\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac
 // buttons and optional extras only (genbtn_hideable()). Confirm/pay/cancel
 // buttons have no alternative path around them, so hiding one would strand
 // the customer - this pattern is what stops that from being reachable at all.
-if (preg_match('/^gbtn\|hide\|([a-z]{2})\|(rc|rp|bu|tp|ac|ts|he|hb|hv|ab|bc|ns|te|sc|td|su)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|hide\|([a-z]{2})\|(rc|rp|bu|tp|ac|ts|he|hb|hv|ab|ut|bc|ns|te|sc|td|su)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     if ($gb_key === null || !genbtn_hideable($gb_m[2], (int) $gb_m[3])) {
         return;
     }
     $gb_ov = genbtn_override($gb_m[1], $gb_key, (int) $gb_m[3]);
-    $gb_nowHidden = empty($gb_ov['hidden']);
-    genbtn_set_style($gb_m[1], $gb_key, (int) $gb_m[3], null, null, null, null, null, $gb_nowHidden);
+    $gb_def = genbtn_defs($gb_m[2], $textbotlang)[(int) $gb_m[3]] ?? [];
+    $gb_nowHidden = !genbtn_is_hidden($gb_def, $gb_ov);
+    // a button that ships hidden needs an explicit "shown", not just no flag
+    genbtn_set_style($gb_m[1], $gb_key, (int) $gb_m[3], null, null, null, null, null, $gb_nowHidden ? true : (!empty($gb_def['hidden']) ? 'shown' : false));
     if ($gb_nowHidden) {
         // hiding a close/back button takes away the only way OFF that screen -
         // say so once, on the tap that does it, rather than leaving the shop to
@@ -7156,7 +7160,7 @@ if (preg_match('/^gbtn\|hide\|([a-z]{2})\|(rc|rp|bu|tp|ac|ts|he|hb|hv|ab|bc|ns|t
     Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|rst\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv|ab)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|rst\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv|ab|ut)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     genbtn_reset($gb_m[1], $gb_key, (int) $gb_m[3]);
     // 🖼 استیکر دکمه بستن sits on this same screen now, so "ریست این دکمه" has to
@@ -7169,14 +7173,14 @@ if (preg_match('/^gbtn\|rst\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac
     Editmessagetext($from_id, $message_id, "🔁 این دکمه به پیش‌فرض برگشت.\n\n" . $gb_text, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtn\|rstall\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|td|hb|hv|ab)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtn\|rstall\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|td|hb|hv|ab|ut)(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     genbtn_reset_all($gb_m[1], $gb_key);
     list($gb_text, $gb_kb) = genbtn_list_payload($gb_m[2], $gb_m[1], $textbotlang, $gb_m[3] ?? '');
     Editmessagetext($from_id, $message_id, "🔁 همه دکمه‌ها به پیش‌فرض برگشتن.\n\n" . $gb_text, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtntxt-([a-z]{2})-(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv|ab)-([01])(?:-(u))?$/', (string) $user['step'], $gb_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtntxt-([a-z]{2})-(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv|ab|ut)-([01])(?:-(u))?$/', (string) $user['step'], $gb_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     $gb_newtext = trim((string) $text);
     if ($gb_newtext === '' || mb_strlen($gb_newtext) > 64) {
@@ -7196,7 +7200,7 @@ if (preg_match('/^gbtntxt-([a-z]{2})-(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|
     }
     return;
 }
-if (preg_match('/^gbtnemo-([a-z]{2})-(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv|ab)-([01])(?:-(u))?$/', (string) $user['step'], $gb_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtnemo-([a-z]{2})-(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv|ab|ut)-([01])(?:-(u))?$/', (string) $user['step'], $gb_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     $gb_idx = (int) $gb_m[3];
     $gb_icon_id = '';
