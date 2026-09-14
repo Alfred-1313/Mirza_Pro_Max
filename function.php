@@ -9285,6 +9285,13 @@ if (!function_exists('genbtn_alias_map')) {
             'ab' => 'textbot.afterPay',
             // and its twin under the test-account message
             'ut' => 'textbot.afterText',
+            // the other four bt_btnitem_keys() buttons - listed there all along
+            // but never here, so their style screen opened empty and its 🔙
+            // fell through to an unrelated screen
+            'sp' => 'keyboard.sendPhoneNumber',
+            'ar' => 'keyboard.acceptRules',
+            'mg' => 'keyboard.receiveMembershipGift',
+            'sl' => 'keyboard.shareLink',
         ];
     }
 }
@@ -9306,12 +9313,26 @@ if (!function_exists('genbtn_alias_to_key')) {
     // (cf, rn, cl and su's cancel) stay out - hiding one strands the customer.
     function genbtn_hideable($alias, $idx)
     {
+        // their render sites (keyboard.php) never read 'hidden', and hiding
+        // «پذیرش قوانین» would strand a customer on the rules screen
+        if ($alias === 'sp' || $alias === 'ar') {
+            return false;
+        }
         $key = genbtn_alias_to_key($alias);
         if ($key !== null && function_exists('bt_btnitem_keys') && in_array($key, bt_btnitem_keys(), true)) {
             return true;
         }
         $extras = ['ab' => [0], 'ut' => [0], 'bc' => [0], 'ns' => [0], 'te' => [0], 'sc' => [0], 'hb' => [0], 'hv' => [0], 'td' => [0, 1], 'su' => [1]];
         return in_array((int) $idx, $extras[$alias] ?? [], true);
+    }
+}
+if (!function_exists('genbtn_text_only')) {
+    // buttons that can show nothing but their label: a reply-keyboard
+    // request_contact button and a URL button - colour, emoji, simple mode and
+    // position are not offered for them (they would silently do nothing)
+    function genbtn_text_only($alias)
+    {
+        return $alias === 'sp' || $alias === 'sl';
     }
 }
 if (!function_exists('genbtn_defs')) {
@@ -9420,6 +9441,21 @@ if (!function_exists('genbtn_defs')) {
             // counts that space as emoji length ("📚 م مشاهده...").
             // 'hidden' => true: ships switched off, shown from its own screen
             return [0 => ['name' => '📚 دکمه مشاهده آموزش', 'text' => trim($textbotlang['users']['help']['btninlinebuy']), 'style' => '', 'callback_data' => 'helpbtn', 'hidden' => true]];
+        }
+        // defaults are exactly what keyboard.php / index.php render today; the
+        // real callback (or request_contact / url) is supplied at each call site.
+        // 'note' is shown on the style screen when a button cannot show every tool
+        if ($alias === 'sp') {
+            return [0 => ['name' => '📞 دکمه ارسال شماره تماس', 'text' => $textbotlang['keyboard']['sendPhoneNumber'], 'style' => '', 'callback_data' => 'none', 'note' => 'این دکمه روی کیبورد پایین صفحه میاد و تلگرام اونجا رنگ و ایموجی نمی‌پذیره - فقط متنش قابل تغییره.']];
+        }
+        if ($alias === 'ar') {
+            return [0 => ['name' => '🟢 دکمه پذیرش قوانین', 'text' => $textbotlang['keyboard']['acceptRules'], 'style' => 'success', 'callback_data' => 'none', 'note' => 'رنگ و ایموجی فقط وقتی دیده می‌شن که دکمه‌های شیشه‌ای روشن باشه؛ با کیبورد پایین صفحه فقط متن نشون داده می‌شه.']];
+        }
+        if ($alias === 'mg') {
+            return [0 => ['name' => '🟢 دکمه دریافت هدیه عضویت', 'text' => $textbotlang['keyboard']['receiveMembershipGift'], 'style' => 'success', 'callback_data' => 'none']];
+        }
+        if ($alias === 'sl') {
+            return [0 => ['name' => '🔗 دکمه اشتراک‌گذاری لینک', 'text' => $textbotlang['keyboard']['shareLink'], 'style' => '', 'callback_data' => 'none', 'note' => 'این دکمه لینکه و تلگرام برای دکمه‌ی لینک رنگ و ایموجی نمی‌پذیره - فقط متنش قابل تغییره.']];
         }
         return [];
     }
@@ -9820,6 +9856,9 @@ if (!function_exists('genbtn_detail_payload')) {
         }
         $csKey = genbtn_close_sticker_key($alias, $key, $idx);
         $info = "🔘 <b>ویرایش {$d['name']}</b>\n➖➖➖➖➖➖➖➖➖➖\n";
+        if (!empty($d['note'])) {
+            $info .= "ℹ️ {$d['note']}\n➖➖➖➖➖➖➖➖➖➖\n";
+        }
         if ($csKey !== '') {
             $info .= close_sticker_caption_block($csKey, $csNote);
         }
@@ -9829,17 +9868,19 @@ if (!function_exists('genbtn_detail_payload')) {
         $kb = ['inline_keyboard' => []];
         $kb['inline_keyboard'][] = [$previewBtn];
         $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش متن', 'callback_data' => "gbtn|text|{$lang}|{$alias}|{$idx}{$gb_sfx}", 'style' => 'primary']];
-        $kb['inline_keyboard'][] = [
-            ['text' => ($curStyle === 'primary' ? '✅ ' : '') . '🔵 آبی', 'callback_data' => "gbtn|style|{$lang}|{$alias}|{$idx}|primary{$gb_sfx}", 'style' => 'primary'],
-            ['text' => ($curStyle === 'success' ? '✅ ' : '') . '🟢 سبز', 'callback_data' => "gbtn|style|{$lang}|{$alias}|{$idx}|success{$gb_sfx}", 'style' => 'success'],
-            ['text' => ($curStyle === 'danger' ? '✅ ' : '') . '🔴 قرمز', 'callback_data' => "gbtn|style|{$lang}|{$alias}|{$idx}|danger{$gb_sfx}", 'style' => 'danger'],
-        ];
-        $kb['inline_keyboard'][] = [['text' => ($hasEmoji ? '✅ ' : '') . '💎 ایموجی دکمه', 'callback_data' => "gbtn|emoji|{$lang}|{$alias}|{$idx}{$gb_sfx}", 'style' => 'primary']];
-        $kb['inline_keyboard'][] = [['text' => ($curSimple ? '✅ ' : '') . '🎭 حالت ساده (بدون ایموجی)', 'callback_data' => "gbtn|simple|{$lang}|{$alias}|{$idx}{$gb_sfx}", 'style' => 'primary']];
-        $kb['inline_keyboard'][] = [
-            ['text' => ($curPos === 'right' ? '✅ ' : '') . '➡️ راست', 'callback_data' => "gbtn|pos|{$lang}|{$alias}|{$idx}|right{$gb_sfx}", 'style' => 'primary'],
-            ['text' => ($curPos === 'left' ? '✅ ' : '') . '⬅️ چپ', 'callback_data' => "gbtn|pos|{$lang}|{$alias}|{$idx}|left{$gb_sfx}", 'style' => 'primary'],
-        ];
+        if (!genbtn_text_only($alias)) {
+            $kb['inline_keyboard'][] = [
+                ['text' => ($curStyle === 'primary' ? '✅ ' : '') . '🔵 آبی', 'callback_data' => "gbtn|style|{$lang}|{$alias}|{$idx}|primary{$gb_sfx}", 'style' => 'primary'],
+                ['text' => ($curStyle === 'success' ? '✅ ' : '') . '🟢 سبز', 'callback_data' => "gbtn|style|{$lang}|{$alias}|{$idx}|success{$gb_sfx}", 'style' => 'success'],
+                ['text' => ($curStyle === 'danger' ? '✅ ' : '') . '🔴 قرمز', 'callback_data' => "gbtn|style|{$lang}|{$alias}|{$idx}|danger{$gb_sfx}", 'style' => 'danger'],
+            ];
+            $kb['inline_keyboard'][] = [['text' => ($hasEmoji ? '✅ ' : '') . '💎 ایموجی دکمه', 'callback_data' => "gbtn|emoji|{$lang}|{$alias}|{$idx}{$gb_sfx}", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [['text' => ($curSimple ? '✅ ' : '') . '🎭 حالت ساده (بدون ایموجی)', 'callback_data' => "gbtn|simple|{$lang}|{$alias}|{$idx}{$gb_sfx}", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [
+                ['text' => ($curPos === 'right' ? '✅ ' : '') . '➡️ راست', 'callback_data' => "gbtn|pos|{$lang}|{$alias}|{$idx}|right{$gb_sfx}", 'style' => 'primary'],
+                ['text' => ($curPos === 'left' ? '✅ ' : '') . '⬅️ چپ', 'callback_data' => "gbtn|pos|{$lang}|{$alias}|{$idx}|left{$gb_sfx}", 'style' => 'primary'],
+            ];
+        }
         // 🖼 استیکر دکمه بستن - only the six ❌ بستن buttons close_sticker_keys()
         // knows about get these rows (servclose/سرویس‌های من, plus the five
         // bt_btnitem_keys() close buttons); every other alias/idx opens or
