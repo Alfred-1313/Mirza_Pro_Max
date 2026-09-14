@@ -3642,6 +3642,13 @@ if (!function_exists('topup_range_notice')) {
         $fmt = function ($v) {
             return is_numeric($v) ? number_format((float) $v, 0) : (string) $v;
         };
+        // a package is held to the dollar floor only, so its refusal has no
+        // maximum of its own - quote the one the amount screen shows, not a blank
+        if ($min === null || $max === null) {
+            [$effMin, $effMax] = topup_effective_limits($lang, $gatewayKey);
+            $min = $min ?? $effMin;
+            $max = $max ?? $effMax;
+        }
         $rate = topup_has_usd_floor($gatewayKey) ? topup_usd_rate() : 0;
         $usd = function ($v) use ($rate) {
             return ($rate > 0 && is_numeric($v)) ? rtrim(rtrim(number_format((float) $v / $rate, 2), '0'), '.') : '—';
@@ -4706,12 +4713,19 @@ if (!function_exists('topup_checkout_limits')) {
     // (topup_effective_limits, which prefers «حداقل و حداکثر مبلغ دلخواه»), so it
     // is held to the very same numbers here - checkouts used to re-check it
     // against the raw 💎 مالی value instead, refusing it a second time with other
-    // figures, and refusing everything when that value was empty. Package
-    // buttons and the method list keep the gateway's own range, with the same
-    // defaults and dollar floor the amount screen quotes.
+    // figures, and refusing everything when that value was empty.
+    //
+    // A package button is the admin's own amount, and the min/max screen tells
+    // the admin packages are always selectable - so only the gateway's dollar
+    // floor applies. Holding packages to the 💎 مالی range refused every package
+    // over its 1,000,000 default. The method list keeps the gateway's own range.
     function topup_checkout_limits($lang, $key)
     {
-        if (strpos((string) ($GLOBALS['topup_amount_origin_step'] ?? ''), 'topup_custom:') === 0) {
+        $origin = (string) ($GLOBALS['topup_amount_origin_step'] ?? '');
+        if (strpos($origin, 'topup_pkg:') === 0) {
+            return [topup_usd_floor_toman($lang, $key), null];
+        }
+        if (strpos($origin, 'topup_custom:') === 0) {
             return topup_effective_limits($lang, $key);
         }
         return [topup_gateway_min($lang, $key), topup_gateway_max($lang, $key)];
