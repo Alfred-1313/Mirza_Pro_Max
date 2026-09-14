@@ -596,7 +596,9 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             ['text' => $textbotlang['users']['page']['nextPageBtn'], 'callback_data' => 'next_page'],
         ];
     }
-    $keyboardlists['inline_keyboard'][] = [myservices_close_btn($user['lang'] ?? 'fa', $textbotlang)];
+    if (!bt_button_hidden($user['lang'] ?? 'fa', 'users.sell.service_sell')) {
+        $keyboardlists['inline_keyboard'][] = [myservices_close_btn($user['lang'] ?? 'fa', $textbotlang)];
+    }
     $keyboard_json = json_encode($keyboardlists);
     // 🛍 سرویس‌های من might have JUST fired its own sticker on this exact tap -
     // if there is a dedicated sticker for "has an active service" it replaces
@@ -4523,7 +4525,6 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
             $config .= "\n" . $link;
         }
     }
-    $Shoppinginfo = json_encode($Shoppinginfo);
     $textbotlang['textbot']['afterPay'] = $marzban_list_get['type'] == "Manualsale" ? $textbotlang['textbot']['manual'] : $textbotlang['textbot']['afterPay'];
     $textbotlang['textbot']['afterPay'] = $marzban_list_get['type'] == "WGDashboard" ? $textbotlang['textbot']['wgDashboard'] : $textbotlang['textbot']['afterPay'];
     $textbotlang['textbot']['afterPay'] = $marzban_list_get['type'] == "ibsng" || $marzban_list_get['type'] == "mikrotik" ? $textbotlang['textbot']['afterPayIbsng'] : $textbotlang['textbot']['afterPay'];
@@ -4943,7 +4944,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         'volume' => false,
         'time' => false,
     ));
-    $Shoppinginfo = json_encode(afterpay_help_kb($user['lang'] ?? 'fa', $textbotlang));
+    $Shoppinginfo = afterpay_help_kb($user['lang'] ?? 'fa', $textbotlang);
     for ($i = 0; $i < $user['Processing_value_four']; $i++) {
         $random_number = rand(1000000, 9999999);
         $username_acc = $username_ac . "_" . $i;

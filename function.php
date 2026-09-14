@@ -893,7 +893,7 @@ function DirectPayment($order_id, $image = 'images.jpg')
             }
             return;
         }
-        $Shoppinginfo = json_encode(afterpay_help_kb($Balance_id['lang'] ?? 'fa', $textbotlang));
+        $Shoppinginfo = afterpay_help_kb($Balance_id['lang'] ?? 'fa', $textbotlang);
         $output_config_link = "";
         $config = "";
         if ($marzban_list_get['config'] == "onconfig" && is_array($dataoutput['configs'])) {
@@ -1323,7 +1323,7 @@ function DirectPayment($order_id, $image = 'images.jpg')
         $bc_lang = (is_array($Balance_id) && !empty($Balance_id['lang'])) ? $Balance_id['lang'] : 'fa';
         $bc_defs = genbtn_defs('bc', $textbotlang);
         $bc_ov = genbtn_override($bc_lang, 'users.Balance.chargeSuccess', 0);
-        $bc_kb = json_encode(['inline_keyboard' => [[genbtn_render($bc_defs[0], $bc_ov, $bc_defs[0]['callback_data'])]]]);
+        $bc_kb = !empty($bc_ov['hidden']) ? null : json_encode(['inline_keyboard' => [[genbtn_render($bc_defs[0], $bc_ov, $bc_defs[0]['callback_data'])]]]);
         sendmessage($Payment_report['id_user'], $bc_caption, $bc_kb, 'HTML');
     }
     // every gateway reaches here once its payment is confirmed, so this is
@@ -9189,6 +9189,18 @@ if (!function_exists('genbtn_alias_to_key')) {
         $alias = array_search($key, genbtn_alias_map(), true);
         return $alias !== false ? $alias : '';
     }
+    // Which buttons get the 👁/🚫 toggle: every close/back button plus the
+    // optional extras a screen still works without. Confirm/pay/cancel buttons
+    // (cf, rn, cl and su's cancel) stay out - hiding one strands the customer.
+    function genbtn_hideable($alias, $idx)
+    {
+        $key = genbtn_alias_to_key($alias);
+        if ($key !== null && function_exists('bt_btnitem_keys') && in_array($key, bt_btnitem_keys(), true)) {
+            return true;
+        }
+        $extras = ['ab' => [0], 'bc' => [0], 'ns' => [0], 'te' => [0], 'sc' => [0], 'hb' => [0], 'hv' => [0], 'td' => [0, 1], 'su' => [1]];
+        return in_array((int) $idx, $extras[$alias] ?? [], true);
+    }
 }
 if (!function_exists('genbtn_defs')) {
     // idx => ['name' => admin-facing label, 'text' => default button text,
@@ -9448,12 +9460,16 @@ if (!function_exists('myservices_close_btn')) {
     }
 }
 if (!function_exists('afterpay_help_kb')) {
-    // the keyboard under the post-purchase message - genbtn alias 'ab'
+    // the keyboard under the post-purchase message - genbtn alias 'ab'.
+    // JSON, or null when the admin hid the button (no keyboard at all)
     function afterpay_help_kb($lang, $textbotlang)
     {
         $defs = genbtn_defs('ab', $textbotlang);
         $ov = genbtn_override($lang, 'textbot.afterPay', 0);
-        return ['inline_keyboard' => [[genbtn_render($defs[0], $ov, $defs[0]['callback_data'])]]];
+        if (!empty($ov['hidden'])) {
+            return null;
+        }
+        return json_encode(['inline_keyboard' => [[genbtn_render($defs[0], $ov, $defs[0]['callback_data'])]]]);
     }
 }
 if (!function_exists('sell_selectUsername_kb')) {
@@ -9466,6 +9482,9 @@ if (!function_exists('sell_selectUsername_kb')) {
         $buttons = [];
         foreach ($defs as $idx => $d) {
             $ov = genbtn_override($lang, 'users.sell.selectUsernamePrompt', $idx);
+            if (!empty($ov['hidden']) && genbtn_hideable('su', $idx)) {
+                continue;
+            }
             $buttons[] = genbtn_render($d, $ov, $d['callback_data']);
         }
         return json_encode(['inline_keyboard' => [$buttons]]);
@@ -9494,6 +9513,9 @@ if (!function_exists('sell_noservice_kb')) {
     {
         $defs = genbtn_defs('ns', $textbotlang);
         $ov = genbtn_override($lang, 'users.sell.service_not_available', 0);
+        if (!empty($ov['hidden'])) {
+            return null;
+        }
         return json_encode(['inline_keyboard' => [[genbtn_render($defs[0], $ov, $defs[0]['callback_data'])]]]);
     }
 }
@@ -9502,6 +9524,9 @@ if (!function_exists('test_expired_kb')) {
     {
         $defs = genbtn_defs('te', $textbotlang);
         $ov = genbtn_override($lang, 'textbot.testExpired', 0);
+        if (!empty($ov['hidden'])) {
+            return null;
+        }
         return json_encode(['inline_keyboard' => [[genbtn_render($defs[0], $ov, $defs[0]['callback_data'])]]]);
     }
 }
@@ -9596,7 +9621,7 @@ if (!function_exists('genbtn_list_payload')) {
         foreach ($defs as $idx => $d) {
             $ov = genbtn_override($lang, $key, $idx);
             list($curText, $curStyle) = genbtn_current($d, $ov);
-            $gb_row = ['text' => $curText, 'callback_data' => "gbtn|open|{$lang}|{$alias}|{$idx}{$gb_sfx}"];
+            $gb_row = ['text' => (!empty($ov['hidden']) ? '🚫 ' : '') . $curText, 'callback_data' => "gbtn|open|{$lang}|{$alias}|{$idx}{$gb_sfx}"];
             // 'ab' ships unstyled - an empty style key is left out, like genbtn_render() does
             if ($curStyle !== '') {
                 $gb_row['style'] = $curStyle;
@@ -9649,8 +9674,8 @@ if (!function_exists('genbtn_detail_payload')) {
         $curSimple = !empty($ov['simple']);
         $hasEmoji = !empty($ov['emoji']) || !empty($ov['emojiIcon']);
         $previewBtn = genbtn_render($d, $ov, 'none');
-        // hidden is only offered for the seven bt_btnitem_keys() buttons (see
-        // the toggle row below) - marking the preview keeps the state visible
+        // hidden is only offered where genbtn_hideable() allows it (see the
+        // toggle row below) - marking the preview keeps the state visible
         // without having to scroll to that row
         $gb_hidden = !empty($ov['hidden']);
         if ($gb_hidden) {
@@ -9706,15 +9731,15 @@ if (!function_exists('genbtn_detail_payload')) {
                 ]];
             }
         }
-        // 👁/🚫 - only the seven bt_btnitem_keys() buttons. The other eight
-        // aliases are confirm/pay/cancel buttons whose flows have no other way
-        // forward; hiding one of those would break the screen it lives on, so
-        // the toggle is not offered there at all.
-        if (function_exists('bt_btnitem_keys') && in_array($key, bt_btnitem_keys(), true)) {
+        // 👁/🚫 - close/back buttons and optional extras (genbtn_hideable()).
+        // Confirm/pay/cancel buttons have no other way forward; hiding one of
+        // those would break the screen it lives on, so the toggle is not
+        // offered there at all.
+        if (genbtn_hideable($alias, $idx)) {
             $kb['inline_keyboard'][] = [['text' => bt_section_meta('genbtn_visibility')['label'], 'callback_data' => 'bt_sep|genbtn_visibility']];
             $kb['inline_keyboard'][] = [[
                 'text' => $gb_hidden ? '👁 نمایش دادن این دکمه' : '🚫 مخفی کردن این دکمه',
-                'callback_data' => "gbtn|hide|{$lang}|{$alias}|{$idx}",
+                'callback_data' => "gbtn|hide|{$lang}|{$alias}|{$idx}{$gb_sfx}",
                 'style' => $gb_hidden ? 'success' : 'danger',
             ]];
         }
@@ -9765,6 +9790,9 @@ if (!function_exists('usertest_selectUsername_kb')) {
         $buttons = [];
         foreach ($defs as $idx => $d) {
             $ov = usertest_prompt_button_override($lang, $idx);
+            if ($idx === 1 && !empty($ov['hidden'])) {
+                continue;
+            }
             $text = (isset($ov['text']) && $ov['text'] !== '') ? $ov['text'] : $d['text'];
             $style = (isset($ov['style']) && in_array($ov['style'], ['primary', 'success', 'danger'], true)) ? $ov['style'] : $d['style'];
             $buttons[] = ['text' => $text, 'callback_data' => $d['callback_data'], 'style' => $style];
@@ -9784,7 +9812,7 @@ if (!function_exists('usertest_prompt_buttons_payload')) {
             $ov = usertest_prompt_button_override($lang, $idx);
             $curText = (isset($ov['text']) && $ov['text'] !== '') ? $ov['text'] : $d['text'];
             $curStyle = (isset($ov['style']) && in_array($ov['style'], ['primary', 'success', 'danger'], true)) ? $ov['style'] : $d['style'];
-            $kb['inline_keyboard'][] = [['text' => $curText, 'callback_data' => "btact|btn|{$lang}|{$idx}", 'style' => $curStyle]];
+            $kb['inline_keyboard'][] = [['text' => (!empty($ov['hidden']) ? '🚫 ' : '') . $curText, 'callback_data' => "btact|btn|{$lang}|{$idx}", 'style' => $curStyle]];
         }
         $kb['inline_keyboard'][] = [['text' => '🔁 ریست همه به پیش‌فرض', 'callback_data' => "btact|btnsrstall|{$lang}", 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "bt_edit|{$lang}|users.usertest.selectUsernamePrompt", 'style' => 'danger']];
@@ -9803,13 +9831,22 @@ if (!function_exists('usertest_prompt_button_detail_payload')) {
         $info = "🔘 <b>ویرایش {$d['name']}</b>\n➖➖➖➖➖➖➖➖➖➖\n";
         $info .= "👁 پیش‌نمایش زنده 👇";
         $kb = ['inline_keyboard' => []];
-        $kb['inline_keyboard'][] = [['text' => $curText, 'callback_data' => 'none', 'style' => $curStyle]];
+        $ub_hidden = !empty($ov['hidden']);
+        $kb['inline_keyboard'][] = [['text' => ($ub_hidden ? '🚫 ' : '') . $curText, 'callback_data' => 'none', 'style' => $curStyle]];
         $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش متن', 'callback_data' => "btact|btntext|{$lang}|{$idx}", 'style' => 'primary']];
         $kb['inline_keyboard'][] = [
             ['text' => ($curStyle === 'primary' ? '✅ ' : '') . '🔵 آبی', 'callback_data' => "btact|btnstyle|{$lang}|{$idx}|primary", 'style' => 'primary'],
             ['text' => ($curStyle === 'success' ? '✅ ' : '') . '🟢 سبز', 'callback_data' => "btact|btnstyle|{$lang}|{$idx}|success", 'style' => 'success'],
             ['text' => ($curStyle === 'danger' ? '✅ ' : '') . '🔴 قرمز', 'callback_data' => "btact|btnstyle|{$lang}|{$idx}|danger", 'style' => 'danger'],
         ];
+        if ((int) $idx === 1) {
+            // cancel (idx 0) is the prompt's way out, so only "use default" can go
+            $kb['inline_keyboard'][] = [[
+                'text' => $ub_hidden ? '👁 نمایش دادن این دکمه' : '🚫 مخفی کردن این دکمه',
+                'callback_data' => "btact|btnhide|{$lang}|1",
+                'style' => $ub_hidden ? 'success' : 'danger',
+            ]];
+        }
         $kb['inline_keyboard'][] = [['text' => '🔁 ریست این دکمه', 'callback_data' => "btact|btnrst|{$lang}|{$idx}", 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "btact|btns|{$lang}", 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
@@ -10776,7 +10813,7 @@ if (!function_exists('topup_disc_method_keyboard')) {
         // Once a code IS applied there is no row at all: the caption already
         // states the discount and its terms, so a "🎁 کد فعال: X" button only
         // repeated it - and it exposed the code itself, which it should not.
-        if (topup_disc_active_label($userId, $lang) === null) {
+        if (topup_disc_active_label($userId, $lang) === null && !bt_button_hidden($lang, 'users.Balance.topupDiscPrompt')) {
             global $textbotlang;
             $defs = genbtn_defs('td', $textbotlang);
             $ov = genbtn_override($lang, 'users.Balance.topupDiscPrompt', 0);
@@ -10816,7 +10853,7 @@ if (!function_exists('topup_disc_prompt_payload')) {
         }
         $defs = genbtn_defs('td', $textbotlang);
         $ov = genbtn_override($lang, 'users.Balance.topupDiscPrompt', 1);
-        $kb = json_encode(['inline_keyboard' => [[genbtn_render($defs[1], $ov, 'topup_disc_cancel')]]]);
+        $kb = !empty($ov['hidden']) ? null : json_encode(['inline_keyboard' => [[genbtn_render($defs[1], $ov, 'topup_disc_cancel')]]]);
         return [$caption, $kb];
     }
 }
@@ -12167,7 +12204,7 @@ if (!function_exists('volumepct_tier_set_pct')) {
 if (!function_exists('volumepct_tier_set_style')) {
     // null = leave that field untouched, matches topup_packages_set_style's
     // established sentinel convention - pass '' explicitly to clear one
-    function volumepct_tier_set_style($index, $style = null, $emoji = null, $emojiIcon = null, $pos = null, $simple = null)
+    function volumepct_tier_set_style($index, $style = null, $emoji = null, $emojiIcon = null, $pos = null, $simple = null, $hidden = null)
     {
         $tiers = volumepct_tiers_map();
         if (!isset($tiers[$index])) {
@@ -12197,6 +12234,13 @@ if (!function_exists('volumepct_tier_set_style')) {
         }
         if ($simple !== null) {
             $tiers[$index]['simple'] = (bool) $simple;
+        }
+        if ($hidden !== null) {
+            if ($hidden) {
+                $tiers[$index]['hidden'] = true;
+            } else {
+                unset($tiers[$index]['hidden']);
+            }
         }
         volumepct_tiers_save($tiers);
     }
@@ -12365,7 +12409,7 @@ if (!function_exists('volumepct_tier_reset_style')) {
             return;
         }
         unset($tiers[$index]['text'][$lang], $tiers[$index]['btnLabel'][$lang], $tiers[$index]['sticker'][$lang]);
-        unset($tiers[$index]['style'], $tiers[$index]['emoji'], $tiers[$index]['emojiIcon'], $tiers[$index]['pos'], $tiers[$index]['simple']);
+        unset($tiers[$index]['style'], $tiers[$index]['emoji'], $tiers[$index]['emojiIcon'], $tiers[$index]['pos'], $tiers[$index]['simple'], $tiers[$index]['hidden']);
         volumepct_tiers_save($tiers);
     }
 }
@@ -12385,9 +12429,13 @@ if (!function_exists('volumepct_tier_kb')) {
     // 'extend_{invoiceId}' callback the pre-existing single-threshold notifier
     // already relies on (createExtendServiceKeyboard() in
     // NoticationsService.php), so tapping it still triggers the real extend flow
-    function volumepct_tier_kb($index, $lang, $textbotlang, $invoiceId)
+    // null when the admin hid the button; $ignoreHidden is for the admin preview
+    function volumepct_tier_kb($index, $lang, $textbotlang, $invoiceId, $ignoreHidden = false)
     {
         $tier = volumepct_tier_get($index);
+        if (!$ignoreHidden && !empty($tier['hidden'])) {
+            return null;
+        }
         $text = $tier['btnLabel'][$lang] ?? ($textbotlang['keyboard']['renewService'] ?? 'تمدید سرویس');
         $style = (isset($tier['style']) && in_array($tier['style'], ['primary', 'success', 'danger'], true)) ? $tier['style'] : 'primary';
         $pos = (isset($tier['pos']) && $tier['pos'] === 'left') ? 'left' : 'right';
@@ -12492,9 +12540,13 @@ if (!function_exists('volumepct_tier_detail_payload')) {
         $curSimple = !empty($tier['simple']);
         $hasSticker = !empty($tier['sticker'][$lang]);
         $hasEmoji = !empty($tier['emoji']) || !empty($tier['emojiIcon']);
-        $previewKb = json_decode(volumepct_tier_kb($index, $lang, $textbotlang, 0), true);
+        $previewKb = json_decode(volumepct_tier_kb($index, $lang, $textbotlang, 0, true), true);
         $previewBtn = $previewKb['inline_keyboard'][0][0];
         $previewBtn['callback_data'] = 'none';
+        $isHidden = !empty($tier['hidden']);
+        if ($isHidden) {
+            $previewBtn['text'] = '🚫 ' . $previewBtn['text'];
+        }
 
         $kind = volumepct_tier_kind($tier);
         $meta = volumepct_kind_meta($kind);
@@ -12504,6 +12556,9 @@ if (!function_exists('volumepct_tier_detail_payload')) {
         $info .= "✏️ کپشن: " . ($hasCustomText ? "سفارشی ✅" : "پیش‌فرض") . "\n";
         $info .= "<blockquote>" . htmlspecialchars($currentCaptionRaw, ENT_QUOTES) . "</blockquote>\n";
         $info .= "🖼 استیکر: " . ($hasSticker ? "ست شده ✅" : "ندارد ❌") . "\n";
+        if ($isHidden) {
+            $info .= "🚫 دکمه مخفیه - این پیام بدون دکمه فرستاده می‌شه.\n";
+        }
         $info .= "➖➖➖➖➖➖➖➖➖➖\n👁 پیش‌نمایش زنده دکمه 👇";
 
         $kb = ['inline_keyboard' => []];
@@ -12525,6 +12580,11 @@ if (!function_exists('volumepct_tier_detail_payload')) {
             ['text' => ($curPos === 'right' ? '✅ ' : '') . '➡️ راست', 'callback_data' => "volpct|pos|{$lang}|{$index}|right"],
             ['text' => ($curPos === 'left' ? '✅ ' : '') . '⬅️ چپ', 'callback_data' => "volpct|pos|{$lang}|{$index}|left"],
         ];
+        $kb['inline_keyboard'][] = [[
+            'text' => $isHidden ? '👁 نمایش دادن دکمه' : '🚫 مخفی کردن دکمه',
+            'callback_data' => "volpct|hide|{$lang}|{$index}",
+            'style' => $isHidden ? 'success' : 'danger',
+        ]];
         $kb['inline_keyboard'][] = [['text' => '🔁 ریست کپشن و دکمه', 'callback_data' => "volpct|rst|{$lang}|{$index}", 'style' => 'danger']];
         if (!$meta['single']) {
             $kb['inline_keyboard'][] = [['text' => '🗑 حذف این آستانه', 'callback_data' => "volpct|del|{$lang}|{$index}", 'style' => 'danger']];

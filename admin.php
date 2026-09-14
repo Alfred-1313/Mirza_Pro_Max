@@ -7112,14 +7112,13 @@ if (preg_match('/^gbtn\|pos\|([a-z]{2})\|(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac
     Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
     return;
 }
-// 👁/🚫 نمایش و پنهان کردن - deliberately NOT the full alias list: only the
-// seven bt_btnitem_keys() buttons (the two purchase-flow back buttons and the
-// five ❌ بستن). The other eight aliases are confirm/pay/cancel buttons their
-// screens have no alternative path around, so hiding one would strand the
-// customer - this pattern is what stops that from being reachable at all.
-if (preg_match('/^gbtn\|hide\|([a-z]{2})\|(rc|rp|bu|tp|ac|ts|he|hb|hv)\|([01])$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+// 👁/🚫 نمایش و پنهان کردن - deliberately NOT the full alias list: close/back
+// buttons and optional extras only (genbtn_hideable()). Confirm/pay/cancel
+// buttons have no alternative path around them, so hiding one would strand
+// the customer - this pattern is what stops that from being reachable at all.
+if (preg_match('/^gbtn\|hide\|([a-z]{2})\|(rc|rp|bu|tp|ac|ts|he|hb|hv|ab|bc|ns|te|sc|td|su)\|([01])(?:\|(u))?$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
-    if ($gb_key === null || !in_array($gb_key, bt_btnitem_keys(), true)) {
+    if ($gb_key === null || !genbtn_hideable($gb_m[2], (int) $gb_m[3])) {
         return;
     }
     $gb_ov = genbtn_override($gb_m[1], $gb_key, (int) $gb_m[3]);
@@ -7129,13 +7128,14 @@ if (preg_match('/^gbtn\|hide\|([a-z]{2})\|(rc|rp|bu|tp|ac|ts|he|hb|hv)\|([01])$/
         // hiding a close/back button takes away the only way OFF that screen -
         // say so once, on the tap that does it, rather than leaving the shop to
         // discover it from a customer
+        $gb_isExit = in_array($gb_m[2], ['rc', 'rp', 'bu', 'tp', 'ac', 'ts', 'he', 'hb', 'hv', 'sc'], true) || ($gb_m[2] === 'td' && (int) $gb_m[3] === 1);
         telegram('answerCallbackQuery', [
             'callback_query_id' => $callback_query_id,
-            'text' => '🚫 این دکمه دیگه به کاربر نشون داده نمی‌شه. اگه تنها راه بستن/برگشت اون صفحه بوده، کاربر باید از منوی اصلی یا /start بیرون بیاد.',
+            'text' => '🚫 این دکمه دیگه به کاربر نشون داده نمی‌شه.' . ($gb_isExit ? ' اگه تنها راه بستن/برگشت اون صفحه بوده، کاربر باید از منوی اصلی یا /start بیرون بیاد.' : ''),
             'show_alert' => true,
         ]);
     }
-    list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], (int) $gb_m[3], $textbotlang, '');
+    list($gb_text, $gb_kb) = genbtn_detail_payload($gb_m[2], $gb_m[1], (int) $gb_m[3], $textbotlang, $gb_m[4] ?? '');
     Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
     return;
 }
@@ -7416,6 +7416,14 @@ if (preg_match('/^volpct\|simple\|([a-z]{2})\|(\d+)$/', $datain, $vp_m) && $admi
     Editmessagetext($from_id, $message_id, $vp_text, $vp_kb, 'HTML');
     return;
 }
+if (preg_match('/^volpct\|hide\|([a-z]{2})\|(\d+)$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
+    // the notice itself still goes out - only its button is dropped
+    $vp_cur = !empty(volumepct_tier_get((int) $vp_m[2])['hidden']);
+    volumepct_tier_set_style((int) $vp_m[2], null, null, null, null, null, !$vp_cur);
+    list($vp_text, $vp_kb) = volumepct_tier_detail_payload((int) $vp_m[2], $vp_m[1], $textbotlang);
+    Editmessagetext($from_id, $message_id, $vp_text, $vp_kb, 'HTML');
+    return;
+}
 if (preg_match('/^volpct\|pos\|([a-z]{2})\|(\d+)\|(left|right)$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
     volumepct_tier_set_style((int) $vp_m[2], null, null, null, $vp_m[3], null);
     list($vp_text, $vp_kb) = volumepct_tier_detail_payload((int) $vp_m[2], $vp_m[1], $textbotlang);
@@ -7476,6 +7484,24 @@ if (preg_match('/^btact\|btnstyle\|([a-z]{2})\|([01])\|(primary|success|danger)$
     $ub_be[$ub_lang]['users.usertest.selectUsernamePrompt'][$ub_idx]['style'] = $ub_style;
     update("setting", "button_edit", json_encode($ub_be, JSON_UNESCAPED_UNICODE), null, null);
     list($ub_text, $ub_kb) = usertest_prompt_button_detail_payload($ub_lang, $ub_idx, $textbotlang);
+    Editmessagetext($from_id, $message_id, $ub_text, $ub_kb, 'HTML');
+    return;
+}
+if (preg_match('/^btact\|btnhide\|([a-z]{2})\|1$/', $datain, $btm) && $adminrulecheck['rule'] == "administrator") {
+    // only "use default name" - cancel (idx 0) stays, it is the prompt's way out
+    $ub_lang = $btm[1];
+    $ub_setting = select("setting", "*", null, null, "select");
+    $ub_be = json_decode((string) ($ub_setting['button_edit'] ?? ''), true);
+    if (!is_array($ub_be)) {
+        $ub_be = [];
+    }
+    if (!empty($ub_be[$ub_lang]['users.usertest.selectUsernamePrompt'][1]['hidden'])) {
+        unset($ub_be[$ub_lang]['users.usertest.selectUsernamePrompt'][1]['hidden']);
+    } else {
+        $ub_be[$ub_lang]['users.usertest.selectUsernamePrompt'][1]['hidden'] = true;
+    }
+    update("setting", "button_edit", json_encode($ub_be, JSON_UNESCAPED_UNICODE), null, null);
+    list($ub_text, $ub_kb) = usertest_prompt_button_detail_payload($ub_lang, 1, $textbotlang);
     Editmessagetext($from_id, $message_id, $ub_text, $ub_kb, 'HTML');
     return;
 }
@@ -15934,7 +15960,7 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         }
     }
     // the customer's language, not the admin's - it is their button
-    $Shoppinginfo = json_encode(afterpay_help_kb(select("user", "*", "id", $user['Processing_value'], "select")['lang'] ?? 'fa', $textbotlang));
+    $Shoppinginfo = afterpay_help_kb(select("user", "*", "id", $user['Processing_value'], "select")['lang'] ?? 'fa', $textbotlang);
     $textbotlang['textbot']['afterPay'] = $marzban_list_get['type'] == "Manualsale" ? $textbotlang['textbot']['manual'] : $textbotlang['textbot']['afterPay'];
     $textbotlang['textbot']['afterPay'] = $marzban_list_get['type'] == "WGDashboard" ? $textbotlang['textbot']['wgDashboard'] : $textbotlang['textbot']['afterPay'];
     $textbotlang['textbot']['afterPay'] = $marzban_list_get['type'] == "ibsng" || $marzban_list_get['type'] == "mikrotik" ? $textbotlang['textbot']['afterPayIbsng'] : $textbotlang['textbot']['afterPay'];
