@@ -8115,6 +8115,31 @@ if (!function_exists('config_delivery_set_mode')) {
         config_delivery_map_save($map);
     }
 }
+if (!function_exists('config_delivery_qr_on')) {
+    // 📷 QR with the delivered service - on unless the admin switched it off
+    // for this panel and kind. Like the modes, only the deviation is stored.
+    function config_delivery_qr_on($kind, $codePanel)
+    {
+        $map = config_delivery_map();
+        return $codePanel === null || empty($map['qroff'][$kind][$codePanel]);
+    }
+    function config_delivery_set_qr($kind, $codePanel, $on)
+    {
+        $map = config_delivery_map();
+        if ($on) {
+            unset($map['qroff'][$kind][$codePanel]);
+            if (isset($map['qroff'][$kind]) && empty($map['qroff'][$kind])) {
+                unset($map['qroff'][$kind]);
+            }
+            if (isset($map['qroff']) && empty($map['qroff'])) {
+                unset($map['qroff']);
+            }
+        } else {
+            $map['qroff'][$kind][$codePanel] = true;
+        }
+        config_delivery_map_save($map);
+    }
+}
 if (!function_exists('config_delivery_panel_reset')) {
     // $kind = null resets BOTH kinds for this panel (kept for completeness);
     // a specific kind resets ONLY that one - used by the kind-scoped screens
@@ -8124,10 +8149,16 @@ if (!function_exists('config_delivery_panel_reset')) {
         $map = config_delivery_map();
         $kinds = ($kind === null) ? ['purchase', 'usertest'] : [$kind];
         foreach ($kinds as $k) {
-            unset($map[$k][$codePanel]);
+            unset($map[$k][$codePanel], $map['qroff'][$k][$codePanel]);
             if (isset($map[$k]) && empty($map[$k])) {
                 unset($map[$k]);
             }
+            if (isset($map['qroff'][$k]) && empty($map['qroff'][$k])) {
+                unset($map['qroff'][$k]);
+            }
+        }
+        if (isset($map['qroff']) && empty($map['qroff'])) {
+            unset($map['qroff']);
         }
         config_delivery_map_save($map);
     }
@@ -8205,12 +8236,18 @@ if (!function_exists('config_delivery_panel_payload')) {
         $info .= "مناسب سرویس‌هایی که چند تا کانفیگ دارن.\n";
         $info .= "➖➖➖➖➖➖➖➖➖➖\n";
         $info .= "الان: <b>حالت " . config_delivery_mode_fa($cur) . "</b>";
+        $qrOn = config_delivery_qr_on($kind, $codePanel);
+        $info .= "\n\n📷 <b>QR کد همراه پیام:</b> " . ($qrOn ? "روشن ✅" : "خاموش ❌") . "\n";
+        $info .= "QR لینک اشتراک رو نشون می‌ده. اگه لینک اشتراک این پنل خاموش باشه، فقط وقتی سرویس یک کانفیگ داره QR فرستاده می‌شه.";
         $kb = ['inline_keyboard' => []];
         $kb['inline_keyboard'][] = [
             ['text' => ($cur === '1' ? '✅ ' : '') . 'حالت ۱ — فقط پیام کامل', 'callback_data' => "cfgdeliv|set|{$lang}|{$codePanel}|{$kind}|1|{$origin}", 'style' => $cur === '1' ? 'success' : 'primary'],
         ];
         $kb['inline_keyboard'][] = [
             ['text' => ($cur === '2' ? '✅ ' : '') . 'حالت ۲ — + صفحه‌ی کانفیگ', 'callback_data' => "cfgdeliv|set|{$lang}|{$codePanel}|{$kind}|2|{$origin}", 'style' => $cur === '2' ? 'success' : 'primary'],
+        ];
+        $kb['inline_keyboard'][] = [
+            ['text' => $qrOn ? '📷 ارسال QR کد: روشن ✅' : '📷 ارسال QR کد: خاموش ❌', 'callback_data' => "cfgdeliv|qr|{$lang}|{$codePanel}|{$kind}|{$origin}", 'style' => $qrOn ? 'success' : 'danger'],
         ];
         $kb['inline_keyboard'][] = [['text' => bt_section_meta('cfgdeliv_edit')['label'], 'callback_data' => 'bt_sep|cfgdeliv_edit']];
         if ($kind === 'purchase') {
@@ -13888,19 +13925,12 @@ function sendMessageService($panel_info, $config, $sub_link, $username_service, 
     if (!check_active_btn($setting['keyboardmain'], "text_help"))
         $reply_markup = null;
     $user_id = $user_id == null ? $from_id : $user_id;
-    $STATUS_SEND_MESSAGE_PHOTO = $panel_info['config'] == "onconfig" && count($config) != 1 ? false : true;
-    $out_put_qrcode = "";
-    if ($panel_info['type'] == "Manualsale" || $panel_info['type'] == "ibsng" || $panel_info['type'] == "mikrotik") {
-    }
-    if ($panel_info['sublink'] == "onsublink" && $panel_info['config']) {
-        $out_put_qrcode = $sub_link;
-    } elseif ($panel_info['sublink'] == "onsublink") {
-        $out_put_qrcode = $sub_link;
-    } elseif ($panel_info['config'] == "onconfig") {
-        $out_put_qrcode = $config[0];
-    }
-    if ($STATUS_SEND_MESSAGE_PHOTO) {
-        if ($panel_info['type'] == "WGDashboard") {
+    $configCount = is_array($config) ? count($config) : 0;
+    if ($panel_info['type'] == "WGDashboard") {
+        // WireGuard delivers its .conf file rather than a QR - unchanged
+        if ($panel_info['config'] == "onconfig" && $configCount != 1) {
+            sendmessage($user_id, $caption, $reply_markup, 'HTML');
+        } else {
             $urlimage = "{$panel_info['inboundid']}_{$invoice_id}.conf";
             file_put_contents($urlimage, $sub_link);
             telegram('senddocument', [
@@ -13911,22 +13941,47 @@ function sendMessageService($panel_info, $config, $sub_link, $username_service, 
                 'parse_mode' => "HTML",
             ]);
             unlink($urlimage);
-        } else {
-            $urlimage = "$user_id$invoice_id.png";
-            $qrCode = createqrcode($out_put_qrcode);
-            file_put_contents($urlimage, $qrCode->getString());
-            addBackgroundImage($urlimage, $qrCode, $image);
-            telegram('sendphoto', [
-                'chat_id' => $user_id,
-                'photo' => new CURLFile($urlimage),
-                'reply_markup' => $reply_markup,
-                'caption' => $caption,
-                'parse_mode' => "HTML",
-            ]);
-            unlink($urlimage);
         }
     } else {
-        sendmessage($user_id, $caption, $reply_markup, 'HTML');
+        // What the QR stands for: the subscription link covers every config, so
+        // it wins even when there are several - that case used to send no QR at
+        // all. A lone config works on its own; several configs with no
+        // subscription link have nothing a single QR could stand for.
+        $out_put_qrcode = "";
+        if ($panel_info['sublink'] == "onsublink") {
+            $out_put_qrcode = (string) $sub_link;
+        } elseif ($panel_info['config'] == "onconfig" && $configCount == 1) {
+            $out_put_qrcode = (string) $config[0];
+        }
+        $captionSent = false;
+        if ($out_put_qrcode !== '' && config_delivery_qr_on($kind, $panel_info['code_panel'] ?? null)) {
+            $urlimage = "$user_id$invoice_id.png";
+            try {
+                $qrCode = createqrcode($out_put_qrcode);
+                file_put_contents($urlimage, $qrCode->getString());
+                addBackgroundImage($urlimage, $qrCode, $image);
+                // a photo caption is capped at 1024 characters - a longer message
+                // (several config links) follows the QR as its own text instead
+                $captionFits = mb_strlen(html_entity_decode(strip_tags((string) $caption), ENT_QUOTES, 'UTF-8')) <= 1024;
+                $res = telegram('sendphoto', [
+                    'chat_id' => $user_id,
+                    'photo' => new CURLFile($urlimage),
+                    'reply_markup' => $captionFits ? $reply_markup : null,
+                    'caption' => $captionFits ? $caption : '',
+                    'parse_mode' => "HTML",
+                ]);
+                $captionSent = $captionFits && !empty($res['ok']);
+            } catch (\Throwable $e) {
+                error_log('sendMessageService QR: ' . $e->getMessage());
+            }
+            if (is_file($urlimage)) {
+                unlink($urlimage);
+            }
+        }
+        // the service details must reach the customer even when the QR could not
+        if (!$captionSent) {
+            sendmessage($user_id, $caption, $reply_markup, 'HTML');
+        }
     }
     if ($panel_info['config'] == "onconfig" && config_delivery_mode($kind, $panel_info['code_panel'] ?? null) === "2") {
         if (is_array($config)) {

@@ -5848,10 +5848,16 @@ if (preg_match('/^cfgdeliv\|set\|([a-z]{2})\|([^|]+)\|(purchase|usertest)\|(1|2)
     Editmessagetext($from_id, $message_id, $cd_text, $cd_kb, 'HTML');
     return;
 }
+if (preg_match('/^cfgdeliv\|qr\|([a-z]{2})\|([^|]+)\|(purchase|usertest)\|([bu])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
+    config_delivery_set_qr($cd_m[3], $cd_m[2], !config_delivery_qr_on($cd_m[3], $cd_m[2]));
+    list($cd_text, $cd_kb) = config_delivery_panel_payload($cd_m[1], $cd_m[2], $cd_m[4]);
+    Editmessagetext($from_id, $message_id, $cd_text, $cd_kb, 'HTML');
+    return;
+}
 if (preg_match('/^cfgdeliv\|rst\|([a-z]{2})\|([^|]+)\|(purchase|usertest)\|([bu])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
     config_delivery_panel_reset($cd_m[2], $cd_m[3]);
     list($cd_text, $cd_kb) = config_delivery_panel_payload($cd_m[1], $cd_m[2], $cd_m[4]);
-    Editmessagetext($from_id, $message_id, "🔁 این پنل به حالت پیش‌فرض (حالت ۲) برگشت.\n\n" . $cd_text, $cd_kb, 'HTML');
+    Editmessagetext($from_id, $message_id, "🔁 این پنل به حالت پیش‌فرض (حالت ۲، QR کد روشن) برگشت.\n\n" . $cd_text, $cd_kb, 'HTML');
     return;
 }
 if (preg_match('/^cfgdeliv\|cfgcol\|([a-z]{2})\|([^|]+)\|([bu])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
