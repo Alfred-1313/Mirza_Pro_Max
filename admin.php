@@ -842,6 +842,12 @@ if (!function_exists('bt_inline_block_keys')) {
             // the same kind of line, inside the payment invoice
             'hardcoded.topupDiscPkgPercent',
             'hardcoded.topupDiscPkgFixed',
+            // ...and their 💰 حداقل مبلغ variants
+            'hardcoded.topupDiscMinPercentCaption',
+            'hardcoded.topupDiscMinFixedCaption',
+            'hardcoded.topupDiscMinPkgPercent',
+            'hardcoded.topupDiscMinPkgFixed',
+            'hardcoded.topupDiscMinSuffix',
             // a line inside the service-status caption
             'users.status.svcLocationMore',
             // button labels: there is no message to attach a sticker to, and
@@ -6894,6 +6900,25 @@ if (preg_match('/^btact\|text\|([a-z]{2})\|(.+)$/', $datain, $btm) && $adminrule
         'hardcoded.topupDiscPkgFixed' => "• مبلغ هدیه برای همین فاکتور: <code>{bonus}</code>\n"
             . "• مبلغ فاکتور: <code>{amount}</code>\n"
             . "\n💡 این جمله داخل <b>خودِ فاکتور پرداخت</b> نشون داده می‌شه، بعد از انتخاب مبلغ.",
+        'hardcoded.topupDiscMinPercentCaption' => "• حداقل مبلغ شارژ: <code>{min}</code>\n"
+            . "• درصد تخفیف: <code>{value}</code>\n"
+            . "• نام دسته (فقط تخفیف یک دسته): <code>{group}</code>\n"
+            . "\n💡 روی لیست بسته‌ها، فقط برای تخفیفی که <b>💰 حداقل مبلغ</b> داره.",
+        'hardcoded.topupDiscMinFixedCaption' => "• حداقل مبلغ شارژ: <code>{min}</code>\n"
+            . "• مبلغی که به شارژ اضافه می‌شه: <code>{value}</code>\n"
+            . "• نام دسته (فقط تخفیف یک دسته): <code>{group}</code>\n"
+            . "\n💡 روی لیست بسته‌ها، فقط برای تخفیفی که <b>💰 حداقل مبلغ</b> داره.",
+        'hardcoded.topupDiscMinPkgPercent' => "• حداقل مبلغ شارژ: <code>{min}</code>\n"
+            . "• مبلغ هدیه برای همین فاکتور: <code>{bonus}</code>\n"
+            . "• درصد تخفیف: <code>{value}</code>\n"
+            . "• مبلغ فاکتور: <code>{amount}</code>\n"
+            . "\n💡 داخل <b>خودِ فاکتور</b>، وقتی مبلغ انتخاب‌شده به حداقل رسیده باشه.",
+        'hardcoded.topupDiscMinPkgFixed' => "• حداقل مبلغ شارژ: <code>{min}</code>\n"
+            . "• مبلغ هدیه برای همین فاکتور: <code>{bonus}</code>\n"
+            . "• مبلغ فاکتور: <code>{amount}</code>\n"
+            . "\n💡 داخل <b>خودِ فاکتور</b>، وقتی مبلغ انتخاب‌شده به حداقل رسیده باشه.",
+        'hardcoded.topupDiscMinSuffix' => "• حداقل مبلغ شارژ: <code>{min}</code>\n"
+            . "\n💡 کنار مقدار تخفیف، در صفحه‌ی انتخاب روش پرداخت.",
         'bottext.langPickerCaption' => "• خطوط «زبان خود را انتخاب کنید»، یکی به ازای هر زبان فعال: <code>{lines}</code>\n"
             . "\n💡 این صفحه قبل از اینکه کاربر زبانی داشته باشه نشون داده می‌شه، برای همین متنش چندزبانه‌ست. اگه <code>{lines}</code> رو برداری، کاربر خارجی‌زبان هیچ راهنمایی به زبان خودش نمی‌بینه.\n"
             . "💡 ظاهر خود دکمه‌ها (چیدمان، رنگ، ایموجی، نام) از همون صفحه‌ی 🌐 تنظیمات تغییر زبان کاربر تنظیم می‌شه.",
@@ -8037,15 +8062,44 @@ if (preg_match('/^tpdautolimitv-([a-z]{2})-([a-z0-9_]+)$/', (string) $user['step
     }
     return;
 }
-// the three typed fields of a CATEGORY's discount - the group twins of
-// tpdautovalv / tpdautoexpv / tpdautolimitv above, same validation, same
-// "edit the screen you came from" ending
-if (preg_match('/^dsgrp(val|exp|limit)v-([a-z]{2})-([a-z0-9_]+)$/', (string) $user['step'], $td_m) && $datain == '' && $adminrulecheck['rule'] == "administrator" && !topup_disc_is_nav_text($text, $textbotlang)) {
+// 💰 حداقل مبلغ of a gateway's auto discount - an amount, so "5,000,000" and
+// Persian digits are accepted; 0 removes the minimum
+if (preg_match('/^tpdautominv-([a-z]{2})-([a-z0-9_]+)$/', (string) $user['step'], $td_m) && $datain == '' && $adminrulecheck['rule'] == "administrator" && !topup_disc_is_nav_text($text, $textbotlang)) {
+    $td_raw = money_normalize((string) $text);
+    if ($td_raw === null) {
+        sendmessage($from_id, "⚠️ لطفاً فقط یه عدد بفرست 😅", $backadmin, 'HTML');
+        return;
+    }
+    $td_a = topup_disc_auto_for($td_m[1], $td_m[2]);
+    $td_a['minAmount'] = floatval($td_raw);
+    topup_disc_auto_set($td_m[1], $td_m[2], $td_a);
+    step('home', $from_id);
+    list($td_text, $td_kb) = topup_disc_auto_payload($td_m[1], $td_m[2], $textbotlang);
+    $td_mid = intval(json_decode((string) ($user['Processing_value'] ?? ''), true)['bt_msgid'] ?? 0);
+    deletemessage($from_id, $message_id);
+    $td_done = "✅ ذخیره شد!\n\n" . $td_text;
+    if ($td_mid > 0) {
+        Editmessagetext($from_id, $td_mid, $td_done, $td_kb, 'HTML');
+    } else {
+        sendmessage($from_id, $td_done, $td_kb, 'HTML');
+    }
+    return;
+}
+// the four typed fields of a CATEGORY's discount - the group twins of
+// tpdautovalv / tpdautoexpv / tpdautolimitv / tpdautominv above, same
+// validation, same "edit the screen you came from" ending
+if (preg_match('/^dsgrp(val|exp|limit|min)v-([a-z]{2})-([a-z0-9_]+)$/', (string) $user['step'], $td_m) && $datain == '' && $adminrulecheck['rule'] == "administrator" && !topup_disc_is_nav_text($text, $textbotlang)) {
     $td_what = $td_m[1];
     $td_lang = $td_m[2];
     $td_group = $td_m[3];
     $td_raw = trim((string) $text);
-    if ($td_what === 'val') {
+    if ($td_what === 'min') {
+        $td_raw = money_normalize($td_raw);
+        if ($td_raw === null) {
+            sendmessage($from_id, "⚠️ لطفاً فقط یه عدد بفرست 😅", $backadmin, 'HTML');
+            return;
+        }
+    } elseif ($td_what === 'val') {
         if (!is_numeric($td_raw) || floatval($td_raw) < 0) {
             sendmessage($from_id, "⚠️ لطفاً فقط یه عدد بفرست 😅", $backadmin, 'HTML');
             return;
@@ -8073,6 +8127,8 @@ if (preg_match('/^dsgrp(val|exp|limit)v-([a-z]{2})-([a-z0-9_]+)$/', (string) $us
                 topup_disc_scope_disable_others($td_lang, 'all');
             }
         }
+    } elseif ($td_what === 'min') {
+        $td_g['minAmount'] = floatval($td_raw);
     } elseif ($td_what === 'exp') {
         $td_days = intval($td_raw);
         $td_g['expiry'] = $td_days > 0 ? (time() + $td_days * 86400) : 0;
@@ -8092,12 +8148,16 @@ if (preg_match('/^dsgrp(val|exp|limit)v-([a-z]{2})-([a-z0-9_]+)$/', (string) $us
     }
     return;
 }
-if (preg_match('/^tpdfld-(val|limit|user|exp)-([a-z]{2})-([a-z0-9_@]+)-(\d+)$/', (string) $user['step'], $td_m) && $datain == '' && $adminrulecheck['rule'] == "administrator" && !topup_disc_is_nav_text($text, $textbotlang)) {
+if (preg_match('/^tpdfld-(val|limit|user|exp|min)-([a-z]{2})-([a-z0-9_@]+)-(\d+)$/', (string) $user['step'], $td_m) && $datain == '' && $adminrulecheck['rule'] == "administrator" && !topup_disc_is_nav_text($text, $textbotlang)) {
     $td_what = $td_m[1];
     $td_lang = $td_m[2];
     $td_key = $td_m[3];
     $td_idx = (int) $td_m[4];
     $td_raw = trim((string) $text);
+    if ($td_what === 'min') {
+        // an amount: "5,000,000" and Persian digits are fine here
+        $td_raw = money_normalize($td_raw) ?? $td_raw;
+    }
     if (!is_numeric($td_raw) || floatval($td_raw) < 0) {
         sendmessage($from_id, "⚠️ لطفاً فقط یه عدد بفرست 😅", $backadmin, 'HTML');
         return;
@@ -8115,6 +8175,8 @@ if (preg_match('/^tpdfld-(val|limit|user|exp)-([a-z]{2})-([a-z0-9_@]+)-(\d+)$/',
         topup_disc_code_update($td_lang, $td_key, $td_idx, ['limitTotal' => intval($td_raw)]);
     } elseif ($td_what === 'user') {
         topup_disc_code_update($td_lang, $td_key, $td_idx, ['limitPerUser' => intval($td_raw)]);
+    } elseif ($td_what === 'min') {
+        topup_disc_code_update($td_lang, $td_key, $td_idx, ['minAmount' => floatval($td_raw)]);
     } else {
         // days from now, 0 = never expires
         $td_days = intval($td_raw);
@@ -19708,6 +19770,11 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     step("dsgrplimitv-{$td_m[1]}-{$td_m[2]}", $from_id);
     $td_kb = json_encode(['inline_keyboard' => [[['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "dsgrpauto:{$td_m[1]}:{$td_m[2]}"]], [['text' => '❌ بستن', 'callback_data' => "tpdclose", 'style' => 'danger']]]]);
     Editmessagetext($from_id, $message_id, "👤 هر کاربر چند بار بتونه از تخفیف گروهی این دسته استفاده کنه؟ (۰ = نامحدود)", $td_kb, 'HTML');
+} elseif (preg_match('/^dsgrpmin:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
+    savedata("clear", "bt_msgid", $message_id);
+    step("dsgrpminv-{$td_m[1]}-{$td_m[2]}", $from_id);
+    $td_kb = json_encode(['inline_keyboard' => [[['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "dsgrpauto:{$td_m[1]}:{$td_m[2]}"]], [['text' => '❌ بستن', 'callback_data' => "tpdclose", 'style' => 'danger']]]]);
+    Editmessagetext($from_id, $message_id, "💰 حداقل مبلغ شارژ رو بفرست — زیر این مبلغ تخفیف گروهی این دسته اعمال نمی‌شه (فقط عدد، ۰ = بدون حداقل)", $td_kb, 'HTML');
 } elseif (preg_match('/^tpdautotog:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
     $td_a = topup_disc_auto_for($td_m[1], $td_m[2]);
     $td_a['enabled'] = empty($td_a['enabled']);
@@ -19757,6 +19824,11 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     step("tpdautolimitv-{$td_m[1]}-{$td_m[2]}", $from_id);
     $td_kb = json_encode(['inline_keyboard' => [[['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "tpdauto:{$td_m[1]}:{$td_m[2]}"]], [['text' => '❌ بستن', 'callback_data' => "tpdclose", 'style' => 'danger']]]]);
     Editmessagetext($from_id, $message_id, "👤 هر کاربر چند بار بتونه از تخفیف خودکار این درگاه استفاده کنه؟ (۰ = نامحدود)", $td_kb, 'HTML');
+} elseif (preg_match('/^tpdautomin:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
+    savedata("clear", "bt_msgid", $message_id);
+    step("tpdautominv-{$td_m[1]}-{$td_m[2]}", $from_id);
+    $td_kb = json_encode(['inline_keyboard' => [[['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "tpdauto:{$td_m[1]}:{$td_m[2]}"]], [['text' => '❌ بستن', 'callback_data' => "tpdclose", 'style' => 'danger']]]]);
+    Editmessagetext($from_id, $message_id, "💰 حداقل مبلغ شارژ رو بفرست — زیر این مبلغ تخفیف خودکار این درگاه اعمال نمی‌شه (فقط عدد، ۰ = بدون حداقل)", $td_kb, 'HTML');
 } elseif (preg_match('/^tpdadd:([a-z]{2}):([a-z0-9_@]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
     savedata("clear", "bt_msgid", $message_id);
     step("tpdaddc-{$td_m[1]}-{$td_m[2]}", $from_id);
@@ -19789,7 +19861,7 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     topup_disc_code_update($td_m[1], $td_m[2], (int) $td_m[3], $td_upd);
     list($td_text, $td_kb) = topup_disc_code_payload($td_m[1], $td_m[2], (int) $td_m[3], $textbotlang);
     Editmessagetext($from_id, $message_id, $td_text, $td_kb, 'HTML');
-} elseif (preg_match('/^tpd(val|limit|user|exp):([a-z]{2}):([a-z0-9_@]+):(\d+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^tpd(val|limit|user|exp|min):([a-z]{2}):([a-z0-9_@]+):(\d+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
     $td_what = $td_m[1];
     savedata("clear", "bt_msgid", $message_id);
     step("tpdfld-{$td_what}-{$td_m[2]}-{$td_m[3]}-{$td_m[4]}", $from_id);
@@ -19799,6 +19871,7 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
         'limit' => '🔢 سهمیه کل کد رو بفرست — چند بار در مجموع قابل استفاده باشه؟ (۰ = نامحدود)',
         'user' => '👤 هر کاربر چند بار بتونه از این کد استفاده کنه؟ (۰ = نامحدود)',
         'exp' => '⏳ کد تا چند روز دیگه معتبر باشه؟ (۰ = بدون انقضا)',
+        'min' => '💰 حداقل مبلغ شارژ رو بفرست — زیر این مبلغ این کد هدیه‌ای نمی‌ده (فقط عدد، ۰ = بدون حداقل)',
     ];
     $td_kb = json_encode(['inline_keyboard' => [[['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "tpdopen:{$td_m[2]}:{$td_m[3]}:{$td_m[4]}"]], [['text' => '❌ بستن', 'callback_data' => "tpdclose", 'style' => 'danger']]]]);
     Editmessagetext($from_id, $message_id, $td_hints[$td_what], $td_kb, 'HTML');

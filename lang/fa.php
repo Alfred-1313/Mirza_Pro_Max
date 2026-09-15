@@ -590,6 +590,37 @@ return array (
         'group' => 'topupdisc',
         'section' => 'topupdisc_line_invoice',
       ),
+      // the same lines for a discount with a 💰 حداقل مبلغ
+      array (
+        'label' => '💰 لیست بسته‌ها — درصدی',
+        'key' => 'hardcoded.topupDiscMinPercentCaption',
+        'group' => 'topupdisc',
+        'section' => 'topupdisc_line_min',
+      ),
+      array (
+        'label' => '💰 لیست بسته‌ها — مبلغ ثابت',
+        'key' => 'hardcoded.topupDiscMinFixedCaption',
+        'group' => 'topupdisc',
+        'section' => 'topupdisc_line_min',
+      ),
+      array (
+        'label' => '💰 داخل فاکتور — درصدی',
+        'key' => 'hardcoded.topupDiscMinPkgPercent',
+        'group' => 'topupdisc',
+        'section' => 'topupdisc_line_min',
+      ),
+      array (
+        'label' => '💰 داخل فاکتور — مبلغ ثابت',
+        'key' => 'hardcoded.topupDiscMinPkgFixed',
+        'group' => 'topupdisc',
+        'section' => 'topupdisc_line_min',
+      ),
+      array (
+        'label' => '💰 کنار تخفیف در صفحه‌ی روش پرداخت',
+        'key' => 'hardcoded.topupDiscMinSuffix',
+        'group' => 'topupdisc',
+        'section' => 'topupdisc_line_min',
+      ),
       array (
         'label' => '❌ خطای مبلغ خارج از حداقل/حداکثر',
         'key' => 'users.Balance.amountRangeError',
@@ -9172,6 +9203,11 @@ nowpayments.io
     'topupDiscAllFixedCaption' => '🎁 روی هر شارژی، {value} هدیه هم می‌گیری!',
     'topupDiscPkgPercent' => '🎁 با این شارژ {bonus} هم هدیه می‌گیری — یعنی {value}٪ بیشتر از {amount}!',
     'topupDiscPkgFixed' => '🎁 با این شارژ {bonus} هدیه می‌گیری!',
+    'topupDiscMinPercentCaption' => '🎁 شارژ از {min} به بالا، {value}٪ شارژ اضافه بگیر!',
+    'topupDiscMinFixedCaption' => '🎁 شارژ از {min} به بالا، {value} شارژ اضافه بگیر!',
+    'topupDiscMinPkgPercent' => '🎁 چون از {min} به بالا شارژ می‌کنی، {bonus} هم هدیه می‌گیری — یعنی {value}٪ بیشتر!',
+    'topupDiscMinPkgFixed' => '🎁 چون از {min} به بالا شارژ می‌کنی، {bonus} هدیه می‌گیری!',
+    'topupDiscMinSuffix' => '(از {min} به بالا)',
     'volumeEndDefaultText' => 'مشتری گرامی {username}
 حجم بسته VPN شما {packagedays} روزه {packagevolume} گیگابایتی شما به پایان رسید .
 این بسته فاقد تمدید خودکار میباشد برای تمدید و استفاده مجدد میتوانید بسته خود را با دکمه پایین تمدید کنید 🫶',

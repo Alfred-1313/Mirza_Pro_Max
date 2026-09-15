@@ -9122,6 +9122,10 @@ if (!function_exists('bt_section_meta')) {
                 'label' => '🧾 جمله‌ی تخفیف — داخل خودِ فاکتور',
                 'alert' => 'این دو جمله داخل خودِ فاکتور پرداخت (هر درگاهی) نشون داده می‌شن، بعد از اینکه کاربر مبلغ رو انتخاب کرده. دقیقاً می‌گن برای همین مبلغ چقدر به موجودی اضافه می‌شه: {bonus} مبلغ هدیه، {amount} مبلغ فاکتور، {value} درصد تخفیف.',
             ],
+            'topupdisc_line_min' => [
+                'label' => '💰 جمله‌ی تخفیف — وقتی حداقل مبلغ ست شده',
+                'alert' => 'فقط برای تخفیفی که «💰 حداقل مبلغ» داره نشون داده می‌شن: دو تا روی لیست بسته‌ها، دو تا داخل فاکتور، یکی کنار تخفیف در صفحه‌ی روش پرداخت. {min} همون حداقل مبلغه.',
+            ],
             'topupdisc_members' => [
                 'label' => '💳 درگاه‌های این دسته',
                 'alert' => 'دکمه‌ی بالا تخفیف کل این دسته‌ست. دکمه‌های زیر هر درگاه رو جدا تنظیم می‌کنن (تخفیف خودکار و کدهای تخفیف مخصوص همون درگاه). اگه هر دو ست باشن، روی هم سوار نمی‌شن — هرکدوم به کاربر بیشتر بده همون اعمال می‌شه.',
@@ -11111,7 +11115,7 @@ if (!function_exists('topup_disc_auto_info_text')) {
         $lines = ['🎁 تخفیف خودکار — بدون نیاز به کد'];
         foreach ($autos as $gw => $a) {
             $val = (($a['mode'] ?? 'percent') === 'fixed') ? money($a['value']) : ('٪' . rtrim(rtrim(number_format((float) $a['value'], 2, '.', ','), '0'), '.'));
-            $lines[] = '• ' . topup_disc_gateway_label($gw, $textbotlang) . ': ' . $val;
+            $lines[] = '• ' . topup_disc_gateway_label($gw, $textbotlang) . ': ' . $val . topup_disc_min_suffix($a, $textbotlang);
         }
         $exp = 0;
         foreach ($autos as $a) {
@@ -11177,7 +11181,7 @@ if (!function_exists('topup_disc_method_caption')) {
                 $perUser = intval($g['limitPerUser'] ?? 0);
                 $autoLines[] = topup_disc_render_block('users.Balance.topupDiscAutoLine', $textbotlang, [
                     '{gateway}' => topup_disc_scope_label($grp, $textbotlang),
-                    '{value}' => topup_disc_admin_value_label($g),
+                    '{value}' => topup_disc_admin_value_label($g) . topup_disc_min_suffix($g, $textbotlang),
                     '{uses}' => topup_disc_uses_text($perUser, $perUser > 0 ? topup_disc_group_user_count($userId, $lang, $grp) : 0, $textbotlang),
                 ]);
                 $e = intval($g['expiry'] ?? 0);
@@ -11189,7 +11193,7 @@ if (!function_exists('topup_disc_method_caption')) {
                 $perUser = intval($a['limitPerUser'] ?? 0);
                 $autoLines[] = topup_disc_render_block('users.Balance.topupDiscAutoLine', $textbotlang, [
                     '{gateway}' => topup_disc_gateway_label($gw, $textbotlang),
-                    '{value}' => topup_disc_admin_value_label($a),
+                    '{value}' => topup_disc_admin_value_label($a) . topup_disc_min_suffix($a, $textbotlang),
                     '{uses}' => topup_disc_uses_text($perUser, $perUser > 0 ? topup_disc_auto_user_count($userId, $lang, $gw) : 0, $textbotlang),
                 ]);
                 $e = intval($a['expiry'] ?? 0);
@@ -11301,14 +11305,33 @@ if (!function_exists('topup_disc_caption_line')) {
         $value = $disc['value'] ?? 0;
         $isFixed = (($disc['mode'] ?? 'percent') === 'fixed');
         $valueTxt = rtrim(rtrim(number_format((float) $value, 2, '.', ','), '0'), '.');
+        $min = floatval($disc['minAmount'] ?? 0);
         if ($forPackage && $amount !== null) {
             $bonus = topup_disc_bonus_of($disc, $amount);
-            $key = $isFixed ? 'topupDiscPkgFixed' : 'topupDiscPkgPercent';
-            $tpl = $textbotlang['hardcoded'][$key] ?? ($isFixed ? '{bonus} اضافه برای بسته {amount}' : 'تخفیف {value} درصدی برای بسته {amount}');
+            if ($min > 0) {
+                $key = $isFixed ? 'topupDiscMinPkgFixed' : 'topupDiscMinPkgPercent';
+                $tpl = $textbotlang['hardcoded'][$key] ?? ($isFixed ? '🎁 چون از {min} به بالا شارژ می‌کنی، {bonus} هدیه می‌گیری!' : '🎁 چون از {min} به بالا شارژ می‌کنی، {bonus} هم هدیه می‌گیری — یعنی {value}٪ بیشتر!');
+            } else {
+                $key = $isFixed ? 'topupDiscPkgFixed' : 'topupDiscPkgPercent';
+                $tpl = $textbotlang['hardcoded'][$key] ?? ($isFixed ? '{bonus} اضافه برای بسته {amount}' : 'تخفیف {value} درصدی برای بسته {amount}');
+            }
             return strtr($tpl, [
                 '{value}' => $valueTxt,
                 '{bonus}' => money($bonus),
                 '{amount}' => money($amount),
+                '{min}' => money($min),
+            ]);
+        }
+        // a discount with a 💰 حداقل مبلغ says so up front - the rate alone would
+        // promise it on any amount
+        if ($min > 0) {
+            $key = $isFixed ? 'topupDiscMinFixedCaption' : 'topupDiscMinPercentCaption';
+            $tpl = $textbotlang['hardcoded'][$key] ?? ($isFixed ? '🎁 شارژ از {min} به بالا، {value} شارژ اضافه بگیر!' : '🎁 شارژ از {min} به بالا، {value}٪ شارژ اضافه بگیر!');
+            $minGroup = (string) ($disc['group'] ?? '');
+            return strtr($tpl, [
+                '{min}' => money($min),
+                '{value}' => $isFixed ? money($value) : $valueTxt,
+                '{group}' => ($minGroup !== '' && $minGroup !== 'all') ? topup_disc_scope_label($minGroup, $textbotlang) : '',
             ]);
         }
         // a discount that came from a whole category says so by name, so the
@@ -11347,7 +11370,10 @@ if (!function_exists('topup_disc_caption_block')) {
     // topup_disc_award() credits once the invoice is paid.
     function topup_disc_caption_block($userId, $lang, $gatewayKey, $textbotlang, $amount = null, $forPackage = false)
     {
-        $eff = topup_disc_effective($userId, $lang, $gatewayKey, $amount === null ? 100000 : $amount);
+        // with no amount picked yet this only asks "is a discount on for this
+        // user" - a stand-in amount no 💰 حداقل مبلغ can be above, or a discount
+        // with a minimum would hide the very line that announces that minimum
+        $eff = topup_disc_effective($userId, $lang, $gatewayKey, $amount === null ? PHP_INT_MAX : $amount);
         if ($eff === null) {
             return '';
         }
@@ -11373,6 +11399,22 @@ if (!function_exists('topup_disc_admin_value_label')) {
         $v = $d['value'] ?? 0;
         $txt = rtrim(rtrim(number_format((float) $v, 2, '.', ','), '0'), '.');
         return (($d['mode'] ?? 'percent') === 'fixed') ? (money($v)) : ('٪' . $txt);
+    }
+}
+if (!function_exists('topup_disc_min_suffix')) {
+    // " (از 5,000,000 تومان به بالا)" after a discount's value wherever only the
+    // value is printed (the payment-method screen) - '' when no minimum is set
+    function topup_disc_min_suffix(array $d, $textbotlang)
+    {
+        $min = floatval($d['minAmount'] ?? 0);
+        if ($min <= 0) {
+            return '';
+        }
+        $tpl = is_array($textbotlang) ? ($textbotlang['hardcoded']['topupDiscMinSuffix'] ?? '') : '';
+        if (trim((string) $tpl) === '') {
+            $tpl = '(از {min} به بالا)';
+        }
+        return ' ' . strtr(trim((string) $tpl), ['{min}' => money($min)]);
     }
 }
 if (!function_exists('topup_disc_enabled_gateways')) {
@@ -11757,6 +11799,8 @@ if (!function_exists('topup_disc_auto_payload')) {
         $info .= "وضعیت: " . ($on ? 'روشن ✅' : 'خاموش') . "\n";
         $info .= "نوع: " . ($mode === 'fixed' ? 'مبلغ ثابت' : 'درصدی') . "\n";
         $info .= "مقدار: " . topup_disc_admin_value_label($auto) . "\n";
+        $minAmt = floatval($auto['minAmount'] ?? 0);
+        $info .= "حداقل مبلغ شارژ: " . ($minAmt > 0 ? money($minAmt) : 'ندارد') . "\n";
         $autoExp = intval($auto['expiry'] ?? 0);
         $info .= "انقضا: " . ($autoExp > 0 ? jdate('Y/m/d - H:i', $autoExp) : 'ندارد') . "\n";
         $info .= "هر کاربر: " . ($perUser > 0 ? "{$perUser} بار" : 'نامحدود') . " (پیش‌فرض: ۱ بار)\n";
@@ -11787,6 +11831,7 @@ if (!function_exists('topup_disc_auto_payload')) {
             ['text' => ($mode === 'fixed' ? '✅ ' : '') . '💵 مبلغ ثابت', 'callback_data' => "tpdautomode:{$lang}:{$key}:fixed", 'style' => 'primary'],
         ];
         $kb['inline_keyboard'][] = [['text' => '✏️ تغییر مقدار (' . topup_disc_admin_value_label($auto) . ')', 'callback_data' => "tpdautoval:{$lang}:{$key}", 'style' => $val > 0 ? 'success' : 'primary']];
+        $kb['inline_keyboard'][] = [['text' => '💰 حداقل مبلغ' . ($minAmt > 0 ? ' (' . money($minAmt) . ')' : ''), 'callback_data' => "tpdautomin:{$lang}:{$key}", 'style' => $minAmt > 0 ? 'success' : 'primary']];
         $kb['inline_keyboard'][] = [['text' => '⏳ مدت اعتبار', 'callback_data' => "tpdautoexp:{$lang}:{$key}", 'style' => $autoExp > 0 ? 'success' : 'primary']];
         $kb['inline_keyboard'][] = [['text' => '👤 سهمیه هر کاربر' . ($perUser > 0 ? " ({$perUser} بار)" : ''), 'callback_data' => "tpdautolimit:{$lang}:{$key}", 'style' => $perUser > 0 ? 'success' : 'primary']];
         $kb['inline_keyboard'][] = [['text' => ($newOnly ? '✅ ' : '') . '🆕 فقط کاربران جدید', 'callback_data' => "tpdautonewonly:{$lang}:{$key}", 'style' => $newOnly ? 'success' : 'primary']];
@@ -11824,6 +11869,8 @@ if (!function_exists('topup_disc_group_auto_payload')) {
         $info .= "وضعیت: " . ($on ? 'روشن ✅' : 'خاموش') . "\n";
         $info .= "نوع: " . ($mode === 'fixed' ? 'مبلغ ثابت' : 'درصدی') . "\n";
         $info .= "مقدار: " . topup_disc_admin_value_label($g) . "\n";
+        $minAmt = floatval($g['minAmount'] ?? 0);
+        $info .= "حداقل مبلغ شارژ: " . ($minAmt > 0 ? money($minAmt) : 'ندارد') . "\n";
         $info .= "انقضا: " . ($exp > 0 ? jdate('Y/m/d - H:i', $exp) : 'ندارد') . "\n";
         $info .= "هر کاربر: " . ($perUser > 0 ? "{$perUser} بار" : 'نامحدود') . " (پیش‌فرض: ۱ بار)\n";
         $info .= "فقط کاربران جدید: " . ($newOnly ? 'بله' : 'خیر') . "\n";
@@ -11856,6 +11903,7 @@ if (!function_exists('topup_disc_group_auto_payload')) {
             ['text' => ($mode === 'fixed' ? '✅ ' : '') . '💵 مبلغ ثابت', 'callback_data' => "dsgrpmode:{$lang}:{$group}:fixed", 'style' => 'primary'],
         ];
         $kb['inline_keyboard'][] = [['text' => '✏️ تغییر مقدار (' . topup_disc_admin_value_label($g) . ')', 'callback_data' => "dsgrpval:{$lang}:{$group}", 'style' => $val > 0 ? 'success' : 'primary']];
+        $kb['inline_keyboard'][] = [['text' => '💰 حداقل مبلغ' . ($minAmt > 0 ? ' (' . money($minAmt) . ')' : ''), 'callback_data' => "dsgrpmin:{$lang}:{$group}", 'style' => $minAmt > 0 ? 'success' : 'primary']];
         $kb['inline_keyboard'][] = [['text' => '⏳ مدت اعتبار', 'callback_data' => "dsgrpexp:{$lang}:{$group}", 'style' => $exp > 0 ? 'success' : 'primary']];
         $kb['inline_keyboard'][] = [['text' => '👤 سهمیه هر کاربر' . ($perUser > 0 ? " ({$perUser} بار)" : ''), 'callback_data' => "dsgrplimit:{$lang}:{$group}", 'style' => $perUser > 0 ? 'success' : 'primary']];
         $kb['inline_keyboard'][] = [['text' => ($newOnly ? '✅ ' : '') . '🆕 فقط کاربران جدید', 'callback_data' => "dsgrpnewonly:{$lang}:{$group}", 'style' => $newOnly ? 'success' : 'primary']];
@@ -11887,6 +11935,8 @@ if (!function_exists('topup_disc_code_payload')) {
         $info .= "💳 فقط برای درگاه: " . topup_disc_gateway_label($key, $textbotlang) . "\n";
         $info .= "وضعیت: " . topup_disc_admin_status_label($st) . "\n";
         $info .= "نوع: " . ($mode === 'fixed' ? 'مبلغ ثابت' : 'درصدی') . " — " . topup_disc_admin_value_label($c) . "\n";
+        $minAmt = floatval($c['minAmount'] ?? 0);
+        $info .= "حداقل مبلغ شارژ: " . ($minAmt > 0 ? money($minAmt) : 'ندارد') . "\n";
         $info .= "سهمیه کل: " . ($lim > 0 ? "{$used} از {$lim}" : "{$used} (نامحدود)") . "\n";
         $info .= "هر کاربر: " . ($perUser > 0 ? "{$perUser} بار" : 'نامحدود') . " (پیش‌فرض: ۱ بار)\n";
         $info .= "انقضا: " . ($exp > 0 ? jdate('Y/m/d H:i', $exp) : 'ندارد') . "\n";
@@ -11909,6 +11959,7 @@ if (!function_exists('topup_disc_code_payload')) {
             ['text' => ($mode === 'fixed' ? '✅ ' : '') . '💵 مبلغ ثابت', 'callback_data' => "tpdmode:{$lang}:{$key}:{$idx}:fixed", 'style' => 'primary'],
         ];
         $kb['inline_keyboard'][] = [['text' => '✏️ مقدار (' . topup_disc_admin_value_label($c) . ')', 'callback_data' => "tpdval:{$lang}:{$key}:{$idx}", 'style' => floatval($c['value'] ?? 0) > 0 ? 'success' : 'primary']];
+        $kb['inline_keyboard'][] = [['text' => '💰 حداقل مبلغ' . ($minAmt > 0 ? ' (' . money($minAmt) . ')' : ''), 'callback_data' => "tpdmin:{$lang}:{$key}:{$idx}", 'style' => $minAmt > 0 ? 'success' : 'primary']];
         $kb['inline_keyboard'][] = [
             ['text' => '🔢 سهمیه کل', 'callback_data' => "tpdlimit:{$lang}:{$key}:{$idx}", 'style' => $lim > 0 ? 'success' : 'primary'],
             ['text' => '👤 سهمیه هر کاربر', 'callback_data' => "tpduser:{$lang}:{$key}:{$idx}", 'style' => $perUser > 0 ? 'success' : 'primary'],
@@ -11961,6 +12012,7 @@ if (!function_exists('topup_disc_auto_set')) {
         $clean['enabled'] = !empty($auto['enabled']);
         $clean['mode'] = (isset($auto['mode']) && $auto['mode'] === 'fixed') ? 'fixed' : 'percent';
         $clean['value'] = max(0, floatval($auto['value'] ?? 0));
+        $clean['minAmount'] = max(0, floatval($auto['minAmount'] ?? 0));
         $clean['expiry'] = max(0, intval($auto['expiry'] ?? 0));
         $clean['limitPerUser'] = max(0, intval($auto['limitPerUser'] ?? 1));
         $clean['newUserOnly'] = !empty($auto['newUserOnly']);
@@ -12027,6 +12079,7 @@ if (!function_exists('topup_disc_group_set')) {
                 'enabled' => !empty($auto['enabled']),
                 'mode' => (isset($auto['mode']) && $auto['mode'] === 'fixed') ? 'fixed' : 'percent',
                 'value' => max(0, floatval($auto['value'] ?? 0)),
+                'minAmount' => max(0, floatval($auto['minAmount'] ?? 0)),
                 'expiry' => max(0, intval($auto['expiry'] ?? 0)),
                 'limitPerUser' => max(0, intval($auto['limitPerUser'] ?? 1)),
                 'newUserOnly' => !empty($auto['newUserOnly']),
@@ -12186,6 +12239,7 @@ if (!function_exists('topup_disc_codes_set')) {
                 'code' => $code,
                 'mode' => (isset($c['mode']) && $c['mode'] === 'fixed') ? 'fixed' : 'percent',
                 'value' => max(0, floatval($c['value'] ?? 0)),
+                'minAmount' => max(0, floatval($c['minAmount'] ?? 0)),
                 'enabled' => !empty($c['enabled']),
                 'expiry' => max(0, intval($c['expiry'] ?? 0)),
                 'limitTotal' => max(0, intval($c['limitTotal'] ?? 0)),
@@ -12399,6 +12453,11 @@ if (!function_exists('topup_disc_bonus_of')) {
     {
         $amount = floatval($amount);
         if ($amount <= 0) {
+            return 0;
+        }
+        // 💰 حداقل مبلغ: below it this discount gives nothing; the minimum itself
+        // already qualifies. 0 (every discount saved before it existed) = none.
+        if ($amount < floatval($disc['minAmount'] ?? 0)) {
             return 0;
         }
         $value = floatval($disc['value'] ?? 0);
