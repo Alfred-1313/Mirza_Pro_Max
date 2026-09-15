@@ -489,6 +489,14 @@ return array (
         'label' => '❌ دکمه بستن (اکانت تست)',
         'key' => 'bottext.btnCloseTest',
       ),
+      // the test-account panel list's own caption - it used to borrow the
+      // purchase one (textbot.selectLocation). No group either: its only row is
+      // inside 🔑 تنظیم اکانت تست, next to the close button above.
+      'test_selectlocation' =>
+      array (
+        'label' => '🎯 پیام انتخاب پنل (اکانت تست)',
+        'key' => 'textbot.selectLocationTest',
+      ),
       // reached from 🌐 تنظیمات تغییر زبان کاربر, which owns everything about
       // the picker; no 'group' so they get no second entry point of their own
       array (
@@ -7057,6 +7065,7 @@ nowpayments.io
 3- سرویس ها را از طریق پیامک ارسال نکنید برای ارسال پیامک می توانید از طریق ایمیل ارسال کنید.
     ',
     'selectLocation' => '<b>برای خرید، پنل که میخای انتخاب کن!</b>',
+    'selectLocationTest' => '<b>میخوای سرویس تستت از کدوم پنل باشه؟ انتخاب کن!</b>',
     'sell' => '🔐 خرید اشتراک',
     'tonPayment' => '💎 پرداخت با TON',
     'trxPayment' => '⚡ پرداخت با TRX',

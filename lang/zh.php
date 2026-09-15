@@ -3859,6 +3859,7 @@ f,n.n2',
     
 ',
                 'selectLocation' => '📌 请选择服务位置。',
+                'selectLocationTest' => '📌 请选择测试服务的面板。',
                 'sell' => '🔐 购买订阅',
                 'starTelegram' => '💫 Star Telegram',
                 'support' => '☎️ 客服',

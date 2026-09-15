@@ -30,6 +30,7 @@ return array (
     'requestAgent' => '👨‍💻 Wekilçilik haýyşy',
     'agentRequestDesc' => '📌 Wekilçilik haýyşyny ibermek üçin düşündirişiňizi iberiň.',
     'selectLocation' => '📌 Hyzmatyň ýerleşýän ýerini saýlaň.',
+    'selectLocationTest' => '📌 Synag hyzmatyňyz üçin paneli saýlaň.',
     'botOff' => '❌ Bot öçürilen, birnäçe minutdan soň täzeden synanyşyň',
     'tariffListDesc' => 'Bellenmedik',
     'cartToCart' => 'Kartdan karta',

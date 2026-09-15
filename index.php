@@ -146,6 +146,10 @@ if (!is_array($admin_ids)) {
 // per-user limit (default on) and their purchases cost nothing (default off)
 $admin_test_free = in_array($from_id, $admin_ids) && (string) ($setting['admin_test_unlimited'] ?? '1') !== '0';
 $admin_buy_free = in_array($from_id, $admin_ids) && (string) ($setting['admin_buy_free'] ?? '0') === '1';
+// set by the phone-verification step once the number is accepted: the flow
+// (verifybuy / verifyusertest / verifybulk / verifytopup) to pick up again in
+// this same request instead of the welcome screen
+$verify_resume = '';
 $helpdata = select("help", "*");
 $id_invoice = select("invoice", "id_invoice", null, null, "FETCH_COLUMN");
 $usernameinvoice = select("invoice", "username", null, null, "FETCH_COLUMN");
@@ -508,10 +512,48 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         ]), $request_contact, 'html');
         return;
     }
-    sendmessage($from_id, $textbotlang['users']['number']['active'], json_encode(['inline_keyboard' => [], 'remove_keyboard' => true]), 'html');
-    sendmessage($from_id, strtr($textbotlang['users']['text_start'], bottext_user_placeholders($user, $from_id)), $keyboard, 'html');
     update("user", "number", $user_phone, "id", $from_id);
     step('home', $from_id);
+    // Back to the flow that asked for the number (each of the four gates leaves
+    // its marker in Processing_value), not the welcome screen. Anything else in
+    // that field means there is nothing to pick up.
+    if (in_array((string) $user['Processing_value'], ['verifybuy', 'verifyusertest', 'verifybulk', 'verifytopup'], true)) {
+        $verify_resume = $user['Processing_value'];
+        update("user", "Processing_value", "0", "id", $from_id);
+    }
+    // the flows below read the number from here, not from the database
+    $user['number'] = $user_phone;
+    // the contact keyboard has to go: a reply-keyboard main menu takes its place
+    // in this same message, an inline one can't ride on a keyboard removal
+    $verifyMenuIsReply = array_key_exists('keyboard', (array) json_decode((string) $keyboard, true));
+    sendmessage($from_id, $textbotlang['users']['number']['active'], $verifyMenuIsReply ? $keyboard : json_encode(['inline_keyboard' => [], 'remove_keyboard' => true]), 'html');
+    if ($verify_resume === 'verifyusertest') {
+        // the test-account entry is further down this same elseif chain, so this
+        // request can't reach it - its next screen, behind the same checks
+        if (!check_active_btn($setting['keyboardmain'], "text_usertest")) {
+            sendmessage($from_id, $textbotlang['users']['usertest']['unavailable'], null, 'HTML');
+            return;
+        }
+        if (select("marzban_panel", "*", "TestAccount", "ONTestAccount", "count") == 0) {
+            sendmessage($from_id, $textbotlang['users']['usertest']['noPanel'], null, 'HTML');
+            return;
+        }
+        if ($user['limit_usertest'] <= 0 && !$admin_test_free) {
+            sendmessage($from_id, $textbotlang['users']['usertest']['limitwarning'], $keyboard_buy, 'html');
+            return;
+        }
+        sell_sticker_retire($from_id);
+        $usertestLocationMsg = sendmessage($from_id, $textbotlang['textbot']['selectLocationTest'], $list_marzban_usertest, 'html');
+        if (!empty($usertestLocationMsg['_sticker_message_id'])) {
+            update("user", "bt_sticker_id", (string) $usertestLocationMsg['_sticker_message_id'], "id", $from_id);
+        }
+    } elseif ($verify_resume === '' && !$verifyMenuIsReply) {
+        // nothing to pick up: the inline menu still needs a message to sit under -
+        // the one 🏠 بازگشت به منوی اصلی sends, not the welcome text a second time
+        sendmessage($from_id, $textbotlang['users']['back'], $keyboard, 'html');
+    }
+    // verifybuy / verifybulk / verifytopup: their own entries in the next elseif
+    // chain match $verify_resume and run for this same request, checks and all
 } elseif ($text == $textbotlang['textbot']['purchasedServices'] || $datain == "backorder" || $text == "/services") {
     $pages = 1;
     update("user", "pagenumber", $pages, "id", $from_id);
@@ -3357,6 +3399,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     if (true || $locationproduct != 1) {
         if (feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone" && $user['step'] != "get_number" && $user['number'] == "none") {
             sendmessage($from_id, $textbotlang['users']['number']['confirming'], $request_contact, 'HTML');
+            update("user", "Processing_value", "verifyusertest", "id", $from_id);
             step('get_number', $from_id);
         }
         if ($user['number'] == "none" && feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone")
@@ -3368,7 +3411,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         // any sticker still up from an abandoned run goes first, so only this
         // screen's own is on the books
         sell_sticker_retire($from_id);
-        $usertestLocationMsg = sendmessage($from_id, $textbotlang['textbot']['selectLocation'], $list_marzban_usertest, 'html');
+        $usertestLocationMsg = sendmessage($from_id, $textbotlang['textbot']['selectLocationTest'], $list_marzban_usertest, 'html');
         if (!empty($usertestLocationMsg['_sticker_message_id'])) {
             // the dedicated sticker column, not Processing_value_tow: that field
             // is re-purposed a few steps later in this very flow (it takes the
@@ -3403,6 +3446,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     }
     if (feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone" && $user['step'] != "get_number" && $user['number'] == "none") {
         sendmessage($from_id, $textbotlang['users']['number']['confirming'], $request_contact, 'HTML');
+        update("user", "Processing_value", "verifyusertest", "id", $from_id);
         step('get_number', $from_id);
     }
     if ($user['number'] == "none" && feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone")
@@ -3907,9 +3951,10 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     }
     step('home', $from_id);
     return;
-} elseif (($text == $textbotlang['textbot']['sell'] || $datain == "buy" || $datain == "buyback" || $datain == "buyfresh" || $text == "/buy" || $text == "buy") && $statusnote) {
+} elseif (($text == $textbotlang['textbot']['sell'] || $datain == "buy" || $datain == "buyback" || $datain == "buyfresh" || $text == "/buy" || $text == "buy" || $verify_resume === 'verifybuy') && $statusnote) {
     if (feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone" && $user['step'] != "get_number" && $user['number'] == "none") {
         sendmessage($from_id, $textbotlang['users']['number']['confirming'], $request_contact, 'HTML');
+        update("user", "Processing_value", "verifybuy", "id", $from_id);
         step('get_number', $from_id);
     }
     if ($user['number'] == "none" && feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone")
@@ -3928,7 +3973,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     }
     step("statusnamecustom", $from_id);
     return;
-} elseif ($text == $textbotlang['textbot']['sell'] || $datain == "buy" || $datain == "buybacktow" || $datain == "buyback" || $datain == "buyfresh" || $text == "/buy" || $text == "buy" || $user['step'] == "statusnamecustom") {
+} elseif ($text == $textbotlang['textbot']['sell'] || $datain == "buy" || $datain == "buybacktow" || $datain == "buyback" || $datain == "buyfresh" || $text == "/buy" || $text == "buy" || $user['step'] == "statusnamecustom" || $verify_resume === 'verifybuy') {
     if (!check_active_btn($setting['keyboardmain'], "text_sell")) {
         sendmessage($from_id, $textbotlang['users']['buttonDisabled'], null, 'HTML');
         return;
@@ -3951,6 +3996,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     }
     if (feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone" && $user['step'] != "get_number" && $user['number'] == "none") {
         sendmessage($from_id, $textbotlang['users']['number']['confirming'], $request_contact, 'HTML');
+        update("user", "Processing_value", "verifybuy", "id", $from_id);
         step('get_number', $from_id);
     }
     if ($user['number'] == "none" && feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone")
@@ -4693,7 +4739,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     }
     update("user", "Processing_value_four", "none", "id", $from_id);
     step('home', $from_id);
-} elseif ($text == $textbotlang['keyboard']['bulkPurchase'] || $datain == "kharidanbuh") {
+} elseif ($text == $textbotlang['keyboard']['bulkPurchase'] || $datain == "kharidanbuh" || $verify_resume === 'verifybulk') {
     if (feature_value('bulkbuy', $user['lang'] ?? 'fa', $setting['bulkbuy']) == "offbulk") {
         sendmessage($from_id, $textbotlang['users']['Major']['disabled'], null, 'HTML');
         return;
@@ -4713,6 +4759,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     }
     if (feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone" && $user['step'] != "get_number" && $user['number'] == "none") {
         sendmessage($from_id, $textbotlang['users']['number']['confirming'], $request_contact, 'HTML');
+        update("user", "Processing_value", "verifybulk", "id", $from_id);
         step('get_number', $from_id);
     }
     if ($user['number'] == "none" && feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone")
@@ -5059,13 +5106,15 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         ]);
     }
     step('home', $from_id);
-} elseif ($text == $textbotlang['textbot']['addBalance'] || $datain == "Add_Balance" || $text == "/topup") {
+} elseif ($text == $textbotlang['textbot']['addBalance'] || $datain == "Add_Balance" || $text == "/topup" || $verify_resume === 'verifytopup') {
     update("user", "Processing_value", "0", "id", $from_id);
     update("user", "Processing_value_one", "0", "id", $from_id);
     update("user", "Processing_value_tow", "0", "id", $from_id);
     update("user", "Processing_value_four", "0", "id", $from_id);
     if (feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone" && $user['step'] != "get_number" && $user['number'] == "none") {
         sendmessage($from_id, $textbotlang['users']['number']['confirming'], $request_contact, 'HTML');
+        // after the resets above, so the marker survives them
+        update("user", "Processing_value", "verifytopup", "id", $from_id);
         step('get_number', $from_id);
     }
     if ($user['number'] == "none" && feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone")

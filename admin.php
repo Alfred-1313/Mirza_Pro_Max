@@ -691,7 +691,9 @@ if (!function_exists('bottext_item_menu_payload')) {
             // not more controls for the prompt this screen is already editing
             $kb['inline_keyboard'][] = [['text' => bt_section_meta('usertest_related')['label'], 'callback_data' => 'bt_sep|usertest_related']];
             // first in the flow: the panel list the customer sees before this
-            // prompt. It is the only way in - it has no row on the home list.
+            // prompt - its caption, then its close button. This is the only way
+            // in to either - neither has a row on the home list.
+            $kb['inline_keyboard'][] = [['text' => '🎯 پیام انتخاب پنل (اکانت تست)', 'callback_data' => "bt_edit|{$bt_lang}|textbot.selectLocationTest", 'style' => 'primary']];
             $kb['inline_keyboard'][] = [['text' => '❌ دکمه بستن لیست پنل‌ها', 'callback_data' => "bt_edit|{$bt_lang}|bottext.btnCloseTest", 'style' => 'primary']];
             // it sent the customer here from the home list before, where it read
             // as a child of whatever section was last on screen; its own back
@@ -769,7 +771,7 @@ if (!function_exists('bottext_item_menu_payload')) {
             $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => 'bt_langswitch', 'style' => 'danger']];
         } elseif ($bt_key === 'users.Balance.chargeSuccessDiscount') {
             $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "bt_edit|{$bt_lang}|users.Balance.chargeSuccess", 'style' => 'danger']];
-        } elseif ($bt_key === 'textbot.afterText' || $bt_key === 'users.usertest.noPanel') {
+        } elseif ($bt_key === 'textbot.afterText' || $bt_key === 'users.usertest.noPanel' || $bt_key === 'textbot.selectLocationTest') {
             $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "bt_edit|{$bt_lang}|users.usertest.selectUsernamePrompt", 'style' => 'danger']];
         } elseif ($bt_key === 'textbot.testExpired') {
             // bottext.btnCloseTest used to need the same case here, but it now

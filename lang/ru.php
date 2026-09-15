@@ -3859,6 +3859,7 @@ ID пользователя : %s
     
 ',
                 'selectLocation' => '📌 Выберите локацию сервиса.',
+                'selectLocationTest' => '📌 Выберите панель для тестового сервиса.',
                 'sell' => '🔐 Купить подписку',
                 'starTelegram' => '💫 Star Telegram',
                 'support' => '☎️ Поддержка',

@@ -2343,7 +2343,7 @@ function keyboard_list_text($lang, $groupFilter = null)
         // 🔑 تنظیم اکانت تست now, and a second row here would give them two ways
         // in and an ambiguous "back" - textbot.afterText's own back button has
         // pointed at that screen all along, while its only row was out here
-        'bottext.btnCloseTest', 'textbot.afterText', 'textbot.afterPay', 'textbot.preInvoice', 'textbot.getConfigHintBuy', 'textbot.getConfigHintTest', 'users.status.infoFull', 'users.Balance.sendReceipt', 'users.Balance.chargeSuccess', 'users.Balance.chargeSuccessDiscount',
+        'bottext.btnCloseTest', 'textbot.selectLocationTest', 'textbot.afterText', 'textbot.afterPay', 'textbot.preInvoice', 'textbot.getConfigHintBuy', 'textbot.getConfigHintTest', 'users.status.infoFull', 'users.Balance.sendReceipt', 'users.Balance.chargeSuccess', 'users.Balance.chargeSuccessDiscount',
         // owned by 🌐 تنظیمات تغییر زبان کاربر, which edits them in place - a
         // second row here would make their back button ambiguous
         'bottext.langPickerCaption', 'bottext.langBlockedMsg'];

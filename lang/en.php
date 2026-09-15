@@ -3859,6 +3859,7 @@ After joining, click the check membership button',
     
 ',
                 'selectLocation' => '📌 Select the service location.',
+                'selectLocationTest' => '📌 Select the panel for your test service.',
                 'sell' => '🔐 Buy subscription',
                 'starTelegram' => '💫 Star Telegram',
                 'support' => '☎️ Support',
