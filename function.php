@@ -3094,6 +3094,8 @@ if (!function_exists('topup_card_invoice_generate')) {
             '{price}' => $valueprice,
             '{minutes}' => $expireMinutes,
         ]);
+        // the discount this exact amount earns, stated on the invoice itself
+        $textcart .= topup_disc_caption_block($from_id, $lang, 'card', $textbotlang, $amount, true);
         // shown whenever the feature is currently on - even on a reissued
         // invoice, whose amount may already carry an earlier random addition
         // from when it was first created - so the exact-amount warning always
@@ -3278,6 +3280,7 @@ if (!function_exists('topup_card_invoice_generate')) {
             '{usd}' => number_format($usd),
             '{minutes}' => $expireMinutes,
         ]);
+        $textnowpayments .= topup_disc_caption_block($from_id, $lang, 'plisio', $textbotlang, $amount, true);
         $payBtn = topup_styled_button($textbotlang['users']['Balance']['payments'], topup_invoice_btnstyle_for($lang, 'plisio', 'pay'), '', topup_invoice_btnstyle_default_color('pay'));
         $payBtn['url'] = $pay['invoice_url'];
         $paymentkeyboard = json_encode(['inline_keyboard' => [[$payBtn]]]);
@@ -3863,6 +3866,7 @@ if (!function_exists('trx_invoice_build')) {
             // cannot end up naming the same network differently.
             '{network}' => $b['trxNetworkLabel'],
         ]);
+        $text .= topup_disc_caption_block($from_id, $lang, 'trx', $textbotlang, $amount, true);
         $copy = function ($which, $label, $value) use ($lang) {
             $btn = topup_styled_button($label, topup_invoice_btnstyle_for($lang, 'trx', $which), '', topup_invoice_btnstyle_default_color($which, 'trx'));
             unset($btn['callback_data']);
@@ -4186,6 +4190,7 @@ if (!function_exists('usdtbep_invoice_build')) {
             '{address}' => $addr,
             '{network}' => $b['usdtbepNetworkLabel'],
         ]);
+        $text .= topup_disc_caption_block($from_id, $lang, 'usdtbep', $textbotlang, $amount, true);
         $copy = function ($which, $label, $value) use ($lang) {
             $btn = topup_styled_button($label, topup_invoice_btnstyle_for($lang, 'usdtbep', $which), '', topup_invoice_btnstyle_default_color($which, 'usdtbep'));
             unset($btn['callback_data']);
@@ -4401,6 +4406,7 @@ if (!function_exists('ton_invoice_build')) {
             '{address}' => $addr,
             '{memo}' => $randomString,
         ]);
+        $text .= topup_disc_caption_block($from_id, $lang, 'ton', $textbotlang, $amount, true);
         // The wallet link pre-fills all three values, which is the path that
         // cannot go wrong. The copy buttons are for anyone paying from a wallet
         // the link does not open.
@@ -5708,6 +5714,7 @@ if (!function_exists('nowpayment_invoice_build')) {
             '{usd}' => number_format($usd),
             '{minutes}' => topup_expire_minutes($lang, 'nowpayment'),
         ]);
+        $text .= topup_disc_caption_block($from_id, $lang, 'nowpayment', $textbotlang, $amount, true);
         $payBtn = topup_styled_button($textbotlang['users']['Balance']['payments'], topup_invoice_btnstyle_for($lang, 'nowpayment', 'pay'), '', topup_invoice_btnstyle_default_color('pay'));
         $payBtn['url'] = $pay['invoice_url'];
         return [
@@ -5763,6 +5770,7 @@ if (!function_exists('star_invoice_build')) {
             '{price}' => number_format($amount, 0),
             '{minutes}' => topup_expire_minutes($lang, 'startelegrams'),
         ]);
+        $text .= topup_disc_caption_block($from_id, $lang, 'startelegrams', $textbotlang, $amount, true);
         $payBtn = topup_styled_button($textbotlang['users']['Balance']['payments'], topup_invoice_btnstyle_for($lang, 'startelegrams', 'pay'), '', topup_invoice_btnstyle_default_color('pay'));
         $payBtn['url'] = $link['result'];
         return [
@@ -9110,6 +9118,10 @@ if (!function_exists('bt_section_meta')) {
                 'label' => '✏️ جمله‌ی تخفیف — وقتی روی یک دسته ست شده',
                 'alert' => 'این دو جمله وقتی نشون داده می‌شن که تخفیف روی کل یه دسته ست شده باشه (کارت به کارت / ریالی / آنلاین ارزی / آفلاین ارزی). اسم اون دسته خودش با {group} داخل جمله نوشته می‌شه، پس یه متن برای هر چهار دسته کافیه.',
             ],
+            'topupdisc_line_invoice' => [
+                'label' => '🧾 جمله‌ی تخفیف — داخل خودِ فاکتور',
+                'alert' => 'این دو جمله داخل خودِ فاکتور پرداخت (هر درگاهی) نشون داده می‌شن، بعد از اینکه کاربر مبلغ رو انتخاب کرده. دقیقاً می‌گن برای همین مبلغ چقدر به موجودی اضافه می‌شه: {bonus} مبلغ هدیه، {amount} مبلغ فاکتور، {value} درصد تخفیف.',
+            ],
             'topupdisc_members' => [
                 'label' => '💳 درگاه‌های این دسته',
                 'alert' => 'دکمه‌ی بالا تخفیف کل این دسته‌ست. دکمه‌های زیر هر درگاه رو جدا تنظیم می‌کنن (تخفیف خودکار و کدهای تخفیف مخصوص همون درگاه). اگه هر دو ست باشن، روی هم سوار نمی‌شن — هرکدوم به کاربر بیشتر بده همون اعمال می‌شه.',
@@ -10651,6 +10663,11 @@ if (!function_exists('topup_disc_method_to_gateway')) {
             'arze digital offline' => 'digitaltron',
             'Star Telegram' => 'startelegrams',
             'USDT-BEP20' => 'usdtbep',
+            // both settle through DirectPayment() from their cronbot watchers
+            // like USDT-BEP20 does; missing here, a discount shown on their
+            // screens was never actually credited
+            'TON' => 'ton',
+            'TRX' => 'trx',
         ];
         return $map[(string) $method] ?? null;
     }
@@ -10974,20 +10991,6 @@ if (!function_exists('topup_disc_expiry_text')) {
         }
         require_once __DIR__ . '/jdf.php';
         return jdate('Y/m/d - H:i', intval($ts));
-    }
-}
-if (!function_exists('topup_disc_decorate_button')) {
-    // appends "← <total>" to a package button when a discount applies, without
-    // touching the admin's own customised label/emoji/colour (pure suffix)
-    function topup_disc_decorate_button(array $btn, $userId, $lang, $gatewayKey, $amount)
-    {
-        $eff = topup_disc_effective($userId, $lang, $gatewayKey, $amount);
-        if ($eff === null || $eff['bonus'] <= 0) {
-            return $btn;
-        }
-        $total = floatval($amount) + floatval($eff['bonus']);
-        $btn['text'] = $btn['text'] . ' ← ' . money($total);
-        return $btn;
     }
 }
 if (!function_exists('topup_disc_active_label')) {
@@ -11339,14 +11342,16 @@ if (!function_exists('topup_disc_caption_line')) {
 if (!function_exists('topup_disc_caption_block')) {
     // the bold + blockquote block appended under the amount screens' own
     // caption. Returns '' when no discount applies, so call sites can just
-    // concatenate unconditionally.
-    function topup_disc_caption_block($userId, $lang, $gatewayKey, $textbotlang, $amount = null)
+    // concatenate unconditionally. $forPackage = true is the invoice's own
+    // quote: the bonus for exactly this $amount, the same figure
+    // topup_disc_award() credits once the invoice is paid.
+    function topup_disc_caption_block($userId, $lang, $gatewayKey, $textbotlang, $amount = null, $forPackage = false)
     {
         $eff = topup_disc_effective($userId, $lang, $gatewayKey, $amount === null ? 100000 : $amount);
         if ($eff === null) {
             return '';
         }
-        $line = topup_disc_caption_line($eff['disc'], $textbotlang, $amount, false);
+        $line = topup_disc_caption_line($eff['disc'], $textbotlang, $amount, $forPackage);
         return "\n\n<blockquote><b>" . htmlspecialchars($line, ENT_QUOTES) . "</b></blockquote>";
     }
 }

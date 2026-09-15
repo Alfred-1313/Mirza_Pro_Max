@@ -62,7 +62,8 @@ if (!isset($from_id, $datain)) {
             ]
         ]);
         $price_format = number_format($user['Processing_value'], 0);
-        $textnowpayments = sprintf($textbotlang['users']['Balance']['invoiceCreated'], $randomString, $price_format);
+        $textnowpayments = sprintf($textbotlang['users']['Balance']['invoiceCreated'], $randomString, $price_format)
+            . topup_disc_caption_block($from_id, $user['lang'] ?? 'fa', 'aqayepardakht', $textbotlang, $user['Processing_value'], true);
         topup_linkmsg_help($from_id, 'helpaqayepardakht');
         topup_track_invoice_message($randomString, topup_linkmsg_finish($from_id, $textnowpayments, $paymentkeyboard));
     } elseif ($datain == "zarinpal") {
@@ -109,7 +110,8 @@ if (!isset($from_id, $datain)) {
             ]
         ]);
         $price_format = number_format($user['Processing_value'], 0);
-        $textnowpayments = sprintf($textbotlang['users']['Balance']['invoiceCreated2'], $randomString, $price_format);
+        $textnowpayments = sprintf($textbotlang['users']['Balance']['invoiceCreated2'], $randomString, $price_format)
+            . topup_disc_caption_block($from_id, $user['lang'] ?? 'fa', 'zarinpal', $textbotlang, $user['Processing_value'], true);
         topup_linkmsg_help($from_id, 'helpzarinpal');
         topup_track_invoice_message($randomString, topup_linkmsg_finish($from_id, $textnowpayments, $paymentkeyboard));
     } elseif ($datain == "plisio") {
@@ -199,7 +201,8 @@ if (!isset($from_id, $datain)) {
             ]
         ]);
         $pricetoman = number_format($user['Processing_value'], 0);
-        $textnowpayments = sprintf($textbotlang['users']['Balance']['transactionCreated'], $randomString, $pricetoman);
+        $textnowpayments = sprintf($textbotlang['users']['Balance']['transactionCreated'], $randomString, $pricetoman)
+            . topup_disc_caption_block($from_id, $user['lang'] ?? 'fa', 'iranpay1', $textbotlang, $user['Processing_value'], true);
         topup_linkmsg_help($from_id, 'helpiranpay1');
         topup_track_invoice_message($randomString, topup_linkmsg_finish($from_id, $textnowpayments, $paymentkeyboard));
     } elseif ($datain == "iranpay2") {
@@ -255,7 +258,8 @@ if (!isset($from_id, $datain)) {
             ]
         ]);
         $pricetoman = number_format($user['Processing_value'], 0);
-        $textnowpayments = sprintf($textbotlang['users']['Balance']['transactionCreated2'], $randomString, $pricetoman);
+        $textnowpayments = sprintf($textbotlang['users']['Balance']['transactionCreated2'], $randomString, $pricetoman)
+            . topup_disc_caption_block($from_id, $user['lang'] ?? 'fa', 'iranpay2', $textbotlang, $user['Processing_value'], true);
         topup_linkmsg_help($from_id, 'helpiranpay2');
         topup_track_invoice_message($randomString, topup_linkmsg_finish($from_id, $textnowpayments, $paymentkeyboard));
     } elseif ($datain == "iranpay3") {
@@ -321,7 +325,8 @@ if (!isset($from_id, $datain)) {
                 ],
             ]
         ]);
-        $textnowpayments = sprintf($textbotlang['users']['Balance']['transactionCreated3'], $randomString, $pricetoman);
+        $textnowpayments = sprintf($textbotlang['users']['Balance']['transactionCreated3'], $randomString, $pricetoman)
+            . topup_disc_caption_block($from_id, $user['lang'] ?? 'fa', 'iranpay3', $textbotlang, $user['Processing_value'], true);
         topup_linkmsg_help($from_id, 'helpiranpay3');
         topup_linkmsg_finish($from_id, $textnowpayments, $paymentkeyboard);
         step("getvoocherx", $from_id);
@@ -367,7 +372,8 @@ if (!isset($from_id, $datain)) {
             ]
         ]);
         $formatprice = number_format($user['Processing_value'], 0);
-        $textnowpayments = sprintf($textbotlang['users']['Balance']['transactionCreatedTron'], $randomString, $affilnecurrency, $trxprice, $formatprice);
+        $textnowpayments = sprintf($textbotlang['users']['Balance']['transactionCreatedTron'], $randomString, $affilnecurrency, $trxprice, $formatprice)
+            . topup_disc_caption_block($from_id, $user['lang'] ?? 'fa', 'digitaltron', $textbotlang, $user['Processing_value'], true);
         topup_linkmsg_help($from_id, 'helpofflinearze');
         topup_track_invoice_message($randomString, topup_linkmsg_finish($from_id, $textnowpayments, $paymentkeyboard));
     } elseif ($datain == "ton") {

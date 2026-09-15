@@ -839,6 +839,9 @@ if (!function_exists('bt_inline_block_keys')) {
             'hardcoded.topupDiscGroupFixedCaption',
             'hardcoded.topupDiscAllPercentCaption',
             'hardcoded.topupDiscAllFixedCaption',
+            // the same kind of line, inside the payment invoice
+            'hardcoded.topupDiscPkgPercent',
+            'hardcoded.topupDiscPkgFixed',
             // a line inside the service-status caption
             'users.status.svcLocationMore',
             // button labels: there is no message to attach a sticker to, and
@@ -6884,6 +6887,13 @@ if (preg_match('/^btact\|text\|([a-z]{2})\|(.+)$/', $datain, $btm) && $adminrule
             . "\n💡 این جمله برای تخفیف <b>اعمال همگانی</b> است (همه‌ی درگاه‌ها). دسته‌ای در کار نیست، پس <code>{group}</code> اینجا کار نمی‌کنه.",
         'hardcoded.topupDiscAllFixedCaption' => "• مبلغی که به شارژ اضافه می‌شه: <code>{value}</code>\n"
             . "\n💡 این جمله برای تخفیف <b>اعمال همگانی</b> است (همه‌ی درگاه‌ها). دسته‌ای در کار نیست، پس <code>{group}</code> اینجا کار نمی‌کنه.",
+        'hardcoded.topupDiscPkgPercent' => "• مبلغ هدیه برای همین فاکتور: <code>{bonus}</code>\n"
+            . "• درصد تخفیف: <code>{value}</code>\n"
+            . "• مبلغ فاکتور: <code>{amount}</code>\n"
+            . "\n💡 این جمله داخل <b>خودِ فاکتور پرداخت</b> نشون داده می‌شه، بعد از انتخاب مبلغ.",
+        'hardcoded.topupDiscPkgFixed' => "• مبلغ هدیه برای همین فاکتور: <code>{bonus}</code>\n"
+            . "• مبلغ فاکتور: <code>{amount}</code>\n"
+            . "\n💡 این جمله داخل <b>خودِ فاکتور پرداخت</b> نشون داده می‌شه، بعد از انتخاب مبلغ.",
         'bottext.langPickerCaption' => "• خطوط «زبان خود را انتخاب کنید»، یکی به ازای هر زبان فعال: <code>{lines}</code>\n"
             . "\n💡 این صفحه قبل از اینکه کاربر زبانی داشته باشه نشون داده می‌شه، برای همین متنش چندزبانه‌ست. اگه <code>{lines}</code> رو برداری، کاربر خارجی‌زبان هیچ راهنمایی به زبان خودش نمی‌بینه.\n"
             . "💡 ظاهر خود دکمه‌ها (چیدمان، رنگ، ایموجی، نام) از همون صفحه‌ی 🌐 تنظیمات تغییر زبان کاربر تنظیم می‌شه.",

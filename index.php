@@ -5224,7 +5224,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     foreach (array_chunk(topup_packages_for($tp_lang, $tp_key, true), topup_columns_for($tp_lang, $tp_key), true) as $tp_row) {
         $tp_kbRow = [];
         foreach ($tp_row as $tp_i => $tp_p) {
-            $tp_kbRow[] = topup_disc_decorate_button(topup_package_button($tp_p, $tp_lang, "toppick:{$tp_i}"), $from_id, $tp_lang, $tp_key, $tp_p['amount'] ?? 0);
+            $tp_kbRow[] = topup_package_button($tp_p, $tp_lang, "toppick:{$tp_i}");
         }
         $tp_kb['inline_keyboard'][] = $tp_kbRow;
     }
@@ -5310,7 +5310,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     foreach (array_chunk(topup_packages_for($tp_lang, $tp_key, true), topup_columns_for($tp_lang, $tp_key), true) as $tp_row) {
         $tp_kbRow = [];
         foreach ($tp_row as $tp_i => $tp_p) {
-            $tp_kbRow[] = topup_disc_decorate_button(topup_package_button($tp_p, $tp_lang, "toppick:{$tp_i}"), $from_id, $tp_lang, $tp_key, $tp_p['amount'] ?? 0);
+            $tp_kbRow[] = topup_package_button($tp_p, $tp_lang, "toppick:{$tp_i}");
         }
         $tp_kb['inline_keyboard'][] = $tp_kbRow;
     }

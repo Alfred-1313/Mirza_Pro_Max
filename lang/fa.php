@@ -577,6 +577,19 @@ return array (
         'group' => 'topupdisc',
         'section' => 'topupdisc_line_all',
       ),
+      // the quote inside the invoice itself, for the one amount just picked
+      array (
+        'label' => '🧾 داخل فاکتور — درصدی',
+        'key' => 'hardcoded.topupDiscPkgPercent',
+        'group' => 'topupdisc',
+        'section' => 'topupdisc_line_invoice',
+      ),
+      array (
+        'label' => '🧾 داخل فاکتور — مبلغ ثابت',
+        'key' => 'hardcoded.topupDiscPkgFixed',
+        'group' => 'topupdisc',
+        'section' => 'topupdisc_line_invoice',
+      ),
       array (
         'label' => '❌ خطای مبلغ خارج از حداقل/حداکثر',
         'key' => 'users.Balance.amountRangeError',
@@ -9151,14 +9164,14 @@ nowpayments.io
 چنان چه تمایل به مصرف سرویس خود دارید از دکمه زیر استفاده کنید 🫶',
     'volumeTimeEndDefaultText' => 'مشتری گرامی {username}
 مدت زمان بسته شما که در تاریخ {purchasedate} خریداری کرده بودید به اتمام رسید ، چنان چه تمایل به مصرف سرویس خود دارید از دکمه زیر استفاده کنید 🫶',
-    'topupDiscPercentCaption' => 'تخفیف {value} درصدی برای افزایش موجودی',
-    'topupDiscFixedCaption' => '{value} اضافه برای هر شارژ',
-    'topupDiscGroupPercentCaption' => '{group} — تخفیف {value} درصدی',
-    'topupDiscGroupFixedCaption' => '{group} — {value} اضافه برای هر شارژ',
-    'topupDiscAllPercentCaption' => '🎉 تخفیف {value} درصدی روی همه‌ی روش‌های پرداخت',
-    'topupDiscAllFixedCaption' => '🎉 {value} اضافه روی هر شارژ، با هر روش پرداخت',
-    'topupDiscPkgPercent' => 'تخفیف {value} درصدی برای بسته {amount}',
-    'topupDiscPkgFixed' => '{bonus} اضافه برای بسته {amount}',
+    'topupDiscPercentCaption' => '🎁 با شارژ حسابت، {value}٪ بیشتر می‌گیری!',
+    'topupDiscFixedCaption' => '🎁 با هر شارژ، {value} هدیه هم می‌گیری!',
+    'topupDiscGroupPercentCaption' => '🎁 با شارژ از {group}، {value}٪ بیشتر می‌گیری!',
+    'topupDiscGroupFixedCaption' => '🎁 با شارژ از {group}، {value} هدیه هم می‌گیری!',
+    'topupDiscAllPercentCaption' => '🎁 روی هر شارژی، {value}٪ بیشتر می‌گیری!',
+    'topupDiscAllFixedCaption' => '🎁 روی هر شارژی، {value} هدیه هم می‌گیری!',
+    'topupDiscPkgPercent' => '🎁 با این شارژ {bonus} هم هدیه می‌گیری — یعنی {value}٪ بیشتر از {amount}!',
+    'topupDiscPkgFixed' => '🎁 با این شارژ {bonus} هدیه می‌گیری!',
     'volumeEndDefaultText' => 'مشتری گرامی {username}
 حجم بسته VPN شما {packagedays} روزه {packagevolume} گیگابایتی شما به پایان رسید .
 این بسته فاقد تمدید خودکار میباشد برای تمدید و استفاده مجدد میتوانید بسته خود را با دکمه پایین تمدید کنید 🫶',
