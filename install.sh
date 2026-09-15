@@ -219,6 +219,44 @@ _link_mirza() {
     chmod +x "$link" 2>/dev/null
 }
 
+# Which GitHub branch this server installs and updates from. master is the
+# main project; a test branch lets new work run on a server first and be
+# merged into master once it checks out. No file (the default) = master.
+MIRZA_BRANCH_FILE="/root/.mirza_branch"
+mirza_branch() {
+    local b=""
+    [ -f "$MIRZA_BRANCH_FILE" ] && b=$(tr -d ' \t\r\n' < "$MIRZA_BRANCH_FILE")
+    case "$b" in ""|-*|*[!A-Za-z0-9._/-]*) b="master" ;; esac
+    echo "$b"
+}
+
+# mirza branch [name] - handled before the self-update below, so a switch
+# fetches the script from the new branch straight away
+if [ "$1" = "branch" ]; then
+    if [ -z "$2" ]; then
+        echo -e "\e[32mThis server installs and updates from branch: $(mirza_branch)\033[0m"
+        exit 0
+    fi
+    case "$2" in
+        -*|*[!A-Za-z0-9._/-]*) echo -e "\e[91mInvalid branch name: $2\033[0m"; exit 1 ;;
+    esac
+    ensure_dns >/dev/null 2>&1
+    # it has to exist on GitHub, or every later update would download nothing
+    _branch_url="https://raw.githubusercontent.com/Alfred-1313/Mirza_Pro_Max/$2/install.sh"
+    if ! { curl -fsSL --max-time 15 -o /dev/null "$_branch_url" 2>/dev/null || wget -q -O /dev/null "$_branch_url" 2>/dev/null; }; then
+        echo -e "\e[91mBranch '$2' was not found on GitHub (or GitHub is unreachable). Nothing changed.\033[0m"
+        exit 1
+    fi
+    if [ "$2" = "master" ]; then
+        rm -f "$MIRZA_BRANCH_FILE"
+    else
+        echo "$2" > "$MIRZA_BRANCH_FILE"
+    fi
+    echo -e "\e[32mThis server now installs and updates from branch: $2\033[0m"
+    echo -e "\e[33mRun 'mirza update' to put that branch's code on this server.\033[0m"
+    exit 0
+fi
+
 # Self-update: every run, fetch the latest script from GitHub, validate it,
 # install it to /root/install.sh, link it into /usr/local/bin, and re-exec.
 function self_update_script() {
@@ -228,7 +266,7 @@ function self_update_script() {
     done
     local MASTER_PATH="/root/install.sh"
     local BIN_LINK="/usr/local/bin/mirza"
-    local URL="https://raw.githubusercontent.com/Alfred-1313/Mirza_Pro_Max/master/install.sh"
+    local URL="https://raw.githubusercontent.com/Alfred-1313/Mirza_Pro_Max/$(mirza_branch)/install.sh"
     local TEMP_FILE="/tmp/mirzabot_update.sh"
 
     # Make sure DNS works before reaching GitHub
@@ -778,13 +816,19 @@ get_installed_version() {
 
 # Choose which source to download.
 # Sets globals: SRC_ZIP_URL, SRC_LABEL
-# There is one source: the current code on master. Release tags used to be an
+# There is one source: the current code on this server's branch (master unless
+# 'mirza branch <name>' picked a test branch). Release tags used to be an
 # option, and that is exactly what went wrong - the newest tag could sit well
 # behind master, so "latest stable" quietly installed old code. No prompt now.
 # Returns: 0 = chosen (it cannot fail)
 choose_source() {
-    SRC_ZIP_URL="https://github.com/${GIT_REPO}/archive/refs/heads/master.zip"
-    SRC_LABEL="Latest"
+    local branch; branch=$(mirza_branch)
+    SRC_ZIP_URL="https://github.com/${GIT_REPO}/archive/refs/heads/${branch}.zip"
+    if [ "$branch" = "master" ]; then
+        SRC_LABEL="Latest"
+    else
+        SRC_LABEL="Latest - test branch: ${branch}"
+    fi
     return 0
 }
 
@@ -2182,8 +2226,8 @@ EOF
         # neither file on disk, so fetch them first if still missing.
         if [ ! -f "$BOT_DIR/vendor/autoload.php" ]; then
             if [ ! -f "$BOT_DIR/composer.json" ]; then
-                curl -fsSL -o "$BOT_DIR/composer.json" "https://raw.githubusercontent.com/${GIT_REPO}/master/composer.json" 2>/dev/null
-                curl -fsSL -o "$BOT_DIR/composer.lock" "https://raw.githubusercontent.com/${GIT_REPO}/master/composer.lock" 2>/dev/null
+                curl -fsSL -o "$BOT_DIR/composer.json" "https://raw.githubusercontent.com/${GIT_REPO}/$(mirza_branch)/composer.json" 2>/dev/null
+                curl -fsSL -o "$BOT_DIR/composer.lock" "https://raw.githubusercontent.com/${GIT_REPO}/$(mirza_branch)/composer.lock" 2>/dev/null
             fi
             run_step "Installing PHP dependencies (composer)" "install_php_deps '$BOT_DIR'" \
                 || { show_step_error; install_pause "Installing PHP dependencies"; }
@@ -3100,7 +3144,7 @@ function migrate_to_pro() {
     NEW_BOT_DIR="/var/www/html/mirzaprobotconfig"
     rm -rf "$OLD_BOT_DIR"
     mkdir -p "$NEW_BOT_DIR"
-    ZIP_URL="https://github.com/Alfred-1313/Mirza_Pro_Max/archive/refs/heads/master.zip"
+    ZIP_URL="https://github.com/${GIT_REPO}/archive/refs/heads/$(mirza_branch).zip"
     TEMP_DIR="/tmp/mirzabot_mig"
     mkdir -p "$TEMP_DIR"
     run_step "Downloading Mirza source" "wget -q -O '$TEMP_DIR/bot.zip' '$ZIP_URL'" \
@@ -3235,6 +3279,11 @@ print_usage() {
     backup             Dump the database and send it to Telegram
     import             Restore the database from a .sql dump (beta)
     menu               Open the interactive menu (default)
+    branch [name]      Show or switch the GitHub branch this server installs
+                       and updates from. master is the main project; a test
+                       branch runs new work here before it is merged into
+                       master. 'mirza branch master' goes back to the main
+                       project. Run 'mirza update' after switching.
 
   Options:
     --name    <user>   Bot username, without the @
@@ -3250,6 +3299,8 @@ print_usage() {
     mirza install --name myvpnbot --token 123456:ABC --admin 111222333 \\
                   --domain bot.example.com --db-user mirza --db-pass s3cret_1
     mirza update
+    mirza branch test && mirza update      try the test branch
+    mirza branch master && mirza update    back to the main project
 
   Notes:
     - Run as root.
