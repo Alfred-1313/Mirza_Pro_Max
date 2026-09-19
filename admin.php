@@ -1756,6 +1756,8 @@ if (!function_exists('gateway_globally_on')) {
                 return getPaySettingValue('statusaqayepardakht') === 'onaqayepardakht';
             case 'zarinpal':
                 return getPaySettingValue('zarinpalstatus') === 'onzarinpal';
+            case 'frenzyex':
+                return getPaySettingValue('frenzyexstatus') === 'onfrenzyex';
             case 'paymentnotverify':
                 return getPaySettingValue('paymentstatussnotverify') === 'onverifypay';
             case 'startelegrams':
@@ -1785,6 +1787,7 @@ if (!function_exists('gateway_globally_set')) {
             'iranpay3' => ['statusiranpay3', 'oniranpay3', 'offiranpay3'],
             'aqayepardakht' => ['statusaqayepardakht', 'onaqayepardakht', 'offaqayepardakht'],
             'zarinpal' => ['zarinpalstatus', 'onzarinpal', 'offzarinpal'],
+            'frenzyex' => ['frenzyexstatus', 'onfrenzyex', 'offfrenzyex'],
             'paymentnotverify' => ['paymentstatussnotverify', 'onverifypay', 'offverifypay'],
             'startelegrams' => ['statusstar', '1', '0'],
             'ton' => ['statuston', '1', '0'],
@@ -13571,6 +13574,8 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     sendmessage($from_id, $textbotlang['users']['selectoption'], $aqayepardakht, 'HTML');
 } elseif ($datain == "zarinpalsetting" && $adminrulecheck['rule'] == "administrator") {
     sendmessage($from_id, $textbotlang['Admin']['selectOption'], $keyboardzarinpal, 'HTML');
+} elseif ($datain == "frenzyexsetting" && $adminrulecheck['rule'] == "administrator") {
+    sendmessage($from_id, $textbotlang['Admin']['selectOption'], $keyboardfrenzyex, 'HTML');
 } elseif ($text == $textbotlang['keyboard']['setAqayePardakhtMerchant'] && $adminrulecheck['rule'] == "administrator") {
     $PaySetting = select("PaySetting", "ValuePay", "NamePay", "merchant_id_aqayepardakht")['ValuePay'];
     $textaqayepardakht = sprintf($textbotlang['Admin']['gateway']['askAqayePardakhtMerchant'], $PaySetting);
@@ -13588,6 +13593,24 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
 } elseif ($user['step'] == "merchant_zarinpal") {
     sendmessage($from_id, $textbotlang['Admin']['SettingnowPayment']['saveApi'], $keyboardzarinpal, 'HTML');
     update("PaySetting", "ValuePay", $text, "NamePay", "merchant_zarinpal");
+    step('home', $from_id);
+} elseif ($text == $textbotlang['keyboard']['frenzyExApiKey'] && $adminrulecheck['rule'] == "administrator") {
+    $PaySetting = select("PaySetting", "ValuePay", "NamePay", "frenzyex_api_key")['ValuePay'];
+    $textfrenzyex = sprintf($textbotlang['Admin']['gateway']['askFrenzyExApiKey'], $PaySetting);
+    sendmessage($from_id, $textfrenzyex, $backadmin, 'HTML');
+    step('frenzyex_api_key', $from_id);
+} elseif ($user['step'] == "frenzyex_api_key") {
+    sendmessage($from_id, $textbotlang['Admin']['SettingnowPayment']['saveApi'], $keyboardfrenzyex, 'HTML');
+    update("PaySetting", "ValuePay", $text, "NamePay", "frenzyex_api_key");
+    step('home', $from_id);
+} elseif ($text == $textbotlang['keyboard']['frenzyExCallbackSecret'] && $adminrulecheck['rule'] == "administrator") {
+    $PaySetting = select("PaySetting", "ValuePay", "NamePay", "frenzyex_callback_secret")['ValuePay'];
+    $textfrenzyex = sprintf($textbotlang['Admin']['gateway']['askFrenzyExCallbackSecret'], $PaySetting);
+    sendmessage($from_id, $textfrenzyex, $backadmin, 'HTML');
+    step('frenzyex_callback_secret', $from_id);
+} elseif ($user['step'] == "frenzyex_callback_secret") {
+    sendmessage($from_id, $textbotlang['Admin']['SettingnowPayment']['saveApi'], $keyboardfrenzyex, 'HTML');
+    update("PaySetting", "ValuePay", $text, "NamePay", "frenzyex_callback_secret");
     step('home', $from_id);
 } elseif ($text == $textbotlang['Admin']['btnKeyboard']['managementPanel'] && $adminrulecheck['rule'] == "administrator") {
     sendmessage($from_id, $textbotlang['Admin']['managepanel']['getLoc'], $json_list_marzban_panel, 'HTML');
@@ -16922,6 +16945,13 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
             $valuenew = "onzarinpal";
         }
         update("PaySetting", "ValuePay", $valuenew, "NamePay", "zarinpalstatus");
+    } elseif ($type == "frenzyex") {
+        if ($value == "onfrenzyex") {
+            $valuenew = "offfrenzyex";
+        } else {
+            $valuenew = "onfrenzyex";
+        }
+        update("PaySetting", "ValuePay", $valuenew, "NamePay", "frenzyexstatus");
     } elseif ($type == "affilnecurrency") {
         if ($value == "ondigi") {
             $valuenew = "offdigi";
@@ -16952,6 +16982,7 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         update("PaySetting", "ValuePay", $valuenew, "NamePay", "statusnowpayment");
     }
     $zarinpal = getPaySettingValue('zarinpalstatus', 'offzarinpal');
+    $frenzyex = getPaySettingValue('frenzyexstatus', 'offfrenzyex');
     $cartotcart = getPaySettingValue('Cartstatus', 'offcard');
     $plisio = getPaySettingValue('nowpaymentstatus', 'offnowpayment');
     $arzireyali1 = getPaySettingValue('statusSwapWallet', 'offSwapinoBot');
@@ -16986,6 +17017,10 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         'onzarinpal' => $textbotlang['Admin']['Status']['statuson'],
         'offzarinpal' => $textbotlang['Admin']['Status']['statusoff']
     ][$zarinpal];
+    $frenzyexstatus = [
+        'onfrenzyex' => $textbotlang['Admin']['Status']['statuson'],
+        'offfrenzyex' => $textbotlang['Admin']['Status']['statusoff']
+    ][$frenzyex];
     $affilnecurrencystatus = [
         'ondigi' => $textbotlang['Admin']['Status']['statuson'],
         'offdigi' => $textbotlang['Admin']['Status']['statusoff']
@@ -17051,6 +17086,11 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
                 ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "zarinpalsetting"],
                 ['text' => $zarinpalstatus, 'callback_data' => "editpayment-zarinpal-$zarinpal"],
                 ['text' => $textbotlang['keyboard']['zarinPalGateway'], 'callback_data' => "zarinpal"],
+            ],
+            [
+                ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "frenzyexsetting"],
+                ['text' => $frenzyexstatus, 'callback_data' => "editpayment-frenzyex-$frenzyex"],
+                ['text' => $textbotlang['keyboard']['frenzyExGateway'], 'callback_data' => "frenzyex"],
             ],
             [
                 ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "affilnecurrencysetting"],
@@ -17160,6 +17200,17 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     sendmessage($from_id, $textbotlang['Admin']['price']['priceSaved'], $keyboardzarinpal, 'HTML');
     step("home", $from_id);
     update("PaySetting", "ValuePay", $text, "NamePay", "chashbackzarinpal");
+} elseif ($text == $textbotlang['keyboard']['cashbackFrenzyEx']) {
+    sendmessage($from_id, $textbotlang['Admin']['price']['askPaymentCashback'], $backadmin, 'HTML');
+    step("getcashfrenzyex", $from_id);
+} elseif ($user['step'] == "getcashfrenzyex") {
+    if (!ctype_digit($text)) {
+        sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
+        return;
+    }
+    sendmessage($from_id, $textbotlang['Admin']['price']['priceSaved'], $keyboardfrenzyex, 'HTML');
+    step("home", $from_id);
+    update("PaySetting", "ValuePay", $text, "NamePay", "chashbackfrenzyex");
 } elseif ($text == $textbotlang['keyboard']['addConfig']) {
     $product = [];
     $stmt = $pdo->prepare("SELECT * FROM product WHERE Location = :text or Location = '/all' ");
@@ -17765,6 +17816,38 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     sendmessage($from_id, $textbotlang['Admin']['Balance']['maxDepositSaved'], $aqayepardakht, 'HTML');
     step("home", $from_id);
     update("PaySetting", "ValuePay", $text, "NamePay", "maxbalancezarinpal");
+} elseif ($text == $textbotlang['keyboard']['minAmountFrenzyEx']) {
+    sendmessage($from_id, $textbotlang['Admin']['Balance']['askMinDeposit'], $backadmin, 'HTML');
+    step("getmainfrenzyex", $from_id);
+} elseif ($user['step'] == "getmainfrenzyex") {
+    if (!ctype_digit($text)) {
+        sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
+        return;
+    }
+    $limitErr = limit_conflict_text(true, $text, pay_value("maxbalancefrenzyex", null, ''), 'fa', $textbotlang);
+    if ($limitErr !== null) {
+        sendmessage($from_id, $limitErr, $backadmin, 'HTML');
+        return;
+    }
+    sendmessage($from_id, $textbotlang['Admin']['Balance']['minDepositSaved'], $keyboardfrenzyex, 'HTML');
+    step("home", $from_id);
+    update("PaySetting", "ValuePay", $text, "NamePay", "minbalancefrenzyex");
+} elseif ($text == $textbotlang['keyboard']['maxAmountFrenzyEx']) {
+    sendmessage($from_id, $textbotlang['Admin']['Balance']['askMaxDeposit'], $backadmin, 'HTML');
+    step("getmaaxfrenzyex", $from_id);
+} elseif ($user['step'] == "getmaaxfrenzyex") {
+    if (!ctype_digit($text)) {
+        sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
+        return;
+    }
+    $limitErr = limit_conflict_text(false, $text, pay_value("minbalancefrenzyex", null, ''), 'fa', $textbotlang);
+    if ($limitErr !== null) {
+        sendmessage($from_id, $limitErr, $backadmin, 'HTML');
+        return;
+    }
+    sendmessage($from_id, $textbotlang['Admin']['Balance']['maxDepositSaved'], $keyboardfrenzyex, 'HTML');
+    step("home", $from_id);
+    update("PaySetting", "ValuePay", $text, "NamePay", "maxbalancefrenzyex");
 } elseif ($datain == "walletaddress") {
     $PaySetting = select("PaySetting", "ValuePay", "NamePay", "walletaddress", "select");
     $texttronseller = sprintf($textbotlang['Admin']['gateway']['askTronWallet'], $PaySetting['ValuePay']);
@@ -18278,6 +18361,40 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
             'videoid' => $videoid
         ));
         update("PaySetting", "ValuePay", $data, "NamePay", "helpzarinpal");
+    } else {
+        sendmessage($from_id, $textbotlang['Admin']['Help']['invalidContent'], $backadmin, 'HTML');
+        return;
+    }
+    step('home', $from_id);
+    sendmessage($from_id, $textbotlang['Admin']['Help']['tutorialSaved'], $CartManage, 'HTML');
+} elseif ($text == $textbotlang['keyboard']['setEducationFrenzyEx'] && $adminrulecheck['rule'] == "administrator") {
+    sendmessage($from_id, $textbotlang['Admin']['Help']['askTutorialMedia'], $backadmin, 'HTML');
+    step("helpfrenzyex", $from_id);
+} elseif ($user['step'] == "helpfrenzyex") {
+    if ($text) {
+        if (intval($text) == 2) {
+            update("PaySetting", "ValuePay", "0", "NamePay", "helpfrenzyex");
+        } else {
+            $data = json_encode(array(
+                'type' => "text",
+                'text' => topup_caption_text_from_update($text, $update)
+            ));
+            update("PaySetting", "ValuePay", $data, "NamePay", "helpfrenzyex");
+        }
+    } elseif ($photo) {
+        $data = json_encode(array(
+            'type' => "photo",
+            'text' => premium_emoji_html_from_entities($update['message']['caption'] ?? $caption, $update['message']['caption_entities'] ?? []),
+            'photoid' => $photoid
+        ));
+        update("PaySetting", "ValuePay", $data, "NamePay", "helpfrenzyex");
+    } elseif ($video) {
+        $data = json_encode(array(
+            'type' => "video",
+            'text' => premium_emoji_html_from_entities($update['message']['caption'] ?? $caption, $update['message']['caption_entities'] ?? []),
+            'videoid' => $videoid
+        ));
+        update("PaySetting", "ValuePay", $data, "NamePay", "helpfrenzyex");
     } else {
         sendmessage($from_id, $textbotlang['Admin']['Help']['invalidContent'], $backadmin, 'HTML');
         return;

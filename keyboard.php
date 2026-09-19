@@ -386,6 +386,14 @@ $keyboardzarinpal = json_encode([
     ],
     'resize_keyboard' => true
 ]);
+$keyboardfrenzyex = json_encode([
+    'keyboard' => [
+        [['text' => $textbotlang['keyboard']['frenzyExApiKey']], ['text' => $textbotlang['keyboard']['frenzyExCallbackSecret']]],
+        [['text' => $textbotlang['keyboard']['setEducationFrenzyEx']]],
+        [['text' => $textbotlang['Admin']['backAdminBtn']], ['text' => $textbotlang['Admin']['backMenuBtn']]]
+    ],
+    'resize_keyboard' => true
+]);
 $aqayepardakht = json_encode([
     'keyboard' => [
         [['text' => $textbotlang['keyboard']['setEducationAqayePardakht']]],
@@ -459,6 +467,7 @@ $stmt->bindValue(':user_id', $from_id);
 $stmt->execute();
 $paymentexits = $stmt->rowCount();
 $zarinpal = getPaySettingValue("zarinpalstatus");
+$frenzyex = getPaySettingValue("frenzyexstatus");
 $affilnecurrency = getPaySettingValue("digistatus");
 $arzireyali3 = getPaySettingValue("statusiranpay3");
 $paymentstatussnotverify = getPaySettingValue("paymentstatussnotverify");
@@ -518,6 +527,11 @@ if ($PaySettingaqayepardakht == "onaqayepardakht") {
 if ($zarinpal == "onzarinpal") {
     $step_payment['inline_keyboard'][] = [
         ['text' => $textbotlang['textbot']['zarinPal'], 'callback_data' => "zarinpal"]
+    ];
+}
+if ($frenzyex == "onfrenzyex") {
+    $step_payment['inline_keyboard'][] = [
+        ['text' => $textbotlang['textbot']['frenzyEx'], 'callback_data' => "frenzyex"]
     ];
 }
 if ($paymentstatussnotverify == "onverifypay") {

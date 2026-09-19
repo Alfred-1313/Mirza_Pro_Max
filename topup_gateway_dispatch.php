@@ -114,6 +114,62 @@ if (!isset($from_id, $datain)) {
             . topup_disc_caption_block($from_id, $user['lang'] ?? 'fa', 'zarinpal', $textbotlang, $user['Processing_value'], true);
         topup_linkmsg_help($from_id, 'helpzarinpal');
         topup_track_invoice_message($randomString, topup_linkmsg_finish($from_id, $textnowpayments, $paymentkeyboard));
+    } elseif ($datain == "frenzyex") {
+        // no hardcoded floor like zarinpal's own "< 5000" check above - this
+        // gateway relies only on the admin-configurable range (minbalancefrenzyex/
+        // maxbalancefrenzyex), same as every other rial-group gateway besides
+        // zarinpal itself
+        [$mainbalance, $maxbalance] = topup_checkout_limits($user['lang'] ?? 'fa', 'frenzyex');
+        if (topup_amount_out_of_range($user['Processing_value'], $mainbalance, $maxbalance)) {
+            topup_range_notice($from_id, $user['lang'] ?? 'fa', 'frenzyex', $mainbalance, $maxbalance, $textbotlang);
+            return;
+        }
+        deletemessage($from_id, $message_id);
+        topup_linkmsg_show($from_id, $user['lang'] ?? 'fa', 'frenzyex', $textbotlang['users']['Balance']['linkpayments']);
+        $randomString = bin2hex(random_bytes(5));
+        $pay = createPayFrenzyEx($user['Processing_value'], $randomString);
+        if ($pay['http_code'] < 200 || $pay['http_code'] >= 300 || empty($pay['body']['request_id'])) {
+            $text_error = json_encode($pay['body']);
+            topup_linkmsg_drop($from_id);
+            sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
+            step('home', $from_id);
+            $ErrorsLinkPayment = sprintf($textbotlang['Admin']['reportgroup']['errorFrenzyExLink'], $text_error, $from_id, $username);
+            if (strlen($setting['Channel_Report']) > 0) {
+                telegram('sendmessage', [
+                    'chat_id' => $setting['Channel_Report'],
+                    'message_thread_id' => $errorreport,
+                    'text' => $ErrorsLinkPayment,
+                    'parse_mode' => "HTML"
+                ]);
+            }
+            return;
+        }
+        $invoice = "{$user['Processing_value_tow']}|{$user['Processing_value_one']}";
+        $dateacc = date('Y/m/d H:i:s');
+        $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice,dec_not_confirmed) VALUES (?,?,?,?,?,?,?,?)");
+        $payment_Status = "Unpaid";
+        $Payment_Method = "frenzyex";
+        $stmt->execute([$from_id, $randomString, $dateacc, $user['Processing_value'], $payment_Status, $Payment_Method, $invoice, $pay['body']['request_id']]);
+        // never a bot-built URL (FR-006) - copy FrenzyEx's own links exactly:
+        // checkout_url first (deployment-aware), bot_pay_url as the visible
+        // "open in bot chat" fallback, per the guide's own link-fallback advice
+        $checkoutUrl = $pay['body']['checkout_url'] ?? ($pay['body']['pay_url'] ?? '');
+        $botFallbackUrl = $pay['body']['bot_pay_url'] ?? $checkoutUrl;
+        $paymentkeyboard = json_encode([
+            'inline_keyboard' => [
+                [
+                    ['text' => $textbotlang['users']['Balance']['payments'], 'url' => $checkoutUrl],
+                ],
+                [
+                    ['text' => $textbotlang['users']['Balance']['frenzyexBotFallbackBtn'], 'url' => $botFallbackUrl],
+                ],
+            ]
+        ]);
+        $price_format = number_format($user['Processing_value'], 0);
+        $textnowpayments = sprintf($textbotlang['users']['Balance']['invoiceCreated2'], $randomString, $price_format)
+            . topup_disc_caption_block($from_id, $user['lang'] ?? 'fa', 'frenzyex', $textbotlang, $user['Processing_value'], true);
+        topup_linkmsg_help($from_id, 'helpfrenzyex');
+        topup_track_invoice_message($randomString, topup_linkmsg_finish($from_id, $textnowpayments, $paymentkeyboard));
     } elseif ($datain == "plisio") {
         topup_plisio_invoice_generate($from_id, $user, $message_id, $textbotlang, $setting);
     } elseif ($datain == "nowpayment") {

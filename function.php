@@ -2180,6 +2180,10 @@ if (!function_exists('gw_field_registry')) {
             'zarinpal' => [
                 ['field' => 'merchant_zarinpal', 'type' => 'text', 'label' => 'merchantLabel', 'scope' => 'global'],
             ],
+            'frenzyex' => [
+                ['field' => 'frenzyex_api_key', 'type' => 'text', 'label' => 'apiKeyLabel', 'scope' => 'global'],
+                ['field' => 'frenzyex_callback_secret', 'type' => 'text', 'label' => 'callbackSecretLabel', 'scope' => 'global'],
+            ],
             'paymentnotverify' => [],
             'startelegrams' => [
                 ['field' => 'starInvoiceExpireMinutes', 'type' => 'number', 'label' => 'invoiceExpireLabel'],
@@ -2308,6 +2312,7 @@ if (!function_exists('gateway_registry')) {
             'iranpay3' => $textbotlang['textbot']['iranPay1'],
             'aqayepardakht' => $textbotlang['textbot']['aqayePardakht'],
             'zarinpal' => $textbotlang['textbot']['zarinPal'],
+            'frenzyex' => $textbotlang['textbot']['frenzyEx'],
             'paymentnotverify' => $textbotlang['textbot']['paymentNotVerify'],
             'startelegrams' => $textbotlang['textbot']['starTelegram'],
         ];
@@ -2333,7 +2338,7 @@ if (!function_exists('gateway_groups')) {
             // rial processors - every one of these is fa-only (see
             // gateway_fa_only_keys), so the group simply never appears on the
             // other language tabs
-            'rial' => ['iranpay1', 'iranpay2', 'iranpay3', 'aqayepardakht', 'zarinpal', 'paymentnotverify'],
+            'rial' => ['iranpay1', 'iranpay2', 'iranpay3', 'aqayepardakht', 'zarinpal', 'frenzyex', 'paymentnotverify'],
         ];
     }
 }
@@ -2424,7 +2429,7 @@ if (!function_exists('gateway_all_keys')) {
     function gateway_all_keys()
     {
         return ['card', 'plisio', 'nowpayment', 'ton', 'trx', 'usdtbep', 'digitaltron', 'iranpay1', 'iranpay2',
-            'iranpay3', 'aqayepardakht', 'zarinpal', 'paymentnotverify', 'startelegrams'];
+            'iranpay3', 'aqayepardakht', 'zarinpal', 'frenzyex', 'paymentnotverify', 'startelegrams'];
     }
 }
 if (!function_exists('gateway_lang_map')) {
@@ -4594,6 +4599,7 @@ if (!function_exists('topup_usd_rate')) {
             'usdtbep' => 'usdtbep',
             'digitaltron' => 'digitaltron',
             'zarinpal' => 'zarinpal',
+            'frenzyex' => 'frenzyex',
             'aqayepardakht' => 'aqayepardakht',
             'iranpay1' => 'iranpay1',
             'iranpay2' => 'iranpay2',
@@ -5796,6 +5802,7 @@ if (!function_exists('topup_gateway_key_by_method')) {
             'USDT-BEP20' => 'usdtbep',
             'arze digital offline' => 'digitaltron',
             'zarinpal' => 'zarinpal',
+            'frenzyex' => 'frenzyex',
             'aqayepardakht' => 'aqayepardakht',
             'Currency Rial 1' => 'iranpay1',
             'Currency Rial 2' => 'iranpay2',
@@ -6482,7 +6489,7 @@ if (!function_exists('gateway_fa_only_keys')) {
     // where it actually protects the real checkout flow.
     function gateway_fa_only_keys()
     {
-        return ['zarinpal', 'aqayepardakht', 'iranpay1', 'iranpay2', 'iranpay3', 'paymentnotverify'];
+        return ['zarinpal', 'frenzyex', 'aqayepardakht', 'iranpay1', 'iranpay2', 'iranpay3', 'paymentnotverify'];
     }
 }
 if (!function_exists('gateway_applicable_for_lang')) {
@@ -7072,6 +7079,10 @@ function activecron()
         "*/2 * * * * flock -n /tmp/mz_trx.lock curl -s --max-time 110 https://$domainhosts/cronbot/trx.php > /dev/null 2>&1",
         "*/2 * * * * flock -n /tmp/mz_usdtbep.lock curl -s --max-time 110 https://$domainhosts/cronbot/usdtbep.php > /dev/null 2>&1",
         "*/3 * * * * flock -n /tmp/mz_plisio.lock curl -s --max-time 170 https://$domainhosts/cronbot/plisio.php > /dev/null 2>&1",
+        // FrenzyEx settles primarily through its own signed callback
+        // (payment/frenzyex.php) - this is only the recovery path for a
+        // delayed/dropped one, so it can run at plisio's own relaxed cadence
+        "*/3 * * * * flock -n /tmp/mz_frenzyex.lock curl -s --max-time 170 https://$domainhosts/cronbot/frenzyex.php > /dev/null 2>&1",
         "*/5 * * * * flock -n /tmp/mz_payment_expire.lock curl -s --max-time 280 https://$domainhosts/cronbot/payment_expire.php > /dev/null 2>&1",
         // --- stretched: these were the load ---
         "*/5 * * * * flock -n /tmp/mz_notifications.lock curl -s --max-time 280 https://$domainhosts/cronbot/NoticationsService.php > /dev/null 2>&1",
@@ -14554,6 +14565,52 @@ function createPayZarinpal($price, $order_id)
     $response = curl_exec($curl);
     curl_close($curl);
     return json_decode($response, true);
+}
+// FrenzyEx (درگاه ارزی ریالی) - creates one v1 payment request per top-up
+// attempt and hands back the whole decoded response (plus the real HTTP
+// status, since a failure here is a status code, not a body field like
+// zarinpal's own 'code'). Never retried on an uncertain result (the guide's
+// own create endpoint has no idempotency key) - the caller's message-replace
+// ordering (delete-then-show-placeholder, same as every redirect gateway
+// already does) is what keeps a second tap from creating a second request.
+function createPayFrenzyEx($price, $order_id)
+{
+    $apiKey = select("PaySetting", "ValuePay", "NamePay", "frenzyex_api_key", "select")['ValuePay'];
+    $curl = curl_init();
+    curl_setopt_array($curl, array(
+        CURLOPT_URL => 'https://frenzy.fastsnap.info/api/v1/payment-requests',
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_ENCODING => '',
+        CURLOPT_MAXREDIRS => 10,
+        // bounded, unlike the other gateways' CURLOPT_TIMEOUT => 0: FrenzyEx's
+        // own guide is explicit that a hung create call must never be retried
+        // blindly, so a request that cannot finish in reasonable time should
+        // fail cleanly instead of holding the customer's tap open indefinitely
+        CURLOPT_TIMEOUT => 20,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+        CURLOPT_CUSTOMREQUEST => 'POST',
+        CURLOPT_HTTPHEADER => array(
+            'Content-Type: application/json',
+            'Accept: application/json',
+            'Authorization: Bearer ' . $apiKey,
+        ),
+    ));
+    curl_setopt($curl, CURLOPT_POSTFIELDS, json_encode([
+        'amount' => $price,
+        'amount_ccy' => 'TMN',
+        'payment_method' => 'auto',
+        'order_ref' => $order_id,
+        'description' => 'TopUp - ' . $order_id,
+    ]));
+    $response = curl_exec($curl);
+    $httpCode = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
+    curl_close($curl);
+    $decoded = json_decode((string) $response, true);
+    return [
+        'http_code' => $httpCode,
+        'body' => is_array($decoded) ? $decoded : [],
+    ];
 }
 function createPayaqayepardakht($price, $order_id)
 {

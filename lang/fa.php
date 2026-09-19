@@ -987,6 +987,7 @@ return array (
       'nowpayments' => '❌ خطا 
     کمترین مبلغ برای  پرداخت در این درگاه 1 دلار می باشد.',
       'payments' => 'پرداخت',
+      'frenzyexBotFallbackBtn' => '🤖 پرداخت در ربات (FrenzyEx)',
       'receiptimage' => '🖼 تصویر رسید ارسالی',
       'refunded' => 'مبلغ به کیف پول شما بازگشته است',
       'rejectPay' => '❌ رد پرداخت',
@@ -3141,8 +3142,14 @@ nowpayments.io
         
 مرچنت کد فعلی شما : %s',
       'askZarinpalMerchant' => '💳 مرچنت کد خود را از زرین پال دریافت و در این قسمت وارد کنید
-        
+
 مرچنت کد فعلی شما : %s',
+      'askFrenzyExApiKey' => '🔑 کلید API که از FrenzyEx گرفتید رو وارد کنید (با frx_live_ شروع می‌شه)
+
+کلید فعلی شما : %s',
+      'askFrenzyExCallbackSecret' => '🔒 رمز تایید کالبک (Callback Secret) که از FrenzyEx گرفتید رو وارد کنید
+
+رمز فعلی شما : %s',
       'askMerchant' => '💳 مرچنت کد خود را دریافت و در این قسمت وارد کنید
         
 مرچنت کد فعلی شما : %s',
@@ -4606,9 +4613,14 @@ f,n.n2',
 ادمین انجام دهنده : api site',
       'userUnblockedByApi' => 'کاربر با آیدی عددی %s در ربات از مسدودیت خارج گردید 
 ادمین انجام دهنده : api site',
+      'errorFrenzyExLink' => '⭕️ خطا در ساخت لینک FrenzyEx
+✍️ دلیل خطا : %s
+
+آیدی کابر : %s
+نام کاربری کاربر : @%s',
       'errorZarinpalLink' => '⭕️ خطا در ساخت لینک زرین پال
 ✍️ دلیل خطا : %s
-            
+
 آیدی کابر : %s
 نام کاربری کاربر : @%s',
     ),
@@ -6515,6 +6527,7 @@ nowpayments.io
       'cartDirectLabel' => '👤 آیدی پشتیبانی (پرداخت مستقیم)',
       'apiKeyLabel' => '🔑 کلید API',
       'merchantLabel' => '🔑 کد پذیرنده (مرچنت)',
+      'callbackSecretLabel' => '🔒 رمز تایید کالبک (Callback Secret)',
       'payUrlLabel' => '🔗 آدرس درگاه',
       'cashbackLabel' => '🎁 درصد بازگشت وجه',
       'globalFieldPrefix' => '🌐 ',
@@ -7134,6 +7147,7 @@ nowpayments.io
 🧑‍🦯 شما میتوانید شیوه اتصال را  با فشردن دکمه زیر و انتخاب سیستم عامل خود را دریافت کنید',
     'wheelLuck' => '🎲 گردونه شانس',
     'zarinPal' => 'زرین پال',
+    'frenzyEx' => 'درگاه ارزی ریالی FrenzyEx',
   ),
   'keyboard' => 
   array (
@@ -7229,6 +7243,7 @@ nowpayments.io
     'cashbackPlisio' => '💰 کش بک plisio',
     'cashbackStar' => '💰 کش بک استار',
     'cashbackZarinPal' => '💰 کش بک زرین پال',
+    'cashbackFrenzyEx' => '💰 کش بک FrenzyEx',
     'category' => 'دسته بندی',
     'categoryBug' => '🗂 دسته بندی',
     'changeLocation' => '🌍 تغییر لوکیشن',
@@ -7441,6 +7456,7 @@ nowpayments.io
     'maxAmountPlisio' => '⬆️ حداکثر مبلغ plisio',
     'maxAmountStar' => '⬆️ حداکثر مبلغ استار',
     'maxAmountZarinPal' => '⬆️ حداکثر مبلغ زرین پال',
+    'maxAmountFrenzyEx' => '⬆️ حداکثر مبلغ FrenzyEx',
     'maxChargeBalance' => '⬆️ حداکثر شارژ موجودی',
     'maxCustomTime' => '📍 حداکثر زمان دلخواه',
     'maxCustomVolume' => '📍 حداکثر حجم دلخواه',
@@ -7456,6 +7472,7 @@ nowpayments.io
     'minAmountPlisio' => '⬇️ حداقل مبلغ plisio',
     'minAmountStar' => '⬇️ حداقل مبلغ استار',
     'minAmountZarinPal' => '⬇️ حداقل مبلغ زرین پال',
+    'minAmountFrenzyEx' => '⬇️ حداقل مبلغ FrenzyEx',
     'minBulkBalance' => '⬇️ حداقل موجودی خرید عمده',
     'minChargeBalance' => '⬇️ حداقل شارژ موجودی',
     'minCustomTime' => '📍 حداقل زمان دلخواه',
@@ -7549,6 +7566,7 @@ nowpayments.io
     'setEducationPlisio' => '📚 تنظیم آموزش plisio',
     'setEducationStar' => '📚 تنظیم آموزش استار',
     'setEducationZarinPal' => '📚 تنظیم آموزش زرین پال',
+    'setEducationFrenzyEx' => '📚 تنظیم آموزش FrenzyEx',
     'setFirstPrize' => '1️⃣ تنظیم جایزه نفر اول',
     'setInbound' => '🎛 تنظیم اینباند',
     'setInboundId' => '💎 تنظیم شناسه اینباند',
@@ -7624,6 +7642,9 @@ nowpayments.io
     'yesterday' => '☀️ دیروز',
     'zarinPalGateway' => '🟡 زرین پال',
     'zarinPalMerchant' => 'مرچنت زرین پال',
+    'frenzyExGateway' => '🌐 FrenzyEx',
+    'frenzyExApiKey' => 'کلید API فرنزی‌اکس',
+    'frenzyExCallbackSecret' => 'رمز کالبک فرنزی‌اکس',
     'zeroBalance' => '0️⃣ صفر کردن موجودی',
     'panelSetting' => '🎛 تنظیم پنل',
     'mirzaAgentPanel' => 'نمایندگی میرزا',
@@ -9327,6 +9348,13 @@ nowpayments.io
 💰 مبلغ: %s تومان
 📊 دریافتی: %s TRX
 🧾 فاکتور: <code>%s</code>',
+    'frenzyexPaymentLog' => '💵 <b>پرداخت FrenzyEx دریافت شد</b>
+
+👤 آیدی کاربر: <code>%s</code>
+👤 یوزرنیم: %s
+💰 مبلغ: %s تومان
+🧾 فاکتور: <code>%s</code>
+🆔 request_id: <code>%s</code>',
     'usdtbepNewPaymentLog' => '💵 <b>پرداخت تتر (BEP20) دریافت شد</b>
 
 👤 کاربر: %s (<code>%s</code>)
