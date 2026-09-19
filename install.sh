@@ -222,9 +222,14 @@ _link_mirza() {
 # Self-update: every run, fetch the latest script from GitHub, validate it,
 # install it to /root/install.sh, link it into /usr/local/bin, and re-exec.
 function self_update_script() {
-    # asking for help must never depend on the network
+    # asking for help must never depend on the network - and neither must the
+    # once-a-minute watcher: fetching this script from GitHub every 60 seconds
+    # would hammer it for nothing, and rewriting /root/install.sh while bash is
+    # still reading that very file is how a half-executed script happens. The
+    # watcher gets its new copy the normal way, from the package update_bot
+    # unpacks (step 9), not from here.
     for _a in "$@"; do
-        case "$_a" in -h|--help|--version) return 0 ;; esac
+        case "$_a" in -h|--help|--version|selfupdate-watch) return 0 ;; esac
     done
     local MASTER_PATH="/root/install.sh"
     local BIN_LINK="/usr/local/bin/mirza"
@@ -1231,6 +1236,15 @@ function import_bot() {
 }
 
 function show_menu() {
+    # A run with nobody at the keyboard (the bot's own 🔄 آپدیت ربات button,
+    # carried out by the root watcher below) has no terminal: the `read` at the
+    # bottom of this menu would hit EOF, fall into the "Not an option" branch
+    # and call show_menu again - forever. Every error path in this script
+    # returns to this menu, so guarding it in this one place is what makes all
+    # 57 of them safe to reach unattended.
+    if [ -n "$MIRZA_NONINTERACTIVE" ]; then
+        return 0
+    fi
     show_logo
     _sec "Menu"
     _mi "1" "Install"   "set up the bot on a clean server"
@@ -1504,6 +1518,17 @@ bots_registry_count() {
 pick_bot_instance() {
     local action="${1:-manage}"
     bots_registry_ensure
+    # The watcher already knows which install asked for this update (the request
+    # file was found in that very directory), so it says so outright. Without
+    # this, a server with two bots would reach the "which bot?" prompt with no
+    # one there to answer it.
+    if [ -n "$MIRZA_BOT_DIR" ] && [ -d "$MIRZA_BOT_DIR" ]; then
+        PICKED_DIR="$MIRZA_BOT_DIR"
+        PICKED_NAME=$(jq -r --arg d "$MIRZA_BOT_DIR" '.[] | select(.dir==$d) | .name' "$BOTS_REGISTRY" 2>/dev/null | head -1)
+        PICKED_DOMAIN=$(jq -r --arg d "$MIRZA_BOT_DIR" '.[] | select(.dir==$d) | .domain' "$BOTS_REGISTRY" 2>/dev/null | head -1)
+        [ -z "$PICKED_NAME" ] && PICKED_NAME="Bot"
+        return 0
+    fi
     local count; count=$(jq 'length' "$BOTS_REGISTRY" 2>/dev/null)
     if [ -z "$count" ] || [ "$count" = "0" ]; then
         printf "    ${C_BAD}●${CR} ${C_BAD}No Mirza bot found on this server.${CR}\n"
@@ -2233,6 +2258,7 @@ EOF
 
     chmod +x /root/install.sh
     ln -sf /root/install.sh /usr/local/bin/mirza
+    _ensure_selfupdate_cron
     self_update_script
 }
 function install_second_bot() {
@@ -2531,8 +2557,14 @@ function update_bot() {
     _kv "Installed" "${C_OK}${flavour}${CR}"
     _kv "Target" "${C_KEY}${TARGET_LABEL}${CR}"
     echo ""
-    printf "  ${C_PROMPT}❯${CR} Update now? ${C_DIM}[y/N]${CR}: "
-    local confirm; read -r confirm
+    local confirm
+    if [ -n "$MIRZA_NONINTERACTIVE" ]; then
+        # the admin already confirmed, in the bot, before the request was written
+        confirm="y"
+    else
+        printf "  ${C_PROMPT}❯${CR} Update now? ${C_DIM}[y/N]${CR}: "
+        read -r confirm
+    fi
     case "$confirm" in
         y|Y|yes|YES|Yes) ;;
         *)
@@ -2648,6 +2680,9 @@ function update_bot() {
             ln -sf /root/install.sh /usr/local/bin/mirza
         fi
     fi
+    # an install that predates the button gets its watcher here, so the very
+    # next update can be started from inside the bot
+    _ensure_selfupdate_cron
 
     rm -rf "$TEMP_DIR"
 
@@ -2737,6 +2772,11 @@ NOTIFYEOF
     printf "    ${C_DIM}Your config.php and database were kept as they were.${CR}\n"
     printf "    ${C_DIM}To undo:${CR} ${C_KEY}tar -xzf ${ROLLBACK} -C /var/www/html${CR}\n"
     echo ""
+    # the success report above is the whole point of the run when nobody is
+    # watching; the admin is told in Telegram by step 10 either way
+    if [ -n "$MIRZA_NONINTERACTIVE" ]; then
+        return 0
+    fi
     printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "
     read -r _
     show_menu
@@ -2761,6 +2801,72 @@ _rollback_update() {
     mv "${botdir}.failed" "$botdir" 2>/dev/null
     printf "  ${C_BAD}●${CR} ${C_BAD}Rollback failed. Snapshot kept at ${archive}${CR}\n"
     return 1
+}
+
+# ── Updates asked for from inside the bot ────────────────────
+# The bot is served as www-data; everything update_bot() does needs root, so
+# the bot can never run it directly. Instead its 🔄 آپدیت ربات button only
+# WRITES a request file into its own directory, and this watcher - a line in
+# root's crontab - is what actually updates. No sudo rights are handed to the
+# web server, so the worst a compromised bot could ask for is the same update
+# an admin could already have started from the terminal.
+MIRZA_UPDATE_REQUEST="update_request"
+MIRZA_UPDATE_STATUS="update_status.json"
+
+# Leave the bot a readable note about what happened, so its button can report
+# back without needing to see this script's output.
+_selfupdate_status() {
+    local dir="$1" state="$2" detail="$3"
+    printf '{"state":"%s","detail":"%s","at":%s}\n' "$state" "$detail" "$(date +%s)" \
+        > "${dir}/${MIRZA_UPDATE_STATUS}" 2>/dev/null
+    chown www-data:www-data "${dir}/${MIRZA_UPDATE_STATUS}" 2>/dev/null
+    chmod 664 "${dir}/${MIRZA_UPDATE_STATUS}" 2>/dev/null
+}
+
+selfupdate_watch() {
+    bots_registry_ensure
+    local dirs; dirs=$(jq -r '.[].dir' "$BOTS_REGISTRY" 2>/dev/null)
+    [ -z "$dirs" ] && return 0
+    local dir req claimed age rc
+    while IFS= read -r dir; do
+        [ -n "$dir" ] && [ -d "$dir" ] || continue
+        req="${dir}/${MIRZA_UPDATE_REQUEST}"
+        [ -f "$req" ] || continue
+        # Claim it by moving it aside FIRST. If this run is killed half way the
+        # request is already gone, so the next minute can never start a second
+        # update on top of one still running.
+        claimed="${req}.running"
+        mv -f "$req" "$claimed" 2>/dev/null || continue
+        # An old request is a leftover (server was off, cron disabled). Acting
+        # on it hours later would restart the bot at a moment nobody chose.
+        age=$(( $(date +%s) - $(stat -c %Y "$claimed" 2>/dev/null || echo 0) ))
+        if [ "$age" -gt 900 ]; then
+            rm -f "$claimed"
+            _selfupdate_status "$dir" "stale" "درخواست قدیمی بود و اجرا نشد"
+            continue
+        fi
+        _selfupdate_status "$dir" "running" "در حال آپدیت"
+        ( MIRZA_NONINTERACTIVE=1 MIRZA_BOT_DIR="$dir" update_bot ) >> /tmp/mirza_selfupdate.log 2>&1
+        rc=$?
+        rm -f "$claimed"
+        if [ "$rc" -eq 0 ]; then
+            _selfupdate_status "$dir" "done" "آپدیت با موفقیت انجام شد"
+        else
+            # update_bot restores its own pre-update snapshot before returning
+            # non-zero, so "failed" always means "still on the old version"
+            _selfupdate_status "$dir" "failed" "آپدیت ناموفق بود - نسخه قبلی برگردانده شد"
+        fi
+    done <<< "$dirs"
+}
+
+# One crontab line, added once. Matched by its command text rather than the
+# whole line so a hand-edited schedule is never duplicated.
+_ensure_selfupdate_cron() {
+    command -v crontab >/dev/null 2>&1 || return 0
+    crontab -l 2>/dev/null | grep -Fq "mirza selfupdate-watch" && return 0
+    ( crontab -l 2>/dev/null; \
+      echo "* * * * * flock -n /tmp/mirza_selfupdate.lock /usr/local/bin/mirza selfupdate-watch >/dev/null 2>&1" \
+    ) | crontab - 2>/dev/null
 }
 
 # Create the Apache vhost only when it is missing or points somewhere else.
@@ -3265,7 +3371,7 @@ process_arguments() {
     local cmd="menu"
     # First non-flag token is the command
     case "$1" in
-        install|update|remove|migrate|renew|backup|import|addbot|menu) cmd="$1"; shift ;;
+        install|update|remove|migrate|renew|backup|import|addbot|menu|selfupdate-watch) cmd="$1"; shift ;;
         -h|--help) print_usage; exit 0 ;;
         "") cmd="menu" ;;
         --*) cmd="menu" ;;            # only flags given -> menu, but still parse flags
@@ -3289,6 +3395,8 @@ process_arguments() {
     case "$cmd" in
         install) install_bot ;;
         update)  update_bot ;;
+        # internal: root's crontab, not something an admin types
+        selfupdate-watch) selfupdate_watch ;;
         remove)  remove_bot ;;
         migrate) migrate_to_pro ;;
         renew)   renew_ssl ;;

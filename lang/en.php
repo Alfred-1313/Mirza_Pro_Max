@@ -4188,6 +4188,7 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'quickSetVolumePrice' => '🔋 Quick volume price setting',
                 'rebecca' => 'Rebecca',
                 'reWebhookAgentBots' => '🔗 Re-webhook agent bots',
+                'updateBotBtn' => '🔄 Update bot',
                 'receiveMembershipGift' => '🎁 Receive membership gift',
                 'reconnectNode' => '♻️ Reconnect node',
                 'refresh' => '♻️ Update',

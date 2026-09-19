@@ -420,6 +420,7 @@ $setting_panel = json_encode([
         [['text' => $textbotlang['keyboard']['backupSettingsBtn']]],
         [['text' => $textbotlang['keyboard']['agentMembershipFee']], ['text' => $textbotlang['keyboard']['qrBackground']]],
         [['text' => $textbotlang['keyboard']['reWebhookAgentBots']]],
+        [['text' => $textbotlang['keyboard']['updateBotBtn']]],
         [['text' => $textbotlang['Admin']['backAdminBtn']], ['text' => $textbotlang['Admin']['backMenuBtn']]]
     ],
     'resize_keyboard' => true

@@ -2715,6 +2715,72 @@ if (!function_exists('sms_forward_settings_payload')) {
         return json_encode($kb);
     }
 }
+if (!function_exists('bot_update_request_path')) {
+    // The bot is served as www-data; every step of an update needs root, so it
+    // can never run the updater itself. Instead it leaves a note in its own
+    // directory and root's own watcher (`mirza selfupdate-watch`, a crontab
+    // line install.sh adds) picks it up within the minute and runs the very
+    // same `mirza update` an admin would have typed - pre-update snapshot,
+    // config.php kept, additive database migration and automatic rollback on a
+    // failed syntax check all included, because it IS that same code path.
+    function bot_update_request_path()
+    {
+        return __DIR__ . '/update_request';
+    }
+    // What the watcher reported about the last run, if it ever ran.
+    function bot_update_status()
+    {
+        $raw = @file_get_contents(__DIR__ . '/update_status.json');
+        $out = json_decode((string) $raw, true);
+        return is_array($out) ? $out : [];
+    }
+    // Waiting to be picked up, or already being carried out - either way a
+    // second request must not be written on top of it.
+    function bot_update_busy()
+    {
+        return file_exists(bot_update_request_path())
+            || file_exists(bot_update_request_path() . '.running');
+    }
+    function bot_update_caption()
+    {
+        $ver = trim((string) @file_get_contents(__DIR__ . '/version'));
+        $out = "<blockquote><b>🔄 آپدیت ربات</b></blockquote>\n\n";
+        $out .= "نسخه فعلی: <b>" . htmlspecialchars($ver === '' ? 'نامشخص' : $ver, ENT_QUOTES) . "</b>\n\n";
+        $out .= "با زدن دکمه پایین، ربات آخرین نسخه را از گیت‌هاب می‌گیرد و خودش را آپدیت می‌کند. دیگر لازم نیست به سرور وصل شوی.\n\n";
+        $out .= "<blockquote>✅ تنظیمات، دیتابیس، پنل‌ها و فایل config دست‌نخورده می‌مانند. پیش از شروع یک بکاپ کامل گرفته می‌شود و اگر آپدیت به مشکل بخورد، ربات خودکار به همین نسخه برمی‌گردد.</blockquote>\n\n";
+        $st = bot_update_status();
+        $state = (string) ($st['state'] ?? '');
+        if (bot_update_busy()) {
+            $out .= "⏳ <b>یک آپدیت در جریان است.</b> چند دقیقه صبر کن؛ نتیجه در تلگرام به تو اطلاع داده می‌شود.\n\n";
+        } elseif ($state !== '') {
+            $icon = $state === 'done' ? '✅' : ($state === 'failed' ? '❌' : 'ℹ️');
+            $out .= $icon . " آخرین وضعیت: " . htmlspecialchars((string) ($st['detail'] ?? $state), ENT_QUOTES) . "\n\n";
+        }
+        // the refresh button would otherwise re-send an identical message,
+        // which Telegram rejects as "message is not modified"
+        $out .= "<i>آخرین بررسی: " . date('H:i:s') . "</i>";
+        return $out;
+    }
+    function bot_update_keyboard()
+    {
+        $rows = [];
+        if (!bot_update_busy()) {
+            $rows[] = [['text' => '🚀 شروع آپدیت', 'callback_data' => 'botupdatego', 'style' => 'primary']];
+        }
+        $rows[] = [['text' => '🔄 بررسی وضعیت', 'callback_data' => 'botupdatestatus']];
+        return json_encode(['inline_keyboard' => $rows]);
+    }
+    function bot_update_request_write()
+    {
+        if (bot_update_busy()) {
+            return "⏳ همین الان یک آپدیت در جریان است - تا تمام شدنش صبر کن.\n\n<i>" . date('H:i:s') . "</i>";
+        }
+        if (@file_put_contents(bot_update_request_path(), (string) time()) === false) {
+            return "❌ نتوانستم درخواست آپدیت را ثبت کنم.\n\nاحتمالاً پوشه ربات برای وب‌سرور قابل نوشتن نیست. یک بار <code>mirza update</code> را از ترمینال اجرا کن تا درست شود.\n\n<i>" . date('H:i:s') . "</i>";
+        }
+        return "✅ <b>درخواست آپدیت ثبت شد.</b>\n\nحداکثر تا یک دقیقه دیگر شروع می‌شود و چند دقیقه طول می‌کشد. وقتی تمام شد، همین‌جا در تلگرام خبرت می‌کنم.\n\n<i>" . date('H:i:s') . "</i>";
+    }
+}
 if (!function_exists('sms_forward_show_url_payload')) {
     // Shared by both smsfwdshowurl: (first open) and smsfwdregensecret: (after
     // regenerating) so the two dispatchers can never drift apart - the only
@@ -12581,6 +12647,15 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     sendmessage($from_id, $textbotlang['Admin']['manageadmin']['listAndDelete'], $keyboardadmin, 'HTML');
 } elseif ($text == $textbotlang['keyboard']['generalSettings'] && $adminrulecheck['rule'] == "administrator") {
     sendmessage($from_id, $textbotlang['users']['selectoption'], $setting_panel, 'HTML');
+} elseif ($text == $textbotlang['keyboard']['updateBotBtn'] && $adminrulecheck['rule'] == "administrator") {
+    sendmessage($from_id, bot_update_caption(), bot_update_keyboard(), 'HTML');
+} elseif ($datain == "botupdatego" && $adminrulecheck['rule'] == "administrator") {
+    // deliberately two taps: this restarts the live bot, so the first tap only
+    // opens the screen that says what will happen
+    $bot_update_reply = bot_update_request_write();
+    Editmessagetext($from_id, $message_id, $bot_update_reply, bot_update_keyboard(), 'HTML');
+} elseif ($datain == "botupdatestatus" && $adminrulecheck['rule'] == "administrator") {
+    Editmessagetext($from_id, $message_id, bot_update_caption(), bot_update_keyboard(), 'HTML');
 } elseif ($text == $textbotlang['keyboard']['miniAppSettingsBtn'] && $adminrulecheck['rule'] == "administrator") {
     sendmessage($from_id, miniapp_hub_caption($textbotlang), miniapp_hub_keyboard($textbotlang), 'HTML');
 } elseif ($datain == "miniappHubToggle" && $adminrulecheck['rule'] == "administrator") {

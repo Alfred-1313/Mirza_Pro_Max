@@ -7518,6 +7518,7 @@ nowpayments.io
     'quickSetVolumePrice' => '🔋 تنظیم سریع قیمت حجم',
     'rebecca' => 'ربکا',
     'reWebhookAgentBots' => '🔗 وبهوک مجدد ربات های نماینده',
+    'updateBotBtn' => '🔄 آپدیت ربات',
     'receiveMembershipGift' => '🎁 دریافت هدیه عضویت',
     'reconnectNode' => '♻️ اتصال مجدد نود',
     'refresh' => '♻️ بروزرسانی',

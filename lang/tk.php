@@ -454,6 +454,7 @@ Hyzmatyňyzyň amatlylygyndan we tizliginden hoşal bolandygyňyza umyt edýäri
     'quickSetVolumePrice' => '🔋 Göwrüm bahasyny çalt bellemek',
     'rebecca' => 'Rebecca',
     'reWebhookAgentBots' => '🔗 Wekil botlarynyň webhook-yny täzelemek',
+    'updateBotBtn' => '🔄 Boty täzelemek',
     'receiveMembershipGift' => '🎁 Agzalyk sowgadyny almak',
     'refreshInfo' => '♻️ Maglumatlary täzelemek',
     'registerDiscountCode' => '🎁 Arzanladyş kodyny bellige almak',

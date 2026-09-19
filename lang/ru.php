@@ -4188,6 +4188,7 @@ ID пользователя : %s
                 'quickSetVolumePrice' => '🔋 Быстрая настройка цены трафика',
                 'rebecca' => 'Rebecca',
                 'reWebhookAgentBots' => '🔗 Повторный webhook ботов агентов',
+                'updateBotBtn' => '🔄 Обновить бота',
                 'receiveMembershipGift' => '🎁 Получить подарок за членство',
                 'reconnectNode' => '♻️ Переподключить ноду',
                 'refresh' => '♻️ Обновить',
