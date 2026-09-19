@@ -2735,11 +2735,103 @@ if (!function_exists('bot_update_request_path')) {
         return is_array($out) ? $out : [];
     }
     // Waiting to be picked up, or already being carried out - either way a
-    // second request must not be written on top of it.
+    // second request must not be written on top of it. A pending rollback
+    // counts too: the two must never be asked for at the same time.
     function bot_update_busy()
     {
         return file_exists(bot_update_request_path())
-            || file_exists(bot_update_request_path() . '.running');
+            || file_exists(bot_update_request_path() . '.running')
+            || file_exists(__DIR__ . '/rollback_request');
+    }
+    // The snapshots root's watcher says belong to this bot, newest first.
+    function bot_update_backups()
+    {
+        $raw = @file_get_contents(__DIR__ . '/update_backups.json');
+        $out = json_decode((string) $raw, true);
+        return is_array($out) ? $out : [];
+    }
+    // This name travels from a button to a script running as root, so its
+    // shape is pinned down on both sides - nothing else is ever written here,
+    // and the watcher refuses anything else it is handed.
+    function bot_update_backup_valid($name)
+    {
+        return (bool) preg_match('/^pre-update_[0-9]{8}_[0-9]{6}\.tar\.gz$/', (string) $name);
+    }
+    function bot_update_when($ts)
+    {
+        $ts = (int) $ts;
+        if ($ts <= 0) {
+            return '-';
+        }
+        return function_exists('jdate') ? jdate('Y/m/d H:i', $ts) : date('Y-m-d H:i', $ts);
+    }
+    function bot_update_backups_caption()
+    {
+        $list = bot_update_backups();
+        $out = "<blockquote><b>♻️ بازگشت به نسخه قبلی</b></blockquote>\n\n";
+        if (empty($list)) {
+            $out .= "هنوز هیچ نسخه پشتیبانی ساخته نشده.\n\nهر بار که آپدیت می‌زنی، درست پیش از شروع یک نسخه کامل از همان لحظه نگه داشته می‌شود و بعد همین‌جا برای بازگشت فهرست می‌شود.";
+            return $out . "\n\n<i>" . date('H:i:s') . "</i>";
+        }
+        $out .= "هر ردیف، عکسی است از ربات درست پیش از یکی از آپدیت‌ها. با زدن هر کدام، ربات دقیقاً به همان حالت برمی‌گردد.\n\n";
+        foreach ($list as $b) {
+            $out .= "• <b>نسخه " . htmlspecialchars((string) ($b['version'] ?? '?'), ENT_QUOTES) . "</b> — "
+                . bot_update_when($b['at'] ?? 0) . "\n";
+        }
+        $out .= "\n<blockquote>⚠️ فقط فایل‌های ربات برمی‌گردند، نه دیتابیس. کاربران، سفارش‌ها و موجودی‌ها دست‌نخورده می‌مانند.</blockquote>";
+        return $out . "\n\n<i>" . date('H:i:s') . "</i>";
+    }
+    function bot_update_backups_keyboard()
+    {
+        $rows = [];
+        foreach (bot_update_backups() as $b) {
+            $name = (string) ($b['name'] ?? '');
+            if (!bot_update_backup_valid($name)) {
+                continue;
+            }
+            $rows[] = [[
+                'text' => '♻️ ' . ($b['version'] ?? '?') . ' — ' . bot_update_when($b['at'] ?? 0),
+                'callback_data' => 'botupdaterb:' . $name,
+            ]];
+        }
+        $rows[] = [['text' => '🔙 بازگشت', 'callback_data' => 'botupdatestatus', 'style' => 'danger']];
+        return json_encode(['inline_keyboard' => $rows]);
+    }
+    function bot_update_rollback_caption($name)
+    {
+        $ver = '?';
+        $at = 0;
+        foreach (bot_update_backups() as $b) {
+            if ((string) ($b['name'] ?? '') === (string) $name) {
+                $ver = (string) ($b['version'] ?? '?');
+                $at = (int) ($b['at'] ?? 0);
+            }
+        }
+        $out = "<blockquote><b>♻️ برگشت به نسخه " . htmlspecialchars($ver, ENT_QUOTES) . "</b></blockquote>\n\n";
+        $out .= "ربات به حالت <b>" . bot_update_when($at) . "</b> برمی‌گردد.\n\n";
+        $out .= "<blockquote>فایل‌های فعلی با همان نسخه جایگزین می‌شوند. دیتابیس و فایل config دست نمی‌خورند.</blockquote>\n\n";
+        $out .= "مطمئنی؟";
+        return $out . "\n\n<i>" . date('H:i:s') . "</i>";
+    }
+    function bot_update_rollback_keyboard($name)
+    {
+        return json_encode(['inline_keyboard' => [
+            [['text' => '✅ بله، برگرد', 'callback_data' => 'botupdaterbgo:' . $name, 'style' => 'primary']],
+            [['text' => '🔙 بی‌خیال', 'callback_data' => 'botupdatelist', 'style' => 'danger']],
+        ]]);
+    }
+    function bot_update_rollback_write($name)
+    {
+        if (!bot_update_backup_valid($name)) {
+            return "❌ این نسخه پشتیبان معتبر نیست.\n\n<i>" . date('H:i:s') . "</i>";
+        }
+        if (bot_update_busy()) {
+            return "⏳ همین الان یک کار در جریان است - تا تمام شدنش صبر کن.\n\n<i>" . date('H:i:s') . "</i>";
+        }
+        if (@file_put_contents(__DIR__ . '/rollback_request', $name) === false) {
+            return "❌ نتوانستم درخواست بازگشت را ثبت کنم.\n\nاحتمالاً پوشه ربات برای وب‌سرور قابل نوشتن نیست.\n\n<i>" . date('H:i:s') . "</i>";
+        }
+        return "♻️ <b>درخواست بازگشت ثبت شد.</b>\n\nحداکثر تا یک دقیقه دیگر شروع می‌شود و از آپدیت سریع‌تر تمام می‌شود.\n\n<i>" . date('H:i:s') . "</i>";
     }
     function bot_update_caption()
     {
@@ -2766,6 +2858,9 @@ if (!function_exists('bot_update_request_path')) {
         $rows = [];
         if (!bot_update_busy()) {
             $rows[] = [['text' => '🚀 شروع آپدیت', 'callback_data' => 'botupdatego', 'style' => 'primary']];
+        }
+        if (bot_update_backups()) {
+            $rows[] = [['text' => '♻️ بازگشت به نسخه قبلی', 'callback_data' => 'botupdatelist']];
         }
         $rows[] = [['text' => '🔄 بررسی وضعیت', 'callback_data' => 'botupdatestatus']];
         return json_encode(['inline_keyboard' => $rows]);
@@ -12656,6 +12751,12 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     Editmessagetext($from_id, $message_id, $bot_update_reply, bot_update_keyboard(), 'HTML');
 } elseif ($datain == "botupdatestatus" && $adminrulecheck['rule'] == "administrator") {
     Editmessagetext($from_id, $message_id, bot_update_caption(), bot_update_keyboard(), 'HTML');
+} elseif ($datain == "botupdatelist" && $adminrulecheck['rule'] == "administrator") {
+    Editmessagetext($from_id, $message_id, bot_update_backups_caption(), bot_update_backups_keyboard(), 'HTML');
+} elseif (preg_match('/^botupdaterb:(pre-update_[0-9]{8}_[0-9]{6}\.tar\.gz)$/', (string) $datain, $bot_rb_m) && $adminrulecheck['rule'] == "administrator") {
+    Editmessagetext($from_id, $message_id, bot_update_rollback_caption($bot_rb_m[1]), bot_update_rollback_keyboard($bot_rb_m[1]), 'HTML');
+} elseif (preg_match('/^botupdaterbgo:(pre-update_[0-9]{8}_[0-9]{6}\.tar\.gz)$/', (string) $datain, $bot_rb_m) && $adminrulecheck['rule'] == "administrator") {
+    Editmessagetext($from_id, $message_id, bot_update_rollback_write($bot_rb_m[1]), bot_update_keyboard(), 'HTML');
 } elseif ($text == $textbotlang['keyboard']['miniAppSettingsBtn'] && $adminrulecheck['rule'] == "administrator") {
     sendmessage($from_id, miniapp_hub_caption($textbotlang), miniapp_hub_keyboard($textbotlang), 'HTML');
 } elseif ($datain == "miniappHubToggle" && $adminrulecheck['rule'] == "administrator") {

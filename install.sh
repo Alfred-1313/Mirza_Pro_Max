@@ -2812,6 +2812,10 @@ _rollback_update() {
 # an admin could already have started from the terminal.
 MIRZA_UPDATE_REQUEST="update_request"
 MIRZA_UPDATE_STATUS="update_status.json"
+MIRZA_ROLLBACK_REQUEST="rollback_request"
+MIRZA_BACKUPS_LIST="update_backups.json"
+# the same folder update_bot() drops its pre-update snapshot into
+MIRZA_BACKUP_DIR="/root/mirza-backups"
 
 # Leave the bot a readable note about what happened, so its button can report
 # back without needing to see this script's output.
@@ -2823,13 +2827,78 @@ _selfupdate_status() {
     chmod 664 "${dir}/${MIRZA_UPDATE_STATUS}" 2>/dev/null
 }
 
+# Which snapshots belong to THIS bot, newest first, each with the version it
+# holds - so the admin picks "the 1.0.2 from this morning" rather than a
+# filename. Ownership is not cosmetic: on a two-bot server every snapshot
+# lands in the same folder, and unpacking one bot's tree over another's would
+# be a disaster, so the archive's own top-level directory has to match.
+_selfupdate_publish_backups() {
+    local dir="$1"
+    local base; base=$(basename "$dir")
+    local out="[" first=1 f top ver at size
+    for f in $(ls -1t "$MIRZA_BACKUP_DIR"/pre-update_*.tar.gz 2>/dev/null); do
+        top=$(tar -tzf "$f" 2>/dev/null | head -1 | cut -d/ -f1)
+        [ "$top" = "$base" ] || continue
+        ver=$(tar -xzOf "$f" "${base}/version" 2>/dev/null | tr -cd '[:alnum:]._-')
+        [ -z "$ver" ] && ver="?"
+        at=$(stat -c %Y "$f" 2>/dev/null || echo 0)
+        size=$(stat -c %s "$f" 2>/dev/null || echo 0)
+        [ "$first" -eq 1 ] || out="${out},"
+        first=0
+        out="${out}{\"name\":\"$(basename "$f")\",\"version\":\"${ver}\",\"at\":${at},\"size\":${size}}"
+    done
+    out="${out}]"
+    printf '%s\n' "$out" > "${dir}/${MIRZA_BACKUPS_LIST}" 2>/dev/null
+    chown www-data:www-data "${dir}/${MIRZA_BACKUPS_LIST}" 2>/dev/null
+    chmod 664 "${dir}/${MIRZA_BACKUPS_LIST}" 2>/dev/null
+}
+
 selfupdate_watch() {
     bots_registry_ensure
     local dirs; dirs=$(jq -r '.[].dir' "$BOTS_REGISTRY" 2>/dev/null)
     [ -z "$dirs" ] && return 0
-    local dir req claimed age rc
+    local dir req claimed age rc rbreq want arc top newest
     while IFS= read -r dir; do
         [ -n "$dir" ] && [ -d "$dir" ] || continue
+        # Refresh the list the bot shows only when a new snapshot has actually
+        # appeared - rebuilding it means reading inside every archive, which is
+        # not something to do every single minute for nothing.
+        newest=$(ls -1t "$MIRZA_BACKUP_DIR"/pre-update_*.tar.gz 2>/dev/null | head -1)
+        if [ ! -f "${dir}/${MIRZA_BACKUPS_LIST}" ] \
+            || { [ -n "$newest" ] && [ "$newest" -nt "${dir}/${MIRZA_BACKUPS_LIST}" ]; }; then
+            _selfupdate_publish_backups "$dir"
+        fi
+        # ── going back to an earlier snapshot ────────────────
+        rbreq="${dir}/${MIRZA_ROLLBACK_REQUEST}"
+        if [ -f "$rbreq" ]; then
+            want=$(head -c 200 "$rbreq" 2>/dev/null | tr -d '\r\n')
+            rm -f "$rbreq"
+            # www-data wrote this name, so it is treated as hostile input: a
+            # bare snapshot filename and nothing else - no slashes, no "..",
+            # and it must really be one of this bot's own snapshots.
+            case "$want" in
+                */*|*..*|"") _selfupdate_status "$dir" "failed" "نام نسخه پشتیبان معتبر نبود"; continue ;;
+                pre-update_*.tar.gz) ;;
+                *) _selfupdate_status "$dir" "failed" "نام نسخه پشتیبان معتبر نبود"; continue ;;
+            esac
+            arc="${MIRZA_BACKUP_DIR}/${want}"
+            top=$(tar -tzf "$arc" 2>/dev/null | head -1 | cut -d/ -f1)
+            if [ ! -f "$arc" ] || [ "$top" != "$(basename "$dir")" ]; then
+                _selfupdate_status "$dir" "failed" "نسخه پشتیبان پیدا نشد"
+                continue
+            fi
+            _selfupdate_status "$dir" "running" "در حال بازگشت به نسخه قبلی"
+            # _rollback_update replaces the whole directory, so anything written
+            # here beforehand is gone with it - the status below is written back
+            # onto the restored tree, which is why it comes after, not before.
+            if _rollback_update "$arc" "$dir" >> /tmp/mirza_selfupdate.log 2>&1; then
+                _selfupdate_status "$dir" "restored" "بازگشت به نسخه قبلی انجام شد"
+            else
+                _selfupdate_status "$dir" "failed" "بازگشت به نسخه قبلی ناموفق بود"
+            fi
+            _selfupdate_publish_backups "$dir"
+            continue
+        fi
         req="${dir}/${MIRZA_UPDATE_REQUEST}"
         [ -f "$req" ] || continue
         # Claim it by moving it aside FIRST. If this run is killed half way the
@@ -2856,6 +2925,8 @@ selfupdate_watch() {
             # non-zero, so "failed" always means "still on the old version"
             _selfupdate_status "$dir" "failed" "آپدیت ناموفق بود - نسخه قبلی برگردانده شد"
         fi
+        # the snapshot this run just took is what the admin would go back to
+        _selfupdate_publish_backups "$dir"
     done <<< "$dirs"
 }
 
