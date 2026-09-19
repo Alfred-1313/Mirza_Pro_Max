@@ -150,24 +150,34 @@ if (!isset($from_id, $datain)) {
         $payment_Status = "Unpaid";
         $Payment_Method = "frenzyex";
         $stmt->execute([$from_id, $randomString, $dateacc, $user['Processing_value'], $payment_Status, $Payment_Method, $invoice, $pay['body']['request_id']]);
-        // never a bot-built URL (FR-006) - copy FrenzyEx's own links exactly:
-        // checkout_url first (deployment-aware), bot_pay_url as the visible
-        // "open in bot chat" fallback, per the guide's own link-fallback advice
+        // One button, not two. bot_pay_url opens the same checkout checkout_url
+        // does, so a second button only asked the customer to choose between
+        // two identical things; it stays on as the fallback address for that
+        // one button when checkout_url comes back empty. Still never a
+        // bot-built URL (FR-006) - both come from FrenzyEx's own response.
         $checkoutUrl = $pay['body']['checkout_url'] ?? ($pay['body']['pay_url'] ?? '');
-        $botFallbackUrl = $pay['body']['bot_pay_url'] ?? $checkoutUrl;
-        $paymentkeyboard = json_encode([
-            'inline_keyboard' => [
-                [
-                    ['text' => $textbotlang['users']['Balance']['payments'], 'url' => $checkoutUrl],
-                ],
-                [
-                    ['text' => $textbotlang['users']['Balance']['frenzyexBotFallbackBtn'], 'url' => $botFallbackUrl],
-                ],
-            ]
-        ]);
+        if ($checkoutUrl === '') {
+            $checkoutUrl = (string) ($pay['body']['bot_pay_url'] ?? '');
+        }
+        $fx_lang = $user['lang'] ?? 'fa';
+        // built through the styling helper like every other invoice button, so
+        // 🎨 شخصی‌سازی can rename/recolour it; blue unless the admin says otherwise
+        $fx_payBtn = topup_styled_button(
+            $textbotlang['users']['Balance']['payments'],
+            topup_invoice_btnstyle_for($fx_lang, 'frenzyex', 'pay'),
+            '',
+            topup_invoice_btnstyle_default_color('pay', 'frenzyex')
+        );
+        $fx_payBtn['url'] = $checkoutUrl;
+        $paymentkeyboard = json_encode(['inline_keyboard' => [[$fx_payBtn]]]);
         $price_format = number_format($user['Processing_value'], 0);
-        $textnowpayments = sprintf($textbotlang['users']['Balance']['invoiceCreated2'], $randomString, $price_format)
-            . topup_disc_caption_block($from_id, $user['lang'] ?? 'fa', 'frenzyex', $textbotlang, $user['Processing_value'], true);
+        // its own caption rather than zarinpal's: this is the one rial gateway
+        // whose expiry is really enforced, so it can name the actual number
+        $textnowpayments = strtr($textbotlang['users']['Balance']['frenzyexInvoiceCreated'], [
+            '{invoice}' => $randomString,
+            '{price}' => $price_format,
+            '{minutes}' => topup_expire_minutes($fx_lang, 'frenzyex'),
+        ]) . topup_disc_caption_block($from_id, $fx_lang, 'frenzyex', $textbotlang, $user['Processing_value'], true);
         topup_linkmsg_help($from_id, 'helpfrenzyex');
         topup_track_invoice_message($randomString, topup_linkmsg_finish($from_id, $textnowpayments, $paymentkeyboard));
     } elseif ($datain == "plisio") {

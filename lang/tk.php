@@ -6437,6 +6437,9 @@ Umumy baha gaýtarmak üçin <b>0</b> iber.',
       'globalToggleBtn' => '🌐 Umumy ýagdaý (ähli diller): %s',
       'legacyBtn' => '🔑 Tehniki sazlamalar (ähli diller üçin umumy)',
       'legacyBtnSingle' => '🔑 Tehniki sazlamalar',
+      // every gateway with an invoice lifetime reads this one label; it was
+      // missing here, so those rows rendered with no text at all
+      'invoiceExpireLabel' => '⏳ Faktura möhleti (minut)',
       'colTitle' => 'Ady',
       'colStatus' => 'Ýagdaý',
       'colAction' => 'Amal',

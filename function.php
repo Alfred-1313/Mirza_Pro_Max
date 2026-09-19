@@ -2183,6 +2183,7 @@ if (!function_exists('gw_field_registry')) {
             'frenzyex' => [
                 ['field' => 'frenzyex_api_key', 'type' => 'text', 'label' => 'apiKeyLabel', 'scope' => 'global'],
                 ['field' => 'frenzyex_callback_secret', 'type' => 'text', 'label' => 'callbackSecretLabel', 'scope' => 'global'],
+                ['field' => 'frenzyexInvoiceExpireMinutes', 'type' => 'number', 'label' => 'invoiceExpireLabel'],
             ],
             'paymentnotverify' => [],
             'startelegrams' => [
@@ -5570,6 +5571,17 @@ if (!function_exists('topup_invoice_btnstyle_items')) {
                 'paid' => $b['paidInvoiceBtn'],
             ];
         }
+        if ($key === 'frenzyex') {
+            // no 'reissue': an expired FrenzyEx invoice is removed rather than
+            // turned into a "ساخت فاکتور جدید" button, because there is no
+            // frenzyex_invoice_build() for index.php's gwreissue: handler to
+            // call - listing it here would offer the admin a button to restyle
+            // that the customer is never shown
+            return [
+                'pay' => $textbotlang['users']['Balance']['payments'],
+                'paid' => $textbotlang['users']['Balance']['paidInvoiceBtn'],
+            ];
+        }
         return [
             'pay' => $textbotlang['users']['Balance']['payments'],
             'reissue' => $textbotlang['users']['Balance']['reissueInvoiceBtn'],
@@ -5667,6 +5679,7 @@ if (!function_exists('topup_expire_minutes')) {
             'trx' => 'trxInvoiceExpireMinutes',
             'usdtbep' => 'usdtbepInvoiceExpireMinutes',
             'digitaltron' => 'digitaltronInvoiceExpireMinutes',
+            'frenzyex' => 'frenzyexInvoiceExpireMinutes',
         ][$key] ?? null;
     }
     // How long this gateway's invoice stays payable, set per language on the
@@ -5679,7 +5692,14 @@ if (!function_exists('topup_expire_minutes')) {
         // single default is what an admin can actually reason about - and any
         // gateway that wants a shorter window still has its own per-language
         // field on its settings screen.
-        $default = 30;
+        // ...except where the gateway's own nature asks for another number.
+        // FrenzyEx settles a rial invoice through a forex/crypto processor,
+        // which is slower than a card redirect - half an hour is not enough
+        // for a customer who has to move money through it, so it starts at an
+        // hour. This is the ONLY number in play: the caption quotes it and
+        // cronbot/payment_expire.php enforces the very same call, so the two
+        // cannot promise different things.
+        $default = ['frenzyex' => 60][$key] ?? 30;
         $field = topup_expire_field($key);
         $m = $field === null ? $default : (int) pay_value($field, $lang, $default);
         return $m > 0 ? $m : $default;

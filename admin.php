@@ -3310,6 +3310,13 @@ if (!function_exists('topup_gw_customizables')) {
             }
             return $has;
         }
+        // FrenzyEx hands the customer off to an external page like the rest of
+        // its family, but unlike them it renders its own payment button, so it
+        // gets the button-styling screen the online family has - without the
+        // invoice/expired captions, which it does not build in the chat.
+        if ($key === 'frenzyex') {
+            return ['custom', 'linkmsg', 'range', 'notnumber', 'paidalert', 'btnstyle'];
+        }
         return ['custom', 'linkmsg', 'range', 'notnumber', 'paidalert'];
     }
 }
