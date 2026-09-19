@@ -2591,6 +2591,16 @@ if (!function_exists('gateway_settings_payload')) {
                 'style' => topup_memo_is_custom($lang, 'ton') ? 'success' : 'primary',
             ]];
         }
+        if ($key === 'frenzyex') {
+            // a copy button, not a callback one: this address is only ever
+            // pasted into FrenzyEx's own panel, so tapping it should put it on
+            // the clipboard rather than navigate anywhere. Same copy_text shape
+            // the TRX/TON invoices already use for their wallet addresses.
+            $kb['inline_keyboard'][] = [[
+                'text' => '📋 کپی آدرس کال‌بک',
+                'copy_text' => ['text' => frenzyex_callback_url()],
+            ]];
+        }
         $legacy = gw_legacy_settings_datain($key);
         if ($legacy !== null) {
             $kb['inline_keyboard'][] = [['text' => $t['legacyBtn'], 'callback_data' => $legacy]];
@@ -3843,6 +3853,12 @@ if (!function_exists('gateway_settings_caption')) {
             if (!empty($report)) {
                 $cap .= "\n\n<blockquote>📝 گزارش موارد تغییریافته:\n" . implode("\n", $report) . '</blockquote>';
             }
+        }
+        if ($key === 'frenzyex') {
+            // the one value that has to travel OUT of this bot: FrenzyEx's own
+            // panel is where the completion webhook gets registered, so the
+            // address belongs on the screen the admin is already looking at
+            $cap .= "\n\n" . sprintf($textbotlang['Admin']['gateway']['frenzyExCallbackUrl'], frenzyex_callback_url());
         }
         // every gateway, card included: the numbers that are actually in force
         $cap .= gateway_effective_report($lang, $key, $textbotlang);
