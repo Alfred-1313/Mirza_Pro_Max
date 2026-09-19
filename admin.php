@@ -2765,31 +2765,56 @@ if (!function_exists('bot_update_request_path')) {
     {
         return (bool) preg_match('/^pre-update_[0-9]{8}_[0-9]{6}\.tar\.gz$/', (string) $name);
     }
-    function bot_update_when($ts)
+    // A moment in time is one moment; only how it is written differs. The
+    // project's own convention decides that: Jalali for Persian, Gregorian for
+    // every other language, exactly as topup_disc_expiry_text() and the agent
+    // screens already do it.
+    function bot_update_when($ts, $lang = 'fa')
     {
         $ts = (int) $ts;
         if ($ts <= 0) {
             return '-';
         }
-        return function_exists('jdate') ? jdate('Y/m/d H:i', $ts) : date('Y-m-d H:i', $ts);
+        return ($lang === 'fa' && function_exists('jdate'))
+            ? jdate('Y/m/d H:i', $ts)
+            : date('Y-m-d H:i', $ts);
     }
-    function bot_update_backups_caption()
+    // One lookup for every word on these screens: the admin's own language when
+    // it has been translated, Persian when it has not - never an empty string,
+    // which Telegram refuses to send at all.
+    function bot_update_text($textbotlang, $key, $fa)
+    {
+        $t = is_array($textbotlang) ? ($textbotlang['Admin']['botUpdate'] ?? []) : [];
+        $v = is_array($t) ? (string) ($t[$key] ?? '') : '';
+        return $v !== '' ? $v : $fa;
+    }
+    function bot_update_backups_caption($lang = 'fa', $textbotlang = null)
     {
         $list = bot_update_backups();
-        $out = "<blockquote><b>♻️ بازگشت به نسخه قبلی</b></blockquote>\n\n";
+        $out = "<blockquote><b>" . bot_update_text($textbotlang, 'rollbackTitle', '♻️ بازگشت به نسخه قبلی') . "</b></blockquote>\n\n";
         if (empty($list)) {
-            $out .= "هنوز هیچ نسخه پشتیبانی ساخته نشده.\n\nهر بار که آپدیت می‌زنی، درست پیش از شروع یک نسخه کامل از همان لحظه نگه داشته می‌شود و بعد همین‌جا برای بازگشت فهرست می‌شود.";
-            return $out . "\n\n<i>" . date('H:i:s') . "</i>";
+            return $out . bot_update_text(
+                $textbotlang,
+                'noBackups',
+                "هنوز هیچ نسخه پشتیبانی ساخته نشده.\n\nهر بار که آپدیت می‌زنی، درست پیش از شروع یک نسخه کامل از همان لحظه نگه داشته می‌شود و بعد همین‌جا برای بازگشت فهرست می‌شود."
+            );
         }
-        $out .= "هر ردیف، عکسی است از ربات درست پیش از یکی از آپدیت‌ها. با زدن هر کدام، ربات دقیقاً به همان حالت برمی‌گردد.\n\n";
+        $out .= bot_update_text(
+            $textbotlang,
+            'rollbackIntro',
+            'هر ردیف، عکسی است از ربات درست پیش از یکی از آپدیت‌ها. با زدن هر کدام، ربات دقیقاً به همان حالت برمی‌گردد.'
+        ) . "\n\n";
         foreach ($list as $b) {
-            $out .= "• <b>نسخه " . htmlspecialchars((string) ($b['version'] ?? '?'), ENT_QUOTES) . "</b> — "
-                . bot_update_when($b['at'] ?? 0) . "\n";
+            $out .= "• <b>" . htmlspecialchars((string) ($b['version'] ?? '?'), ENT_QUOTES) . "</b> — "
+                . bot_update_when($b['at'] ?? 0, $lang) . "\n";
         }
-        $out .= "\n<blockquote>⚠️ فقط فایل‌های ربات برمی‌گردند، نه دیتابیس. کاربران، سفارش‌ها و موجودی‌ها دست‌نخورده می‌مانند.</blockquote>";
-        return $out . "\n\n<i>" . date('H:i:s') . "</i>";
+        return $out . "\n<blockquote>" . bot_update_text(
+            $textbotlang,
+            'rollbackWarn',
+            '⚠️ فقط فایل‌های ربات برمی‌گردند، نه دیتابیس. کاربران، سفارش‌ها و موجودی‌ها دست‌نخورده می‌مانند.'
+        ) . "</blockquote>";
     }
-    function bot_update_backups_keyboard()
+    function bot_update_backups_keyboard($lang = 'fa', $textbotlang = null)
     {
         $rows = [];
         foreach (bot_update_backups() as $b) {
@@ -2798,14 +2823,18 @@ if (!function_exists('bot_update_request_path')) {
                 continue;
             }
             $rows[] = [[
-                'text' => '♻️ ' . ($b['version'] ?? '?') . ' — ' . bot_update_when($b['at'] ?? 0),
+                'text' => '♻️ ' . ($b['version'] ?? '?') . ' — ' . bot_update_when($b['at'] ?? 0, $lang),
                 'callback_data' => 'botupdaterb:' . $name,
+                'style' => 'danger',
             ]];
         }
-        $rows[] = [['text' => '🔙 بازگشت', 'callback_data' => 'botupdatestatus', 'style' => 'danger']];
+        $rows[] = [[
+            'text' => bot_update_text($textbotlang, 'backBtn', '🔙 بازگشت'),
+            'callback_data' => 'botupdatestatus',
+        ]];
         return json_encode(['inline_keyboard' => $rows]);
     }
-    function bot_update_rollback_caption($name)
+    function bot_update_rollback_caption($name, $lang = 'fa', $textbotlang = null)
     {
         $ver = '?';
         $at = 0;
@@ -2815,73 +2844,190 @@ if (!function_exists('bot_update_request_path')) {
                 $at = (int) ($b['at'] ?? 0);
             }
         }
-        $out = "<blockquote><b>♻️ برگشت به نسخه " . htmlspecialchars($ver, ENT_QUOTES) . "</b></blockquote>\n\n";
-        $out .= "ربات به حالت <b>" . bot_update_when($at) . "</b> برمی‌گردد.\n\n";
-        $out .= "<blockquote>فایل‌های فعلی با همان نسخه جایگزین می‌شوند. دیتابیس و فایل config دست نمی‌خورند.</blockquote>\n\n";
-        $out .= "مطمئنی؟";
-        return $out . "\n\n<i>" . date('H:i:s') . "</i>";
+        $out = "<blockquote><b>" . bot_update_text($textbotlang, 'confirmTitle', '♻️ برگشت به نسخه') . ' '
+            . htmlspecialchars($ver, ENT_QUOTES) . "</b></blockquote>\n\n";
+        $out .= strtr(bot_update_text($textbotlang, 'confirmBody', 'ربات به حالت <b>{when}</b> برمی‌گردد.'), [
+            '{when}' => bot_update_when($at, $lang),
+        ]) . "\n\n";
+        $out .= "<blockquote>" . bot_update_text(
+            $textbotlang,
+            'confirmNote',
+            'فایل‌های فعلی با همان نسخه جایگزین می‌شوند. دیتابیس و فایل config دست نمی‌خورند.'
+        ) . "</blockquote>\n\n";
+        return $out . bot_update_text($textbotlang, 'confirmAsk', 'مطمئنی؟');
     }
-    function bot_update_rollback_keyboard($name)
+    function bot_update_rollback_keyboard($name, $textbotlang = null)
     {
         return json_encode(['inline_keyboard' => [
-            [['text' => '✅ بله، برگرد', 'callback_data' => 'botupdaterbgo:' . $name, 'style' => 'primary']],
-            [['text' => '🔙 بی‌خیال', 'callback_data' => 'botupdatelist', 'style' => 'danger']],
+            [[
+                'text' => bot_update_text($textbotlang, 'confirmYes', '✅ بله، برگرد'),
+                'callback_data' => 'botupdaterbgo:' . $name,
+                'style' => 'danger',
+            ]],
+            [[
+                'text' => bot_update_text($textbotlang, 'confirmNo', '🔙 بی‌خیال'),
+                'callback_data' => 'botupdatelist',
+            ]],
         ]]);
     }
-    function bot_update_rollback_write($name)
+    function bot_update_rollback_write($name, $from_id, $message_id, $lang, $textbotlang)
     {
         if (!bot_update_backup_valid($name)) {
-            return "❌ این نسخه پشتیبان معتبر نیست.\n\n<i>" . date('H:i:s') . "</i>";
+            return bot_update_text($textbotlang, 'badBackup', '❌ این نسخه پشتیبان معتبر نیست.');
         }
         if (bot_update_busy()) {
-            return "⏳ همین الان یک کار در جریان است - تا تمام شدنش صبر کن.\n\n<i>" . date('H:i:s') . "</i>";
+            return bot_update_text($textbotlang, 'alreadyBusy', '⏳ همین الان یک کار در جریان است - تا تمام شدنش صبر کن.');
         }
+        bot_update_ctx_write($from_id, $message_id, $lang, $textbotlang, 'rollback');
         if (@file_put_contents(__DIR__ . '/rollback_request', $name) === false) {
-            return "❌ نتوانستم درخواست بازگشت را ثبت کنم.\n\nاحتمالاً پوشه ربات برای وب‌سرور قابل نوشتن نیست.\n\n<i>" . date('H:i:s') . "</i>";
+            return bot_update_text(
+                $textbotlang,
+                'writeFailed',
+                "❌ نتوانستم درخواست را ثبت کنم.\n\nاحتمالاً پوشه ربات برای وب‌سرور قابل نوشتن نیست. یک بار <code>mirza update</code> را از ترمینال اجرا کن تا درست شود."
+            );
         }
-        return "♻️ <b>درخواست بازگشت ثبت شد.</b>\n\nحداکثر تا یک دقیقه دیگر شروع می‌شود و از آپدیت سریع‌تر تمام می‌شود.\n\n<i>" . date('H:i:s') . "</i>";
+        return bot_update_progress_now($textbotlang, 'rollback', 0);
     }
-    function bot_update_caption()
+    function bot_update_caption($lang = 'fa', $textbotlang = null)
     {
         $ver = trim((string) @file_get_contents(__DIR__ . '/version'));
-        $out = "<blockquote><b>🔄 آپدیت ربات</b></blockquote>\n\n";
-        $out .= "نسخه فعلی: <b>" . htmlspecialchars($ver === '' ? 'نامشخص' : $ver, ENT_QUOTES) . "</b>\n\n";
-        $out .= "با زدن دکمه پایین، ربات آخرین نسخه را از گیت‌هاب می‌گیرد و خودش را آپدیت می‌کند. دیگر لازم نیست به سرور وصل شوی.\n\n";
-        $out .= "<blockquote>✅ تنظیمات، دیتابیس، پنل‌ها و فایل config دست‌نخورده می‌مانند. پیش از شروع یک بکاپ کامل گرفته می‌شود و اگر آپدیت به مشکل بخورد، ربات خودکار به همین نسخه برمی‌گردد.</blockquote>\n\n";
         $st = bot_update_status();
         $state = (string) ($st['state'] ?? '');
-        if (bot_update_busy()) {
-            $out .= "⏳ <b>یک آپدیت در جریان است.</b> چند دقیقه صبر کن؛ نتیجه در تلگرام به تو اطلاع داده می‌شود.\n\n";
-        } elseif ($state !== '') {
-            $icon = $state === 'done' ? '✅' : ($state === 'failed' ? '❌' : 'ℹ️');
-            $out .= $icon . " آخرین وضعیت: " . htmlspecialchars((string) ($st['detail'] ?? $state), ENT_QUOTES) . "\n\n";
+        $out = "<blockquote><b>" . bot_update_text($textbotlang, 'title', '🔄 آپدیت ربات') . "</b></blockquote>\n\n";
+        $out .= bot_update_text($textbotlang, 'currentVersion', 'نسخه فعلی') . ": <b>"
+            . htmlspecialchars($ver === '' ? '—' : $ver, ENT_QUOTES) . "</b>\n";
+        // one moment in time, written in the reader's own calendar
+        if (in_array($state, ['done', 'restored'], true) && !empty($st['at'])) {
+            $out .= bot_update_text($textbotlang, 'lastUpdate', 'آخرین به‌روزرسانی') . ": <b>"
+                . bot_update_when($st['at'], $lang) . "</b>\n";
         }
-        // the refresh button would otherwise re-send an identical message,
-        // which Telegram rejects as "message is not modified"
-        $out .= "<i>آخرین بررسی: " . date('H:i:s') . "</i>";
+        $out .= "\n" . bot_update_text(
+            $textbotlang,
+            'intro',
+            'با زدن دکمه پایین، ربات آخرین نسخه را از گیت‌هاب می‌گیرد و خودش را آپدیت می‌کند. دیگر لازم نیست به سرور وصل شوی.'
+        ) . "\n\n";
+        $out .= "<blockquote>" . bot_update_text(
+            $textbotlang,
+            'safety',
+            '✅ تنظیمات، دیتابیس، پنل‌ها و فایل config دست‌نخورده می‌مانند. پیش از شروع یک بکاپ کامل گرفته می‌شود و اگر آپدیت به مشکل بخورد، ربات خودکار به همین نسخه برمی‌گردد.'
+        ) . "</blockquote>";
+        if (bot_update_busy()) {
+            $out .= "\n\n" . bot_update_text($textbotlang, 'busy', '⏳ <b>یک کار در جریان است.</b> همین پیام خودش به‌روز می‌شود.');
+        } elseif ($state === 'failed') {
+            $out .= "\n\n❌ " . htmlspecialchars((string) ($st['detail'] ?? ''), ENT_QUOTES);
+        }
         return $out;
     }
-    function bot_update_keyboard()
+    function bot_update_keyboard($lang = 'fa', $textbotlang = null)
     {
         $rows = [];
         if (!bot_update_busy()) {
-            $rows[] = [['text' => '🚀 شروع آپدیت', 'callback_data' => 'botupdatego', 'style' => 'primary']];
+            $rows[] = [[
+                'text' => bot_update_text($textbotlang, 'startBtn', '🚀 شروع آپدیت'),
+                'callback_data' => 'botupdatego',
+                'style' => 'primary',
+            ]];
         }
-        if (bot_update_backups()) {
-            $rows[] = [['text' => '♻️ بازگشت به نسخه قبلی', 'callback_data' => 'botupdatelist']];
+        // Red, because it throws away the version that is running right now.
+        // Beside it, the snapshot it would go back to: the admin reads what the
+        // button is about to do before tapping it, instead of after.
+        $list = bot_update_backups();
+        if (!empty($list)) {
+            $prev = $list[0];
+            $rows[] = [
+                [
+                    'text' => bot_update_text($textbotlang, 'rollbackBtn', '♻️ بازگشت به نسخه قبلی'),
+                    'callback_data' => 'botupdatelist',
+                    'style' => 'danger',
+                ],
+                [
+                    'text' => '⬅️ ' . ($prev['version'] ?? '?') . ' — ' . bot_update_when($prev['at'] ?? 0, $lang),
+                    'callback_data' => 'botupdatelist',
+                ],
+            ];
         }
-        $rows[] = [['text' => '🔄 بررسی وضعیت', 'callback_data' => 'botupdatestatus']];
+        // no status button: the message redraws itself while the work runs, so
+        // there is nothing left for the admin to go and ask about
         return json_encode(['inline_keyboard' => $rows]);
     }
-    function bot_update_request_write()
+    // Everything the root watcher needs to redraw THIS message while it works.
+    // It is written here, by the bot, already in the admin's own language: the
+    // watcher is a shell script that knows nothing about languages and only
+    // ever fills in {bar}, {percent} and {backup}.
+    function bot_update_ctx_write($from_id, $message_id, $lang, $textbotlang, $kind)
+    {
+        $bar = bot_update_text($textbotlang, 'barLine', '{bar}  <b>{percent}٪</b>');
+        $head = $kind === 'rollback'
+            ? bot_update_text($textbotlang, 'progressRollback', '♻️ <b>در حال بازگشت به نسخه قبلی…</b>')
+            : bot_update_text($textbotlang, 'progressUpdate', '🔄 <b>در حال به‌روزرسانی ربات…</b>');
+        $done = $kind === 'rollback'
+            ? bot_update_text($textbotlang, 'doneRollback', '✅ <b>ربات به نسخه قبلی برگشت.</b>')
+            : bot_update_text($textbotlang, 'doneUpdate', '✅ <b>ربات به‌روزرسانی شد.</b>');
+        $ctx = [
+            'chat_id' => (int) $from_id,
+            'message_id' => (int) $message_id,
+            'lang' => (string) $lang,
+            'progress' => $head . "\n\n" . $bar . "\n\n" . bot_update_text(
+                $textbotlang,
+                'progressNote',
+                '<blockquote>تا پایان کار، ربات ممکن است چند لحظه جواب ندهد. همین پیام خودش به‌روز می‌شود.</blockquote>'
+            ),
+            // the two finishes name the same kind of file for opposite reasons:
+            // an update KEEPS one to go back to, a rollback just CAME from one
+            'done' => $done . "\n\n" . $bar . "\n\n" . ($kind === 'rollback'
+                ? bot_update_text(
+                    $textbotlang,
+                    'doneRestored',
+                    "<blockquote>📦 ربات به این نسخه برگشت:\n<code>{backup}</code></blockquote>"
+                )
+                : bot_update_text(
+                    $textbotlang,
+                    'doneBackup',
+                    "<blockquote>📦 نسخه قبلی نگه داشته شد با نام:\n<code>{backup}</code>\nهر وقت خواستی از «بازگشت به نسخه قبلی» به همان برمی‌گردی.</blockquote>"
+                )),
+            'fail' => bot_update_text($textbotlang, 'failedTitle', '❌ <b>کار ناتمام ماند.</b>') . "\n\n" . bot_update_text(
+                $textbotlang,
+                'failedNote',
+                '<blockquote>ربات روی همان نسخه قبلی باقی ماند و چیزی از دست نرفت.</blockquote>'
+            ),
+        ];
+        @file_put_contents(__DIR__ . '/update_progress.json', json_encode($ctx, JSON_UNESCAPED_UNICODE));
+    }
+    // What this message should say the instant the button is tapped, before the
+    // watcher has had its first look: the same bar, sitting at zero.
+    function bot_update_progress_now($textbotlang, $kind, $percent = 0)
+    {
+        $bar = str_repeat('█', (int) round($percent / 10)) . str_repeat('░', 10 - (int) round($percent / 10));
+        $head = $kind === 'rollback'
+            ? bot_update_text($textbotlang, 'progressRollback', '♻️ <b>در حال بازگشت به نسخه قبلی…</b>')
+            : bot_update_text($textbotlang, 'progressUpdate', '🔄 <b>در حال به‌روزرسانی ربات…</b>');
+        $line = strtr(bot_update_text($textbotlang, 'barLine', '{bar}  <b>{percent}٪</b>'), [
+            '{bar}' => $bar,
+            '{percent}' => (int) $percent,
+        ]);
+        return $head . "\n\n" . $line . "\n\n" . bot_update_text(
+            $textbotlang,
+            'progressNote',
+            '<blockquote>تا پایان کار، ربات ممکن است چند لحظه جواب ندهد. همین پیام خودش به‌روز می‌شود.</blockquote>'
+        );
+    }
+    function bot_update_request_write($from_id, $message_id, $lang, $textbotlang)
     {
         if (bot_update_busy()) {
-            return "⏳ همین الان یک آپدیت در جریان است - تا تمام شدنش صبر کن.\n\n<i>" . date('H:i:s') . "</i>";
+            return bot_update_text($textbotlang, 'alreadyBusy', '⏳ همین الان یک کار در جریان است - تا تمام شدنش صبر کن.');
         }
+        // context first: the watcher can pick the request up within the second,
+        // and a request that arrives without it would run the whole update
+        // behind a message that never moves
+        bot_update_ctx_write($from_id, $message_id, $lang, $textbotlang, 'update');
         if (@file_put_contents(bot_update_request_path(), (string) time()) === false) {
-            return "❌ نتوانستم درخواست آپدیت را ثبت کنم.\n\nاحتمالاً پوشه ربات برای وب‌سرور قابل نوشتن نیست. یک بار <code>mirza update</code> را از ترمینال اجرا کن تا درست شود.\n\n<i>" . date('H:i:s') . "</i>";
+            return bot_update_text(
+                $textbotlang,
+                'writeFailed',
+                "❌ نتوانستم درخواست را ثبت کنم.\n\nاحتمالاً پوشه ربات برای وب‌سرور قابل نوشتن نیست. یک بار <code>mirza update</code> را از ترمینال اجرا کن تا درست شود."
+            );
         }
-        return "✅ <b>درخواست آپدیت ثبت شد.</b>\n\nحداکثر تا یک دقیقه دیگر شروع می‌شود و چند دقیقه طول می‌کشد. وقتی تمام شد، همین‌جا در تلگرام خبرت می‌کنم.\n\n<i>" . date('H:i:s') . "</i>";
+        return bot_update_progress_now($textbotlang, 'update', 0);
     }
 }
 if (!function_exists('sms_forward_show_url_payload')) {
@@ -12768,20 +12914,28 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
 } elseif ($text == $textbotlang['keyboard']['generalSettings'] && $adminrulecheck['rule'] == "administrator") {
     sendmessage($from_id, $textbotlang['users']['selectoption'], $setting_panel, 'HTML');
 } elseif ($text == $textbotlang['keyboard']['updateBotBtn'] && $adminrulecheck['rule'] == "administrator") {
-    sendmessage($from_id, bot_update_caption(), bot_update_keyboard(), 'HTML');
+    $bu_lang = $user['lang'] ?? 'fa';
+    sendmessage($from_id, bot_update_caption($bu_lang, $textbotlang), bot_update_keyboard($bu_lang, $textbotlang), 'HTML');
 } elseif ($datain == "botupdatego" && $adminrulecheck['rule'] == "administrator") {
     // deliberately two taps: this restarts the live bot, so the first tap only
-    // opens the screen that says what will happen
-    $bot_update_reply = bot_update_request_write();
-    Editmessagetext($from_id, $message_id, $bot_update_reply, bot_update_keyboard(), 'HTML');
+    // opens the screen that says what will happen.
+    // No keyboard from here on: the work is under way, the root watcher owns
+    // this message until it finishes, and a button tapped mid-update could only
+    // ask for something that must not happen twice.
+    $bu_lang = $user['lang'] ?? 'fa';
+    Editmessagetext($from_id, $message_id, bot_update_request_write($from_id, $message_id, $bu_lang, $textbotlang), null, 'HTML');
 } elseif ($datain == "botupdatestatus" && $adminrulecheck['rule'] == "administrator") {
-    Editmessagetext($from_id, $message_id, bot_update_caption(), bot_update_keyboard(), 'HTML');
+    $bu_lang = $user['lang'] ?? 'fa';
+    Editmessagetext($from_id, $message_id, bot_update_caption($bu_lang, $textbotlang), bot_update_keyboard($bu_lang, $textbotlang), 'HTML');
 } elseif ($datain == "botupdatelist" && $adminrulecheck['rule'] == "administrator") {
-    Editmessagetext($from_id, $message_id, bot_update_backups_caption(), bot_update_backups_keyboard(), 'HTML');
+    $bu_lang = $user['lang'] ?? 'fa';
+    Editmessagetext($from_id, $message_id, bot_update_backups_caption($bu_lang, $textbotlang), bot_update_backups_keyboard($bu_lang, $textbotlang), 'HTML');
 } elseif (preg_match('/^botupdaterb:(pre-update_[0-9]{8}_[0-9]{6}\.tar\.gz)$/', (string) $datain, $bot_rb_m) && $adminrulecheck['rule'] == "administrator") {
-    Editmessagetext($from_id, $message_id, bot_update_rollback_caption($bot_rb_m[1]), bot_update_rollback_keyboard($bot_rb_m[1]), 'HTML');
+    $bu_lang = $user['lang'] ?? 'fa';
+    Editmessagetext($from_id, $message_id, bot_update_rollback_caption($bot_rb_m[1], $bu_lang, $textbotlang), bot_update_rollback_keyboard($bot_rb_m[1], $textbotlang), 'HTML');
 } elseif (preg_match('/^botupdaterbgo:(pre-update_[0-9]{8}_[0-9]{6}\.tar\.gz)$/', (string) $datain, $bot_rb_m) && $adminrulecheck['rule'] == "administrator") {
-    Editmessagetext($from_id, $message_id, bot_update_rollback_write($bot_rb_m[1]), bot_update_keyboard(), 'HTML');
+    $bu_lang = $user['lang'] ?? 'fa';
+    Editmessagetext($from_id, $message_id, bot_update_rollback_write($bot_rb_m[1], $from_id, $message_id, $bu_lang, $textbotlang), null, 'HTML');
 } elseif ($text == $textbotlang['keyboard']['miniAppSettingsBtn'] && $adminrulecheck['rule'] == "administrator") {
     sendmessage($from_id, miniapp_hub_caption($textbotlang), miniapp_hub_keyboard($textbotlang), 'HTML');
 } elseif ($datain == "miniappHubToggle" && $adminrulecheck['rule'] == "administrator") {

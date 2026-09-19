@@ -135,6 +135,12 @@ run_step() {
     if [ "$ETA_REMAINING" -gt 0 ]; then
         ETA_REMAINING=$(( ETA_REMAINING - eta )); [ "$ETA_REMAINING" -lt 0 ] && ETA_REMAINING=0
     fi
+    # The one place every long step passes through, so the bot's progress bar is
+    # drawn from here instead of from seven separate call sites - and a step
+    # added to the update later moves the bar without anyone remembering to.
+    if [ -n "$MZ_TPL_PROGRESS" ] && [ "$rc" -eq 0 ] && [ "$STEP_TOTAL" -gt 0 ]; then
+        _selfupdate_progress $(( STEP_NO * 100 / STEP_TOTAL ))
+    fi
     if [ "$rc" -eq 0 ]; then
         printf "\r\033[K \033[1;32m✔\033[0m \033[0;37m[%s]\033[0m %s \033[0;37m(%s)\033[0m\n" "$counter" "$msg" "$(_fmt_secs $el)"
     else
@@ -2585,8 +2591,9 @@ function update_bot() {
     run_step "Backing up the current install" \
         "tar --warning=no-file-changed -czf '$ROLLBACK' -C '$(dirname "$BOT_DIR")' --exclude='*.bak*' --exclude='.git' --exclude='log.txt' --exclude='error_log' '$(basename "$BOT_DIR")'" \
         || { show_step_error; printf "  ${C_BAD}Could not create a rollback archive. Refusing to continue.${CR}\n"; sleep 3; show_menu; return 1; }
-    # keep the 5 most recent, so this never fills the disk
-    ls -1t "$BK_DIR"/pre-update_*.tar.gz 2>/dev/null | tail -n +6 | xargs -r rm -f
+    # keep the 10 most recent, so this never fills the disk - the bot lists
+    # exactly these for "بازگشت به نسخه قبلی", so the two numbers are one number
+    ls -1t "$BK_DIR"/pre-update_*.tar.gz 2>/dev/null | tail -n +11 | xargs -r rm -f
 
     # ── 2. Fetch and validate the new code ───────────────────
     TEMP_DIR="/tmp/mirzaprobot_update"
@@ -2816,6 +2823,76 @@ MIRZA_ROLLBACK_REQUEST="rollback_request"
 MIRZA_BACKUPS_LIST="update_backups.json"
 # the same folder update_bot() drops its pre-update snapshot into
 MIRZA_BACKUP_DIR="/root/mirza-backups"
+# where the bot leaves the chat, message and already-translated wording for the
+# progress bar. Written next to the request rather than inside it: the request
+# is claimed and deleted early, and this has to outlive that.
+MIRZA_PROGRESS_CTX="update_progress.json"
+
+# ── The bot's own message, redrawn as the work goes ──────────
+# Only root can do this. The update runs here, not in the bot, and a bot that
+# is being overwritten cannot report on its own progress. Everything needed is
+# read ONCE, up front, into these variables - a rollback replaces the whole bot
+# directory half way through, taking the context file with it, so anything read
+# lazily would be gone exactly when the finished message is due.
+MZ_TOKEN=""; MZ_CHAT=""; MZ_MSG=""
+MZ_TPL_PROGRESS=""; MZ_TPL_DONE=""; MZ_TPL_FAIL=""
+
+_selfupdate_ctx_load() {
+    local dir="$1" ctx="${dir}/${MIRZA_PROGRESS_CTX}"
+    MZ_TOKEN=""; MZ_CHAT=""; MZ_MSG=""
+    MZ_TPL_PROGRESS=""; MZ_TPL_DONE=""; MZ_TPL_FAIL=""
+    [ -f "$ctx" ] || return 1
+    MZ_TOKEN=$(grep '^\$APIKEY' "$dir/config.php" 2>/dev/null | cut -d"'" -f2)
+    MZ_CHAT=$(jq -r '.chat_id // empty' "$ctx" 2>/dev/null)
+    MZ_MSG=$(jq -r '.message_id // empty' "$ctx" 2>/dev/null)
+    MZ_TPL_PROGRESS=$(jq -r '.progress // empty' "$ctx" 2>/dev/null)
+    MZ_TPL_DONE=$(jq -r '.done // empty' "$ctx" 2>/dev/null)
+    MZ_TPL_FAIL=$(jq -r '.fail // empty' "$ctx" 2>/dev/null)
+    [ -n "$MZ_TOKEN" ] && [ -n "$MZ_CHAT" ] && [ -n "$MZ_MSG" ]
+}
+
+_selfupdate_bar() {
+    local pct="$1" width=10 filled i out=""
+    [ "$pct" -gt 100 ] && pct=100
+    [ "$pct" -lt 0 ] && pct=0
+    filled=$(( pct * width / 100 ))
+    for ((i = 0; i < width; i++)); do
+        if [ "$i" -lt "$filled" ]; then out="${out}█"; else out="${out}░"; fi
+    done
+    printf '%s' "$out"
+}
+
+_selfupdate_tg_edit() {
+    [ -n "$MZ_TOKEN" ] && [ -n "$MZ_CHAT" ] && [ -n "$MZ_MSG" ] || return 0
+    curl -s --max-time 10 -X POST "https://api.telegram.org/bot${MZ_TOKEN}/editMessageText" \
+        --data-urlencode "chat_id=${MZ_CHAT}" \
+        --data-urlencode "message_id=${MZ_MSG}" \
+        --data-urlencode "text=$1" \
+        --data-urlencode "parse_mode=HTML" >/dev/null 2>&1
+}
+
+# Redraw at a whole percentage. Called once per finished step, never inside the
+# spinner loop: Telegram rate-limits edits, and five a minute is plenty for a
+# bar that only really moves seven times.
+_selfupdate_progress() {
+    local pct="$1" text
+    [ -n "$MZ_TPL_PROGRESS" ] || return 0
+    text="${MZ_TPL_PROGRESS//\{bar\}/$(_selfupdate_bar "$pct")}"
+    text="${text//\{percent\}/$pct}"
+    _selfupdate_tg_edit "$text"
+}
+
+# The last word: done (with the snapshot the admin can go back to) or failed.
+_selfupdate_final() {
+    local which="$1" backup="$2" tpl text
+    tpl="$MZ_TPL_DONE"
+    [ "$which" = "fail" ] && tpl="$MZ_TPL_FAIL"
+    [ -n "$tpl" ] || return 0
+    text="${tpl//\{backup\}/$backup}"
+    text="${text//\{bar\}/$(_selfupdate_bar 100)}"
+    text="${text//\{percent\}/100}"
+    _selfupdate_tg_edit "$text"
+}
 
 # Leave the bot a readable note about what happened, so its button can report
 # back without needing to see this script's output.
@@ -2857,7 +2934,7 @@ selfupdate_watch() {
     bots_registry_ensure
     local dirs; dirs=$(jq -r '.[].dir' "$BOTS_REGISTRY" 2>/dev/null)
     [ -z "$dirs" ] && return 0
-    local dir req claimed age rc rbreq want arc top newest
+    local dir req claimed age rc rbreq want arc top newest rbpid rbpct
     while IFS= read -r dir; do
         [ -n "$dir" ] && [ -d "$dir" ] || continue
         # Refresh the list the bot shows only when a new snapshot has actually
@@ -2887,16 +2964,37 @@ selfupdate_watch() {
                 _selfupdate_status "$dir" "failed" "نسخه پشتیبان پیدا نشد"
                 continue
             fi
+            # read before anything moves: _rollback_update swaps the whole
+            # directory out and the context file lives inside it, so waiting
+            # until the end would leave nothing to send the last message with
+            _selfupdate_ctx_load "$dir"
             _selfupdate_status "$dir" "running" "در حال بازگشت به نسخه قبلی"
-            # _rollback_update replaces the whole directory, so anything written
-            # here beforehand is gone with it - the status below is written back
-            # onto the restored tree, which is why it comes after, not before.
-            if _rollback_update "$arc" "$dir" >> /tmp/mirza_selfupdate.log 2>&1; then
+            _selfupdate_progress 10
+            # Unpacking is one long call with no steps to count, so the bar is
+            # walked forward on a timer instead - slowly, and never past 90, so
+            # it cannot claim to be finished while the work is still running.
+            ( _rollback_update "$arc" "$dir" >> /tmp/mirza_selfupdate.log 2>&1 ) &
+            rbpid=$!
+            rbpct=10
+            while kill -0 "$rbpid" 2>/dev/null; do
+                sleep 5
+                rbpct=$(( rbpct + 10 ))
+                [ "$rbpct" -gt 90 ] && rbpct=90
+                _selfupdate_progress "$rbpct"
+            done
+            wait "$rbpid"
+            rc=$?
+            # the status file is written back onto the restored tree, which is
+            # why it comes after the restore rather than before it
+            if [ "$rc" -eq 0 ]; then
                 _selfupdate_status "$dir" "restored" "بازگشت به نسخه قبلی انجام شد"
+                _selfupdate_final "done" "$want"
             else
                 _selfupdate_status "$dir" "failed" "بازگشت به نسخه قبلی ناموفق بود"
+                _selfupdate_final "fail" "$want"
             fi
             _selfupdate_publish_backups "$dir"
+            rm -f "${dir}/${MIRZA_PROGRESS_CTX}"
             continue
         fi
         req="${dir}/${MIRZA_UPDATE_REQUEST}"
@@ -2914,19 +3012,30 @@ selfupdate_watch() {
             _selfupdate_status "$dir" "stale" "درخواست قدیمی بود و اجرا نشد"
             continue
         fi
+        _selfupdate_ctx_load "$dir"
         _selfupdate_status "$dir" "running" "در حال آپدیت"
-        ( MIRZA_NONINTERACTIVE=1 MIRZA_BOT_DIR="$dir" update_bot ) >> /tmp/mirza_selfupdate.log 2>&1
+        _selfupdate_progress 0
+        # STEP_TOTAL is what turns run_step's counter into a percentage. The
+        # update path never set it, because a terminal gets a spinner instead -
+        # seven is how many run_step calls update_bot makes, and run_step moves
+        # the bar itself, so a step added later is counted without anyone
+        # remembering to touch this.
+        ( MIRZA_NONINTERACTIVE=1 MIRZA_BOT_DIR="$dir" STEP_TOTAL=7 update_bot ) >> /tmp/mirza_selfupdate.log 2>&1
         rc=$?
         rm -f "$claimed"
+        # the snapshot this run just took is what the admin would go back to -
+        # republished first so the finished message can name it
+        _selfupdate_publish_backups "$dir"
         if [ "$rc" -eq 0 ]; then
             _selfupdate_status "$dir" "done" "آپدیت با موفقیت انجام شد"
+            _selfupdate_final "done" "$(jq -r '.[0].name // empty' "${dir}/${MIRZA_BACKUPS_LIST}" 2>/dev/null)"
         else
             # update_bot restores its own pre-update snapshot before returning
             # non-zero, so "failed" always means "still on the old version"
             _selfupdate_status "$dir" "failed" "آپدیت ناموفق بود - نسخه قبلی برگردانده شد"
+            _selfupdate_final "fail" ""
         fi
-        # the snapshot this run just took is what the admin would go back to
-        _selfupdate_publish_backups "$dir"
+        rm -f "${dir}/${MIRZA_PROGRESS_CTX}"
     done <<< "$dirs"
 }
 
