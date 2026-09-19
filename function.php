@@ -2338,7 +2338,12 @@ if (!function_exists('gateway_groups')) {
             // rial processors - every one of these is fa-only (see
             // gateway_fa_only_keys), so the group simply never appears on the
             // other language tabs
-            'rial' => ['iranpay1', 'iranpay2', 'iranpay3', 'aqayepardakht', 'zarinpal', 'frenzyex', 'paymentnotverify'],
+            'rial' => ['iranpay1', 'iranpay2', 'iranpay3', 'aqayepardakht', 'zarinpal', 'paymentnotverify'],
+            // rial-priced, but settled through a forex/crypto processor rather
+            // than a rial PSP - its own family, directly under the rial one,
+            // so it is configured from its own button instead of being mixed
+            // in with the plain rial gateways
+            'rialforex' => ['frenzyex'],
         ];
     }
 }
@@ -2359,6 +2364,7 @@ if (!function_exists('gateway_disc_groups')) {
         return [
             'card' => ['card'],
             'rial' => $g['rial'] ?? [],
+            'rialforex' => $g['rialforex'] ?? [],
             'online' => $g['online'] ?? [],
             'offline' => $g['offline'] ?? [],
         ];

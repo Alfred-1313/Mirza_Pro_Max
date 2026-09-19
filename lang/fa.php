@@ -6501,6 +6501,7 @@ nowpayments.io
         'online' => '🪙 درگاه‌های آنلاین ارزی',
         'offline' => '⏳ درگاه‌های آفلاین ارزی',
         'rial' => '🏧 درگاه‌های ریالی',
+        'rialforex' => '💱 درگاه‌های ارزی ریالی',
         // card-to-card is a category in 🏦 بسته‌های شارژ and 🎁 تخفیف شارژ, but
         // never a collapsible family on the customer's payment screen - see
         // gateway_disc_groups()
@@ -6508,6 +6509,7 @@ nowpayments.io
       ),
       'groupNotes' => array(
         'offline' => '📌 پرداخت این درگاه‌ها مستقیم به کیف پول خودت میاد، پس هر تراکنش باید دستی توسط مدیر تایید بشه.',
+        'rialforex' => '📌 فاکتور به تومان ساخته می‌شه، ولی خودِ درگاه به کاربر هم کارت به کارت می‌ده هم ارز دیجیتال. فقط برای زبان فارسیه.',
       ),
       'openGroupBtn' => '📂 باز کردن',
       'groupCaption' => '<b>{group}</b>
