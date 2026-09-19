@@ -14579,6 +14579,18 @@ function createPayZarinpal($price, $order_id)
 // own create endpoint has no idempotency key) - the caller's message-replace
 // ordering (delete-then-show-placeholder, same as every redirect gateway
 // already does) is what keeps a second tap from creating a second request.
+if (!function_exists('frenzyex_callback_url')) {
+    // the completion-webhook address FrenzyEx's own merchant panel asks for,
+    // built from the bot's own domain so the admin never types it by hand.
+    // Unlike sms_forward_webhook_url() this carries no secret in the URL -
+    // payment/frenzyex.php authenticates the caller by the X-Frenzy-Signature
+    // HMAC instead, so the address is safe to show on screen.
+    function frenzyex_callback_url()
+    {
+        global $domainhosts;
+        return "https://{$domainhosts}/payment/frenzyex.php";
+    }
+}
 function createPayFrenzyEx($price, $order_id)
 {
     $apiKey = select("PaySetting", "ValuePay", "NamePay", "frenzyex_api_key", "select")['ValuePay'];

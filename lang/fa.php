@@ -3150,6 +3150,12 @@ nowpayments.io
       'askFrenzyExCallbackSecret' => '🔒 رمز تایید کالبک (Callback Secret) که از FrenzyEx گرفتید رو وارد کنید
 
 رمز فعلی شما : %s',
+      'frenzyExCallbackUrl' => '🔗 آدرس کال‌بک (Callback URL) شما:
+
+<code>%s</code>
+
+این آدرس رو توی پنل FrenzyEx، بخش تنظیمات وبهوک (Webhook)، ثبت کنید تا پرداخت‌های موفق خودکار تایید بشن.
+برای کپی، روی خود آدرس بزنید.',
       'askMerchant' => '💳 مرچنت کد خود را دریافت و در این قسمت وارد کنید
         
 مرچنت کد فعلی شما : %s',

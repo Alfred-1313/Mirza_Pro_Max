@@ -13575,7 +13575,11 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
 } elseif ($datain == "zarinpalsetting" && $adminrulecheck['rule'] == "administrator") {
     sendmessage($from_id, $textbotlang['Admin']['selectOption'], $keyboardzarinpal, 'HTML');
 } elseif ($datain == "frenzyexsetting" && $adminrulecheck['rule'] == "administrator") {
-    sendmessage($from_id, $textbotlang['Admin']['selectOption'], $keyboardfrenzyex, 'HTML');
+    // shown right here rather than behind another button: the callback address
+    // is the one value the admin has to carry over to FrenzyEx's own panel
+    $textfrenzyexsetting = $textbotlang['Admin']['selectOption'] . "\n\n"
+        . sprintf($textbotlang['Admin']['gateway']['frenzyExCallbackUrl'], frenzyex_callback_url());
+    sendmessage($from_id, $textfrenzyexsetting, $keyboardfrenzyex, 'HTML');
 } elseif ($text == $textbotlang['keyboard']['setAqayePardakhtMerchant'] && $adminrulecheck['rule'] == "administrator") {
     $PaySetting = select("PaySetting", "ValuePay", "NamePay", "merchant_id_aqayepardakht")['ValuePay'];
     $textaqayepardakht = sprintf($textbotlang['Admin']['gateway']['askAqayePardakhtMerchant'], $PaySetting);
