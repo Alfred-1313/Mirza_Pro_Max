@@ -6500,6 +6500,7 @@ nowpayments.io
       'cardInvalid' => '⛔️ شماره کارت معتبر نیست.',
       'globalToggleBtn' => '🌐 وضعیت سراسری (همه زبان‌ها): %s',
       'legacyBtn' => '🔑 تنظیمات فنی درگاه (مشترک بین همه زبان‌ها)',
+      'legacyBtnSingle' => '🔑 تنظیمات فنی درگاه',
       'colTitle' => 'عنوان',
       'colStatus' => 'وضعیت',
       'colAction' => 'عملیات',
@@ -6543,6 +6544,12 @@ nowpayments.io
       'askValueGlobal' => '✏️ مقدار جدید <b>{field}</b> رو بفرست.
 
 🌐 این مقدار برای <b>همهٔ زبان‌ها</b> استفاده می‌شه.
+
+مقدار فعلی: <code>{current}</code>',
+      // same prompt for a gateway that only exists in one language: the value
+      // is still stored globally, but there is no second language to share it
+      // with, so saying so would only puzzle the admin
+      'askValueGlobalSingle' => '✏️ مقدار جدید <b>{field}</b> رو بفرست.
 
 مقدار فعلی: <code>{current}</code>',
       'cardEditModeBtn' => '✏️ ویرایش شماره کارت',

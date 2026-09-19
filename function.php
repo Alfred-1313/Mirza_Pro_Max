@@ -6504,6 +6504,17 @@ if (!function_exists('gateway_applicable_for_lang')) {
         return $lang === 'fa' || !in_array($key, gateway_fa_only_keys(), true);
     }
 }
+if (!function_exists('gateway_single_lang')) {
+    // A gateway that exists in exactly one language. Its fields may still be
+    // stored globally - that is gw_field_scope()'s business and none of this
+    // changes it - but telling the admin a value is "shared across all
+    // languages" is meaningless when there is no second language to share it
+    // with, so the admin screens use this to stay quiet about it.
+    function gateway_single_lang($key)
+    {
+        return in_array($key, gateway_fa_only_keys(), true);
+    }
+}
 if (!function_exists('gateway_button_key')) {
     function gateway_button_key($btn, $cartToCartText = null)
     {

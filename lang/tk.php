@@ -6436,6 +6436,7 @@ Umumy baha gaýtarmak üçin <b>0</b> iber.',
       'cardInvalid' => '⛔️ Kart belgisi nädogry.',
       'globalToggleBtn' => '🌐 Umumy ýagdaý (ähli diller): %s',
       'legacyBtn' => '🔑 Tehniki sazlamalar (ähli diller üçin umumy)',
+      'legacyBtnSingle' => '🔑 Tehniki sazlamalar',
       'colTitle' => 'Ady',
       'colStatus' => 'Ýagdaý',
       'colAction' => 'Amal',
@@ -6449,6 +6450,9 @@ Umumy baha gaýtarmak üçin <b>0</b> iber.',
       'askValueGlobal' => '✏️ <b>{field}</b> üçin täze bahany iberiň.
 
 🌐 Bu baha <b>ähli diller</b> üçin ulanylýar.
+
+Häzirki baha: <code>{current}</code>',
+      'askValueGlobalSingle' => '✏️ <b>{field}</b> üçin täze bahany iberiň.
 
 Häzirki baha: <code>{current}</code>',
       'cardEditModeBtn' => '✏️ Kart belgisini üýtget',

@@ -2532,7 +2532,10 @@ if (!function_exists('gateway_settings_payload')) {
             }
             list($own, $shown) = gw_field_value_text($field, $lang, $textbotlang);
             $btn = [
-                'text' => (gw_field_scope($field) === 'global' ? $t['globalFieldPrefix'] : '')
+                // the 🌐 marks a value shared between languages - on a gateway
+                // that only exists in Persian there is no second language for
+                // it to mean anything against, so it is left off there
+                'text' => (gw_field_scope($field) === 'global' && !gateway_single_lang($key) ? $t['globalFieldPrefix'] : '')
                     . $t[$field['label']] . ' — ' . $shown,
                 'callback_data' => "gwfld:{$lang}:{$key}:{$i}",
             ];
@@ -2603,7 +2606,12 @@ if (!function_exists('gateway_settings_payload')) {
         }
         $legacy = gw_legacy_settings_datain($key);
         if ($legacy !== null) {
-            $kb['inline_keyboard'][] = [['text' => $t['legacyBtn'], 'callback_data' => $legacy]];
+            // "(مشترک بین همه زبان‌ها)" is true of this screen everywhere except
+            // on a gateway that has only one language - there it just confuses
+            $legacyLabel = gateway_single_lang($key)
+                ? ($t['legacyBtnSingle'] ?? $t['legacyBtn'])
+                : $t['legacyBtn'];
+            $kb['inline_keyboard'][] = [['text' => $legacyLabel, 'callback_data' => $legacy]];
         }
         if (gw_has_any_override($key, $lang)) {
             $kb['inline_keyboard'][] = [['text' => $t['resetBtn'], 'callback_data' => "gwrst:{$lang}:{$key}"]];
@@ -3987,7 +3995,10 @@ if (!function_exists('gateway_settings_caption')) {
                 $hasGlobal = true;
             }
         }
-        if ($hasGlobal) {
+        // same reason as the 🌐 prefix in gateway_settings_payload(): a
+        // Persian-only gateway has no other language to share the value with,
+        // so this sentence only puzzles the admin reading it
+        if ($hasGlobal && !gateway_single_lang($key)) {
             $cap .= "\n\n" . $t['globalFieldHint'];
         }
         if (!gateway_globally_on($key)) {
@@ -11385,7 +11396,14 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     $gw_cancelKb = gwfld_cancel_kb($gw_m[1], $gw_m[2], $gw_m[3], (int) $message_id, $textbotlang);
     if (gw_field_scope($gw_field) === 'global') {
         $gw_cur = (string) getPaySettingValue($gw_field['field']);
-        $gw_prompt = sendmessage($from_id, strtr($gw_t['askValueGlobal'], [
+        // a one-language gateway is not told its value is "for all languages"
+        // - same silence the 🌐 prefix and the caption hint keep. The ?? is a
+        // safety net: an older language file without the sibling key still
+        // gets a real prompt instead of an empty message Telegram would reject
+        $gw_askGlobal = gateway_single_lang($gw_m[2])
+            ? ($gw_t['askValueGlobalSingle'] ?? $gw_t['askValueGlobal'])
+            : $gw_t['askValueGlobal'];
+        $gw_prompt = sendmessage($from_id, strtr($gw_askGlobal, [
             '{field}' => $gw_t[$gw_field['label']],
             '{current}' => $gw_cur === '' ? $gw_t['notSet'] : $gw_cur,
         ]), $gw_cancelKb, 'HTML');
