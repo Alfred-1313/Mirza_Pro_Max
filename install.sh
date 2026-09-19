@@ -2834,17 +2834,18 @@ MIRZA_PROGRESS_CTX="update_progress.json"
 # read ONCE, up front, into these variables - a rollback replaces the whole bot
 # directory half way through, taking the context file with it, so anything read
 # lazily would be gone exactly when the finished message is due.
-MZ_TOKEN=""; MZ_CHAT=""; MZ_MSG=""
+MZ_TOKEN=""; MZ_CHAT=""; MZ_MSG=""; MZ_LANG=""
 MZ_TPL_PROGRESS=""; MZ_TPL_DONE=""; MZ_TPL_FAIL=""
 
 _selfupdate_ctx_load() {
     local dir="$1" ctx="${dir}/${MIRZA_PROGRESS_CTX}"
-    MZ_TOKEN=""; MZ_CHAT=""; MZ_MSG=""
+    MZ_TOKEN=""; MZ_CHAT=""; MZ_MSG=""; MZ_LANG=""
     MZ_TPL_PROGRESS=""; MZ_TPL_DONE=""; MZ_TPL_FAIL=""
     [ -f "$ctx" ] || return 1
     MZ_TOKEN=$(grep '^\$APIKEY' "$dir/config.php" 2>/dev/null | cut -d"'" -f2)
     MZ_CHAT=$(jq -r '.chat_id // empty' "$ctx" 2>/dev/null)
     MZ_MSG=$(jq -r '.message_id // empty' "$ctx" 2>/dev/null)
+    MZ_LANG=$(jq -r '.lang // empty' "$ctx" 2>/dev/null)
     MZ_TPL_PROGRESS=$(jq -r '.progress // empty' "$ctx" 2>/dev/null)
     MZ_TPL_DONE=$(jq -r '.done // empty' "$ctx" 2>/dev/null)
     MZ_TPL_FAIL=$(jq -r '.fail // empty' "$ctx" 2>/dev/null)
@@ -2880,6 +2881,43 @@ _selfupdate_progress() {
     text="${MZ_TPL_PROGRESS//\{bar\}/$(_selfupdate_bar "$pct")}"
     text="${text//\{percent\}/$pct}"
     _selfupdate_tg_edit "$text"
+}
+
+# The finished message is the update screen itself - the version now installed,
+# the date in the reader's own calendar, and the same menu the admin started
+# from. None of that can be built here, so PHP builds it; this only decides
+# when. Returns non-zero whenever that is not possible - php missing, or a
+# rollback that has just restored a version predating this function - and the
+# caller falls back to the plain template below.
+_selfupdate_finish_php() {
+    local dir="$1" kind="$2" backup="$3" ok="$4" rc
+    [ -n "$MZ_CHAT" ] && [ -n "$MZ_MSG" ] || return 1
+    command -v php >/dev/null 2>&1 || return 1
+    grep -q 'function bot_update_finish_edit' "$dir/function.php" 2>/dev/null || return 1
+    cat > /tmp/mirza_update_finish.php <<'FINEOF'
+<?php
+// the same set, in the same order, every cronbot entry point takes
+require 'config.php';
+require 'botapi.php';
+require 'panels.php';
+require 'function.php';
+require 'jdf.php';
+require 'vendor/autoload.php';
+bot_update_finish_edit(
+    getenv('MZ_CHAT'),
+    getenv('MZ_MSG'),
+    getenv('MZ_LANG'),
+    getenv('MZ_BACKUP'),
+    getenv('MZ_KIND'),
+    getenv('MZ_OK') === '1'
+);
+FINEOF
+    ( cd "$dir" && MZ_CHAT="$MZ_CHAT" MZ_MSG="$MZ_MSG" MZ_LANG="$MZ_LANG" \
+        MZ_BACKUP="$backup" MZ_KIND="$kind" MZ_OK="$ok" \
+        php /tmp/mirza_update_finish.php ) >> /tmp/mirza_selfupdate.log 2>&1
+    rc=$?
+    rm -f /tmp/mirza_update_finish.php
+    return $rc
 }
 
 # The last word: done (with the snapshot the admin can go back to) or failed.
@@ -2934,7 +2972,7 @@ selfupdate_watch() {
     bots_registry_ensure
     local dirs; dirs=$(jq -r '.[].dir' "$BOTS_REGISTRY" 2>/dev/null)
     [ -z "$dirs" ] && return 0
-    local dir req claimed age rc rbreq want arc top newest rbpid rbpct
+    local dir req claimed age rc rbreq want arc top newest rbpid rbpct newbk
     while IFS= read -r dir; do
         [ -n "$dir" ] && [ -d "$dir" ] || continue
         # Refresh the list the bot shows only when a new snapshot has actually
@@ -2986,14 +3024,16 @@ selfupdate_watch() {
             rc=$?
             # the status file is written back onto the restored tree, which is
             # why it comes after the restore rather than before it
+            # rebuilt FIRST: the restored tree brought its own, older copy of
+            # this list back with it, and the finished screen is drawn from it
+            _selfupdate_publish_backups "$dir"
             if [ "$rc" -eq 0 ]; then
                 _selfupdate_status "$dir" "restored" "بازگشت به نسخه قبلی انجام شد"
-                _selfupdate_final "done" "$want"
+                _selfupdate_finish_php "$dir" "rollback" "$want" 1 || _selfupdate_final "done" "$want"
             else
                 _selfupdate_status "$dir" "failed" "بازگشت به نسخه قبلی ناموفق بود"
                 _selfupdate_final "fail" "$want"
             fi
-            _selfupdate_publish_backups "$dir"
             rm -f "${dir}/${MIRZA_PROGRESS_CTX}"
             continue
         fi
@@ -3028,7 +3068,8 @@ selfupdate_watch() {
         _selfupdate_publish_backups "$dir"
         if [ "$rc" -eq 0 ]; then
             _selfupdate_status "$dir" "done" "آپدیت با موفقیت انجام شد"
-            _selfupdate_final "done" "$(jq -r '.[0].name // empty' "${dir}/${MIRZA_BACKUPS_LIST}" 2>/dev/null)"
+            newbk=$(jq -r '.[0].name // empty' "${dir}/${MIRZA_BACKUPS_LIST}" 2>/dev/null)
+            _selfupdate_finish_php "$dir" "update" "$newbk" 1 || _selfupdate_final "done" "$newbk"
         else
             # update_bot restores its own pre-update snapshot before returning
             # non-zero, so "failed" always means "still on the old version"
