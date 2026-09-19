@@ -5916,6 +5916,63 @@ if (!function_exists('topup_expire_notify')) {
     }
 }
 
+if (!function_exists('topup_custom_screen_show')) {
+    // The 💵 مبلغ دلخواه screen, in one place because two paths reach it: the
+    // amount screen's own "مبلغ دلخواه" button, and - when this gateway has no
+    // ready-made packages in this language - the gateway pick itself, since an
+    // amount screen listing no amounts asks the customer nothing and can only
+    // be left through this very screen.
+    //
+    // $withBackToPkg tells the two apart. "بازگشت به منوی قبلی" returns to the
+    // amount screen, so it must not be offered when that screen was never
+    // shown: it would drop the customer onto an empty one.
+    function topup_custom_screen_show($from_id, $message_id, $lang, $key, $textbotlang, $withBackToPkg = true)
+    {
+        step("topup_custom:{$key}", $from_id);
+        $cap = topup_custom_caption_for($lang, $key, topup_custom_caption_default($key, $textbotlang));
+        // this screen's own back button has its own style slot ('backcustom'):
+        // it used to share 'back' with the amount screen's button, so restyling
+        // one silently restyled the other
+        $row = [
+            topup_styled_button(
+                topup_slot_label($lang, $key, 'backcustom', $textbotlang),
+                topup_btnstyle_for($lang, $key, 'backcustom', true),
+                'topup_back_methods',
+                'danger'
+            ),
+        ];
+        if ($withBackToPkg) {
+            $row[] = topup_styled_button(
+                topup_slot_label($lang, $key, 'backpkg', $textbotlang),
+                topup_btnstyle_for($lang, $key, 'backpkg', true),
+                "topup_back_pkg:{$key}",
+                'danger'
+            );
+            // the admin's left/right choice only means something with both
+            // buttons present
+            if (topup_custom_screen_swapped($lang, $key)) {
+                $row = array_reverse($row);
+            }
+        }
+        $floor = topup_usd_floor_toman($lang, $key);
+        // {min}/{max} come from topup_effective_limits() - the very same
+        // function that refuses an out-of-range amount a moment later. Reading
+        // them from anywhere else is how a prompt ends up promising one number
+        // while the refusal quotes another.
+        [$pmin, $pmax] = topup_effective_limits($lang, $key);
+        Editmessagetext($from_id, $message_id, strtr($cap, [
+            '{currency}' => currency_get(currency_for_lang($lang))['title'] ?? currency_for_lang($lang),
+            '{minprice}' => $floor !== null ? number_format($floor) : '—',
+            '{min}' => $pmin !== null ? number_format((float) $pmin) : '—',
+            '{max}' => $pmax !== null ? number_format((float) $pmax) : '—',
+        ]) . topup_disc_caption_block($from_id, $lang, $key, $textbotlang), json_encode([
+            'inline_keyboard' => [$row],
+        ]), 'HTML');
+        // remembered so it can be taken away once an invoice is actually made -
+        // see topup_amount_prompt_clear()
+        update("user", "topup_custom_msg_id", (string) intval($message_id), "id", $from_id);
+    }
+}
 if (!function_exists('topup_slot_defs')) {
     // The four buttons of the top-up amount flow that an admin can restyle, each
     // with its own storage slot. 'back' and 'backcustom' are BOTH "بازگشت به روش

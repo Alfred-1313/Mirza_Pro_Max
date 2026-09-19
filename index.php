@@ -5220,6 +5220,15 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     if (!gateway_allowed_for_lang($tp_key, $tp_lang) || !gateway_applicable_for_lang($tp_key, $tp_lang)) {
         return;
     }
+    // Nothing ready to pick? Then "#️⃣ مبلغ واریز" would invite the customer to
+    // choose one of the amounts below while listing none, and the only way on
+    // would be its own مبلغ دلخواه button. Open that screen directly instead -
+    // without its "بازگشت به منوی قبلی", which would point at the screen this
+    // very branch decided not to show.
+    if (empty(topup_packages_for($tp_lang, $tp_key))) {
+        topup_custom_screen_show($from_id, $message_id, $tp_lang, $tp_key, $textbotlang, false);
+        return;
+    }
     $tp_kb = ['inline_keyboard' => []];
     foreach (array_chunk(topup_packages_for($tp_lang, $tp_key, true), topup_columns_for($tp_lang, $tp_key), true) as $tp_row) {
         $tp_kbRow = [];
@@ -5266,38 +5275,9 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     step('topup_pick_method', $from_id);
     Editmessagetext($from_id, $message_id, topup_disc_method_caption($from_id, $user['lang'] ?? 'fa', $textbotlang), topup_disc_method_keyboard(topup_method_keyboard($step_payment, $user['lang'] ?? 'fa'), $from_id, $user['lang'] ?? 'fa'), 'HTML');
 } elseif (preg_match('/^topup_pkg:([a-z0-9]+)$/', (string) $user['step'], $tp_m) && $datain == "topup_custom_start") {
-    step("topup_custom:{$tp_m[1]}", $from_id);
-    $tp_lang = $user['lang'] ?? 'fa';
-    $tp_key = $tp_m[1];
-    $tp_customCap = topup_custom_caption_for($tp_lang, $tp_key, topup_custom_caption_default($tp_key, $textbotlang));
-    // two ways back, one step each: to the amount screen this was opened from,
-    // and all the way out to the payment-method list. This screen's own back
-    // button has its own style slot ('backcustom'): it used to share 'back' with
-    // the amount screen's button, so restyling one restyled both.
-    $tp_customRow = [
-        topup_styled_button(topup_slot_label($tp_lang, $tp_key, 'backcustom', $textbotlang), topup_btnstyle_for($tp_lang, $tp_key, 'backcustom', true), 'topup_back_methods', 'danger'),
-        topup_styled_button(topup_slot_label($tp_lang, $tp_key, 'backpkg', $textbotlang), topup_btnstyle_for($tp_lang, $tp_key, 'backpkg', true), "topup_back_pkg:{$tp_key}", 'danger'),
-    ];
-    if (topup_custom_screen_swapped($tp_lang, $tp_key)) {
-        $tp_customRow = array_reverse($tp_customRow);
-    }
-    $tp_floor = topup_usd_floor_toman($tp_lang, $tp_key);
-    // {min}/{max} come from topup_effective_limits() - the very same function
-    // that refuses an out-of-range amount a moment later. Reading them from
-    // anywhere else is how a prompt ends up promising one number while the
-    // refusal quotes another.
-    [$tp_pmin, $tp_pmax] = topup_effective_limits($tp_lang, $tp_key);
-    Editmessagetext($from_id, $message_id, strtr($tp_customCap, [
-        '{currency}' => currency_get(currency_for_lang($tp_lang))['title'] ?? currency_for_lang($tp_lang),
-        '{minprice}' => $tp_floor !== null ? number_format($tp_floor) : '—',
-        '{min}' => $tp_pmin !== null ? number_format((float) $tp_pmin) : '—',
-        '{max}' => $tp_pmax !== null ? number_format((float) $tp_pmax) : '—',
-    ]) . topup_disc_caption_block($from_id, $tp_lang, $tp_key, $textbotlang), json_encode([
-        'inline_keyboard' => [$tp_customRow],
-    ]), 'HTML');
-    // remembered so it can be taken away once an invoice is actually made -
-    // see topup_amount_prompt_clear()
-    update("user", "topup_custom_msg_id", (string) intval($message_id), "id", $from_id);
+    // reached from the amount screen, so it keeps both ways back - including
+    // the one to the screen the customer just came from
+    topup_custom_screen_show($from_id, $message_id, $user['lang'] ?? 'fa', $tp_m[1], $textbotlang);
 // back one step, to the "#️⃣ مبلغ واریز" screen with its package buttons. The
 // gateway comes from the callback rather than the step, because the screens that
 // offer this button sit on three different steps (topup_custom:, topup_pkg: and
@@ -5306,6 +5286,13 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     && (preg_match('/^topup_custom:/', (string) $user['step']) || preg_match('/^topup_pkg:/', (string) $user['step']) || $user['step'] === 'get_step_payment')) {
     $tp_key = $tp_m[1];
     $tp_lang = $user['lang'] ?? 'fa';
+    // the packages can be taken away by the admin while a customer sits on this
+    // screen - "back" would then rebuild an empty amount screen and strand
+    // them, so the custom-amount screen stands in for it here too
+    if (empty(topup_packages_for($tp_lang, $tp_key))) {
+        topup_custom_screen_show($from_id, $message_id, $tp_lang, $tp_key, $textbotlang, false);
+        return;
+    }
     $tp_kb = ['inline_keyboard' => []];
     foreach (array_chunk(topup_packages_for($tp_lang, $tp_key, true), topup_columns_for($tp_lang, $tp_key), true) as $tp_row) {
         $tp_kbRow = [];
