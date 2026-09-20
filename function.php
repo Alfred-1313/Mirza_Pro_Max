@@ -1528,7 +1528,16 @@ if (!function_exists('shop_feature_lang_map')) {
     function shop_feature_value($featureKey, $lang, $globalValue)
     {
         $m = shop_feature_lang_map();
-        return $m[$featureKey][$lang] ?? $globalValue;
+        if (isset($m[$featureKey][$lang]) && $m[$featureKey][$lang] !== '') {
+            return $m[$featureKey][$lang];
+        }
+        // same rule as feature_value(): an unset language follows Persian, the
+        // language this shop actually configures, rather than the shop-wide
+        // column that predates per-language settings entirely
+        if ($lang !== 'fa' && isset($m[$featureKey]['fa']) && $m[$featureKey]['fa'] !== '') {
+            return $m[$featureKey]['fa'];
+        }
+        return $globalValue;
     }
     function shop_feature_set($featureKey, $lang, $value)
     {
@@ -1710,7 +1719,24 @@ if (!function_exists('feature_lang_map')) {
     function feature_value($featureKey, $lang, $globalValue)
     {
         $m = feature_lang_map();
-        return $m[$featureKey][$lang] ?? $globalValue;
+        if (isset($m[$featureKey][$lang]) && $m[$featureKey][$lang] !== '') {
+            return $m[$featureKey][$lang];
+        }
+        // A language nobody has set follows PERSIAN, not the old shop-wide
+        // column. Turning a feature off on the Persian tab used to leave it on
+        // in every other language, because the shop-wide column was still on -
+        // which is how a shop that had switched the agency-request off still
+        // showed that button to its English customers.
+        //
+        // Persian's value rather than a literal "off": these features do not
+        // share one off token ('offrequestagent', 'rolleoff', '0', ...), so
+        // inventing one would mean guessing per feature, and a wrong guess
+        // switches a feature ON silently - worse than the bug being fixed.
+        // Persian's value is always a real choice an admin made.
+        if ($lang !== 'fa' && isset($m[$featureKey]['fa']) && $m[$featureKey]['fa'] !== '') {
+            return $m[$featureKey]['fa'];
+        }
+        return $globalValue;
     }
     function feature_set($featureKey, $lang, $value)
     {
@@ -2477,7 +2503,13 @@ if (!function_exists('gateway_allowed_for_lang')) {
     {
         $map = gateway_lang_map();
         if (!isset($map[$lang]) || !is_array($map[$lang])) {
-            return true;
+            // A language nobody has configured offers nothing. It used to offer
+            // EVERYTHING, which is how a shop that set its gateways up in
+            // Persian found every one of them live in languages it had never
+            // touched. Off is the safe direction: a gateway that should be
+            // there is one tap away on that language's own screen, a gateway
+            // that should not be there is already taking money.
+            return false;
         }
         return in_array($key, $map[$lang], true);
     }

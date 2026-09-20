@@ -1015,8 +1015,13 @@ $list_marzban_panel_userschange = json_encode($list_marzban_panel_users_change);
 
 
 //------------------  [ listpanelusers test ]----------------//
-$stmt = $pdo->prepare("SELECT * FROM marzban_panel WHERE TestAccount = 'ONTestAccount' AND (agent = :agent OR agent = 'all')");
+// Same language condition the purchase list above already applies: a panel
+// assigned to specific languages must not appear for a customer using another
+// one. Without it, a shop that set its panels up for Persian only still offered
+// every one of them on the test-account screen in every language.
+$stmt = $pdo->prepare("SELECT * FROM marzban_panel WHERE TestAccount = 'ONTestAccount' AND (agent = :agent OR agent = 'all') AND (FIND_IN_SET(:userlang, lang) OR lang = 'all' OR lang IS NULL OR lang = '')");
 $stmt->bindValue(':agent', $users['agent'], PDO::PARAM_STR);
+$stmt->bindValue(':userlang', $users['lang'] ?? 'fa', PDO::PARAM_STR);
 $stmt->execute();
 $list_marzban_panel_usertest = ['inline_keyboard' => []];
 // the same per-language panel styling the purchase list uses (order, width,
