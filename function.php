@@ -1680,6 +1680,24 @@ if (!function_exists('lang_tab_texts')) {
         return $cache[$lang] = $texts;
     }
 }
+if (!function_exists('ui_texts')) {
+    // The language THIS screen is written in.
+    //
+    // Persian for an admin, whatever their own account says: the panel's text
+    // lives in the PHP as Persian and every one of its handlers compares what
+    // comes back against Persian, so any other language means buttons that
+    // cannot be matched - including the one that opens the panel at all.
+    // Everyone else gets their own language, exactly as before.
+    //
+    // This exists because the language was being re-derived in six different
+    // places (the language-switch handler and five inside admin.php), each of
+    // which quietly undid the rule. One helper, called from all of them, is
+    // the only way they cannot drift apart again.
+    function ui_texts()
+    {
+        return !empty($GLOBALS['mz_admin_viewer']) ? lang_tab_texts('fa') : languagechange();
+    }
+}
 if (!function_exists('payer_texts')) {
     // The language of whoever actually paid.
     //

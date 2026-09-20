@@ -7043,7 +7043,7 @@ if (preg_match('/^btact\|rsttext\|([a-z]{2})\|(.+)$/', $datain, $btm) && $adminr
     }
     update("setting", "text_edit", empty($bt_map) ? null : json_encode($bt_map, JSON_UNESCAPED_UNICODE), null, null);
     step('home', $from_id);
-    $textbotlang = languagechange();
+    $textbotlang = ui_texts();
     list($btm_text, $btm_kb) = bottext_item_menu_payload($btm[2], $btm[1], $textbotlang);
     Editmessagetext($from_id, $message_id, $textbotlang['bottext']['msg_reset_done'] . "\n\n" . $btm_text, $btm_kb, 'HTML');
     return;
@@ -7054,7 +7054,7 @@ if (preg_match('/^btact\|rstall\|([a-z]{2})\|(.+)$/', $datain, $btm) && $adminru
     // settings - and only for the language tab the admin is on
     bottext_reset_keys([$btm[2]], $btm[1]);
     step('home', $from_id);
-    $textbotlang = languagechange();
+    $textbotlang = ui_texts();
     list($btm_text, $btm_kb) = bottext_item_menu_payload($btm[2], $btm[1], $textbotlang);
     Editmessagetext($from_id, $message_id, "🔁 همه تنظیمات این پیام به پیش‌فرض برگشت.\n\n" . $btm_text, $btm_kb, 'HTML');
     return;
@@ -22075,7 +22075,7 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
         return;
     }
     $bt_rp_done = bt_reset_apply_mask($bt_lang, $bt_mask, $textbotlang);
-    $textbotlang = languagechange();
+    $textbotlang = ui_texts();
     list($bt_home, $bt_kb) = keyboard_list_text($bt_lang);
     $bt_rp_msg = empty($bt_rp_done)
         ? "ℹ️ چیزی برای ریست نبود - بخش‌های انتخابی از قبل روی پیش‌فرض بودن."
@@ -22091,7 +22091,7 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
         return ($it['group'] ?? '') === $bt_group;
     }), 'key');
     bottext_reset_keys($bt_group_keys, $bt_lang);
-    $textbotlang = languagechange();
+    $textbotlang = ui_texts();
     list($bt_group_text, $bt_group_kb) = keyboard_list_text($bt_lang, $bt_group);
     Editmessagetext($from_id, $message_id, $textbotlang['bottext']['resetAllDone'] . "\n\n" . $bt_group_text, $bt_group_kb, 'HTML');
 } elseif (preg_match('/^bt_group\|([^|]+)\|(.+)$/', $datain, $dataget) && $adminrulecheck['rule'] == "administrator") {
@@ -22191,7 +22191,7 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     }
     update("setting", "text_edit", empty($bt_map) ? null : json_encode($bt_map, JSON_UNESCAPED_UNICODE), null, null);
     step('home', $from_id);
-    $textbotlang = languagechange();
+    $textbotlang = ui_texts();
     list($bt_home, $bt_kb) = keyboard_list_text($bt_lang);
     $bt_done_msg = ($bt_reset ? $textbotlang['bottext']['msg_reset_done'] : $textbotlang['bottext']['msg_saved']) . "\n\n" . $bt_home;
     if ($message_id) {

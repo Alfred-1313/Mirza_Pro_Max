@@ -14,7 +14,7 @@ require_once 'panels.php';
 // keyboard.php has already settled this for an admin (Persian - see its own
 // note there). Re-deriving it here would undo that and leave Persian buttons
 // under foreign captions, which is exactly the mismatch that note describes.
-$textbotlang = !empty($mz_admin_viewer) ? $textbotlang : languagechange();
+$textbotlang = ui_texts();
 if ($is_bot)
     return;
 if (isset($update['chat_member'])) {
@@ -7079,7 +7079,9 @@ if (isset($update['message']['successful_payment'])) {
     clearSelectCache();
     // drop the picker and restart the bot so every button label picks up the new language
     deletemessage($from_id, $message_id);
-    $textbotlang = languagechange();
+    // the admin rule applies here too: rebuilding the main keyboard right after
+    // a language switch is exactly where the panel button used to turn foreign
+    $textbotlang = ui_texts();
     $keyboard = build_main_keyboard();
     sendmessage($from_id, strtr($textbotlang['users']['text_start'], bottext_user_placeholders($user, $from_id)), $keyboard, 'html');
     step('home', $from_id);
