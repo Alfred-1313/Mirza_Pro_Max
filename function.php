@@ -1699,7 +1699,7 @@ if (!function_exists('ui_texts')) {
     // to work with instead of the six scattered re-derivations it replaced.
     function ui_texts()
     {
-        return languagechange();
+        return !empty($GLOBALS['mz_admin_viewer']) ? lang_tab_texts('fa') : languagechange();
     }
 }
 if (!function_exists('payer_texts')) {

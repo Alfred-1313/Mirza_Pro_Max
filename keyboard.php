@@ -16,6 +16,21 @@ if (!$adminrulecheck) {
         'rule' => '',
     );
 }
+// The panel is Persian, for every admin, in every language.
+//
+// It has to be settled here, before a single keyboard below is built: the
+// panel recognises a tapped button by its TEXT, so its keyboards and the
+// comparisons that read them back must be in the same language as each other.
+// Settled any later and the two disagree - which is how the panel became
+// unreachable, openable only by typing its Persian name by hand.
+//
+// This is the panel's language, not the bot's. build_main_keyboard() resolves
+// the customer's own menu from the customer's own language regardless, so an
+// admin still sees their shop in whatever language they picked.
+$mz_admin_viewer = !empty($adminrulecheck['rule']);
+if ($mz_admin_viewer) {
+    $textbotlang = lang_tab_texts('fa');
+}
 $users = select("user", "*", "id", $from_id, "select");
 if ($users == false) {
     $users = array();
@@ -96,7 +111,15 @@ if (!function_exists('build_main_keyboard')) {
     // so the button labels follow the newly selected language
     function build_main_keyboard()
     {
-        global $setting, $textbotlang, $users, $admin_idss, $keyboardRows, $simple_emoji_mode, $global_emoji_pos;
+        global $setting, $users, $admin_idss, $keyboardRows, $simple_emoji_mode, $global_emoji_pos;
+        // The customer's own menu, in the customer's own language - always.
+        //
+        // $textbotlang is deliberately NOT imported from the global scope here.
+        // An admin's global copy is Persian, so that the panel's keyboards and
+        // the comparisons that read them back are in one language; that must
+        // never reach the buttons an admin sees as a user of their own shop.
+        // Local in, local out: nothing leaks either way.
+        $textbotlang = lang_tab_texts($users['lang'] ?? 'fa');
         $temp_addtional_key = [];
         $replacements = [
             'text_usertest' => $textbotlang['textbot']['userTest'],
@@ -155,7 +178,9 @@ if (!function_exists('build_main_keyboard')) {
                 }
             }
             if ($admin_idss != 0) {
-                $temp_addtional_key[] = ['text' => $textbotlang['Admin']['panelAdmin'], 'callback_data' => "admin"];
+                // Persian in every language, on purpose: the panel is Persian,
+                // and admin.php recognises this button by its text
+                $temp_addtional_key[] = ['text' => lang_tab_texts('fa')['Admin']['panelAdmin'], 'callback_data' => "admin"];
             }
             if ($users['agent'] != "f") {
                 $temp_addtional_key[] = ['text' => $textbotlang['textbot']['agentPanel'], 'callback_data' => "agentpanel"];
@@ -228,7 +253,8 @@ if (!function_exists('build_main_keyboard')) {
             $keyboard = json_encode($keyboard);
         } else {
             if ($admin_idss != 0) {
-                $temp_addtional_key[] = ['text' => $textbotlang['Admin']['panelAdmin']];
+                // same reason as the inline variant above
+                $temp_addtional_key[] = ['text' => lang_tab_texts('fa')['Admin']['panelAdmin']];
             }
             if ($users['agent'] != "f") {
                 $temp_addtional_key[] = ['text' => $textbotlang['textbot']['agentPanel']];
