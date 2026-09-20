@@ -11,7 +11,10 @@ require_once 'function.php';
 require_once 'keyboard.php';
 require_once 'vendor/autoload.php';
 require_once 'panels.php';
-$textbotlang = languagechange();
+// keyboard.php has already settled this for an admin (Persian - see its own
+// note there). Re-deriving it here would undo that and leave Persian buttons
+// under foreign captions, which is exactly the mismatch that note describes.
+$textbotlang = !empty($mz_admin_viewer) ? $textbotlang : languagechange();
 if ($is_bot)
     return;
 if (isset($update['chat_member'])) {

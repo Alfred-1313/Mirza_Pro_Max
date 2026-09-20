@@ -16,6 +16,20 @@ if (!$adminrulecheck) {
         'rule' => '',
     );
 }
+// An admin gets the whole bot in Persian - panel and all.
+//
+// It has to be settled HERE, not later: every keyboard in this file is built
+// once, right below, and the panel's own handlers compare the text that comes
+// back against Persian. Settling it in admin.php (as it briefly was) produced
+// Persian captions under English buttons, so no comparison could ever match and
+// the panel could not even be opened except by typing its Persian name by hand.
+// One language for an admin, from the first line, is the only shape that cannot
+// drift apart - the panel is written in Persian in the code itself, so Persian
+// is the language it has to be.
+$mz_admin_viewer = !empty($adminrulecheck['rule']);
+if ($mz_admin_viewer) {
+    $textbotlang = lang_tab_texts('fa');
+}
 $users = select("user", "*", "id", $from_id, "select");
 if ($users == false) {
     $users = array();
