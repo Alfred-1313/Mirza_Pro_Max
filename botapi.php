@@ -70,10 +70,19 @@ function telegram($method, $datas = [], $token = null)
 }
 //----------------[  bot text extras: sticker + reaction for customized texts  ]----------------
 if (!function_exists('bottext_resolve_key')) {
-    function bottext_resolve_key($key)
+    // $lang is for a screen that is showing ONE specific language's text - an
+    // admin's language tab. Without it this reads the global $textbotlang,
+    // which is always the reading ADMIN's own account language: languagechange()
+    // silently discards its own $lang argument and re-derives it from the
+    // caller's user row. That is why every non-fa tab used to preview Persian.
+    // Omitted, behaviour is byte-for-byte what it was - every existing caller
+    // that wants "whoever is reading this" keeps getting exactly that.
+    function bottext_resolve_key($key, $lang = null)
     {
         global $textbotlang;
-        $node = $textbotlang;
+        $node = ($lang !== null && function_exists('lang_tab_texts'))
+            ? lang_tab_texts($lang)
+            : $textbotlang;
         foreach (explode('.', (string) $key) as $p) {
             if (!is_array($node) || !array_key_exists($p, $node)) {
                 return '';

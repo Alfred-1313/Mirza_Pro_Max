@@ -11965,7 +11965,7 @@ if (!function_exists('topup_disc_gw_list_payload')) {
             $preview = $gLive;
             $preview['group'] = $group;
             $info .= "\n👁 چیزی که کاربر می‌بینه:\n<blockquote><b>"
-                . htmlspecialchars(topup_disc_caption_line($preview, $textbotlang), ENT_QUOTES) . "</b></blockquote>";
+                . htmlspecialchars(topup_disc_caption_line($preview, lang_tab_texts($lang)), ENT_QUOTES) . "</b></blockquote>";
         }
 
         $kb = ['inline_keyboard' => []];
@@ -12191,7 +12191,7 @@ if (!function_exists('topup_disc_hub_payload')) {
         }
         if ($autoOn) {
             $info .= "\n👁 چیزی که کاربر می‌بینه:\n<blockquote><b>"
-                . htmlspecialchars(topup_disc_caption_line($auto, $textbotlang), ENT_QUOTES) . "</b></blockquote>";
+                . htmlspecialchars(topup_disc_caption_line($auto, lang_tab_texts($lang)), ENT_QUOTES) . "</b></blockquote>";
         }
 
         $kb = ['inline_keyboard' => []];
@@ -12265,7 +12265,7 @@ if (!function_exists('topup_disc_auto_payload')) {
         }
         if ($on && $val > 0) {
             $info .= "\n👁 چیزی که کاربر می‌بینه:\n<blockquote><b>"
-                . htmlspecialchars(topup_disc_caption_line($auto, $textbotlang), ENT_QUOTES) . "</b></blockquote>";
+                . htmlspecialchars(topup_disc_caption_line($auto, lang_tab_texts($lang)), ENT_QUOTES) . "</b></blockquote>";
         }
 
         $kb = ['inline_keyboard' => []];
@@ -12337,7 +12337,7 @@ if (!function_exists('topup_disc_group_auto_payload')) {
             $preview = $g;
             $preview['group'] = $group;
             $info .= "\n👁 چیزی که کاربر می‌بینه:\n<blockquote><b>"
-                . htmlspecialchars(topup_disc_caption_line($preview, $textbotlang), ENT_QUOTES) . "</b></blockquote>";
+                . htmlspecialchars(topup_disc_caption_line($preview, lang_tab_texts($lang)), ENT_QUOTES) . "</b></blockquote>";
         }
 
         $kb = ['inline_keyboard' => []];
@@ -12392,7 +12392,7 @@ if (!function_exists('topup_disc_code_payload')) {
         $info .= "👥 استفاده‌کننده‌ها: {$uniq} نفر\n";
         if (floatval($c['value'] ?? 0) > 0) {
             $info .= "\n👁 چیزی که کاربر می‌بینه:\n<blockquote><b>"
-                . htmlspecialchars(topup_disc_caption_line($c, $textbotlang), ENT_QUOTES) . "</b></blockquote>";
+                . htmlspecialchars(topup_disc_caption_line($c, lang_tab_texts($lang)), ENT_QUOTES) . "</b></blockquote>";
         }
 
         $on = !empty($c['enabled']);

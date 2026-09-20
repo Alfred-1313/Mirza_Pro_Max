@@ -659,12 +659,17 @@ if (!function_exists('bottext_item_menu_payload')) {
         // the same resolver the customer-facing code uses, so a reset shows the
         // default immediately instead of a stale copy. This replaces the
         // 👁 پیش‌نمایش button, which existed only to show exactly this.
-        $info .= "➖➖➖➖➖➖➖➖➖➖\n👁 <b>متن فعلی:</b>\n" . bt_current_text_quote($bt_key) . "\n";
+        // $bt_lang, not the global: this screen is showing ONE language's text,
+        // and the global is always the reading admin's own account language.
+        // Every caller of this function - 🎨 شخصی‌سازی, the cfgdeliv| delivery
+        // screens, the reset confirmation - already passes the tab it is on, so
+        // fixing it here fixes all of them without touching one call site.
+        $info .= "➖➖➖➖➖➖➖➖➖➖\n👁 <b>متن فعلی:</b>\n" . bt_current_text_quote($bt_key, 1200, $bt_lang) . "\n";
         if ($bt_key === 'users.usertest.selectUsernamePrompt') {
             // this one prompt is followed immediately by a second message the
             // admin cannot see from anywhere else, so it is quoted too - the
             // preview screen used to be the only place both appeared together
-            $info .= "\n📌 <b>مرحله‌ی بعد (دریافت کانفیگ):</b>\n" . bt_current_text_quote('users.status.getConfigHint') . "\n";
+            $info .= "\n📌 <b>مرحله‌ی بعد (دریافت کانفیگ):</b>\n" . bt_current_text_quote('users.status.getConfigHint', 1200, $bt_lang) . "\n";
         }
         $info .= "➖➖➖➖➖➖➖➖➖➖\n👇 بخشی که می‌خوای تنظیم کنی رو انتخاب کن:";
         $kb = ['inline_keyboard' => []];
@@ -793,9 +798,11 @@ if (!function_exists('bt_current_text_quote')) {
     // message past Telegram's 4096 limit - which would not truncate the
     // preview, it would fail the edit and leave the admin staring at the
     // previous screen with no way to fix anything.
-    function bt_current_text_quote($key, $limit = 1200)
+    // $lang is appended AFTER $limit and never before it: an existing caller
+    // that passes $limit positionally as its second argument must keep working.
+    function bt_current_text_quote($key, $limit = 1200, $lang = null)
     {
-        $txt = bottext_resolve_key($key);
+        $txt = bottext_resolve_key($key, $lang);
         if (trim((string) $txt) === '') {
             return topup_packages_caption_preview_quote('⚠️ متن پیدا نشد.');
         }
