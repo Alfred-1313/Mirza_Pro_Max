@@ -1671,6 +1671,24 @@ if (!function_exists('lang_tab_texts')) {
         return $cache[$lang] = $texts;
     }
 }
+if (!function_exists('payer_texts')) {
+    // The language of whoever actually paid.
+    //
+    // A gateway's callback arrives from the processor's own server, not from
+    // Telegram: there is no $from_id behind it, and languagechange() reads
+    // exactly that - so it answered Persian for every customer alive, whatever
+    // language they use the bot in. The payment row knows who paid, so ask it.
+    //
+    // This is what decides the language of the confirmation page the customer
+    // lands on in their browser after paying, and of the messages sent to them
+    // straight afterwards.
+    function payer_texts($userId)
+    {
+        $row = select("user", "lang", "id", $userId, "select");
+        $lang = (is_array($row) && !empty($row['lang'])) ? $row['lang'] : 'fa';
+        return lang_tab_texts($lang);
+    }
+}
 if (!function_exists('feature_lang_map')) {
     // same per-language-override contract as shop_feature_lang_map(), separate
     // column so general bot-feature keys (get_number, wheelagent, ...) never

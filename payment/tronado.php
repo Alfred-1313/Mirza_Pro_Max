@@ -38,7 +38,7 @@ if ($Payment_report['payment_Status'] != "paid") {
     $response = is_string($response['body']) ? json_decode($response['body'], true) : false;
     if ($response && $response['IsPaid'] && $data['IsPaid'] && $data['TronAmount'] == $response['TronAmount']) {
         echo json_encode(array("status" => true));
-        $textbotlang = languagechange();
+        $textbotlang = payer_texts($Payment_report['id_user']);
         DirectPayment($data['PaymentID'], "../images.jpg");
         $pricecashback = select("PaySetting", "ValuePay", "NamePay", "chashbackiranpay2", "select")['ValuePay'];
         $Balance_id = select("user", "*", "id", $Payment_report['id_user'], "select");

@@ -59,7 +59,7 @@ if ($StatusPayment == 100) {
         $dec_payment_status = $textbotlang['paymentGateway']['descThanks'];
         $Payment_report = select("Payment_report", "*", "id_order", $invoice_id, "select");
         if ($Payment_report['payment_Status'] != "paid") {
-            $textbotlang = languagechange();
+            $textbotlang = payer_texts($Payment_report['id_user']);
             DirectPayment($invoice_id, "../images.jpg");
             $pricecashback = select("PaySetting", "ValuePay", "NamePay", "chashbackiranpay1", "select")['ValuePay'];
             $Balance_id = select("user", "*", "id", $Payment_report['id_user'], "select");

@@ -25,6 +25,10 @@ $PaySetting = select("PaySetting", "ValuePay", "NamePay", "merchant_zarinpal","s
 $Payment_reports = select("Payment_report", "*", "dec_not_confirmed", $Authority,"select");
 $price = $Payment_reports['price'];
 $invoice_id = $Payment_reports['id_order'];
+// Settled here, before the first word is chosen: the page rendered at the
+// bottom of this file is what the customer sees in their own browser after
+// paying, and every status line above it is picked from this same array.
+$textbotlang = payer_texts($Payment_reports['id_user']);
 // verify Transaction
 $dec_payment_status = "";
 $payment_status = "";
@@ -60,7 +64,8 @@ $response = json_decode($response,true);
     $dec_payment_status = $textbotlang['paymentGateway']['descThanks'];
     $Payment_report = select("Payment_report", "*", "id_order", $invoice_id,"select");
     if($Payment_report['payment_Status'] != "paid"){
-    $textbotlang = languagechange();
+    // language already settled above from the payer's own row - re-reading it
+    // here through languagechange() is what used to turn it Persian again
     DirectPayment($invoice_id,"../images.jpg");
     $pricecashback = select("PaySetting", "ValuePay", "NamePay", "chashbackzarinpal","select")['ValuePay'];
     $Balance_id = select("user","*","id",$Payment_report['id_user'],"select");

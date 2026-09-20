@@ -18,6 +18,9 @@ if (isset($data['payment_status']) && $data['payment_status'] == "finished") {
         return;
     $Payment_report = select("Payment_report", "*", "dec_not_confirmed", $pay['invoice_id'], "select");
     if ($Payment_report) {
+        // who paid is only known here, several lines after the Persian default
+        // was loaded at the top of this file - so it is settled again, properly
+        $textbotlang = payer_texts($Payment_report['id_user']);
         if ($Payment_report['payment_Status'] == "paid")
             return;
         DirectPayment($Payment_report['id_order'], "../images.jpg");

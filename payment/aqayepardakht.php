@@ -50,7 +50,7 @@ if ($result->code == "1") {
     $dec_payment_status = $textbotlang['paymentGateway']['descThanks'];
     $Payment_report = select("Payment_report", "*", "id_order", $invoice_id,"select");
     if($Payment_report['payment_Status'] != "paid"){
-    $textbotlang = languagechange();
+    $textbotlang = payer_texts($Payment_report['id_user']);
     DirectPayment($invoice_id,"../images.jpg");
     $pricecashback = select("PaySetting", "ValuePay", "NamePay", "chashbackaqaypardokht","select")['ValuePay'];
     $__q16 = $pdo->prepare("SELECT * FROM user WHERE id = ? LIMIT 1");
