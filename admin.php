@@ -1,5 +1,15 @@
 <?php
 #----------------[  admin section  ]------------------#
+// The panel is Persian for every admin, whatever language their own account is
+// set to. It is written in Persian in the code itself - these screens hold
+// hardcoded Persian strings far more often than language keys - so an admin on
+// English got a mix: English wherever en.php happened to have the key, Persian
+// everywhere else. One language reads better than half of two.
+//
+// Only the panel. A customer's own messages are resolved from the customer's
+// own language wherever they are built (see payer_texts() for the payment
+// callbacks), never from this.
+$textbotlang = lang_tab_texts('fa');
 $textadmin = ["panel", "/panel", $textbotlang['Admin']['panelAdmin']];
 $text_panel_admin_login_template = sprintf($textbotlang['Admin']['report']['aboutBot'], $version);
 

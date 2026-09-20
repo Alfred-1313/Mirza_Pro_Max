@@ -2318,20 +2318,13 @@ function keyboard_list_text($lang, $groupFilter = null)
 {
     global $textbotlang;
     $keyboard_text = ['inline_keyboard' => []];
-    // load THIS TAB's own language file (not the admin's account language) so
-    // the item labels below visually match whichever language is being edited
-    $bt_tab_texts = require __DIR__ . '/lang/' . $lang . '.php';
-    if ($lang !== 'fa' && is_array($bt_tab_texts)) {
-        $bt_tab_fa = require __DIR__ . '/lang/fa.php';
-        if (is_array($bt_tab_fa)) {
-            $bt_tab_texts = bt_lang_fill_defaults($bt_tab_texts, $bt_tab_fa);
-        }
-    }
-    if (is_array($bt_tab_texts)) {
-        bottext_apply_overrides($bt_tab_texts, $lang);
-    }
-    $keyboard_list_text = $bt_tab_texts['bottext']['items'] ?? $textbotlang['bottext']['items'];
-    $bt_unknown_label = $bt_tab_texts['bottext']['unknownMsgLabel'] ?? '💬 پیام نام‌شناس';
+    // These labels name WHICH message is being edited - they are panel chrome,
+    // not content, so they stay Persian like the rest of the panel whatever tab
+    // is open. They used to be loaded from the tab's own language file, which
+    // made a screen that was half English and half Persian. What the tab's own
+    // language actually says is shown by the preview inside each item.
+    $keyboard_list_text = $textbotlang['bottext']['items'];
+    $bt_unknown_label = $textbotlang['bottext']['unknownMsgLabel'] ?? '💬 پیام نام‌شناس';
     // language is chosen exactly once, here on the flat home list - group
     // screens no longer show this row at all, so there is nothing left to
     // "re-select"; the row's own dispatcher (admin.php's bt_lang: handler)
@@ -2568,7 +2561,7 @@ function keyboard_list_text($lang, $groupFilter = null)
             'wheel' => 'groupWheelCaption',
             'referral' => 'groupReferralCaption',
         ][$groupFilter] ?? 'groupBuyflowCaption';
-        $bt_caption_tpl = $bt_tab_texts['bottext'][$bt_captionKey] ?? $textbotlang['bottext'][$bt_captionKey];
+        $bt_caption_tpl = $textbotlang['bottext'][$bt_captionKey];
         $bt_caption = strtr($bt_caption_tpl, ['{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang]);
         // the card-to-card previews moved onto that gateway's own screen, next
         // to the buttons that actually edit them
@@ -2748,7 +2741,7 @@ function keyboard_list_text($lang, $groupFilter = null)
     $keyboard_text['inline_keyboard'][] = [$bt_um_btn];
     $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['resetAllLabel'], 'callback_data' => "bt_resetall|$lang", 'style' => 'danger']];
     $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']];
-    $bt_caption_tpl = $bt_tab_texts['bottext']['home_text'] ?? $textbotlang['bottext']['home_text'];
+    $bt_caption_tpl = $textbotlang['bottext']['home_text'];
     $bt_caption = strtr($bt_caption_tpl, ['{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang]);
     return [$bt_caption, json_encode($keyboard_text)];
 }
