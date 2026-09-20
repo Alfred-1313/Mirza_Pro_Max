@@ -2589,7 +2589,7 @@ function update_bot() {
     local ROLLBACK="${BK_DIR}/pre-update_${STAMP}.tar.gz"
     mkdir -p "$BK_DIR"
     run_step "Backing up the current install" \
-        "tar --warning=no-file-changed -czf '$ROLLBACK' -C '$(dirname "$BOT_DIR")' --exclude='*.bak*' --exclude='.git' --exclude='log.txt' --exclude='error_log' '$(basename "$BOT_DIR")'" \
+        "tar --warning=no-file-changed -czf '$ROLLBACK' -C '$(dirname "$BOT_DIR")' --exclude='*.bak*' --exclude='.git' --exclude='log.txt' --exclude='error_log' --exclude='update_request' --exclude='update_request.running' --exclude='rollback_request' --exclude='update_progress.json' --exclude='update_status.json' --exclude='update_backups.json' '$(basename "$BOT_DIR")'" \
         || { show_step_error; printf "  ${C_BAD}Could not create a rollback archive. Refusing to continue.${CR}\n"; sleep 3; show_menu; return 1; }
     # keep the 10 most recent, so this never fills the disk - the bot lists
     # exactly these for "بازگشت به نسخه قبلی", so the two numbers are one number
@@ -2975,6 +2975,21 @@ selfupdate_watch() {
     local dir req claimed age rc rbreq want arc top newest rbpid rbpct newbk
     while IFS= read -r dir; do
         [ -n "$dir" ] && [ -d "$dir" ] || continue
+        # A claim nobody is working on any more. Only the run that created it
+        # ever removes it, so anything that ends that run some other way - a
+        # crash, a reboot, or a rollback restoring a snapshot that was taken
+        # while a claim was in flight - used to leave the bot's own screen
+        # saying "a job is running" for ever, with no way back from inside the
+        # bot. Nothing else can be running while this tick holds the lock, so an
+        # old one here is by definition finished.
+        claimed="${dir}/${MIRZA_UPDATE_REQUEST}.running"
+        if [ -f "$claimed" ] \
+            && [ $(( $(date +%s) - $(stat -c %Y "$claimed" 2>/dev/null || echo 0) )) -gt 1800 ]; then
+            rm -f "$claimed"
+            # deliberately no status write: whatever the last real run reported
+            # is still the truth, and overwriting it would hide it
+            echo "[$(date '+%F %T')] cleared a stale claim in $dir" >> /tmp/mirza_selfupdate.log
+        fi
         # Refresh the list the bot shows only when a new snapshot has actually
         # appeared - rebuilding it means reading inside every archive, which is
         # not something to do every single minute for nothing.
