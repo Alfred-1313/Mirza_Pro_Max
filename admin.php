@@ -1,15 +1,13 @@
 <?php
 #----------------[  admin section  ]------------------#
-// The panel is Persian for every admin, whatever language their own account is
-// set to. It is written in Persian in the code itself - these screens hold
-// hardcoded Persian strings far more often than language keys - so an admin on
-// English got a mix: English wherever en.php happened to have the key, Persian
-// everywhere else. One language reads better than half of two.
+// The panel follows the admin's own language, the way it always did.
 //
-// Only the panel. A customer's own messages are resolved from the customer's
-// own language wherever they are built (see payer_texts() for the payment
-// callbacks), never from this.
-$textbotlang = lang_tab_texts('fa');
+// Forcing Persian here does not work on its own: this file matches a tapped
+// reply-keyboard button by its text, and those keyboards are built in
+// keyboard.php from the admin's own language. Persian comparisons against
+// foreign buttons match nothing - not even the button that opens the panel.
+// Making the panel Persian means building ITS keyboards in Persian too, which
+// is a change in keyboard.php, not here.
 $textadmin = ["panel", "/panel", $textbotlang['Admin']['panelAdmin']];
 $text_panel_admin_login_template = sprintf($textbotlang['Admin']['report']['aboutBot'], $version);
 

@@ -1681,21 +1681,25 @@ if (!function_exists('lang_tab_texts')) {
     }
 }
 if (!function_exists('ui_texts')) {
-    // The language THIS screen is written in.
+    // The language this request is answered in: the reader's own, always.
     //
-    // Persian for an admin, whatever their own account says: the panel's text
-    // lives in the PHP as Persian and every one of its handlers compares what
-    // comes back against Persian, so any other language means buttons that
-    // cannot be matched - including the one that opens the panel at all.
-    // Everyone else gets their own language, exactly as before.
+    // It briefly forced Persian for admins, to keep the panel in one language.
+    // That was wrong, and the reason is worth keeping: an admin is also a
+    // customer of their own bot, and forcing Persian here turned THEIR
+    // customer-facing buttons Persian too, whatever language they had picked.
     //
-    // This exists because the language was being re-derived in six different
-    // places (the language-switch handler and five inside admin.php), each of
-    // which quietly undid the rule. One helper, called from all of them, is
-    // the only way they cannot drift apart again.
+    // Making only the panel Persian is not a switch that can be thrown here.
+    // The panel is driven by reply keyboards built in keyboard.php, in the same
+    // pass and from the same array as the customer's own, and the panel matches
+    // what comes back by its text - so its keyboards and its comparisons have
+    // to be in the same language as each other. Splitting the two apart is a
+    // separate job in that file, not a change to this one line.
+    //
+    // Kept as the single place the question is asked, so that job has one seam
+    // to work with instead of the six scattered re-derivations it replaced.
     function ui_texts()
     {
-        return !empty($GLOBALS['mz_admin_viewer']) ? lang_tab_texts('fa') : languagechange();
+        return languagechange();
     }
 }
 if (!function_exists('payer_texts')) {
