@@ -2390,9 +2390,11 @@ function keyboard_list_text($lang, $groupFilter = null)
     // configured and still render as untouched - the exact complaint this fixes.
     $bt_extra_stores = [
         // 🔑 تنظیم اکانت تست also owns the config-column display settings
+        // Only this language's own setting. configColOrder is a single bot-wide
+        // value (function.php says so itself), so counting it here turned this
+        // row green in EVERY language the moment one of them was configured.
         'users.usertest.selectUsernamePrompt' => function ($lang, $be, $setting) {
-            return !empty($be[$lang]['configDisplay'])
-                || (string) ($setting['configColOrder'] ?? '') !== '';
+            return !empty($be[$lang]['configDisplay']);
         },
         // the confirm/cancel row is shared by both "تأیید خرید" screens -
         // whichever one is customized, the other should show it too
@@ -2403,9 +2405,9 @@ function keyboard_list_text($lang, $groupFilter = null)
             return !empty($be[$lang]['users.sell.confirmButtons']);
         },
         // the buy-only config-column display settings (separate from usertest's above)
+        // same reason as the usertest row above
         'users.status.getConfigHintBuy' => function ($lang, $be, $setting) {
-            return !empty($be[$lang]['configDisplayBuy'])
-                || (string) ($setting['configColOrderBuy'] ?? '') !== '';
+            return !empty($be[$lang]['configDisplayBuy']);
         },
     ];
     $bt_decorate = function ($key, $label) use ($lang, $bt_list_edit, $bt_list_st, $bt_list_re, $bt_can_react_keys, $bt_list_be, $bt_list_setting, $bt_extra_stores) {
@@ -2415,7 +2417,9 @@ function keyboard_list_text($lang, $groupFilter = null)
         // of them was edited - and missed nothing only because it over-matched
         $custom = is_array($bt_list_edit) && bottext_dotted_isset($bt_list_edit[$lang] ?? null, $key);
         // a message that merely ships with its factory sticker is not customized
-        $sticker = bt_media_lookup($bt_list_st, $key, $lang);
+        // - and neither is one whose sticker is the shared pre-per-language one,
+        // which is why this asks for THIS language's own value and nothing else
+        $sticker = bt_media_lookup_own($bt_list_st, $key, $lang);
         if ($sticker !== '' && function_exists('bt_default_sticker') && $sticker === bt_default_sticker($key)) {
             $sticker = '';
         }
@@ -2423,7 +2427,7 @@ function keyboard_list_text($lang, $groupFilter = null)
         if ($sticker !== '' && function_exists('bt_nosticker_keys') && in_array($key, bt_nosticker_keys(), true)) {
             $sticker = '';
         }
-        $react = in_array($key, $bt_can_react_keys, true) ? bt_media_lookup($bt_list_re, $key, $lang) : '';
+        $react = in_array($key, $bt_can_react_keys, true) ? bt_media_lookup_own($bt_list_re, $key, $lang) : '';
         $buttons = is_array($bt_list_be) && !empty($bt_list_be[$lang][$key]);
         if (!$buttons && isset($bt_extra_stores[$key])) {
             $buttons = (bool) $bt_extra_stores[$key]($lang, is_array($bt_list_be) ? $bt_list_be : [], $bt_list_setting);

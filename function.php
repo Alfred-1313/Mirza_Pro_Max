@@ -14780,6 +14780,22 @@ if (!function_exists('bt_media_lookup')) {
         return (string) $entry;
     }
 }
+if (!function_exists('bt_media_lookup_own')) {
+    // Strictly THIS language's own value - no '_default' fallback.
+    //
+    // bt_media_lookup() above deliberately falls back, because when the bot
+    // SENDS a sticker a shared one is better than none. The "this language has
+    // been customized" marker is the opposite question: a value inherited from
+    // before per-language stickers existed is not something this language was
+    // given, and counting it turned every language's row green at once.
+    function bt_media_lookup_own($map, $key, $lang)
+    {
+        if (!is_array($map) || !isset($map[$key]) || !is_array($map[$key])) {
+            return '';
+        }
+        return (string) ($map[$key][$lang] ?? '');
+    }
+}
 if (!function_exists('bt_media_set')) {
     function bt_media_set(&$map, $key, $lang, $value)
     {
