@@ -3100,24 +3100,14 @@ if (!function_exists('bot_update_request_path')) {
             ]];
         }
         // Red, because it throws away the version that is running right now.
-        // Beside it, the snapshot it would go back to: the admin reads what the
-        // button is about to do before tapping it, instead of after.
-        $list = bot_update_backups();
-        if (!empty($list)) {
-            $prev = $list[0];
-            $rows[] = [
-                [
-                    'text' => bot_update_text($textbotlang, 'rollbackBtn', '♻️ بازگشت به نسخه قبلی'),
-                    'callback_data' => 'botupdatelist',
-                    'style' => 'danger',
-                ],
-                // the version only - when it was taken is a date, and dates
-                // belong in the caption where there is room to read them
-                [
-                    'text' => '⬅️ ' . ($prev['version'] ?? '?'),
-                    'callback_data' => 'botupdatelist',
-                ],
-            ];
+        // On its own: which snapshot it would restore is named on the screen it
+        // opens, where every one of them is listed with its date anyway.
+        if (!empty(bot_update_backups())) {
+            $rows[] = [[
+                'text' => bot_update_text($textbotlang, 'rollbackBtn', '♻️ بازگشت به نسخه قبلی'),
+                'callback_data' => 'botupdatelist',
+                'style' => 'danger',
+            ]];
         }
         // no status button: the message redraws itself while the work runs, so
         // there is nothing left for the admin to go and ask about
