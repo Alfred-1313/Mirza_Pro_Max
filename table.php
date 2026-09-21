@@ -274,6 +274,10 @@ timeauto_not_verify,status_keyboard_config,cron_status
         addFieldToTable("setting", "miniapp_bot_logo", "0", "VARCHAR(10)");
         addFieldToTable("setting", "miniapp_bot_name", "", "VARCHAR(60)");
         addFieldToTable("setting", "keyboardmain", $keyboardmain, "TEXT");
+        // Every language but Persian keeps its own main menu here; Persian
+        // stays in keyboardmain above, so an existing bot's menu carries over
+        // untouched and only the other languages start from the factory one.
+        addFieldToTable("setting", "keyboardmain_lang", '{}', "TEXT");
         addFieldToTable("setting", "Dice", '0', "varchar(45)");
         addFieldToTable("setting", "Debtsettlement", '1', "varchar(45)");
         addFieldToTable("setting", "limitnumber", $limitlist, "varchar(200)");

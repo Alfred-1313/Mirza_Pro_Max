@@ -79,46 +79,35 @@ if (!function_exists('split_leading_emoji')) {
         return [$emoji, $rest];
     }
 }
-$keyboardLayout = json_decode($setting['keyboardmain'], true);
-$keyboardRows = [];
-if (is_array($keyboardLayout) && isset($keyboardLayout['keyboard']) && is_array($keyboardLayout['keyboard'])) {
-    $keyboardRows = $keyboardLayout['keyboard'];
-}
-// simple mode: hide default emojis from button texts (custom emoji/icons stay)
-$simple_emoji_mode = (is_array($keyboardLayout) && !empty($keyboardLayout['simple_emoji']));
-// global emoji position: left = after text, right = before text
-$global_emoji_pos = (is_array($keyboardLayout) && isset($keyboardLayout['emoji_pos_global']) && $keyboardLayout['emoji_pos_global'] === 'left') ? 'left' : 'right';
-
-if (!empty($keyboardRows)) {
-    $allowed_btn_styles = ['primary', 'success', 'danger'];
-    foreach ($keyboardRows as $kb_r => $kb_row) {
-        if (!is_array($kb_row)) {
-            continue;
-        }
-        foreach ($kb_row as $kb_c => $kb_btn) {
-            if (is_array($kb_btn) && isset($kb_btn['style']) && !in_array($kb_btn['style'], $allowed_btn_styles, true)) {
-                unset($keyboardRows[$kb_r][$kb_c]['style']);
-            }
-            if (is_array($kb_btn) && isset($kb_btn['style_reply']) && !in_array($kb_btn['style_reply'], $allowed_btn_styles, true)) {
-                unset($keyboardRows[$kb_r][$kb_c]['style_reply']);
-            }
-        }
-    }
-}
+// The reader's own menu, not Persian's: colour, emoji, premium emoji, rename,
+// hidden flag and the grid itself are stored per language now. simple_emoji is
+// the "hide default emojis" switch, emoji_pos_global puts the emoji before or
+// after the label - both belong to one menu, so both travel with it.
+$mm_render = mainmenu_layout_render($users['lang'] ?? 'fa');
+$keyboardRows = $mm_render['rows'];
+$simple_emoji_mode = $mm_render['simple'];
+$global_emoji_pos = $mm_render['pos'];
 
 if (!function_exists('build_main_keyboard')) {
     // builds the user's main menu keyboard; call it again after a language switch
     // so the button labels follow the newly selected language
     function build_main_keyboard()
     {
-        global $setting, $users, $admin_idss, $keyboardRows, $simple_emoji_mode, $global_emoji_pos;
+        global $setting, $users, $admin_idss;
         // The customer's own menu, in the customer's own language - always.
         //
-        // Resolved from the row rather than taken from the global copy so that
-        // a language just switched in this same request is already in effect:
-        // the caller rebuilds the menu straight after the switch, and the
-        // global was read before it.
-        $textbotlang = lang_tab_texts($users['lang'] ?? 'fa');
+        // Both the words AND the grid are resolved from the row rather than
+        // taken from the global copies, so that a language just switched in
+        // this same request is already in effect: the caller rebuilds the menu
+        // straight after the switch, and the globals were read before it. The
+        // grid matters as much as the words now that each language owns its
+        // own buttons, colours and emoji.
+        $mm_lang = $users['lang'] ?? 'fa';
+        $textbotlang = lang_tab_texts($mm_lang);
+        $mm_render = mainmenu_layout_render($mm_lang);
+        $keyboardRows = $mm_render['rows'];
+        $simple_emoji_mode = $mm_render['simple'];
+        $global_emoji_pos = $mm_render['pos'];
         $temp_addtional_key = [];
         $replacements = [
             'text_usertest' => $textbotlang['textbot']['userTest'],

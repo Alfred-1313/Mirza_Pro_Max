@@ -68,28 +68,18 @@ if (!function_exists('btnset_emoji_hub_payload')) {
 
 //----------------[  button color manager  ]----------------
 if (!function_exists('color_editor_payload')) {
-    function color_editor_payload($mode, $textbotlang)
+    function color_editor_payload($mode, $textbotlang, $lang = 'fa')
     {
-        $setting = select("setting", "*", null, null, "select");
-        $layout = json_decode($setting['keyboardmain'], true);
-        $rows = (is_array($layout) && isset($layout['keyboard']) && is_array($layout['keyboard'])) ? $layout['keyboard'] : [];
-        $labels = [
-            'text_usertest' => $textbotlang['textbot']['userTest'],
-            'text_Purchased_services' => $textbotlang['textbot']['purchasedServices'],
-            'text_support' => $textbotlang['textbot']['support'],
-            'text_help' => $textbotlang['textbot']['help'],
-            'accountwallet' => $textbotlang['textbot']['accountWallet'],
-            'addbalance' => $textbotlang['textbot']['addBalance'],
-            'text_sell' => $textbotlang['textbot']['sell'],
-            'text_Tariff_list' => $textbotlang['textbot']['tariffList'],
-            'text_affiliates' => $textbotlang['textbot']['affiliates'],
-            'text_wheel_luck' => $textbotlang['textbot']['wheelLuck'],
-            'text_extend' => $textbotlang['textbot']['extend'],
-            'text_change_language' => $textbotlang['language']['changeButton']
-        ];
+        $rows = mainmenu_layout_get($lang)['keyboard'];
+        // The button names are a live preview of what THIS language's customer
+        // sees, so they come from its own file - the surrounding chrome stays
+        // Persian like the rest of the panel. Same split keyboard_list_text()
+        // draws between an item's label and its preview.
+        $labels = menu_button_labels(lang_tab_texts($lang));
         $styleEmoji = ['' => '⚪', 'primary' => '🔵', 'success' => '🟢', 'danger' => '🔴'];
         $field = ($mode == 'r') ? 'style_reply' : 'style';
         $kb = ['inline_keyboard' => []];
+        $kb['inline_keyboard'][] = mainmenu_lang_tabs($lang, "btnset_color:{$mode}:%s");
         foreach ($rows as $r => $row) {
             if (!is_array($row)) {
                 continue;
@@ -106,7 +96,7 @@ if (!function_exists('color_editor_payload')) {
                 $style = (isset($btn[$field]) && in_array($btn[$field], ['primary', 'success', 'danger'], true)) ? $btn[$field] : '';
                 $kbBtn = [
                     'text' => (!empty($btn['hidden']) ? '🚫 ' : '') . $name . ' ' . $styleEmoji[$style],
-                    'callback_data' => "btncolor-{$mode}-{$r}-{$c}"
+                    'callback_data' => "btncolor-{$mode}-{$lang}-{$r}-{$c}"
                 ];
                 if ($style !== '') {
                     $kbBtn['style'] = $style;
@@ -371,12 +361,13 @@ if (!function_exists('menu_button_labels')) {
 }
 
 if (!function_exists('menu_button_name')) {
-    function menu_button_name($r, $c, $textbotlang)
+    // $lang names WHICH menu the row/column points into - each language has its
+    // own grid now, so the same coordinates are different buttons across tabs.
+    function menu_button_name($r, $c, $textbotlang, $lang = 'fa')
     {
-        $setting = select("setting", "*", null, null, "select");
-        $layout = json_decode($setting['keyboardmain'], true);
+        $layout = mainmenu_layout_get($lang);
         $key = $layout['keyboard'][$r][$c]['text'] ?? '';
-        $labels = menu_button_labels($textbotlang);
+        $labels = menu_button_labels(lang_tab_texts($lang));
         return $labels[$key] ?? $key;
     }
 }
@@ -905,12 +896,13 @@ if (!function_exists('bt_inline_block_keys')) {
     }
 }
 if (!function_exists('emoji_sticker_editor_payload')) {
-    function emoji_sticker_editor_payload($kind, $textbotlang)
+    function emoji_sticker_editor_payload($kind, $textbotlang, $lang = 'fa')
     {
         $setting = select("setting", "*", null, null, "select");
-        $layout = json_decode($setting['keyboardmain'], true);
-        $rows = (is_array($layout) && isset($layout['keyboard']) && is_array($layout['keyboard'])) ? $layout['keyboard'] : [];
-        $labels = menu_button_labels($textbotlang);
+        $layout = mainmenu_layout_get($lang);
+        $rows = $layout['keyboard'];
+        // live preview of THIS language's menu, so the names are its own
+        $labels = menu_button_labels(lang_tab_texts($lang));
         $prefix = ($kind == 'emoji') ? 'btnemoji' : 'btnsticker';
         $es_simple_mode = (is_array($layout) && !empty($layout['simple_emoji']));
         $es_pos_global = (is_array($layout) && isset($layout['emoji_pos_global']) && $layout['emoji_pos_global'] === 'left') ? 'left' : 'right';
@@ -936,7 +928,7 @@ if (!function_exists('emoji_sticker_editor_payload')) {
                     }
                     $kbBtn = [
                         'text' => $name,
-                        'callback_data' => "{$prefix}-{$r}-{$c}"
+                        'callback_data' => "{$prefix}-{$lang}-{$r}-{$c}"
                     ];
                     if (isset($btn['icon_emoji']) && $btn['icon_emoji'] !== '') {
                         $kbBtn['text'] = strip_leading_emoji($name);
@@ -966,7 +958,7 @@ if (!function_exists('emoji_sticker_editor_payload')) {
                     }
                     $kbBtn = [
                         'text' => (!empty($btn['hidden']) ? '🚫 ' : '') . $name . ' ' . (!empty($btn['sticker']) ? '✅' : '❌'),
-                        'callback_data' => "{$prefix}-{$r}-{$c}"
+                        'callback_data' => "{$prefix}-{$lang}-{$r}-{$c}"
                     ];
                 }
                 $es_color = $es_use_inline ? (isset($btn['style']) ? $btn['style'] : '') : (isset($btn['style_reply']) ? $btn['style_reply'] : '');
@@ -981,15 +973,16 @@ if (!function_exists('emoji_sticker_editor_payload')) {
         }
         if ($kind == 'emoji') {
             $es_simple_on = (is_array($layout) && !empty($layout['simple_emoji']));
-            $kb['inline_keyboard'][] = [['text' => ($es_simple_on ? '🔲 حالت ساده: ✅ روشن' : '🔲 حالت ساده: ❌ خاموش'), 'callback_data' => 'emojisimple']];
+            $kb['inline_keyboard'][] = [['text' => ($es_simple_on ? '🔲 حالت ساده: ✅ روشن' : '🔲 حالت ساده: ❌ خاموش'), 'callback_data' => "emojisimple-{$lang}"]];
             $kb['inline_keyboard'][] = [
-                ['text' => '⬅️ چپ' . ($es_pos_global === 'left' ? ' ✅' : ''), 'callback_data' => 'emojiposall-left'],
-                ['text' => 'راست ➡️' . ($es_pos_global === 'right' ? ' ✅' : ''), 'callback_data' => 'emojiposall-right']
+                ['text' => '⬅️ چپ' . ($es_pos_global === 'left' ? ' ✅' : ''), 'callback_data' => "emojiposall-{$lang}-left"],
+                ['text' => 'راست ➡️' . ($es_pos_global === 'right' ? ' ✅' : ''), 'callback_data' => "emojiposall-{$lang}-right"]
             ];
-            $kb['inline_keyboard'][] = [['text' => '🔄 ریست همه ایموجی‌های کاستوم', 'callback_data' => 'emojiresetall', 'style' => 'danger']];
+            $kb['inline_keyboard'][] = [['text' => '🔄 ریست همه ایموجی‌های کاستوم', 'callback_data' => "emojiresetall-{$lang}", 'style' => 'danger']];
         } else {
-            $kb['inline_keyboard'][] = [['text' => '🔄 ریست همه استیکرهای دکمه‌ها', 'callback_data' => 'stickerresetall', 'style' => 'danger']];
+            $kb['inline_keyboard'][] = [['text' => '🔄 ریست همه استیکرهای دکمه‌ها', 'callback_data' => "stickerresetall-{$lang}", 'style' => 'danger']];
         }
+        $kb['inline_keyboard'][] = mainmenu_lang_tabs($lang, "btnset_emoji:{$kind}:%s");
         $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبلی', 'callback_data' => 'btnset_open:emoji', 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']];
         return json_encode($kb);
@@ -997,12 +990,11 @@ if (!function_exists('emoji_sticker_editor_payload')) {
 }
 
 if (!function_exists('layout_editor_payload')) {
-    function layout_editor_payload($textbotlang, $selected = null)
+    function layout_editor_payload($textbotlang, $selected = null, $lang = 'fa')
     {
         $setting = select("setting", "*", null, null, "select");
-        $layout = json_decode($setting['keyboardmain'], true);
-        $rows = (is_array($layout) && isset($layout['keyboard']) && is_array($layout['keyboard'])) ? $layout['keyboard'] : [];
-        $labels = menu_button_labels($textbotlang);
+        $rows = mainmenu_layout_get($lang)['keyboard'];
+        $labels = menu_button_labels(lang_tab_texts($lang));
         $kb = ['inline_keyboard' => []];
         foreach ($rows as $r => $row) {
             if (!is_array($row)) {
@@ -1023,11 +1015,11 @@ if (!function_exists('layout_editor_payload')) {
                 $isSel = ($selected !== null && $selected[0] == $r && $selected[1] == $c);
                 if ($isSel) {
                     $name = '🔵 ' . $name;
-                    $cb = "layoutcancel";
+                    $cb = "layoutcancel-{$lang}";
                 } elseif ($selected !== null) {
-                    $cb = "layoutswap-{$selected[0]}-{$selected[1]}-{$r}-{$c}";
+                    $cb = "layoutswap-{$lang}-{$selected[0]}-{$selected[1]}-{$r}-{$c}";
                 } else {
-                    $cb = "layoutbtn-{$r}-{$c}";
+                    $cb = "layoutbtn-{$lang}-{$r}-{$c}";
                 }
                 $kbBtn = ['text' => $name, 'callback_data' => $cb];
                 $ed_color = (isset($setting['inlinebtnmain']) && $setting['inlinebtnmain'] == "oninline") ? (isset($btn['style']) ? $btn['style'] : '') : (isset($btn['style_reply']) ? $btn['style_reply'] : '');
@@ -1042,10 +1034,11 @@ if (!function_exists('layout_editor_payload')) {
         }
         if ($selected !== null) {
             $kb['inline_keyboard'][] = [
-                ['text' => '🔲 تمام‌عرض / کنار هم', 'callback_data' => "layoutfull-{$selected[0]}-{$selected[1]}"]
+                ['text' => '🔲 تمام‌عرض / کنار هم', 'callback_data' => "layoutfull-{$lang}-{$selected[0]}-{$selected[1]}"]
             ];
         }
-        $kb['inline_keyboard'][] = [['text' => '🔄 ریست چیدمان به پیش‌فرض', 'callback_data' => "layoutreset"]];
+        $kb['inline_keyboard'][] = [['text' => '🔄 ریست چیدمان به پیش‌فرض', 'callback_data' => "layoutreset-{$lang}"]];
+        $kb['inline_keyboard'][] = mainmenu_lang_tabs($lang, "btnset_open:layout:%s");
         $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبلی', 'callback_data' => 'bt_btnsettings', 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']];
         return json_encode($kb);
@@ -1194,12 +1187,11 @@ if (!function_exists('close_sticker_screen')) {
     }
 }
 if (!function_exists('rename_editor_payload')) {
-    function rename_editor_payload($textbotlang, $selected = null)
+    function rename_editor_payload($textbotlang, $selected = null, $lang = 'fa')
     {
         $setting = select("setting", "*", null, null, "select");
-        $layout = json_decode($setting['keyboardmain'], true);
-        $rows = (is_array($layout) && isset($layout['keyboard']) && is_array($layout['keyboard'])) ? $layout['keyboard'] : [];
-        $labels = menu_button_labels($textbotlang);
+        $rows = mainmenu_layout_get($lang)['keyboard'];
+        $labels = menu_button_labels(lang_tab_texts($lang));
         $kb = ['inline_keyboard' => []];
         foreach ($rows as $r => $row) {
             if (!is_array($row)) {
@@ -1224,9 +1216,9 @@ if (!function_exists('rename_editor_payload')) {
                 $isSel = ($selected !== null && $selected[0] == $r && $selected[1] == $c);
                 if ($isSel) {
                     $name = '🔵 ' . $name;
-                    $cb = "renamecancel";
+                    $cb = "renamecancel-{$lang}";
                 } else {
-                    $cb = "renamebtn-{$r}-{$c}";
+                    $cb = "renamebtn-{$lang}-{$r}-{$c}";
                 }
                 $kbBtn = ['text' => $name, 'callback_data' => $cb];
                 $ed_color = (isset($setting['inlinebtnmain']) && $setting['inlinebtnmain'] == "oninline") ? (isset($btn['style']) ? $btn['style'] : '') : (isset($btn['style_reply']) ? $btn['style_reply'] : '');
@@ -1241,11 +1233,12 @@ if (!function_exists('rename_editor_payload')) {
         }
         if ($selected !== null) {
             $kb['inline_keyboard'][] = [
-                ['text' => '✏️ تغییر نام', 'callback_data' => "renametext-{$selected[0]}-{$selected[1]}"],
-                ['text' => '👁 پنهان / نمایش', 'callback_data' => "renamehide-{$selected[0]}-{$selected[1]}"]
+                ['text' => '✏️ تغییر نام', 'callback_data' => "renametext-{$lang}-{$selected[0]}-{$selected[1]}"],
+                ['text' => '👁 پنهان / نمایش', 'callback_data' => "renamehide-{$lang}-{$selected[0]}-{$selected[1]}"]
             ];
         }
-        $kb['inline_keyboard'][] = [['text' => '🔄 ریست به پیش‌فرض', 'callback_data' => "renamereset"]];
+        $kb['inline_keyboard'][] = [['text' => '🔄 ریست به پیش‌فرض', 'callback_data' => "renamereset-{$lang}"]];
+        $kb['inline_keyboard'][] = mainmenu_lang_tabs($lang, "btnset_open:rename:%s");
         $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبلی', 'callback_data' => 'bt_btnsettings', 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']];
         return json_encode($kb);
@@ -6126,12 +6119,12 @@ if ($text == "⌨️ رنگ دکمه‌های کیبوردی" && $adminrulecheck
     sendmessage($from_id, "⌨️ <b>رنگ‌بندی دکمه‌های کیبوردی (معمولی)</b>\n\nاین لیست، پیش‌نمایش زنده‌ی منوته 🎨\nروی هر دکمه بزن تا رنگش عوض بشه 👇\n⚪ پیش‌فرض ← 🔵 آبی ← 🟢 سبز ← 🔴 قرمز\n🚫 = دکمه پنهان شده", $color_kb, 'HTML');
     return;
 }
-if (preg_match('/^btncolor-(i|r)-(\d+)-(\d+)$/', $datain, $colormatch) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^btncolor-(i|r)-([a-z]{2})-(\d+)-(\d+)$/', $datain, $colormatch) && $adminrulecheck['rule'] == "administrator") {
     $color_mode = $colormatch[1];
-    $color_r = intval($colormatch[2]);
-    $color_c = intval($colormatch[3]);
-    $setting_color = select("setting", "*", null, null, "select");
-    $color_layout = json_decode($setting_color['keyboardmain'], true);
+    $color_lang = $colormatch[2];
+    $color_r = intval($colormatch[3]);
+    $color_c = intval($colormatch[4]);
+    $color_layout = mainmenu_layout_get($color_lang);
     if (is_array($color_layout) && isset($color_layout['keyboard'][$color_r][$color_c]) && is_array($color_layout['keyboard'][$color_r][$color_c])) {
         $color_field = ($color_mode == 'r') ? 'style_reply' : 'style';
         $color_order = ['', 'primary', 'success', 'danger'];
@@ -6146,9 +6139,9 @@ if (preg_match('/^btncolor-(i|r)-(\d+)-(\d+)$/', $datain, $colormatch) && $admin
         } else {
             $color_layout['keyboard'][$color_r][$color_c][$color_field] = $color_next;
         }
-        update("setting", "keyboardmain", json_encode($color_layout));
+        mainmenu_layout_save($color_lang, $color_layout);
     }
-    $color_kb = color_editor_payload($color_mode, $textbotlang);
+    $color_kb = color_editor_payload($color_mode, $textbotlang, $color_lang);
     $color_title = ($color_mode == 'r') ? "⌨️ <b>رنگ‌بندی دکمه‌های کیبوردی (معمولی)</b>" : "🎛 <b>رنگ‌بندی دکمه‌های شیشه‌ای (اینلاین)</b>";
     Editmessagetext($from_id, $message_id, $color_title . "\n\nاین لیست، پیش‌نمایش زنده‌ی منوته 🎨\nروی هر دکمه بزن تا رنگش عوض بشه 👇\n⚪ پیش‌فرض ← 🔵 آبی ← 🟢 سبز ← 🔴 قرمز\n🚫 = دکمه پنهان شده", $color_kb, 'HTML');
     return;
@@ -6298,46 +6291,45 @@ if ($text == "✨ استیکر پریمیوم دکمه‌ها" && $adminrulechec
     sendmessage($from_id, "✨ <b>استیکر پریمیوم دکمه‌ها</b>\n\nروی هر دکمه بزن و استیکرش رو بفرست 👇\nوقتی کاربر اون دکمه رو بزنه، اول این استیکر ارسال می‌شه\n✅ ست شده | ❌ ست نشده\n🚫 = دکمه پنهان شده\n\n📌 این‌ها فقط برای لحظه‌ی لمس دکمه‌های منوی اصلی‌ان؛ برای استیکر پیام‌های داخل مراحل خرید/سرویس‌های من/اکانت تست، از 🎨 شخصی‌سازی پیام‌های ربات استفاده کن.", $es_kb, 'HTML');
     return;
 }
-if (preg_match('/^btnemoji-(\d+)-(\d+)$/', $datain, $es_match) && $adminrulecheck['rule'] == "administrator") {
-    $es_name = menu_button_name($es_match[1], $es_match[2], $textbotlang);
-    step("setemoji-{$es_match[1]}-{$es_match[2]}", $from_id);
-    sendmessage($from_id, "😀 ایموجی برای <b>{$es_name}</b> رو بفرست ✍️\n\n🔹 ایموجی معمولی → کنار متن دکمه (چپ/راست بودنش رو با دکمه‌های ⬅️➡️ پایین لیست تعیین می‌کنی)\n💎 ایموجی پریمیوم → آیکون کنار متن\n\n(برای حذف ایموجی، عدد 0 رو بفرست)", $backadmin, 'HTML');
+if (preg_match('/^btnemoji-([a-z]{2})-(\d+)-(\d+)$/', $datain, $es_match) && $adminrulecheck['rule'] == "administrator") {
+    $es_name = menu_button_name($es_match[2], $es_match[3], $textbotlang, $es_match[1]);
+    // the tab travels in the step too - the emoji arrives in a later message,
+    // by which time the callback that started this is long gone
+    step("setemoji-{$es_match[1]}-{$es_match[2]}-{$es_match[3]}", $from_id);
+    sendmessage($from_id, "😀 ایموجی برای <b>{$es_name}</b> رو بفرست ✍️" . mainmenu_tab_note($es_match[1]) . "\n\n🔹 ایموجی معمولی → کنار متن دکمه (چپ/راست بودنش رو با دکمه‌های ⬅️➡️ پایین لیست تعیین می‌کنی)\n💎 ایموجی پریمیوم → آیکون کنار متن\n\n(برای حذف ایموجی، عدد 0 رو بفرست)", $backadmin, 'HTML');
     return;
 }
-if (preg_match('/^emojiposall-(left|right)$/', $datain, $es_match) && $adminrulecheck['rule'] == "administrator") {
-    $es_layout_setting = select("setting", "*", null, null, "select");
-    $es_layout = json_decode($es_layout_setting['keyboardmain'], true);
-    if (is_array($es_layout) && isset($es_layout['keyboard'])) {
-        $es_layout['emoji_pos_global'] = $es_match[1];
-        update("setting", "keyboardmain", json_encode($es_layout));
-    }
-    $es_posname = ($es_match[1] == 'left') ? '⬅️ چپ دکمه' : 'راست دکمه ➡️';
-    $es_kb = emoji_sticker_editor_payload('emoji', $textbotlang);
-    Editmessagetext($from_id, $message_id, "📍 <b>جای ایموجی‌ها: {$es_posname}</b>\n\n😀 <b>ایموجی دکمه‌های منو</b>\nروی هر دکمه بزن و ایموجی جدیدش رو بفرست 👇\n👀 پیش‌نمایش زنده‌ی منوی کاربر", $es_kb, 'HTML');
+if (preg_match('/^emojiposall-([a-z]{2})-(left|right)$/', $datain, $es_match) && $adminrulecheck['rule'] == "administrator") {
+    $es_lang = $es_match[1];
+    $es_layout = mainmenu_layout_get($es_lang);
+    $es_layout['emoji_pos_global'] = $es_match[2];
+    mainmenu_layout_save($es_lang, $es_layout);
+    $es_posname = ($es_match[2] == 'left') ? '⬅️ چپ دکمه' : 'راست دکمه ➡️';
+    $es_kb = emoji_sticker_editor_payload('emoji', $textbotlang, $es_lang);
+    Editmessagetext($from_id, $message_id, "📍 <b>جای ایموجی‌ها: {$es_posname}</b>" . mainmenu_tab_note($es_lang) . "\n\n😀 <b>ایموجی دکمه‌های منو</b>\nروی هر دکمه بزن و ایموجی جدیدش رو بفرست 👇\n👀 پیش‌نمایش زنده‌ی منوی کاربر", $es_kb, 'HTML');
     return;
 }
-if ($datain == "emojisimple" && $adminrulecheck['rule'] == "administrator") {
-    $es_layout_setting = select("setting", "*", null, null, "select");
-    $es_layout = json_decode($es_layout_setting['keyboardmain'], true);
-    if (is_array($es_layout) && isset($es_layout['keyboard'])) {
-        $es_layout['simple_emoji'] = empty($es_layout['simple_emoji']);
-        update("setting", "keyboardmain", json_encode($es_layout));
-    }
-    $es_now = (is_array($es_layout) && !empty($es_layout['simple_emoji']));
+if (preg_match('/^emojisimple-([a-z]{2})$/', $datain, $es_match) && $adminrulecheck['rule'] == "administrator") {
+    $es_lang = $es_match[1];
+    $es_layout = mainmenu_layout_get($es_lang);
+    $es_layout['simple_emoji'] = empty($es_layout['simple_emoji']);
+    mainmenu_layout_save($es_lang, $es_layout);
+    $es_now = !empty($es_layout['simple_emoji']);
     $es_state = $es_now ? "✅ روشن شد — ایموجی‌های پیش‌فرض متن دکمه‌ها مخفی می‌شن" : "❌ خاموش شد — ایموجی‌های پیش‌فرض برگشتن";
-    $es_kb = emoji_sticker_editor_payload('emoji', $textbotlang);
-    Editmessagetext($from_id, $message_id, "🔲 <b>حالت ساده {$es_state}</b>\n\n😀 <b>ایموجی دکمه‌های منو</b>\nروی هر دکمه بزن و ایموجی جدیدش رو بفرست 👇\n\n👀 پیش‌نمایش زنده‌ی منوی کاربره — نتیجه رو همینجا و با /start توی منو ببین", $es_kb, 'HTML');
+    $es_kb = emoji_sticker_editor_payload('emoji', $textbotlang, $es_lang);
+    Editmessagetext($from_id, $message_id, "🔲 <b>حالت ساده {$es_state}</b>" . mainmenu_tab_note($es_lang) . "\n\n😀 <b>ایموجی دکمه‌های منو</b>\nروی هر دکمه بزن و ایموجی جدیدش رو بفرست 👇\n\n👀 پیش‌نمایش زنده‌ی منوی کاربره — نتیجه رو همینجا و با /start توی منو ببین", $es_kb, 'HTML');
     return;
 }
-if ($datain == "stickerresetall" && $adminrulecheck['rule'] == "administrator") {
-    mainmenu_sticker_reset_all();
-    $es_kb = emoji_sticker_editor_payload('sticker', $textbotlang);
-    Editmessagetext($from_id, $message_id, "🔄 <b>همه استیکرهای دکمه‌ها پاک شدن.</b>\n\n✨ <b>استیکر دکمه‌های منو</b>\nروی هر دکمه بزن و استیکری که موقع لمسش فرستاده می‌شه رو تعیین کن 👇\n👀 پیش‌نمایش زنده‌ی منوی کاربر", $es_kb, 'HTML');
+if (preg_match('/^stickerresetall-([a-z]{2})$/', $datain, $es_match) && $adminrulecheck['rule'] == "administrator") {
+    $es_lang = $es_match[1];
+    mainmenu_sticker_reset_all($es_lang);
+    $es_kb = emoji_sticker_editor_payload('sticker', $textbotlang, $es_lang);
+    Editmessagetext($from_id, $message_id, "🔄 <b>همه استیکرهای دکمه‌ها پاک شدن.</b>" . mainmenu_tab_note($es_lang) . "\n\n✨ <b>استیکر دکمه‌های منو</b>\nروی هر دکمه بزن و استیکری که موقع لمسش فرستاده می‌شه رو تعیین کن 👇\n👀 پیش‌نمایش زنده‌ی منوی کاربر", $es_kb, 'HTML');
     return;
 }
-if ($datain == "emojiresetall" && $adminrulecheck['rule'] == "administrator") {
-    $es_layout_setting = select("setting", "*", null, null, "select");
-    $es_layout = json_decode($es_layout_setting['keyboardmain'], true);
+if (preg_match('/^emojiresetall-([a-z]{2})$/', $datain, $es_match) && $adminrulecheck['rule'] == "administrator") {
+    $es_lang = $es_match[1];
+    $es_layout = mainmenu_layout_get($es_lang);
     if (is_array($es_layout) && isset($es_layout['keyboard'])) {
         foreach ($es_layout['keyboard'] as $es_r => $es_row) {
             if (!is_array($es_row)) {
@@ -6350,17 +6342,17 @@ if ($datain == "emojiresetall" && $adminrulecheck['rule'] == "administrator") {
                 unset($es_layout['keyboard'][$es_r][$es_c]['emoji'], $es_layout['keyboard'][$es_r][$es_c]['emoji_pos'], $es_layout['keyboard'][$es_r][$es_c]['icon_emoji']);
             }
         }
-        update("setting", "keyboardmain", json_encode($es_layout));
+        mainmenu_layout_save($es_lang, $es_layout);
     }
-    $es_kb = emoji_sticker_editor_payload('emoji', $textbotlang);
-    Editmessagetext($from_id, $message_id, "🔄 <b>همه ایموجی‌های کاستوم پاک شدن و همه دکمه‌ها به حالت پیش‌فرض برگشتن.</b>\n\n😀 <b>ایموجی دکمه‌های منو</b>\nروی هر دکمه بزن و ایموجی جدیدش رو بفرست 👇\n👀 پیش‌نمایش زنده‌ی منوی کاربر", $es_kb, 'HTML');
+    $es_kb = emoji_sticker_editor_payload('emoji', $textbotlang, $es_lang);
+    Editmessagetext($from_id, $message_id, "🔄 <b>همه ایموجی‌های کاستوم پاک شدن و همه دکمه‌ها به حالت پیش‌فرض برگشتن.</b>" . mainmenu_tab_note($es_lang) . "\n\n😀 <b>ایموجی دکمه‌های منو</b>\nروی هر دکمه بزن و ایموجی جدیدش رو بفرست 👇\n👀 پیش‌نمایش زنده‌ی منوی کاربر", $es_kb, 'HTML');
     return;
 }
-if (preg_match('/^setemoji-(\d+)-(\d+)(?:-(left|right))?$/', $user['step'], $es_match) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
-    $es_r = intval($es_match[1]);
-    $es_c = intval($es_match[2]);
-    $es_layout_setting = select("setting", "*", null, null, "select");
-    $es_layout = json_decode($es_layout_setting['keyboardmain'], true);
+if (preg_match('/^setemoji-([a-z]{2})-(\d+)-(\d+)(?:-(left|right))?$/', $user['step'], $es_match) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+    $es_lang = $es_match[1];
+    $es_r = intval($es_match[2]);
+    $es_c = intval($es_match[3]);
+    $es_layout = mainmenu_layout_get($es_lang);
     $es_icon_id = '';
     if (!empty($update['message']['entities']) && is_array($update['message']['entities'])) {
         foreach ($update['message']['entities'] as $es_ent) {
@@ -6373,12 +6365,12 @@ if (preg_match('/^setemoji-(\d+)-(\d+)(?:-(left|right))?$/', $user['step'], $es_
     if (is_array($es_layout) && isset($es_layout['keyboard'][$es_r][$es_c])) {
         if ($text == '0') {
             unset($es_layout['keyboard'][$es_r][$es_c]['emoji'], $es_layout['keyboard'][$es_r][$es_c]['icon_emoji'], $es_layout['keyboard'][$es_r][$es_c]['emoji_pos']);
-            update("setting", "keyboardmain", json_encode($es_layout));
+            mainmenu_layout_save($es_lang, $es_layout);
             $es_msg = "✅ ایموجی حذف شد و به پیش‌فرض برگشت.";
         } elseif ($es_icon_id !== '') {
             $es_layout['keyboard'][$es_r][$es_c]['icon_emoji'] = $es_icon_id;
             unset($es_layout['keyboard'][$es_r][$es_c]['emoji'], $es_layout['keyboard'][$es_r][$es_c]['emoji_pos']);
-            update("setting", "keyboardmain", json_encode($es_layout));
+            mainmenu_layout_save($es_lang, $es_layout);
             $es_msg = "✅ ایموجی پریمیوم ذخیره شد! 💎\nبه‌صورت آیکون کنار متن دکمه نمایش داده می‌شه";
         } else {
             preg_match('/^\X/u', trim((string) $text), $es_em);
@@ -6389,40 +6381,49 @@ if (preg_match('/^setemoji-(\d+)-(\d+)(?:-(left|right))?$/', $user['step'], $es_
             }
             $es_layout['keyboard'][$es_r][$es_c]['emoji'] = $es_emoji;
             unset($es_layout['keyboard'][$es_r][$es_c]['icon_emoji'], $es_layout['keyboard'][$es_r][$es_c]['emoji_pos']);
-            update("setting", "keyboardmain", json_encode($es_layout));
+            mainmenu_layout_save($es_lang, $es_layout);
             $es_msg = "✅ ایموجی {$es_emoji} ذخیره شد!";
         }
     } else {
         $es_msg = "⚠️ دکمه پیدا نشد.";
     }
     step('emojisticker', $from_id);
-    $es_kb = emoji_sticker_editor_payload('emoji', $textbotlang);
-    sendmessage($from_id, $es_msg . "\n\n😀 <b>ایموجی دکمه‌های منو</b>\nروی دکمه بعدی بزن یا برگرد 👇", $es_kb, 'HTML');
+    $es_kb = emoji_sticker_editor_payload('emoji', $textbotlang, $es_lang);
+    sendmessage($from_id, $es_msg . mainmenu_tab_note($es_lang) . "\n\n😀 <b>ایموجی دکمه‌های منو</b>\nروی دکمه بعدی بزن یا برگرد 👇", $es_kb, 'HTML');
     return;
 }
-if (preg_match('/^btnsticker-(\d+)-(\d+)$/', $datain, $es_match) && $adminrulecheck['rule'] == "administrator") {
-    $es_name = menu_button_name($es_match[1], $es_match[2], $textbotlang);
-    step("setsticker-{$es_match[1]}-{$es_match[2]}", $from_id);
-    sendmessage($from_id, "✨ استیکر پریمیوم برای <b>{$es_name}</b> رو بفرست 🎁\n\n(برای حذف استیکر فعلی، عدد 0 رو بفرست)", $backadmin, 'HTML');
+if (preg_match('/^btnsticker-([a-z]{2})-(\d+)-(\d+)$/', $datain, $es_match) && $adminrulecheck['rule'] == "administrator") {
+    $es_name = menu_button_name($es_match[2], $es_match[3], $textbotlang, $es_match[1]);
+    step("setsticker-{$es_match[1]}-{$es_match[2]}-{$es_match[3]}", $from_id);
+    sendmessage($from_id, "✨ استیکر پریمیوم برای <b>{$es_name}</b> رو بفرست 🎁" . mainmenu_tab_note($es_match[1]) . "\n\n(برای حذف استیکر فعلی، عدد 0 رو بفرست)", $backadmin, 'HTML');
     return;
 }
-if (preg_match('/^setsticker-(\d+)-(\d+)$/', $user['step'], $es_match) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
-    $es_r = intval($es_match[1]);
-    $es_c = intval($es_match[2]);
+if (preg_match('/^setsticker-([a-z]{2})-(\d+)-(\d+)$/', $user['step'], $es_match) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+    $es_lang = $es_match[1];
+    $es_r = intval($es_match[2]);
+    $es_c = intval($es_match[3]);
     $es_fileid = $update['message']['sticker']['file_id'] ?? '';
-    $es_layout_setting = select("setting", "*", null, null, "select");
-    $es_layout = json_decode($es_layout_setting['keyboardmain'], true);
+    $es_layout = mainmenu_layout_get($es_lang);
     if (is_array($es_layout) && isset($es_layout['keyboard'][$es_r][$es_c])) {
         if ($text == '0') {
             unset($es_layout['keyboard'][$es_r][$es_c]['sticker']);
-            update("setting", "keyboardmain", json_encode($es_layout));
+            mainmenu_layout_save($es_lang, $es_layout);
             $es_msg = "✅ استیکر حذف شد.";
         } elseif ($es_fileid !== '') {
             $es_layout['keyboard'][$es_r][$es_c]['sticker'] = $es_fileid;
             if (($es_layout['keyboard'][$es_r][$es_c]['text'] ?? '') === 'text_usertest') {
-                unset($es_layout['text_stickers']['users.usertest.selectUsernamePrompt']);
+                // text_stickers stayed in the shared blob when the menu became
+                // per-language, so clearing the message sticker this button
+                // would otherwise fight with is a write of its own now - and
+                // only for THIS language, which bt_media_unset() handles
+                $es_blob_setting = select("setting", "*", null, null, "select");
+                $es_blob = json_decode((string) ($es_blob_setting['keyboardmain'] ?? ''), true);
+                if (is_array($es_blob) && isset($es_blob['text_stickers'])) {
+                    bt_media_unset($es_blob['text_stickers'], 'users.usertest.selectUsernamePrompt', $es_lang);
+                    update("setting", "keyboardmain", json_encode($es_blob, JSON_UNESCAPED_UNICODE), null, null);
+                }
             }
-            update("setting", "keyboardmain", json_encode($es_layout));
+            mainmenu_layout_save($es_lang, $es_layout);
             $es_msg = "✅ استیکر ذخیره شد! حالا کاربر که این دکمه رو بزنه، اول این استیکر براش ارسال می‌شه ✨";
         } else {
             sendmessage($from_id, "⚠️ لطفاً یه استیکر بفرست (ترجیحاً استیکر پریمیوم) 😅", $backadmin, 'HTML');
@@ -6432,8 +6433,8 @@ if (preg_match('/^setsticker-(\d+)-(\d+)$/', $user['step'], $es_match) && $datai
         $es_msg = "⚠️ دکمه پیدا نشد.";
     }
     step('emojisticker', $from_id);
-    $es_kb = emoji_sticker_editor_payload('sticker', $textbotlang);
-    sendmessage($from_id, $es_msg . "\n\n✨ <b>استیکر پریمیوم دکمه‌ها</b>\nروی دکمه بعدی بزن یا برگرد 👇\n🚫 = دکمه پنهان شده\n\n📌 این‌ها فقط برای لحظه‌ی لمس دکمه‌های منوی اصلی‌ان؛ برای استیکر پیام‌های داخل مراحل خرید/سرویس‌های من/اکانت تست، از 🎨 شخصی‌سازی پیام‌های ربات استفاده کن.", $es_kb, 'HTML');
+    $es_kb = emoji_sticker_editor_payload('sticker', $textbotlang, $es_lang);
+    sendmessage($from_id, $es_msg . mainmenu_tab_note($es_lang) . "\n\n✨ <b>استیکر پریمیوم دکمه‌ها</b>\nروی دکمه بعدی بزن یا برگرد 👇\n🚫 = دکمه پنهان شده\n\n📌 این‌ها فقط برای لحظه‌ی لمس دکمه‌های منوی اصلی‌ان؛ برای استیکر پیام‌های داخل مراحل خرید/سرویس‌های من/اکانت تست، از 🎨 شخصی‌سازی پیام‌های ربات استفاده کن.", $es_kb, 'HTML');
     return;
 }
 
@@ -6443,39 +6444,41 @@ if ($text == "📐 چیدمان دکمه‌ها" && $adminrulecheck['rule'] == "
     sendmessage($from_id, "📐 <b>چیدمان دکمه‌های منو</b>\n\n🔹 <b>جابه‌جایی:</b> روی یه دکمه بزن تا انتخاب بشه، بعد روی دکمه‌ی مقصد بزن\n🔹 <b>تک/دوتایی:</b> دکمه رو انتخاب کن و «🔲 تمام‌عرض / کنار هم» رو بزن\n🔹 رنگ و ایموجی و استیکر دکمه‌ها همراهشون منتقل می‌شن\n🚫 = دکمه پنهان شده", $ly_kb, 'HTML');
     return;
 }
-if (preg_match('/^layoutbtn-(\d+)-(\d+)$/', $datain, $ly_m) && $adminrulecheck['rule'] == "administrator") {
-    $ly_kb = layout_editor_payload($textbotlang, [$ly_m[1], $ly_m[2]]);
-    $ly_name = menu_button_name($ly_m[1], $ly_m[2], $textbotlang);
-    Editmessagetext($from_id, $message_id, "📐 <b>چیدمان دکمه‌ها</b>\n\nدکمه‌ی <b>{$ly_name}</b> انتخاب شد 🔵\nحالا روی دکمه‌ی مقصد بزن تا جاشون عوض بشه 👇\nیا «🔲 تمام‌عرض / کنار هم» رو بزن", $ly_kb, 'HTML');
+if (preg_match('/^layoutbtn-([a-z]{2})-(\d+)-(\d+)$/', $datain, $ly_m) && $adminrulecheck['rule'] == "administrator") {
+    $ly_lang = $ly_m[1];
+    $ly_kb = layout_editor_payload($textbotlang, [$ly_m[2], $ly_m[3]], $ly_lang);
+    $ly_name = menu_button_name($ly_m[2], $ly_m[3], $textbotlang, $ly_lang);
+    Editmessagetext($from_id, $message_id, "📐 <b>چیدمان دکمه‌ها</b>" . mainmenu_tab_note($ly_lang) . "\n\nدکمه‌ی <b>{$ly_name}</b> انتخاب شد 🔵\nحالا روی دکمه‌ی مقصد بزن تا جاشون عوض بشه 👇\nیا «🔲 تمام‌عرض / کنار هم» رو بزن", $ly_kb, 'HTML');
     return;
 }
-if ($datain == "layoutcancel" && $adminrulecheck['rule'] == "administrator") {
-    $ly_kb = layout_editor_payload($textbotlang);
-    Editmessagetext($from_id, $message_id, "📐 <b>چیدمان دکمه‌های منو</b>\n\n🔹 <b>جابه‌جایی:</b> روی یه دکمه بزن تا انتخاب بشه، بعد روی دکمه‌ی مقصد بزن\n🔹 <b>تک/دوتایی:</b> دکمه رو انتخاب کن و «🔲 تمام‌عرض / کنار هم» رو بزن\n🚫 = دکمه پنهان شده", $ly_kb, 'HTML');
+if (preg_match('/^layoutcancel-([a-z]{2})$/', $datain, $ly_m) && $adminrulecheck['rule'] == "administrator") {
+    $ly_lang = $ly_m[1];
+    $ly_kb = layout_editor_payload($textbotlang, null, $ly_lang);
+    Editmessagetext($from_id, $message_id, "📐 <b>چیدمان دکمه‌های منو</b>" . mainmenu_tab_note($ly_lang) . "\n\n🔹 <b>جابه‌جایی:</b> روی یه دکمه بزن تا انتخاب بشه، بعد روی دکمه‌ی مقصد بزن\n🔹 <b>تک/دوتایی:</b> دکمه رو انتخاب کن و «🔲 تمام‌عرض / کنار هم» رو بزن\n🚫 = دکمه پنهان شده", $ly_kb, 'HTML');
     return;
 }
-if (preg_match('/^layoutswap-(\d+)-(\d+)-(\d+)-(\d+)$/', $datain, $ly_m) && $adminrulecheck['rule'] == "administrator") {
-    $ly_setting = select("setting", "*", null, null, "select");
-    $ly_layout = json_decode($ly_setting['keyboardmain'], true);
-    $ly_r1 = intval($ly_m[1]);
-    $ly_c1 = intval($ly_m[2]);
-    $ly_r2 = intval($ly_m[3]);
-    $ly_c2 = intval($ly_m[4]);
+if (preg_match('/^layoutswap-([a-z]{2})-(\d+)-(\d+)-(\d+)-(\d+)$/', $datain, $ly_m) && $adminrulecheck['rule'] == "administrator") {
+    $ly_lang = $ly_m[1];
+    $ly_layout = mainmenu_layout_get($ly_lang);
+    $ly_r1 = intval($ly_m[2]);
+    $ly_c1 = intval($ly_m[3]);
+    $ly_r2 = intval($ly_m[4]);
+    $ly_c2 = intval($ly_m[5]);
     if (is_array($ly_layout) && isset($ly_layout['keyboard'][$ly_r1][$ly_c1], $ly_layout['keyboard'][$ly_r2][$ly_c2])) {
         $ly_tmp = $ly_layout['keyboard'][$ly_r1][$ly_c1];
         $ly_layout['keyboard'][$ly_r1][$ly_c1] = $ly_layout['keyboard'][$ly_r2][$ly_c2];
         $ly_layout['keyboard'][$ly_r2][$ly_c2] = $ly_tmp;
-        update("setting", "keyboardmain", json_encode($ly_layout));
+        mainmenu_layout_save($ly_lang, $ly_layout);
     }
-    $ly_kb = layout_editor_payload($textbotlang);
-    Editmessagetext($from_id, $message_id, "✅ جابه‌جایی انجام شد!\n\n📐 <b>چیدمان دکمه‌های منو</b> — برای ادامه روی یه دکمه بزن 👇", $ly_kb, 'HTML');
+    $ly_kb = layout_editor_payload($textbotlang, null, $ly_lang);
+    Editmessagetext($from_id, $message_id, "✅ جابه‌جایی انجام شد!" . mainmenu_tab_note($ly_lang) . "\n\n📐 <b>چیدمان دکمه‌های منو</b> — برای ادامه روی یه دکمه بزن 👇", $ly_kb, 'HTML');
     return;
 }
-if (preg_match('/^layoutfull-(\d+)-(\d+)$/', $datain, $ly_m) && $adminrulecheck['rule'] == "administrator") {
-    $ly_setting = select("setting", "*", null, null, "select");
-    $ly_layout = json_decode($ly_setting['keyboardmain'], true);
-    $ly_r = intval($ly_m[1]);
-    $ly_c = intval($ly_m[2]);
+if (preg_match('/^layoutfull-([a-z]{2})-(\d+)-(\d+)$/', $datain, $ly_m) && $adminrulecheck['rule'] == "administrator") {
+    $ly_lang = $ly_m[1];
+    $ly_layout = mainmenu_layout_get($ly_lang);
+    $ly_r = intval($ly_m[2]);
+    $ly_c = intval($ly_m[3]);
     $ly_msg = "⚠️ دکمه پیدا نشد.";
     if (is_array($ly_layout) && isset($ly_layout['keyboard'][$ly_r][$ly_c])) {
         $ly_rows = $ly_layout['keyboard'];
@@ -6501,15 +6504,15 @@ if (preg_match('/^layoutfull-(\d+)-(\d+)$/', $datain, $ly_m) && $adminrulecheck[
             }
         }
         $ly_layout['keyboard'] = array_values($ly_rows);
-        update("setting", "keyboardmain", json_encode($ly_layout));
+        mainmenu_layout_save($ly_lang, $ly_layout);
     }
-    $ly_kb = layout_editor_payload($textbotlang);
-    Editmessagetext($from_id, $message_id, $ly_msg . "\n\n📐 <b>چیدمان دکمه‌های منو</b> 👇", $ly_kb, 'HTML');
+    $ly_kb = layout_editor_payload($textbotlang, null, $ly_lang);
+    Editmessagetext($from_id, $message_id, $ly_msg . mainmenu_tab_note($ly_lang) . "\n\n📐 <b>چیدمان دکمه‌های منو</b> 👇", $ly_kb, 'HTML');
     return;
 }
-if ($datain == "layoutreset" && $adminrulecheck['rule'] == "administrator") {
-    $ly_setting = select("setting", "*", null, null, "select");
-    $ly_layout = json_decode($ly_setting['keyboardmain'], true);
+if (preg_match('/^layoutreset-([a-z]{2})$/', $datain, $ly_m) && $adminrulecheck['rule'] == "administrator") {
+    $ly_lang = $ly_m[1];
+    $ly_layout = mainmenu_layout_get($ly_lang);
     $ly_default = [
         ['text_sell', 'text_extend'],
         ['text_usertest', 'text_wheel_luck'],
@@ -6548,9 +6551,9 @@ if ($datain == "layoutreset" && $adminrulecheck['rule'] == "administrator") {
         $ly_layout = [];
     }
     $ly_layout['keyboard'] = $ly_newrows;
-    update("setting", "keyboardmain", json_encode($ly_layout));
-    $ly_kb = layout_editor_payload($textbotlang);
-    Editmessagetext($from_id, $message_id, "🔄 چیدمان به پیش‌فرض برگشت (رنگ و ایموجی و استیکرها حفظ شدن)\n\n📐 <b>چیدمان دکمه‌های منو</b> 👇", $ly_kb, 'HTML');
+    mainmenu_layout_save($ly_lang, $ly_layout);
+    $ly_kb = layout_editor_payload($textbotlang, null, $ly_lang);
+    Editmessagetext($from_id, $message_id, "🔄 چیدمان به پیش‌فرض برگشت (رنگ و ایموجی و استیکرها حفظ شدن)" . mainmenu_tab_note($ly_lang) . "\n\n📐 <b>چیدمان دکمه‌های منو</b> 👇", $ly_kb, 'HTML');
     return;
 }
 
@@ -6560,22 +6563,24 @@ if ($text == "✏️ نام و نمایش دکمه‌ها" && $adminrulecheck['r
     sendmessage($from_id, "✏️ <b>نام و نمایش دکمه‌های منو</b>\n\n🔹 روی یه دکمه بزن تا انتخاب بشه 🔵\n🔹 بعد «✏️ تغییر نام» برای عوض کردن اسمش، یا «👁 پنهان / نمایش» برای مخفی/آشکار کردنش رو بزن\n🚫 = دکمه‌ی پنهان", $rn_kb, 'HTML');
     return;
 }
-if (preg_match('/^renamebtn-(\d+)-(\d+)$/', $datain, $rn_m) && $adminrulecheck['rule'] == "administrator") {
-    $rn_kb = rename_editor_payload($textbotlang, [$rn_m[1], $rn_m[2]]);
-    $rn_name = menu_button_name($rn_m[1], $rn_m[2], $textbotlang);
-    Editmessagetext($from_id, $message_id, "✏️ <b>نام و نمایش دکمه‌ها</b>\n\nدکمه‌ی <b>{$rn_name}</b> انتخاب شد 🔵\nیکی از گزینه‌های پایین رو بزن 👇", $rn_kb, 'HTML');
+if (preg_match('/^renamebtn-([a-z]{2})-(\d+)-(\d+)$/', $datain, $rn_m) && $adminrulecheck['rule'] == "administrator") {
+    $rn_lang = $rn_m[1];
+    $rn_kb = rename_editor_payload($textbotlang, [$rn_m[2], $rn_m[3]], $rn_lang);
+    $rn_name = menu_button_name($rn_m[2], $rn_m[3], $textbotlang, $rn_lang);
+    Editmessagetext($from_id, $message_id, "✏️ <b>نام و نمایش دکمه‌ها</b>" . mainmenu_tab_note($rn_lang) . "\n\nدکمه‌ی <b>{$rn_name}</b> انتخاب شد 🔵\nیکی از گزینه‌های پایین رو بزن 👇", $rn_kb, 'HTML');
     return;
 }
-if ($datain == "renamecancel" && $adminrulecheck['rule'] == "administrator") {
-    $rn_kb = rename_editor_payload($textbotlang);
-    Editmessagetext($from_id, $message_id, "✏️ <b>نام و نمایش دکمه‌های منو</b>\n\nروی یه دکمه بزن تا انتخاب بشه 👇\n🚫 = دکمه‌ی پنهان", $rn_kb, 'HTML');
+if (preg_match('/^renamecancel-([a-z]{2})$/', $datain, $rn_m) && $adminrulecheck['rule'] == "administrator") {
+    $rn_lang = $rn_m[1];
+    $rn_kb = rename_editor_payload($textbotlang, null, $rn_lang);
+    Editmessagetext($from_id, $message_id, "✏️ <b>نام و نمایش دکمه‌های منو</b>" . mainmenu_tab_note($rn_lang) . "\n\nروی یه دکمه بزن تا انتخاب بشه 👇\n🚫 = دکمه‌ی پنهان", $rn_kb, 'HTML');
     return;
 }
-if (preg_match('/^renamehide-(\d+)-(\d+)$/', $datain, $rn_m) && $adminrulecheck['rule'] == "administrator") {
-    $rn_setting = select("setting", "*", null, null, "select");
-    $rn_layout = json_decode($rn_setting['keyboardmain'], true);
-    $rn_r = intval($rn_m[1]);
-    $rn_c = intval($rn_m[2]);
+if (preg_match('/^renamehide-([a-z]{2})-(\d+)-(\d+)$/', $datain, $rn_m) && $adminrulecheck['rule'] == "administrator") {
+    $rn_lang = $rn_m[1];
+    $rn_layout = mainmenu_layout_get($rn_lang);
+    $rn_r = intval($rn_m[2]);
+    $rn_c = intval($rn_m[3]);
     $rn_msg = "⚠️ دکمه پیدا نشد.";
     if (is_array($rn_layout) && isset($rn_layout['keyboard'][$rn_r][$rn_c])) {
         if (!empty($rn_layout['keyboard'][$rn_r][$rn_c]['hidden'])) {
@@ -6585,31 +6590,31 @@ if (preg_match('/^renamehide-(\d+)-(\d+)$/', $datain, $rn_m) && $adminrulecheck[
             $rn_layout['keyboard'][$rn_r][$rn_c]['hidden'] = true;
             $rn_msg = "✅ دکمه از منو پنهان شد 🚫";
         }
-        update("setting", "keyboardmain", json_encode($rn_layout));
+        mainmenu_layout_save($rn_lang, $rn_layout);
     }
-    $rn_kb = rename_editor_payload($textbotlang);
-    Editmessagetext($from_id, $message_id, $rn_msg . "\n\n✏️ <b>نام و نمایش دکمه‌های منو</b> 👇", $rn_kb, 'HTML');
+    $rn_kb = rename_editor_payload($textbotlang, null, $rn_lang);
+    Editmessagetext($from_id, $message_id, $rn_msg . mainmenu_tab_note($rn_lang) . "\n\n✏️ <b>نام و نمایش دکمه‌های منو</b> 👇", $rn_kb, 'HTML');
     return;
 }
-if (preg_match('/^renametext-(\d+)-(\d+)$/', $datain, $rn_m) && $adminrulecheck['rule'] == "administrator") {
-    $rn_name = menu_button_name($rn_m[1], $rn_m[2], $textbotlang);
-    step("renamebtn-{$rn_m[1]}-{$rn_m[2]}", $from_id);
-    sendmessage($from_id, "✏️ نام جدید برای <b>{$rn_name}</b> رو بفرست ✍️\n\n(برای برگشت به نام اصلی، عدد 0 رو بفرست)", $backadmin, 'HTML');
+if (preg_match('/^renametext-([a-z]{2})-(\d+)-(\d+)$/', $datain, $rn_m) && $adminrulecheck['rule'] == "administrator") {
+    $rn_name = menu_button_name($rn_m[2], $rn_m[3], $textbotlang, $rn_m[1]);
+    step("renamebtn-{$rn_m[1]}-{$rn_m[2]}-{$rn_m[3]}", $from_id);
+    sendmessage($from_id, "✏️ نام جدید برای <b>{$rn_name}</b> رو بفرست ✍️" . mainmenu_tab_note($rn_m[1]) . "\n\n(برای برگشت به نام اصلی، عدد 0 رو بفرست)", $backadmin, 'HTML');
     return;
 }
-if (preg_match('/^renamebtn-(\d+)-(\d+)$/', $user['step'], $rn_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
-    $rn_r = intval($rn_m[1]);
-    $rn_c = intval($rn_m[2]);
-    $rn_setting = select("setting", "*", null, null, "select");
-    $rn_layout = json_decode($rn_setting['keyboardmain'], true);
+if (preg_match('/^renamebtn-([a-z]{2})-(\d+)-(\d+)$/', $user['step'], $rn_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+    $rn_lang = $rn_m[1];
+    $rn_r = intval($rn_m[2]);
+    $rn_c = intval($rn_m[3]);
+    $rn_layout = mainmenu_layout_get($rn_lang);
     if (is_array($rn_layout) && isset($rn_layout['keyboard'][$rn_r][$rn_c])) {
         if ($text == '0') {
             unset($rn_layout['keyboard'][$rn_r][$rn_c]['custom_text']);
-            update("setting", "keyboardmain", json_encode($rn_layout));
+            mainmenu_layout_save($rn_lang, $rn_layout);
             $rn_msg = "✅ نام دکمه به پیش‌فرض برگشت.";
         } elseif (!empty($text)) {
             $rn_layout['keyboard'][$rn_r][$rn_c]['custom_text'] = trim((string) $text);
-            update("setting", "keyboardmain", json_encode($rn_layout));
+            mainmenu_layout_save($rn_lang, $rn_layout);
             $rn_msg = "✅ نام دکمه تغییر کرد!";
         } else {
             sendmessage($from_id, "⚠️ لطفاً نام جدید رو به صورت متن بفرست 😅", $backadmin, 'HTML');
@@ -6619,17 +6624,17 @@ if (preg_match('/^renamebtn-(\d+)-(\d+)$/', $user['step'], $rn_m) && $datain == 
         $rn_msg = "⚠️ دکمه پیدا نشد.";
     }
     step('renamemanage', $from_id);
-    $rn_kb = rename_editor_payload($textbotlang);
-    sendmessage($from_id, $rn_msg . "\n\n✏️ <b>نام و نمایش دکمه‌های منو</b>\nروی دکمه بعدی بزن یا برگرد 👇", $rn_kb, 'HTML');
+    $rn_kb = rename_editor_payload($textbotlang, null, $rn_lang);
+    sendmessage($from_id, $rn_msg . mainmenu_tab_note($rn_lang) . "\n\n✏️ <b>نام و نمایش دکمه‌های منو</b>\nروی دکمه بعدی بزن یا برگرد 👇", $rn_kb, 'HTML');
     return;
 }
-if ($datain == "renamereset" && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^renamereset-([a-z]{2})$/', $datain, $rn_m) && $adminrulecheck['rule'] == "administrator") {
+    $rn_lang = $rn_m[1];
     // factory default is NOT "everything visible" - table.php's own keyboardmain
     // ships these keys pre-hidden, so resetting must restore THAT, not clear
     // every hidden flag unconditionally (which used to undo the factory default)
     $rn_default_hidden = mainmenu_default_hidden_keys();
-    $rn_setting = select("setting", "*", null, null, "select");
-    $rn_layout = json_decode($rn_setting['keyboardmain'], true);
+    $rn_layout = mainmenu_layout_get($rn_lang);
     if (is_array($rn_layout) && isset($rn_layout['keyboard']) && is_array($rn_layout['keyboard'])) {
         foreach ($rn_layout['keyboard'] as $rn_r => $rn_row) {
             if (!is_array($rn_row)) {
@@ -6646,10 +6651,10 @@ if ($datain == "renamereset" && $adminrulecheck['rule'] == "administrator") {
                 }
             }
         }
-        update("setting", "keyboardmain", json_encode($rn_layout));
+        mainmenu_layout_save($rn_lang, $rn_layout);
     }
-    $rn_kb = rename_editor_payload($textbotlang);
-    Editmessagetext($from_id, $message_id, "🔄 نام و نمایش دکمه‌ها به پیش‌فرض برگشت (رنگ و ایموجی و استیکرها حفظ شدن)\n\n✏️ <b>نام و نمایش دکمه‌های منو</b> 👇", $rn_kb, 'HTML');
+    $rn_kb = rename_editor_payload($textbotlang, null, $rn_lang);
+    Editmessagetext($from_id, $message_id, "🔄 نام و نمایش دکمه‌ها به پیش‌فرض برگشت (رنگ و ایموجی و استیکرها حفظ شدن)" . mainmenu_tab_note($rn_lang) . "\n\n✏️ <b>نام و نمایش دکمه‌های منو</b> 👇", $rn_kb, 'HTML');
     return;
 }
 
@@ -19743,25 +19748,32 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
 } elseif ($datain == "btnset_open:color" && $adminrulecheck['rule'] == "administrator") {
     $btnset_kb = btnset_color_hub_payload($textbotlang);
     Editmessagetext($from_id, $message_id, "🎨 <b>بخش رنگ‌بندی دکمه‌های منوی اصلی</b>\n\nنوع کیبورد رو انتخاب کن 👇", $btnset_kb, 'HTML');
-} elseif (preg_match('/^btnset_color:(i|r)$/', $datain, $btnset_m) && $adminrulecheck['rule'] == "administrator") {
-    $color_kb = color_editor_payload($btnset_m[1], $textbotlang);
+} elseif (preg_match('/^btnset_color:(i|r)(?::([a-z]{2}))?$/', $datain, $btnset_m) && $adminrulecheck['rule'] == "administrator") {
+    // the tab is optional so the hub's own row (which carries no language)
+    // still opens the screen - on Persian, the tab it has always opened on
+    $btnset_lang = $btnset_m[2] ?? 'fa';
+    $color_kb = color_editor_payload($btnset_m[1], $textbotlang, $btnset_lang);
     $color_title = ($btnset_m[1] == 'r') ? "⌨️ <b>رنگ‌بندی دکمه‌های کیبوردی (معمولی)</b>" : "🎛 <b>رنگ‌بندی دکمه‌های شیشه‌ای (اینلاین)</b>";
-    Editmessagetext($from_id, $message_id, $color_title . "\n\nاین لیست، پیش‌نمایش زنده‌ی منوته 🎨\nروی هر دکمه بزن تا رنگش عوض بشه 👇\n⚪ پیش‌فرض ← 🔵 آبی ← 🟢 سبز ← 🔴 قرمز\n🚫 = دکمه پنهان شده", $color_kb, 'HTML');
+    Editmessagetext($from_id, $message_id, $color_title . mainmenu_tab_note($btnset_lang) . "\n\nاین لیست، پیش‌نمایش زنده‌ی منوته 🎨\nروی هر دکمه بزن تا رنگش عوض بشه 👇\n⚪ پیش‌فرض ← 🔵 آبی ← 🟢 سبز ← 🔴 قرمز\n🚫 = دکمه پنهان شده", $color_kb, 'HTML');
 } elseif ($datain == "btnset_open:emoji" && $adminrulecheck['rule'] == "administrator") {
     $btnset_kb = btnset_emoji_hub_payload($textbotlang);
     Editmessagetext($from_id, $message_id, "🎭 <b>ایموجی و استیکر دکمه‌های منوی اصلی</b>\n\nکدوم بخش رو می‌خوای تنظیم کنی؟ 👇", $btnset_kb, 'HTML');
-} elseif ($datain == "btnset_emoji:emoji" && $adminrulecheck['rule'] == "administrator") {
-    $es_kb = emoji_sticker_editor_payload('emoji', $textbotlang);
-    Editmessagetext($from_id, $message_id, "😀 <b>ایموجی دکمه‌های منو</b>\n\n👀 این لیست دقیقاً همون چیزیه که کاربر توی منو می‌بینه (پیش‌نمایش زنده با همون رنگ و ایموجی‌ها)\nروی هر دکمه بزن و ایموجی جدیدش رو بفرست 👇\n📍 چپ/راست بودن ایموجی‌های معمولی رو با دکمه‌های ⬅️➡️ پایین لیست تعیین کن\n💎 ایموجی پریمیوم همیشه قبل از متن دکمه‌ست و جاش قابل تغییر نیست (این محدودیت خود تلگرامه، نه ربات)\n🚫 = دکمه پنهان شده", $es_kb, 'HTML');
-} elseif ($datain == "btnset_emoji:sticker" && $adminrulecheck['rule'] == "administrator") {
-    $es_kb = emoji_sticker_editor_payload('sticker', $textbotlang);
-    Editmessagetext($from_id, $message_id, "✨ <b>استیکر پریمیوم دکمه‌ها</b>\n\nروی هر دکمه بزن و استیکرش رو بفرست 👇\nوقتی کاربر اون دکمه رو بزنه، اول این استیکر ارسال می‌شه\n✅ ست شده | ❌ ست نشده\n🚫 = دکمه پنهان شده\n\n📌 این‌ها فقط برای لحظه‌ی لمس دکمه‌های منوی اصلی‌ان؛ برای استیکر پیام‌های داخل مراحل خرید/سرویس‌های من/اکانت تست، از 🎨 شخصی‌سازی پیام‌های ربات استفاده کن.", $es_kb, 'HTML');
-} elseif ($datain == "btnset_open:layout" && $adminrulecheck['rule'] == "administrator") {
-    $ly_kb = layout_editor_payload($textbotlang);
-    Editmessagetext($from_id, $message_id, "📐 <b>چیدمان دکمه‌های منو</b>\n\n🔹 <b>جابه‌جایی:</b> روی یه دکمه بزن تا انتخاب بشه، بعد روی دکمه‌ی مقصد بزن\n🔹 <b>تک/دوتایی:</b> دکمه رو انتخاب کن و «🔲 تمام‌عرض / کنار هم» رو بزن\n🔹 رنگ و ایموجی و استیکر دکمه‌ها همراهشون منتقل می‌شن\n🚫 = دکمه پنهان شده", $ly_kb, 'HTML');
-} elseif ($datain == "btnset_open:rename" && $adminrulecheck['rule'] == "administrator") {
-    $rn_kb = rename_editor_payload($textbotlang);
-    Editmessagetext($from_id, $message_id, "✏️ <b>نام و نمایش دکمه‌های منو</b>\n\n🔹 روی یه دکمه بزن تا انتخاب بشه 🔵\n🔹 بعد «✏️ تغییر نام» برای عوض کردن اسمش، یا «👁 پنهان / نمایش» برای مخفی/آشکار کردنش رو بزن\n🚫 = دکمه‌ی پنهان", $rn_kb, 'HTML');
+} elseif (preg_match('/^btnset_emoji:(emoji|sticker)(?::([a-z]{2}))?$/', $datain, $btnset_m) && $adminrulecheck['rule'] == "administrator") {
+    $btnset_lang = $btnset_m[2] ?? 'fa';
+    $es_kb = emoji_sticker_editor_payload($btnset_m[1], $textbotlang, $btnset_lang);
+    if ($btnset_m[1] === 'emoji') {
+        Editmessagetext($from_id, $message_id, "😀 <b>ایموجی دکمه‌های منو</b>" . mainmenu_tab_note($btnset_lang) . "\n\n👀 این لیست دقیقاً همون چیزیه که کاربر توی منو می‌بینه (پیش‌نمایش زنده با همون رنگ و ایموجی‌ها)\nروی هر دکمه بزن و ایموجی جدیدش رو بفرست 👇\n📍 چپ/راست بودن ایموجی‌های معمولی رو با دکمه‌های ⬅️➡️ پایین لیست تعیین کن\n💎 ایموجی پریمیوم همیشه قبل از متن دکمه‌ست و جاش قابل تغییر نیست (این محدودیت خود تلگرامه، نه ربات)\n🚫 = دکمه پنهان شده", $es_kb, 'HTML');
+    } else {
+        Editmessagetext($from_id, $message_id, "✨ <b>استیکر پریمیوم دکمه‌ها</b>" . mainmenu_tab_note($btnset_lang) . "\n\nروی هر دکمه بزن و استیکرش رو بفرست 👇\nوقتی کاربر اون دکمه رو بزنه، اول این استیکر ارسال می‌شه\n✅ ست شده | ❌ ست نشده\n🚫 = دکمه پنهان شده\n\n📌 این‌ها فقط برای لحظه‌ی لمس دکمه‌های منوی اصلی‌ان؛ برای استیکر پیام‌های داخل مراحل خرید/سرویس‌های من/اکانت تست، از 🎨 شخصی‌سازی پیام‌های ربات استفاده کن.", $es_kb, 'HTML');
+    }
+} elseif (preg_match('/^btnset_open:layout(?::([a-z]{2}))?$/', $datain, $btnset_m) && $adminrulecheck['rule'] == "administrator") {
+    $btnset_lang = $btnset_m[1] ?? 'fa';
+    $ly_kb = layout_editor_payload($textbotlang, null, $btnset_lang);
+    Editmessagetext($from_id, $message_id, "📐 <b>چیدمان دکمه‌های منو</b>" . mainmenu_tab_note($btnset_lang) . "\n\n🔹 <b>جابه‌جایی:</b> روی یه دکمه بزن تا انتخاب بشه، بعد روی دکمه‌ی مقصد بزن\n🔹 <b>تک/دوتایی:</b> دکمه رو انتخاب کن و «🔲 تمام‌عرض / کنار هم» رو بزن\n🔹 رنگ و ایموجی و استیکر دکمه‌ها همراهشون منتقل می‌شن\n🚫 = دکمه پنهان شده", $ly_kb, 'HTML');
+} elseif (preg_match('/^btnset_open:rename(?::([a-z]{2}))?$/', $datain, $btnset_m) && $adminrulecheck['rule'] == "administrator") {
+    $btnset_lang = $btnset_m[1] ?? 'fa';
+    $rn_kb = rename_editor_payload($textbotlang, null, $btnset_lang);
+    Editmessagetext($from_id, $message_id, "✏️ <b>نام و نمایش دکمه‌های منو</b>" . mainmenu_tab_note($btnset_lang) . "\n\n🔹 روی یه دکمه بزن تا انتخاب بشه 🔵\n🔹 بعد «✏️ تغییر نام» برای عوض کردن اسمش، یا «👁 پنهان / نمایش» برای مخفی/آشکار کردنش رو بزن\n🚫 = دکمه‌ی پنهان", $rn_kb, 'HTML');
 } elseif ($datain == "btnset_open:langswitch" && $adminrulecheck['rule'] == "administrator") {
     $lsw_kb = lang_switch_settings_payload();
     Editmessagetext($from_id, $message_id, lang_switch_settings_caption($textbotlang), $lsw_kb, 'HTML');

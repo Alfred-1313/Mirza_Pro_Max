@@ -8987,6 +8987,171 @@ if (!function_exists('config_delivery_panel_payload')) {
         }
     }
 }
+if (!function_exists('mainmenu_layout_get')) {
+    // The main menu, per language.
+    //
+    // setting.keyboardmain is Persian's copy AND the home of two maps that
+    // belong to the message manager instead: text_stickers and text_reactions.
+    // Those two are already keyed by language INSIDE themselves
+    // (bt_media_lookup_own), so they must stay in the one shared blob - giving
+    // the whole blob a language would nest a language inside a language and
+    // orphan every sticker already set.
+    //
+    // So only the menu itself travels: 'keyboard' (the rows, which carry each
+    // button's colour, emoji, premium emoji, rename, hidden flag and tap
+    // sticker) plus the two whole-menu switches next to it. Every language but
+    // Persian keeps its copy in setting.keyboardmain_lang.
+    function mainmenu_menu_fields()
+    {
+        return ['keyboard', 'simple_emoji', 'emoji_pos_global'];
+    }
+    // What a language that has never been touched starts from: the menu the
+    // bot ships with, NOT Persian's. A language inheriting Persian's copy is
+    // the bug this whole split exists to fix.
+    function mainmenu_factory_layout()
+    {
+        return json_decode('{"keyboard":[[{"text":"text_sell"},{"text":"text_extend","hidden":true}],[{"text":"text_usertest"},{"text":"text_wheel_luck","hidden":true}],[{"text":"text_Purchased_services"},{"text":"accountwallet"}],[{"text":"addbalance"}],[{"text":"text_affiliates","hidden":true},{"text":"text_Tariff_list","hidden":true}],[{"text":"text_support","hidden":true},{"text":"text_help"}],[{"text":"text_change_language","hidden":true}]]}', true);
+    }
+    function mainmenu_lang_map($fresh = false)
+    {
+        static $cache = null;
+        if ($cache !== null && !$fresh) {
+            return $cache;
+        }
+        $setting = select("setting", "*", null, null, "select");
+        $m = json_decode((string) ($setting['keyboardmain_lang'] ?? ''), true);
+        return $cache = is_array($m) ? $m : [];
+    }
+    // Always returns a usable layout: ['keyboard' => rows, ...switches].
+    function mainmenu_layout_get($lang)
+    {
+        $lang = (string) ($lang ?: 'fa');
+        if ($lang === 'fa') {
+            $setting = select("setting", "*", null, null, "select");
+            $layout = json_decode((string) ($setting['keyboardmain'] ?? ''), true);
+        } else {
+            $map = mainmenu_lang_map();
+            $layout = $map[$lang] ?? null;
+        }
+        if (!is_array($layout) || !isset($layout['keyboard']) || !is_array($layout['keyboard'])) {
+            $layout = mainmenu_factory_layout();
+        }
+        $out = ['keyboard' => $layout['keyboard']];
+        foreach (['simple_emoji', 'emoji_pos_global'] as $sw) {
+            if (isset($layout[$sw])) {
+                $out[$sw] = $layout[$sw];
+            }
+        }
+        return $out;
+    }
+    // Writes only the menu fields back, leaving text_stickers/text_reactions in
+    // setting.keyboardmain exactly as they were.
+    function mainmenu_layout_save($lang, $layout)
+    {
+        $lang = (string) ($lang ?: 'fa');
+        if (!is_array($layout) || !isset($layout['keyboard']) || !is_array($layout['keyboard'])) {
+            return false;
+        }
+        if ($lang === 'fa') {
+            $setting = select("setting", "*", null, null, "select");
+            $blob = json_decode((string) ($setting['keyboardmain'] ?? ''), true);
+            if (!is_array($blob)) {
+                $blob = [];
+            }
+            foreach (mainmenu_menu_fields() as $f) {
+                if (array_key_exists($f, $layout)) {
+                    $blob[$f] = $layout[$f];
+                } else {
+                    unset($blob[$f]);
+                }
+            }
+            // keyboardmain carries the whole menu - never write back an empty one
+            if (empty($blob['keyboard'])) {
+                return false;
+            }
+            update("setting", "keyboardmain", json_encode($blob, JSON_UNESCAPED_UNICODE), null, null);
+            return true;
+        }
+        $map = mainmenu_lang_map(true);
+        $entry = [];
+        foreach (mainmenu_menu_fields() as $f) {
+            if (array_key_exists($f, $layout)) {
+                $entry[$f] = $layout[$f];
+            }
+        }
+        $map[$lang] = $entry;
+        update("setting", "keyboardmain_lang", json_encode($map, JSON_UNESCAPED_UNICODE), null, null);
+        mainmenu_lang_map(true);
+        return true;
+    }
+    // Says which tab the screen is on, in Persian, appended to its title. Every
+    // main-menu editor now edits ONE language, and an editor that does not say
+    // which is how an admin overwrites the wrong menu.
+    function mainmenu_tab_note($lang)
+    {
+        $name = lang_tab_texts('fa')['bottext']['langs'][$lang] ?? $lang;
+        return "\n🌐 زبان: <b>{$name}</b> — این تنظیمات فقط برای همین زبانه.";
+    }
+    // The language-tab row every main-menu editor screen carries, so all four
+    // switch tabs the same way. $cb is a sprintf template taking the code.
+    function mainmenu_lang_tabs($lang, $cb)
+    {
+        $row = [];
+        foreach (['fa', 'en', 'ru', 'zh', 'tk'] as $code) {
+            $row[] = [
+                'text' => ($lang === $code ? '✅' : '') . (lang_tab_texts('fa')['bottext']['langs'][$code] ?? $code),
+                'callback_data' => sprintf($cb, $code),
+                'style' => 'primary',
+            ];
+        }
+        return $row;
+    }
+    // One language's menu, ready to render: rows with unusable colours dropped,
+    // plus the two whole-menu switches. Both the copy keyboard.php builds at
+    // include time and the one build_main_keyboard() rebuilds after a language
+    // switch come from here, so they cannot disagree about a language.
+    function mainmenu_layout_render($lang)
+    {
+        $layout = mainmenu_layout_get($lang);
+        $rows = $layout['keyboard'];
+        $allowed = ['primary', 'success', 'danger'];
+        foreach ($rows as $r => $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            foreach ($row as $c => $btn) {
+                if (is_array($btn) && isset($btn['style']) && !in_array($btn['style'], $allowed, true)) {
+                    unset($rows[$r][$c]['style']);
+                }
+                if (is_array($btn) && isset($btn['style_reply']) && !in_array($btn['style_reply'], $allowed, true)) {
+                    unset($rows[$r][$c]['style_reply']);
+                }
+            }
+        }
+        return [
+            'rows' => $rows,
+            'simple' => !empty($layout['simple_emoji']),
+            'pos' => (isset($layout['emoji_pos_global']) && $layout['emoji_pos_global'] === 'left') ? 'left' : 'right',
+        ];
+    }
+    // Per-language check_active_btn(): is this button part of THIS language's
+    // menu at all? A button removed from the grid disables its feature, so the
+    // bot-wide version gated English customers on Persian's grid.
+    function mainmenu_btn_active($lang, $token)
+    {
+        foreach (mainmenu_layout_get($lang)['keyboard'] as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            foreach ($row as $btn) {
+                if (is_array($btn) && ($btn['text'] ?? null) === $token) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+}
 if (!function_exists('mainmenu_appearance_reset')) {
     // Clears every per-button appearance override the main-menu button screens
     // can set (colour for both keyboard modes, tap sticker, hidden flag,
@@ -9008,7 +9173,9 @@ if (!function_exists('mainmenu_appearance_reset')) {
     {
         return ['text_extend', 'text_wheel_luck', 'text_Tariff_list', 'text_support', 'text_change_language', 'text_affiliates'];
     }
-    function mainmenu_appearance_reset(array $parts = ['sticker', 'color', 'emoji', 'visibility'])
+    // $lang: resets ONE language's menu. A reset offered on a language tab has
+    // to stop there, or clearing English would wipe the Persian menu too.
+    function mainmenu_appearance_reset(array $parts = ['sticker', 'color', 'emoji', 'visibility'], $lang = 'fa')
     {
         $mmFields = [];
         if (in_array('sticker', $parts, true)) {
@@ -9030,8 +9197,7 @@ if (!function_exists('mainmenu_appearance_reset')) {
         if (empty($mmFields)) {
             return false;
         }
-        $setting = select("setting", "*", null, null, "select");
-        $layout = json_decode((string) ($setting['keyboardmain'] ?? ''), true);
+        $layout = mainmenu_layout_get($lang);
         // never write back a decode failure - that would wipe the whole menu
         if (!is_array($layout) || !isset($layout['keyboard']) || !is_array($layout['keyboard'])) {
             return false;
@@ -9065,8 +9231,7 @@ if (!function_exists('mainmenu_appearance_reset')) {
         if (in_array('emoji', $parts, true)) {
             unset($layout['simple_emoji'], $layout['emoji_pos_global']);
         }
-        update("setting", "keyboardmain", json_encode($layout, JSON_UNESCAPED_UNICODE), null, null);
-        return true;
+        return mainmenu_layout_save($lang, $layout);
     }
 }
 if (!function_exists('bt_reset_sections')) {
@@ -9131,8 +9296,12 @@ if (!function_exists('bt_reset_counts')) {
                 $c['warnings']++;
             }
         }
-        if (is_array($layout) && isset($layout['keyboard']) && is_array($layout['keyboard'])) {
-            foreach ($layout['keyboard'] as $row) {
+        // the message stickers above come from the shared blob, but the MENU is
+        // this language's own - counting Persian's here would promise a reset
+        // that never touches the tab the admin is looking at
+        $mmLayout = mainmenu_layout_get($lang);
+        if (is_array($mmLayout) && isset($mmLayout['keyboard']) && is_array($mmLayout['keyboard'])) {
+            foreach ($mmLayout['keyboard'] as $row) {
                 if (!is_array($row)) {
                     continue;
                 }
@@ -9159,7 +9328,7 @@ if (!function_exists('bt_reset_counts')) {
                     }
                 }
             }
-            if (isset($layout['simple_emoji']) || isset($layout['emoji_pos_global'])) {
+            if (isset($mmLayout['simple_emoji']) || isset($mmLayout['emoji_pos_global'])) {
                 $c['mm_emoji']++;
             }
         }
@@ -9255,7 +9424,7 @@ if (!function_exists('bt_reset_apply_mask')) {
             $mmParts[] = 'visibility';
         }
         if (!empty($mmParts)) {
-            mainmenu_appearance_reset($mmParts);
+            mainmenu_appearance_reset($mmParts, $lang);
         }
         foreach ($sections as $name => $s) {
             if (($mask & $s['bit']) && $before[$name] > 0) {
@@ -9268,11 +9437,10 @@ if (!function_exists('bt_reset_apply_mask')) {
 if (!function_exists('mainmenu_sticker_reset_all')) {
     // the ✨ استیکر پریمیوم دکمه‌ها screen's own reset - stickers only, so it
     // stays scoped exactly like the emoji screen's existing reset button
-    function mainmenu_sticker_reset_all()
+    function mainmenu_sticker_reset_all($lang = 'fa')
     {
-        $setting = select("setting", "*", null, null, "select");
-        $layout = json_decode((string) ($setting['keyboardmain'] ?? ''), true);
-        if (!is_array($layout) || !isset($layout['keyboard']) || !is_array($layout['keyboard'])) {
+        $layout = mainmenu_layout_get($lang);
+        if (!isset($layout['keyboard']) || !is_array($layout['keyboard'])) {
             return false;
         }
         foreach ($layout['keyboard'] as $mm_r => $mm_row) {
@@ -9285,8 +9453,7 @@ if (!function_exists('mainmenu_sticker_reset_all')) {
                 }
             }
         }
-        update("setting", "keyboardmain", json_encode($layout, JSON_UNESCAPED_UNICODE), null, null);
-        return true;
+        return mainmenu_layout_save($lang, $layout);
     }
 }
 if (!function_exists('strip_leading_emoji')) {
@@ -15016,9 +15183,13 @@ function isBase64($string)
 function sendMessageService($panel_info, $config, $sub_link, $username_service, $reply_markup, $caption, $invoice_id, $user_id = null, $image = 'images.jpg', $kind = 'purchase')
 {
     global $setting, $from_id, $textbotlang;
-    if (!check_active_btn($setting['keyboardmain'], "text_help"))
-        $reply_markup = null;
     $user_id = $user_id == null ? $from_id : $user_id;
+    // the RECIPIENT's menu decides whether the tutorial button is offered, and
+    // it is resolved after $user_id for that reason - the menu is per language
+    // now, so the sender's own copy would be the wrong one to ask
+    $sms_row = select("user", "lang", "id", $user_id, "select");
+    if (!mainmenu_btn_active($sms_row['lang'] ?? 'fa', "text_help"))
+        $reply_markup = null;
     $configCount = is_array($config) ? count($config) : 0;
     if ($panel_info['type'] == "WGDashboard") {
         // WireGuard delivers its .conf file rather than a QR - unchanged

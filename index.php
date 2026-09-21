@@ -532,7 +532,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     if ($verify_resume === 'verifyusertest') {
         // the test-account entry is further down this same elseif chain, so this
         // request can't reach it - its next screen, behind the same checks
-        if (!check_active_btn($setting['keyboardmain'], "text_usertest")) {
+        if (!mainmenu_btn_active($user['lang'] ?? 'fa', "text_usertest")) {
             sendmessage($from_id, $textbotlang['users']['usertest']['unavailable'], null, 'HTML');
             return;
         }
@@ -3385,7 +3385,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $price = "0";
     $stmt->execute([$from_id, $nameloc['username'], $value, $type, $dateacc, $price]);
 } elseif ($text == $textbotlang['textbot']['userTest'] || $datain == "usertestbtn" || $text == "usertest") {
-    if (!check_active_btn($setting['keyboardmain'], "text_usertest")) {
+    if (!mainmenu_btn_active($user['lang'] ?? 'fa', "text_usertest")) {
         sendmessage($from_id, $textbotlang['users']['usertest']['unavailable'], null, 'HTML');
         return;
     }
@@ -3437,7 +3437,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     if ($datain == "usedefaultname") {
         $text = 'user' . substr(bin2hex(random_bytes(4)), 0, 8);
     }
-    if (!check_active_btn($setting['keyboardmain'], "text_usertest")) {
+    if (!mainmenu_btn_active($user['lang'] ?? 'fa', "text_usertest")) {
         sendmessage($from_id, $textbotlang['users']['usertest']['unavailable'], null, 'HTML');
         return;
     }
@@ -3649,7 +3649,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         ]);
     }
 } elseif ($text == $textbotlang['textbot']['help'] || $datain == "helpbtn" || $datain == "helpbtns" || $text == "/help" || $text == "help") {
-    if (!check_active_btn($setting['keyboardmain'], "text_help") || !help_section_on()) {
+    if (!mainmenu_btn_active($user['lang'] ?? 'fa', "text_help") || !help_section_on()) {
         sendmessage($from_id, $textbotlang['users']['help']['disablehelp'], null, 'HTML');
         return;
     }
@@ -3781,7 +3781,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         help_send_content($from_id, $help_resolved, $backinfoss);
     }
 } elseif ($text == $textbotlang['textbot']['support'] || $datain == "supportbtns" || $text == "/support") {
-    if (!check_active_btn($setting['keyboardmain'], "text_support")) {
+    if (!mainmenu_btn_active($user['lang'] ?? 'fa', "text_support")) {
         sendmessage($from_id, $textbotlang['users']['buttonDisabled'], null, 'HTML');
         return;
     }
@@ -3961,7 +3961,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     }
     if ($user['number'] == "none" && feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone")
         return;
-    if (!check_active_btn($setting['keyboardmain'], "text_sell")) {
+    if (!mainmenu_btn_active($user['lang'] ?? 'fa', "text_sell")) {
         sendmessage($from_id, $textbotlang['users']['buttonDisabled'], null, 'HTML');
         return;
     }
@@ -3976,7 +3976,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     step("statusnamecustom", $from_id);
     return;
 } elseif ($text == $textbotlang['textbot']['sell'] || $datain == "buy" || $datain == "buybacktow" || $datain == "buyback" || $datain == "buyfresh" || $text == "/buy" || $text == "buy" || $user['step'] == "statusnamecustom" || $verify_resume === 'verifybuy') {
-    if (!check_active_btn($setting['keyboardmain'], "text_sell")) {
+    if (!mainmenu_btn_active($user['lang'] ?? 'fa', "text_sell")) {
         sendmessage($from_id, $textbotlang['users']['buttonDisabled'], null, 'HTML');
         return;
     }
@@ -6127,7 +6127,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     deletemessage($from_id, $message_id);
     sendmessage($from_id, $textbotlang['users']['back'], $keyboard, 'HTML');
 } elseif ($text == $textbotlang['textbot']['affiliates'] || $datain == "affiliatesbtn") {
-    if (!check_active_btn($setting['keyboardmain'], "text_affiliates")) {
+    if (!mainmenu_btn_active($user['lang'] ?? 'fa', "text_affiliates")) {
         sendmessage($from_id, $textbotlang['users']['buttonDisabled'], null, 'HTML');
         return;
     }
@@ -6510,7 +6510,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
 } elseif ($text == "/privacy") {
     sendmessage($from_id, $textbotlang['textbot']['rules'], null, 'HTML');
 } elseif ($text == $textbotlang['textbot']['wheelLuck'] || $datain == "wheel_luck" || $text == "/gift") {
-    if (!check_active_btn($setting['keyboardmain'], "text_wheel_luck")) {
+    if (!mainmenu_btn_active($user['lang'] ?? 'fa', "text_wheel_luck")) {
         sendmessage($from_id, $textbotlang['users']['buttonDisabled'], null, 'HTML');
         return;
     }
