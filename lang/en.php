@@ -360,6 +360,9 @@ Current language: <b>{lang}</b>',
 ✅ Valid usernames: ali12 | mahdi | ws1_ksdf
 ❌ Invalid usernames: ali_ | tele@ | _mahdi | محسن',
                 'text_start' => 'Hello, welcome',
+                'unknownMsg' => '❓ I didn\'t understand that.
+
+Please use the menu buttons below, or send /start.',
                 'Balance' => [
                         'Failed' => '⭕️ Your payment has not been confirmed',
                         'addBalanceUser' => '⭕️ Manually add balance',

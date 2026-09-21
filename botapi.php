@@ -4,7 +4,18 @@ function telegram($method, $datas = [], $token = null)
 {
     global $APIKEY;
 
-    $GLOBALS['bt_any_reply'] = true;
+    // "did this update produce a reply?" - the unknown-message handler in
+    // index.php asks this to decide whether the bot owes the user an answer.
+    //
+    // Telegram's getX methods read, they do not reply, so they must not count.
+    // channel() calls getChatMember on EVERY message for as long as a user's
+    // joinchannel column is not "active" - which only one admin action ever
+    // sets - so on any bot with a forced-join channel this flag was already
+    // true by the time the unknown-message branch was reached, and that branch
+    // could never fire.
+    if (stripos($method, 'get') !== 0) {
+        $GLOBALS['bt_any_reply'] = true;
+    }
     $token = $token === null ? $APIKEY : $token;
     $url = "https://api.telegram.org/bot" . $token . "/" . $method;
 

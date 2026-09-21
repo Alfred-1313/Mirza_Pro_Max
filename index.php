@@ -7114,28 +7114,32 @@ if (empty($GLOBALS['bt_any_reply']) && !empty($text) && $datain == '') {
         topup_notnumber_notice($from_id, $user['lang'] ?? 'fa', $unk_tp[1], $textbotlang, (int) ($update['message']['message_id'] ?? 0));
         return;
     }
+    // Text, sticker and reaction are three independent rows on this item's own
+    // screen, so all three are sent. They used to be either/or: any text at all
+    // meant the sticker and the reaction never fired, which made two of the
+    // three settings unreachable the moment the third was filled in - and with
+    // a text now shipped by default, they would never have fired at all.
+    $unk_lang = (is_array($user) && !empty($user['lang'])) ? $user['lang'] : 'fa';
+    $unk_setting = select("setting", "*", null, null, "select");
+    $unk_layout = json_decode((string) ($unk_setting['keyboardmain'] ?? ''), true);
+    $unk_re = bt_media_lookup(is_array($unk_layout['text_reactions'] ?? null) ? $unk_layout['text_reactions'] : [], 'users.unknownMsg', $unk_lang);
+    $unk_st = bt_media_lookup(is_array($unk_layout['text_stickers'] ?? null) ? $unk_layout['text_stickers'] : [], 'users.unknownMsg', $unk_lang);
+    if ($unk_re !== '' && !empty($update['message']['message_id'])) {
+        telegram('setMessageReaction', [
+            'chat_id' => $from_id,
+            'message_id' => $update['message']['message_id'],
+            'reaction' => json_encode([['type' => 'emoji', 'emoji' => $unk_re]]),
+        ]);
+    }
+    if ($unk_st !== '') {
+        telegram('sendSticker', [
+            'chat_id' => $from_id,
+            'sticker' => $unk_st,
+        ]);
+    }
     $unk_text = bottext_resolve_key('users.unknownMsg');
     if ($unk_text !== '') {
         sendmessage($from_id, $unk_text, null, 'HTML');
-    } else {
-        $unk_setting = select("setting", "*", null, null, "select");
-        $unk_layout = json_decode((string) ($unk_setting['keyboardmain'] ?? ''), true);
-        $unk_lang = (is_array($user) && !empty($user['lang'])) ? $user['lang'] : 'fa';
-        $unk_re = bt_media_lookup(is_array($unk_layout['text_reactions'] ?? null) ? $unk_layout['text_reactions'] : [], 'users.unknownMsg', $unk_lang);
-        $unk_st = bt_media_lookup(is_array($unk_layout['text_stickers'] ?? null) ? $unk_layout['text_stickers'] : [], 'users.unknownMsg', $unk_lang);
-        if ($unk_re !== '' && !empty($update['message']['message_id'])) {
-            telegram('setMessageReaction', [
-                'chat_id' => $from_id,
-                'message_id' => $update['message']['message_id'],
-                'reaction' => json_encode([['type' => 'emoji', 'emoji' => $unk_re]]),
-            ]);
-        }
-        if ($unk_st !== '') {
-            telegram('sendSticker', [
-                'chat_id' => $from_id,
-                'sticker' => $unk_st,
-            ]);
-        }
     }
 }
 
