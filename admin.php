@@ -12616,7 +12616,11 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     sendmessage($from_id, $textbotlang['Admin']['manageadmin']['listAndDelete'], $keyboardadmin, 'HTML');
 } elseif ($text == $textbotlang['keyboard']['generalSettings'] && $adminrulecheck['rule'] == "administrator") {
     sendmessage($from_id, $textbotlang['users']['selectoption'], $setting_panel, 'HTML');
-} elseif ($text == $textbotlang['keyboard']['updateBotBtn'] && $adminrulecheck['rule'] == "administrator") {
+} elseif (($text == $textbotlang['keyboard']['updateBotBtn'] || $text == "/update") && $adminrulecheck['rule'] == "administrator") {
+    // /update opens the same screen the 🔄 آپدیت ربات button does - same
+    // caption, same keyboard, same two-tap confirm before anything runs. It is
+    // a way in, not a shortcut past the confirmation, and it is behind the same
+    // administrator check: this restarts the live bot.
     $bu_lang = $user['lang'] ?? 'fa';
     sendmessage($from_id, bot_update_caption($bu_lang, $textbotlang), bot_update_keyboard($bu_lang, $textbotlang), 'HTML');
 } elseif ($datain == "botupdatego" && $adminrulecheck['rule'] == "administrator") {
