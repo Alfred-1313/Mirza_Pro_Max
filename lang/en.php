@@ -3737,17 +3737,17 @@ Connection link:
 🗜 Service volume:  {volume} gigabytes
 
 🧑‍🦯 You can get the connection method by pressing the button below and selecting your operating system',
-                'afterText' => '✅ Service was created successfully
+                'afterText' => '<b>✅ Service was created successfully</b>
 
 👤 Service username : {username}
 🌿 Service name:  {name_service}
 ‏🇺🇳 Location: {location}
-⏳ Duration: {day}  hours
-🗜 Service volume:  {volume} megabytes
+⏳ Duration: {day} hours / {minute} min
+🗜 Service volume:  {volume} MB / {volume_gb} GB
 
-Connection link:
-{config}
-🧑‍🦯 You can get the connection method by pressing the button below and selecting your operating system',
+<blockquote><b>Connection link:</b></blockquote>
+
+{config}',
                 'agentPanel' => '👨‍💻 Agency panel',
                 'agentRequestDesc' => '📌 Send your description to submit an agency request.',
                 'aqayePardakht' => '🔵 Aghaye Pardakht gateway',
