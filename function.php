@@ -15042,6 +15042,24 @@ if (!function_exists('bottext_extras_key_hint')) {
         return $k;
     }
 }
+if (!function_exists('products_available_count')) {
+    // How many products this customer could actually be sold: their agent tier
+    // AND their language, the same two filters every product query downstream
+    // already applies.
+    //
+    // Counting the product table as a whole is not the same question - a shop
+    // with Persian products and none for English passes that count and then
+    // walks its English customers into an empty list.
+    function products_available_count($lang, $agent)
+    {
+        global $pdo;
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM product WHERE agent = :agent AND (FIND_IN_SET(:userlang, lang) OR lang = 'all' OR lang IS NULL OR lang = '')");
+        $stmt->bindValue(':agent', (string) $agent);
+        $stmt->bindValue(':userlang', (string) ($lang ?: 'fa'), PDO::PARAM_STR);
+        $stmt->execute();
+        return (int) $stmt->fetchColumn();
+    }
+}
 if (!function_exists('bt_item_enabled')) {
     // Per-language on/off for the message items that have a switch.
     //

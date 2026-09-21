@@ -1826,7 +1826,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     if ($product == 0) {
         $statuscustomvolume = json_decode($marzban_list_get['customvolume'], true)[$user['agent']] ?? "0";
         if ($statuscustomvolume != "1" || $marzban_list_get['type'] == "Manualsale") {
-            sendmessage($from_id, $textbotlang['users']['sell']['nullProduct'], $backuser, 'html');
+            sendmessage($from_id, $textbotlang['users']['sell']['nullProduct'], null, 'HTML');
             step('home', $from_id);
             return;
         }
@@ -4050,11 +4050,11 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
             $mainvolume = $mainvolume[$user['agent']];
             $maxvolume = json_decode($marzban_list_get['maxvolume'], true);
             $maxvolume = $maxvolume[$user['agent']];
-            $nullproduct = select("product", "*", null, null, "count");
+            $nullproduct = products_available_count($user['lang'] ?? 'fa', $user['agent']);
             if ($nullproduct == 0) {
                 $statuscustomvolume = json_decode($marzban_list_get['customvolume'], true)[$user['agent']] ?? "0";
                 if ($statuscustomvolume != "1" || $marzban_list_get['type'] == "Manualsale") {
-                    sendmessage($from_id, $textbotlang['users']['sell']['nullProduct'], $backuser, 'html');
+                    sendmessage($from_id, $textbotlang['users']['sell']['nullProduct'], null, 'HTML');
                     step('home', $from_id);
                     return;
                 }
@@ -4094,7 +4094,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
                 sell_screen($from_id, $datain == "buy" ? $message_id : 0, $textproduct, KeyboardProduct($marzban_list_get['name_panel'], $query, $user['pricediscount'], $datakeyboard, $statuscustom, $backuser));
             }
         } else {
-            $nullproduct = select("product", "*", null, null, "count");
+            $nullproduct = products_available_count($user['lang'] ?? 'fa', $user['agent']);
             if ($nullproduct == 0) {
                 sendmessage($from_id, $textbotlang['users']['sell']['nullProduct'], null, 'HTML');
                 return;
@@ -4121,6 +4121,24 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     if ($user['step'] == "statusnamecustom") {
         savedata('clear', "nameconfig", $text);
         step("home", $from_id);
+    }
+    // Nothing this customer can be sold: say so here, at step 1, instead of
+    // opening a panel list that leads to an empty product screen two taps
+    // later. Asked per language, so a shop that has set products up for one
+    // language and not the other tells the truth to both.
+    //
+    // No keyboard either way: on a callback the panel caption and its buttons
+    // are edited into this message in place, and on a fresh entry the message
+    // is sent on its own - neither touches the reply keyboard, so the customer
+    // keeps the menu they already had rather than being handed a back button.
+    if (products_available_count($user['lang'] ?? 'fa', $user['agent']) === 0) {
+        $np_text = $textbotlang['users']['sell']['nullProduct'];
+        if ($message_id && ($datain == "buy" || $datain == "buybacktow" || $datain == "buyback")) {
+            Editmessagetext($from_id, $message_id, $np_text, null, 'HTML');
+        } else {
+            sendmessage($from_id, $np_text, null, 'HTML');
+        }
+        return;
     }
     // step 1 of the purchase flow - sell_screen() edits in place when the panel
     // caption has no sticker, and replaces the screen when it has one
@@ -4159,11 +4177,11 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     } else {
         savedata('clear', "name_panel", $location);
     }
-    $nullproduct = select("product", "*", null, null, "count");
+    $nullproduct = products_available_count($user['lang'] ?? 'fa', $user['agent']);
     if ($nullproduct == 0) {
         $statuscustomvolume = json_decode($marzban_list_get['customvolume'], true)[$user['agent']] ?? "0";
         if ($statuscustomvolume != "1" || $marzban_list_get['type'] == "Manualsale") {
-            sendmessage($from_id, $textbotlang['users']['sell']['nullProduct'], $backuser, 'html');
+            sendmessage($from_id, $textbotlang['users']['sell']['nullProduct'], null, 'HTML');
             step('home', $from_id);
             return;
         }
@@ -4202,7 +4220,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
             sell_screen($from_id, $message_id, $textbotlang['users']['sell']['serviceSelect'], KeyboardProduct($marzban_list_get['name_panel'], $query, $user['pricediscount'], $datakeyboard, $statuscustom, $back));
         }
     } else {
-        $nullproduct = select("product", "*", null, null, "count");
+        $nullproduct = products_available_count($user['lang'] ?? 'fa', $user['agent']);
         if ($nullproduct == 0) {
             sendmessage($from_id, $textbotlang['users']['sell']['nullProduct'], null, 'HTML');
             return;
@@ -4789,7 +4807,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
 } elseif (preg_match('/^locationom_(.*)/', $datain, $dataget)) {
     $location = select("marzban_panel", "*", "code_panel", $dataget[1], "select")['name_panel'];
     $marzban_list_get = select("marzban_panel", "*", "code_panel", $dataget[1], "select");
-    $nullproduct = select("product", "*", null, null, "count");
+    $nullproduct = products_available_count($user['lang'] ?? 'fa', $user['agent']);
     if ($nullproduct == 0) {
         sendmessage($from_id, $textbotlang['users']['sell']['nullProduct'], null, 'HTML');
         return;
