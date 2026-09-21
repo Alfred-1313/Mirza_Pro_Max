@@ -1074,6 +1074,7 @@ Support account : @%s',
                         'stockFinishedBuyAnother' => '❌ This service\'s volume has run out. Please purchase another service.',
                         'selectCategoryShort' => '📌 Select a category',
                         'selectCategory' => '📌 Select your category!',
+                        'noPaymentMethod' => '⛔️ Top-up is temporarily unavailable.',
                         'backToPanelListBtn' => '🔙 Back to the panel list',
                         'backToPreviousBtn' => '🔙 Back to the category list',
                         'selectUsernamePrompt' => 'Would you like to choose the service name yourself, or use the default one?
@@ -1245,6 +1246,13 @@ Thank you for using our services.',
                         'confirmEnableConfig' => '📌 By confirming the option below, your config will be turned on and you will be able to connect to it.
 ⚠️ If you want the config to be deactivated again, you must click the <u>❌ Turn off account</u> button from the service management section',
                         'getConfigHint' => '📌 To get the config, click the Get config button',
+                        'getConfigHintBuy' => '📌 To get the config, click the Get config button
+
+⏳ Service duration: {time} hours
+🗜 Service volume: {volume} MB',
+                        'linksubCaption' => '🔗 Subscription link
+
+<code>{link}</code>',
                         'connectionInfo' => '
 📶 Last connection time  : %s
 🔄 Last subscription link update time  : %s
@@ -3727,6 +3735,8 @@ Follow the steps above, then send the address below:
                 'accountWallet' => '🏦 Wallet + Top-up',
                 'addBalance' => '💰 Increase balance',
                 'affiliates' => '👥 Referral collection',
+                'getConfigHintBuy' => '📌 To get the config, click the Get config button',
+                'getConfigHintTest' => '📌 To get the config, click the Get config button',
                 'afterPay' => '✅ Service was created successfully
 
 👤 Service username : {username}

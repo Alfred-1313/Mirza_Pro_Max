@@ -14008,7 +14008,14 @@ if (!function_exists('configdisplay_element_override')) {
 if (!function_exists('configdisplay_element_current')) {
     function configdisplay_element_current($lang, $idx, $textbotlang, $kind = 'usertest')
     {
-        $defs = configdisplay_element_defs($textbotlang);
+        // The default label is a button the CUSTOMER reads, so it comes from
+        // $lang's own file - not from $textbotlang, which is whichever surface
+        // called this. Both callers were passing the wrong one: keyboard.php
+        // hands over the panel's Persian copy, so an English customer got
+        // Persian config buttons wherever no override existed, and the editor
+        // in admin.php did the same in reverse, previewing Persian on the
+        // English tab. $textbotlang stays in the signature for its callers.
+        $defs = configdisplay_element_defs(lang_tab_texts($lang));
         $d = $defs[$idx] ?? $defs[0];
         $ov = configdisplay_element_override($lang, $idx, $kind);
         $text = (isset($ov['text']) && $ov['text'] !== '') ? $ov['text'] : $d['text'];
