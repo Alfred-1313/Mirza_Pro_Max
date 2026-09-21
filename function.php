@@ -9101,6 +9101,37 @@ if (!function_exists('mainmenu_layout_get')) {
         mainmenu_lang_map(true);
         return true;
     }
+    // One main-menu button as the customer will actually see it: the rename
+    // applied, then the emoji in whichever of its three forms is set, then the
+    // whole-menu switches. Returns [label, iconCustomEmojiId] - the caller sets
+    // icon_custom_emoji_id only when the second value isn't ''.
+    //
+    // Shared so the editors that preview the menu cannot drift from each other
+    // about what a button looks like. $simple/$pos come from
+    // mainmenu_layout_render() for the same language as $btn.
+    function mainmenu_btn_preview($btn, $name, $simple = false, $pos = 'right')
+    {
+        if (isset($btn['custom_text']) && $btn['custom_text'] !== '') {
+            $name = $btn['custom_text'];
+        }
+        if (isset($btn['icon_emoji']) && $btn['icon_emoji'] !== '') {
+            // a premium emoji is an icon beside the text, never inside it, so
+            // the text loses whatever emoji it shipped with
+            return [strip_leading_emoji($name), $btn['icon_emoji']];
+        }
+        if (isset($btn['emoji']) && $btn['emoji'] !== '') {
+            $bare = strip_leading_emoji($name);
+            return [($pos === 'left') ? ($bare . ' ' . $btn['emoji']) : ($btn['emoji'] . ' ' . $bare), ''];
+        }
+        if ($simple) {
+            return [strip_leading_emoji($name), ''];
+        }
+        list($defEmoji, $defRest) = split_leading_emoji($name);
+        if ($defEmoji !== '') {
+            return [($pos === 'left') ? ($defRest . ' ' . $defEmoji) : ($defEmoji . ' ' . $defRest), ''];
+        }
+        return [$name, ''];
+    }
     // Says which tab the screen is on, in Persian, appended to its title. Every
     // main-menu editor now edits ONE language, and an editor that does not say
     // which is how an admin overwrites the wrong menu.

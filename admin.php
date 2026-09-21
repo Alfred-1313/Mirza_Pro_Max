@@ -28,38 +28,40 @@ $miniAppInstructionText = sprintf($textbotlang['Admin']['webpanel']['miniAppHelp
 // ⚙️ تنظیمات عمومی (the old destination, hardcoded from when this hub used
 // to live there)
 if (!function_exists('btnset_hub_payload')) {
-    function btnset_hub_payload($textbotlang)
+    // $lang is the tab chosen back on 🎨 شخصی‌سازی پیام‌های ربات. Every screen
+    // in this tree passes it on, so none of them has to ask again.
+    function btnset_hub_payload($textbotlang, $lang = 'fa')
     {
         $kb = ['inline_keyboard' => [
-            [['text' => '🎨 رنگ‌بندی دکمه‌ها', 'callback_data' => 'btnset_open:color', 'style' => 'primary']],
-            [['text' => '🎭 ایموجی و استیکر دکمه‌ها', 'callback_data' => 'btnset_open:emoji', 'style' => 'primary']],
-            [['text' => '📐 چیدمان دکمه‌ها', 'callback_data' => 'btnset_open:layout', 'style' => 'primary']],
-            [['text' => '✏️ نام و نمایش دکمه‌ها', 'callback_data' => 'btnset_open:rename', 'style' => 'primary']],
-            [['text' => $textbotlang['bottext']['backToListLabel'], 'callback_data' => 'btact|back|fa', 'style' => 'danger']],
+            [['text' => '🎨 رنگ‌بندی دکمه‌ها', 'callback_data' => "btnset_open:color:{$lang}", 'style' => 'primary']],
+            [['text' => '🎭 ایموجی و استیکر دکمه‌ها', 'callback_data' => "btnset_open:emoji:{$lang}", 'style' => 'primary']],
+            [['text' => '📐 چیدمان دکمه‌ها', 'callback_data' => "btnset_open:layout:{$lang}", 'style' => 'primary']],
+            [['text' => '✏️ نام و نمایش دکمه‌ها', 'callback_data' => "btnset_open:rename:{$lang}", 'style' => 'primary']],
+            [['text' => $textbotlang['bottext']['backToListLabel'], 'callback_data' => "btact|back|{$lang}", 'style' => 'danger']],
             [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']],
         ]];
         return json_encode($kb);
     }
 }
 if (!function_exists('btnset_color_hub_payload')) {
-    function btnset_color_hub_payload($textbotlang)
+    function btnset_color_hub_payload($textbotlang, $lang = 'fa')
     {
         $kb = ['inline_keyboard' => [
-            [['text' => '🎛 رنگ دکمه‌های شیشه‌ای', 'callback_data' => 'btnset_color:i', 'style' => 'primary']],
-            [['text' => '⌨️ رنگ دکمه‌های کیبوردی', 'callback_data' => 'btnset_color:r', 'style' => 'primary']],
-            [['text' => '🔙 بازگشت به منوی قبلی', 'callback_data' => 'bt_btnsettings', 'style' => 'danger']],
+            [['text' => '🎛 رنگ دکمه‌های شیشه‌ای', 'callback_data' => "btnset_color:i:{$lang}", 'style' => 'primary']],
+            [['text' => '⌨️ رنگ دکمه‌های کیبوردی', 'callback_data' => "btnset_color:r:{$lang}", 'style' => 'primary']],
+            [['text' => '🔙 بازگشت به منوی قبلی', 'callback_data' => "bt_btnsettings|{$lang}", 'style' => 'danger']],
             [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']],
         ]];
         return json_encode($kb);
     }
 }
 if (!function_exists('btnset_emoji_hub_payload')) {
-    function btnset_emoji_hub_payload($textbotlang)
+    function btnset_emoji_hub_payload($textbotlang, $lang = 'fa')
     {
         $kb = ['inline_keyboard' => [
-            [['text' => '😀 ایموجی دکمه‌ها', 'callback_data' => 'btnset_emoji:emoji', 'style' => 'primary']],
-            [['text' => '✨ استیکر پریمیوم دکمه‌ها', 'callback_data' => 'btnset_emoji:sticker', 'style' => 'primary']],
-            [['text' => '🔙 بازگشت به منوی قبلی', 'callback_data' => 'bt_btnsettings', 'style' => 'danger']],
+            [['text' => '😀 ایموجی دکمه‌ها', 'callback_data' => "btnset_emoji:emoji:{$lang}", 'style' => 'primary']],
+            [['text' => '✨ استیکر پریمیوم دکمه‌ها', 'callback_data' => "btnset_emoji:sticker:{$lang}", 'style' => 'primary']],
+            [['text' => '🔙 بازگشت به منوی قبلی', 'callback_data' => "bt_btnsettings|{$lang}", 'style' => 'danger']],
             [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']],
         ]];
         return json_encode($kb);
@@ -79,7 +81,6 @@ if (!function_exists('color_editor_payload')) {
         $styleEmoji = ['' => '⚪', 'primary' => '🔵', 'success' => '🟢', 'danger' => '🔴'];
         $field = ($mode == 'r') ? 'style_reply' : 'style';
         $kb = ['inline_keyboard' => []];
-        $kb['inline_keyboard'][] = mainmenu_lang_tabs($lang, "btnset_color:{$mode}:%s");
         foreach ($rows as $r => $row) {
             if (!is_array($row)) {
                 continue;
@@ -107,7 +108,7 @@ if (!function_exists('color_editor_payload')) {
                 $kb['inline_keyboard'][] = $kbRow;
             }
         }
-        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبلی', 'callback_data' => 'btnset_open:color', 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبلی', 'callback_data' => "btnset_open:color:{$lang}", 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']];
         return json_encode($kb);
     }
@@ -920,35 +921,20 @@ if (!function_exists('emoji_sticker_editor_payload')) {
                     continue;
                 }
                 if ($kind == 'emoji') {
-                    // live preview: render exactly like the user's menu
+                    // live preview: render exactly like the user's menu, through
+                    // the same helper ✏️ نام و نمایش uses, so the two screens
+                    // cannot disagree about what a button looks like
                     $name = $btn['text'];
                     if (isset($labels[$name])) {
                         $name = $labels[$name];
                     }
-                    if (isset($btn['custom_text']) && $btn['custom_text'] !== '') {
-                        $name = $btn['custom_text'];
-                    }
+                    list($es_label, $es_icon) = mainmenu_btn_preview($btn, $name, $es_simple_mode, $es_pos_global);
                     $kbBtn = [
-                        'text' => $name,
+                        'text' => $es_label,
                         'callback_data' => "{$prefix}-{$lang}-{$r}-{$c}"
                     ];
-                    if (isset($btn['icon_emoji']) && $btn['icon_emoji'] !== '') {
-                        $kbBtn['text'] = strip_leading_emoji($name);
-                        $kbBtn['icon_custom_emoji_id'] = $btn['icon_emoji'];
-                    } elseif (isset($btn['emoji']) && $btn['emoji'] !== '') {
-                        if ($es_pos_global === 'left') {
-                            $kbBtn['text'] = strip_leading_emoji($name) . ' ' . $btn['emoji'];
-                        } else {
-                            $kbBtn['text'] = $btn['emoji'] . ' ' . strip_leading_emoji($name);
-                        }
-                    } elseif ($es_simple_mode) {
-                        $kbBtn['text'] = strip_leading_emoji($name);
-                    } else {
-                        // reposition the default text emoji per global setting (live preview)
-                        list($es_def_emoji, $es_def_rest) = split_leading_emoji($name);
-                        if ($es_def_emoji !== '') {
-                            $kbBtn['text'] = ($es_pos_global === 'left') ? $es_def_rest . ' ' . $es_def_emoji : $es_def_emoji . ' ' . $es_def_rest;
-                        }
+                    if ($es_icon !== '') {
+                        $kbBtn['icon_custom_emoji_id'] = $es_icon;
                     }
                     if (!empty($btn['hidden'])) {
                         $kbBtn['text'] = '🚫 ' . $kbBtn['text'];
@@ -984,8 +970,7 @@ if (!function_exists('emoji_sticker_editor_payload')) {
         } else {
             $kb['inline_keyboard'][] = [['text' => '🔄 ریست همه استیکرهای دکمه‌ها', 'callback_data' => "stickerresetall-{$lang}", 'style' => 'danger']];
         }
-        $kb['inline_keyboard'][] = mainmenu_lang_tabs($lang, "btnset_emoji:{$kind}:%s");
-        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبلی', 'callback_data' => 'btnset_open:emoji', 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبلی', 'callback_data' => "btnset_open:emoji:{$lang}", 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']];
         return json_encode($kb);
     }
@@ -1040,8 +1025,7 @@ if (!function_exists('layout_editor_payload')) {
             ];
         }
         $kb['inline_keyboard'][] = [['text' => '🔄 ریست چیدمان به پیش‌فرض', 'callback_data' => "layoutreset-{$lang}"]];
-        $kb['inline_keyboard'][] = mainmenu_lang_tabs($lang, "btnset_open:layout:%s");
-        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبلی', 'callback_data' => 'bt_btnsettings', 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبلی', 'callback_data' => "bt_btnsettings|{$lang}", 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']];
         return json_encode($kb);
     }
@@ -1196,7 +1180,10 @@ if (!function_exists('rename_editor_payload')) {
     function rename_editor_payload($textbotlang, $selected = null, $lang = 'fa')
     {
         $setting = select("setting", "*", null, null, "select");
-        $rows = mainmenu_layout_get($lang)['keyboard'];
+        // the same render the customer gets, so this screen shows the button as
+        // it stands - its emoji and colour included - not just its name
+        $rn_render = mainmenu_layout_render($lang);
+        $rows = $rn_render['rows'];
         $labels = menu_button_labels(lang_tab_texts($lang));
         $kb = ['inline_keyboard' => []];
         foreach ($rows as $r => $row) {
@@ -1208,14 +1195,11 @@ if (!function_exists('rename_editor_payload')) {
                 if (!is_array($btn) || !isset($btn['text'])) {
                     continue;
                 }
-                if (isset($btn['custom_text']) && $btn['custom_text'] !== '') {
-                    $name = $btn['custom_text'];
-                } else {
-                    $name = $btn['text'];
-                    if (isset($labels[$name])) {
-                        $name = $labels[$name];
-                    }
+                $name = $btn['text'];
+                if (isset($labels[$name])) {
+                    $name = $labels[$name];
                 }
+                list($name, $rn_icon) = mainmenu_btn_preview($btn, $name, $rn_render['simple'], $rn_render['pos']);
                 if (!empty($btn['hidden'])) {
                     $name = '🚫 ' . $name;
                 }
@@ -1227,6 +1211,9 @@ if (!function_exists('rename_editor_payload')) {
                     $cb = "renamebtn-{$lang}-{$r}-{$c}";
                 }
                 $kbBtn = ['text' => $name, 'callback_data' => $cb];
+                if ($rn_icon !== '') {
+                    $kbBtn['icon_custom_emoji_id'] = $rn_icon;
+                }
                 $ed_color = (isset($setting['inlinebtnmain']) && $setting['inlinebtnmain'] == "oninline") ? (isset($btn['style']) ? $btn['style'] : '') : (isset($btn['style_reply']) ? $btn['style_reply'] : '');
                 if ($ed_color !== '' && in_array($ed_color, ['primary', 'success', 'danger'], true)) {
                     $kbBtn['style'] = $ed_color;
@@ -1244,8 +1231,7 @@ if (!function_exists('rename_editor_payload')) {
             ];
         }
         $kb['inline_keyboard'][] = [['text' => '🔄 ریست به پیش‌فرض', 'callback_data' => "renamereset-{$lang}"]];
-        $kb['inline_keyboard'][] = mainmenu_lang_tabs($lang, "btnset_open:rename:%s");
-        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبلی', 'callback_data' => 'bt_btnsettings', 'style' => 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبلی', 'callback_data' => "bt_btnsettings|{$lang}", 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']];
         return json_encode($kb);
     }
@@ -19722,8 +19708,10 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
 } elseif ($datain == "bt_displayhub" && $adminrulecheck['rule'] == "administrator") {
     $dh_kb = displayhub_payload($textbotlang);
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['DisplayHub']['hubCaption'], $dh_kb, 'HTML');
-} elseif ($datain == "bt_btnsettings" && $adminrulecheck['rule'] == "administrator") {
-    $btnset_kb = btnset_hub_payload($textbotlang);
+} elseif (preg_match('/^bt_btnsettings(?:\|([a-z]{2}))?$/', $datain, $btnset_m) && $adminrulecheck['rule'] == "administrator") {
+    // optional tab so the older reply-keyboard way in still lands somewhere
+    $btnset_lang = $btnset_m[1] ?? 'fa';
+    $btnset_kb = btnset_hub_payload($textbotlang, $btnset_lang);
     Editmessagetext($from_id, $message_id, "🔘 <b>تنظیمات دکمه‌های منوی اصلی</b>\n\nاز اینجا ظاهر ۱۲ دکمه‌ی ثابت پایین صفحه‌ی کاربر (منوی اصلی) رو کامل شخصی‌سازی می‌کنی:\n\n🎨 <b>رنگ‌بندی</b> — رنگ هر دکمه، جدا برای حالت شیشه‌ای و کیبوردی\n🎭 <b>ایموجی و استیکر</b> — ایموجی کنار متن یا استیکری که موقع لمس دکمه ارسال می‌شه\n📐 <b>چیدمان</b> — ترتیب و عرض دکمه‌ها\n✏️ <b>نام و نمایش</b> — تغییر اسم دکمه یا مخفی کردنش\n\n👇 کدوم بخش رو می‌خوای؟", $btnset_kb, 'HTML');
 } elseif ($datain == "bt_langswitch" && $adminrulecheck['rule'] == "administrator") {
     // promoted out of 🔘 تنظیمات دکمه‌های منوی اصلی into its own direct entry
@@ -19731,8 +19719,9 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     // menu, a different concern from main-menu button appearance
     $lsw_kb = lang_switch_settings_payload();
     Editmessagetext($from_id, $message_id, lang_switch_settings_caption($textbotlang), $lsw_kb, 'HTML');
-} elseif ($datain == "btnset_open:color" && $adminrulecheck['rule'] == "administrator") {
-    $btnset_kb = btnset_color_hub_payload($textbotlang);
+} elseif (preg_match('/^btnset_open:color(?::([a-z]{2}))?$/', $datain, $btnset_m) && $adminrulecheck['rule'] == "administrator") {
+    $btnset_lang = $btnset_m[1] ?? 'fa';
+    $btnset_kb = btnset_color_hub_payload($textbotlang, $btnset_lang);
     Editmessagetext($from_id, $message_id, "🎨 <b>بخش رنگ‌بندی دکمه‌های منوی اصلی</b>\n\nنوع کیبورد رو انتخاب کن 👇", $btnset_kb, 'HTML');
 } elseif (preg_match('/^btnset_color:(i|r)(?::([a-z]{2}))?$/', $datain, $btnset_m) && $adminrulecheck['rule'] == "administrator") {
     // the tab is optional so the hub's own row (which carries no language)
@@ -19741,8 +19730,9 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     $color_kb = color_editor_payload($btnset_m[1], $textbotlang, $btnset_lang);
     $color_title = ($btnset_m[1] == 'r') ? "⌨️ <b>رنگ‌بندی دکمه‌های کیبوردی (معمولی)</b>" : "🎛 <b>رنگ‌بندی دکمه‌های شیشه‌ای (اینلاین)</b>";
     Editmessagetext($from_id, $message_id, $color_title . mainmenu_tab_note($btnset_lang) . "\n\nاین لیست، پیش‌نمایش زنده‌ی منوته 🎨\nروی هر دکمه بزن تا رنگش عوض بشه 👇\n⚪ پیش‌فرض ← 🔵 آبی ← 🟢 سبز ← 🔴 قرمز\n🚫 = دکمه پنهان شده", $color_kb, 'HTML');
-} elseif ($datain == "btnset_open:emoji" && $adminrulecheck['rule'] == "administrator") {
-    $btnset_kb = btnset_emoji_hub_payload($textbotlang);
+} elseif (preg_match('/^btnset_open:emoji(?::([a-z]{2}))?$/', $datain, $btnset_m) && $adminrulecheck['rule'] == "administrator") {
+    $btnset_lang = $btnset_m[1] ?? 'fa';
+    $btnset_kb = btnset_emoji_hub_payload($textbotlang, $btnset_lang);
     Editmessagetext($from_id, $message_id, "🎭 <b>ایموجی و استیکر دکمه‌های منوی اصلی</b>\n\nکدوم بخش رو می‌خوای تنظیم کنی؟ 👇", $btnset_kb, 'HTML');
 } elseif (preg_match('/^btnset_emoji:(emoji|sticker)(?::([a-z]{2}))?$/', $datain, $btnset_m) && $adminrulecheck['rule'] == "administrator") {
     $btnset_lang = $btnset_m[2] ?? 'fa';

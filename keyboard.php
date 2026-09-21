@@ -2742,7 +2742,10 @@ function keyboard_list_text($lang, $groupFilter = null)
     // reply-keyboard buttons themselves (color/emoji/sticker/layout/rename),
     // a different data model from the per-message items above
     $keyboard_text['inline_keyboard'][] = [['text' => bt_section_meta('home_tools')['label'], 'callback_data' => 'bt_sep|home_tools']];
-    $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btnSettingsLabel'], 'callback_data' => 'bt_btnsettings', 'style' => 'primary']];
+    // carries the tab: this whole tree edits one language's menu, and the tab
+    // was already chosen at the top of this screen - asking again inside every
+    // editor was a second place to get it wrong
+    $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btnSettingsLabel'], 'callback_data' => "bt_btnsettings|$lang", 'style' => 'primary']];
     // promoted out of the button-settings hub into its own direct row - it
     // controls the end-user language-picker menu, unrelated to button appearance
     $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['langSwitchLabel'], 'callback_data' => 'bt_langswitch', 'style' => 'primary']];
