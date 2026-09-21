@@ -7103,7 +7103,16 @@ $textbotlang = ui_texts();
 //----------------[  unknown message reply  ]----------------
 // if nothing in this update produced a bot response and the user sent plain text,
 // reply with the customizable "unknown message" (text/sticker/reaction from 📝 manager)
-if (empty($GLOBALS['bt_any_reply']) && !empty($text) && $datain == '') {
+//
+// Never to someone holding the panel. This answer is written for a customer who
+// tapped nothing the shop menu offers; an admin typing into the panel - a value
+// for a setting, a name, an amount - would get it as noise on every keystroke
+// the panel did not recognise. Same test that decides whether admin.php runs at
+// all, so "has a panel" means one thing in both places.
+//
+// Consequence worth knowing: an admin account can no longer see this reply, so
+// testing it needs an account that is not an admin.
+if (empty($GLOBALS['bt_any_reply']) && !empty($text) && $datain == '' && !in_array($from_id, $admin_ids)) {
     // On the custom-amount step this is not an unknown message - it is an
     // amount that is not a number. Getting this far is what proves it was not
     // a menu button or a command: those all have their own branches, some of
