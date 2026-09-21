@@ -656,7 +656,7 @@ if ($setting['inlinebtnmain'] == "oninline") {
     $confrimrolls = json_encode([
         'inline_keyboard' => [
             [
-                bt_button($kb_userlang, 'keyboard.acceptRules', $textbotlang['keyboard']['acceptRules'], "acceptrule", 'success'),
+                bt_button($kb_userlang, 'keyboard.acceptRules', $customer_texts['keyboard']['acceptRules'], "acceptrule", 'success'),
             ],
         ]
     ]);
@@ -665,7 +665,7 @@ if ($setting['inlinebtnmain'] == "oninline") {
     // colour/callback here
     $confrimrolls = json_encode([
         'keyboard' => [
-            [['text' => bt_reply_label($kb_userlang, 'keyboard.acceptRules', $textbotlang['keyboard']['acceptRules'])]],
+            [['text' => bt_reply_label($kb_userlang, 'keyboard.acceptRules', $customer_texts['keyboard']['acceptRules'])]],
         ],
         'resize_keyboard' => true
     ]);
@@ -696,13 +696,13 @@ $channelkeyboard = json_encode([
 if ($setting['inlinebtnmain'] == "oninline") {
     $backuser = json_encode([
         'inline_keyboard' => [
-            [['text' => $textbotlang['users']['backbtn'], 'callback_data' => "backuser"]]
+            [['text' => $customer_texts['users']['backbtn'], 'callback_data' => "backuser"]]
         ],
     ]);
 } else {
     $backuser = json_encode([
         'keyboard' => [
-            [['text' => $textbotlang['users']['backbtn']]]
+            [['text' => $customer_texts['users']['backbtn']]]
         ],
         'resize_keyboard' => true,
     ]);
@@ -1622,11 +1622,11 @@ if (feature_value('statussupportpv', $users['lang'] ?? 'fa', $setting['statussup
     $supportoption = json_encode([
         'inline_keyboard' => [
             [
-                ['text' => $textbotlang['textbot']['faq'], 'callback_data' => "fqQuestions"],
-                ['text' => $textbotlang['keyboard']['sendMessageToSupport'], 'url' => "https://t.me/{$setting['id_support']}"],
+                ['text' => $customer_texts['textbot']['faq'], 'callback_data' => "fqQuestions"],
+                ['text' => $customer_texts['keyboard']['sendMessageToSupport'], 'url' => "https://t.me/{$setting['id_support']}"],
             ],
             [
-                ['text' => $textbotlang['keyboard']['backToMainMenu'], 'callback_data' => "backuser"]
+                ['text' => $customer_texts['keyboard']['backToMainMenu'], 'callback_data' => "backuser"]
             ],
 
         ]
@@ -1635,11 +1635,11 @@ if (feature_value('statussupportpv', $users['lang'] ?? 'fa', $setting['statussup
     $supportoption = json_encode([
         'inline_keyboard' => [
             [
-                ['text' => $textbotlang['textbot']['faq'], 'callback_data' => "fqQuestions"],
-                ['text' => $textbotlang['keyboard']['sendMessageToSupport'], 'callback_data' => "support"],
+                ['text' => $customer_texts['textbot']['faq'], 'callback_data' => "fqQuestions"],
+                ['text' => $customer_texts['keyboard']['sendMessageToSupport'], 'callback_data' => "support"],
             ],
             [
-                ['text' => $textbotlang['keyboard']['backToMainMenu'], 'callback_data' => "backuser"]
+                ['text' => $customer_texts['keyboard']['backToMainMenu'], 'callback_data' => "backuser"]
             ],
 
         ]
