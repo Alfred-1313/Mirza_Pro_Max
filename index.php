@@ -193,7 +193,7 @@ $date_start = jdate('H:i:s', time());
 if ($user['username'] == "none" || $user['username'] == null || $user['username'] != $username) {
     update("user", "username", $username, "id", $from_id);
 }
-$lang_array = ['fa', 'en', 'ru', 'zh', 'tk'];
+$lang_array = panel_langs();
 if (!in_array($user['lang'], $lang_array)) {
     update("user", "lang", 'fa', "id", $from_id);
 }

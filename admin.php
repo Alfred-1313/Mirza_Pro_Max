@@ -195,7 +195,7 @@ if (!function_exists('lang_scope_picker_payload')) {
     // first open (derived from what is stored) and supplied on every re-render.
     function lang_scope_picker_payload($kind, $id, $currentLang, $textbotlang, $bitmask = null)
     {
-        $langs = ['fa', 'en', 'ru', 'zh', 'tk'];
+        $langs = panel_langs();
         if ($bitmask === null) {
             $bitmask = langscope_casc_lang_to_bitmask($currentLang);
         }
@@ -225,14 +225,16 @@ if (!function_exists('lang_scope_picker_payload')) {
 }
 if (!function_exists('langscope_casc_lang_to_bitmask')) {
     // converts a stored lang value ('all', '', null, or a comma list like
-    // "fa,en") into a 5-char 1/0 string over [fa,en,ru,zh,tk], used as the
-    // multi-select picker's transient state (carried in callback_data, no
-    // server-side session needed)
+    // "fa,en") into a 1/0 string, one character per panel_langs() entry, used
+    // as the multi-select picker's transient state (carried in callback_data,
+    // no server-side session needed). Width follows that list rather than a
+    // fixed 5, so dropping or re-adding a language cannot leave the two halves
+    // of this pair disagreeing about which bit means what.
     function langscope_casc_lang_to_bitmask($langValue)
     {
-        $langs = ['fa', 'en', 'ru', 'zh', 'tk'];
+        $langs = panel_langs();
         if ($langValue === 'all' || $langValue === null || $langValue === '') {
-            return '00000';
+            return str_repeat('0', count($langs));
         }
         $parts = array_map('trim', explode(',', $langValue));
         $bits = '';
@@ -245,11 +247,11 @@ if (!function_exists('langscope_casc_lang_to_bitmask')) {
 if (!function_exists('langscope_casc_bitmask_to_langs')) {
     function langscope_casc_bitmask_to_langs($bitmask)
     {
-        $langs = ['fa', 'en', 'ru', 'zh', 'tk'];
+        $langs = panel_langs();
         $picked = [];
-        for ($i = 0; $i < 5; $i++) {
+        foreach ($langs as $i => $code) {
             if (($bitmask[$i] ?? '0') === '1') {
-                $picked[] = $langs[$i];
+                $picked[] = $code;
             }
         }
         return $picked;
@@ -277,7 +279,7 @@ if (!function_exists('langscope_casc_picker_payload')) {
     // beyond re-rendering with that new callback_data's bitmask
     function langscope_casc_picker_payload($catId, $bitmask, $textbotlang)
     {
-        $langs = ['fa', 'en', 'ru', 'zh', 'tk'];
+        $langs = panel_langs();
         $kb = ['inline_keyboard' => []];
         $row = [];
         foreach ($langs as $i => $code) {
@@ -1069,7 +1071,11 @@ if (!function_exists('lang_switch_settings_payload')) {
         }
 
         $kb['inline_keyboard'][] = [['text' => bt_section_meta('langsw_langs')['label'], 'callback_data' => 'bt_sep|langsw_langs']];
-        foreach ($lsw_names as $lsw_code => $lsw_label) {
+        // only the languages the bot speaks - offering a toggle for one whose
+        // tabs no longer exist would let an admin hand customers a language
+        // nothing in the panel can configure
+        foreach (panel_langs() as $lsw_code) {
+            $lsw_label = $lsw_names[$lsw_code] ?? $lsw_code;
             $lsw_on = in_array($lsw_code, $ls['langs'], true);
             // ✅/❌ like every other toggle in the bot. The empty ⬜ read as an
             // unticked checkbox waiting to be filled rather than as "off".
@@ -1638,13 +1644,7 @@ if (!function_exists('help_home_payload')) {
         $help_list_label = $help_tab_texts['Admin']['Help']['viewListBtn'] ?? $textbotlang['Admin']['Help']['viewListBtn'];
         $help_display_label = $help_tab_texts['Admin']['Help']['displayBtn'] ?? $textbotlang['Admin']['Help']['displayBtn'];
         $kb = ['inline_keyboard' => []];
-        $kb['inline_keyboard'][] = [
-            ['text' => ($lang == 'fa' ? "✅" : "") . $textbotlang['bottext']['langs']['fa'], 'callback_data' => "help_lang:fa"],
-            ['text' => ($lang == 'en' ? "✅" : "") . $textbotlang['bottext']['langs']['en'], 'callback_data' => "help_lang:en"],
-            ['text' => ($lang == 'ru' ? "✅" : "") . $textbotlang['bottext']['langs']['ru'], 'callback_data' => "help_lang:ru"],
-            ['text' => ($lang == 'zh' ? "✅" : "") . $textbotlang['bottext']['langs']['zh'], 'callback_data' => "help_lang:zh"],
-            ['text' => ($lang == 'tk' ? "✅" : "") . $textbotlang['bottext']['langs']['tk'], 'callback_data' => "help_lang:tk"],
-        ];
+        $kb['inline_keyboard'][] = panel_lang_tabs($lang, "help_lang:%s", null);
         // what actually exists right now, so the screen answers "where do
         // categories come from?" instead of leaving it to be discovered
         $help_all = select("help", "*", null, null, "fetchAll");
@@ -1864,7 +1864,7 @@ if (!function_exists('gateway_hub_payload')) {
         $t = $textbotlang['Admin']['GatewayLang'];
         $kb = ['inline_keyboard' => []];
         $tabs = [];
-        foreach (['fa', 'en', 'ru', 'zh', 'tk'] as $l) {
+        foreach (panel_langs() as $l) {
             $tabs[] = [
                 'text' => ($lang === $l ? '✅' : '') . ($textbotlang['bottext']['langs'][$l] ?? $l),
                 'callback_data' => "gwlang:{$l}",
@@ -2102,7 +2102,7 @@ if (!function_exists('topup_hub_payload')) {
         $t = $textbotlang['Admin']['TopupPkg'];
         $kb = ['inline_keyboard' => []];
         $tabs = [];
-        foreach (['fa', 'en', 'ru', 'zh', 'tk'] as $l) {
+        foreach (panel_langs() as $l) {
             $tabs[] = [
                 'text' => ($lang === $l ? '✅' : '') . ($textbotlang['bottext']['langs'][$l] ?? $l),
                 'callback_data' => "topuplang:{$l}",
@@ -4052,7 +4052,7 @@ if (!function_exists('prodcur_lang_keyboard')) {
     {
         $rows = [];
         $pair = [];
-        foreach (['fa', 'en', 'ru', 'zh', 'tk'] as $l) {
+        foreach (panel_langs() as $l) {
             $pair[] = ['text' => prodcur_lang_label($l, $textbotlang)];
             if (count($pair) === 2) {
                 $rows[] = $pair;
@@ -4084,7 +4084,7 @@ if (!function_exists('prodcur_lang_from_label')) {
     function prodcur_lang_from_label($label, $textbotlang)
     {
         $label = trim((string) $label);
-        foreach (['fa', 'en', 'ru', 'zh', 'tk', 'all'] as $l) {
+        foreach (array_merge(panel_langs(), ['all']) as $l) {
             if ($label === prodcur_lang_label($l, $textbotlang)) {
                 return $l;
             }
@@ -4698,13 +4698,7 @@ if (!function_exists('shop_feature_status_payload')) {
             return "sfs_tog:{$lang}:{$type}:{$value}";
         };
         $rows = [];
-        $rows[] = [
-            ['text' => ($lang == 'fa' ? "✅" : "") . $textbotlang['bottext']['langs']['fa'], 'callback_data' => "sfs_lang:fa", 'style' => 'primary'],
-            ['text' => ($lang == 'en' ? "✅" : "") . $textbotlang['bottext']['langs']['en'], 'callback_data' => "sfs_lang:en", 'style' => 'primary'],
-            ['text' => ($lang == 'ru' ? "✅" : "") . $textbotlang['bottext']['langs']['ru'], 'callback_data' => "sfs_lang:ru", 'style' => 'primary'],
-            ['text' => ($lang == 'zh' ? "✅" : "") . $textbotlang['bottext']['langs']['zh'], 'callback_data' => "sfs_lang:zh", 'style' => 'primary'],
-            ['text' => ($lang == 'tk' ? "✅" : "") . $textbotlang['bottext']['langs']['tk'], 'callback_data' => "sfs_lang:tk", 'style' => 'primary'],
-        ];
+        $rows[] = panel_lang_tabs($lang, "sfs_lang:%s");
         $rows[] = [$btn($extravolunme_v == 'onextra', $textbotlang['Admin']['Status']['statusVolumeExtra'], $tog('extravolunme', $extravolunme_v))];
         $rows[] = [$btn($paydirect_v == 'ondirectbuy', $textbotlang['Admin']['Status']['paydirect'], $tog('paydirect', $paydirect_v))];
         $rows[] = [$btn($statustimeextra_v == 'ontimeextraa', $textbotlang['Admin']['Status']['statusTimeExtra'], $tog('statustimeextra', $statustimeextra_v))];
@@ -4917,13 +4911,7 @@ if (!function_exists('feature_status_lang_payload')) {
         $affiliatesstatus_v = feature_value('affiliatesstatus', $lang, $setting['affiliatesstatus']);
         $statuslimitchangeloc_v = feature_value('statuslimitchangeloc', $lang, $setting['statuslimitchangeloc']);
         $rows = [];
-        $rows[] = [
-            ['text' => ($lang == 'fa' ? "✅" : "") . $textbotlang['bottext']['langs']['fa'], 'callback_data' => "fls_lang:fa", 'style' => 'primary'],
-            ['text' => ($lang == 'en' ? "✅" : "") . $textbotlang['bottext']['langs']['en'], 'callback_data' => "fls_lang:en", 'style' => 'primary'],
-            ['text' => ($lang == 'ru' ? "✅" : "") . $textbotlang['bottext']['langs']['ru'], 'callback_data' => "fls_lang:ru", 'style' => 'primary'],
-            ['text' => ($lang == 'zh' ? "✅" : "") . $textbotlang['bottext']['langs']['zh'], 'callback_data' => "fls_lang:zh", 'style' => 'primary'],
-            ['text' => ($lang == 'tk' ? "✅" : "") . $textbotlang['bottext']['langs']['tk'], 'callback_data' => "fls_lang:tk", 'style' => 'primary'],
-        ];
+        $rows[] = panel_lang_tabs($lang, "fls_lang:%s");
         $rows[] = [
             ['text' => $NotUser_v == 'onnotuser' ? $on : $off, 'callback_data' => $tog('usernamebtn', $NotUser_v)],
             ['text' => $tx['Admin']['Status']['statusUsernameBtn'], 'callback_data' => "usernamebtn"],
@@ -5225,13 +5213,7 @@ if (!function_exists('btnstyle_hub_payload')) {
     function btnstyle_hub_payload($lang, $textbotlang)
     {
         $kb = ['inline_keyboard' => []];
-        $kb['inline_keyboard'][] = [
-            ['text' => ($lang == 'fa' ? "✅" : "") . $textbotlang['bottext']['langs']['fa'], 'callback_data' => "btnstyle_lang:fa"],
-            ['text' => ($lang == 'en' ? "✅" : "") . $textbotlang['bottext']['langs']['en'], 'callback_data' => "btnstyle_lang:en"],
-            ['text' => ($lang == 'ru' ? "✅" : "") . $textbotlang['bottext']['langs']['ru'], 'callback_data' => "btnstyle_lang:ru"],
-            ['text' => ($lang == 'zh' ? "✅" : "") . $textbotlang['bottext']['langs']['zh'], 'callback_data' => "btnstyle_lang:zh"],
-            ['text' => ($lang == 'tk' ? "✅" : "") . $textbotlang['bottext']['langs']['tk'], 'callback_data' => "btnstyle_lang:tk"],
-        ];
+        $kb['inline_keyboard'][] = panel_lang_tabs($lang, "btnstyle_lang:%s", null);
         $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['panelsBtn'], 'callback_data' => "btnstyle_kindhub:panel:{$lang}"]];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['productsBtn'], 'callback_data' => "btnstyle_kindhub:product:{$lang}"]];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['categoriesBtn'], 'callback_data' => "btnstyle_kindhub:category:{$lang}"]];
@@ -22054,7 +22036,7 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     Editmessagetext($from_id, $message_id, $bt_home, $bt_kb);
 } elseif (preg_match('/^bt_resetall\|(.+)$/', $datain, $dataget) && $adminrulecheck['rule'] == "administrator") {
     $bt_lang = $dataget[1];
-    if (!in_array($bt_lang, ['fa', 'en', 'ru', 'zh', 'tk'], true)) {
+    if (!in_array($bt_lang, panel_langs(), true)) {
         $bt_lang = 'fa';
     }
     // no longer wipes on the spot - opens the picker so the admin sees exactly
@@ -22063,14 +22045,14 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     list($bt_rp_text, $bt_rp_kb) = bt_reset_picker_payload($bt_lang, 255, $textbotlang);
     Editmessagetext($from_id, $message_id, $bt_rp_text, $bt_rp_kb, 'HTML');
 } elseif (preg_match('/^bt_rsttog\|([a-z]{2})\|(\d{1,3})\|(\d{1,3})$/', $datain, $dataget) && $adminrulecheck['rule'] == "administrator") {
-    $bt_lang = in_array($dataget[1], ['fa', 'en', 'ru', 'zh', 'tk'], true) ? $dataget[1] : 'fa';
+    $bt_lang = in_array($dataget[1], panel_langs(), true) ? $dataget[1] : 'fa';
     $bt_mask = ((int) $dataget[2]) & 255;
     $bt_bit = ((int) $dataget[3]) & 255;
     $bt_mask = ($bt_mask & $bt_bit) ? ($bt_mask & ~$bt_bit) : ($bt_mask | $bt_bit);
     list($bt_rp_text, $bt_rp_kb) = bt_reset_picker_payload($bt_lang, $bt_mask, $textbotlang);
     Editmessagetext($from_id, $message_id, $bt_rp_text, $bt_rp_kb, 'HTML');
 } elseif (preg_match('/^bt_rstsel\|([a-z]{2})\|(all|none)$/', $datain, $dataget) && $adminrulecheck['rule'] == "administrator") {
-    $bt_lang = in_array($dataget[1], ['fa', 'en', 'ru', 'zh', 'tk'], true) ? $dataget[1] : 'fa';
+    $bt_lang = in_array($dataget[1], panel_langs(), true) ? $dataget[1] : 'fa';
     $bt_mask = ($dataget[2] === 'all') ? 255 : 0;
     list($bt_rp_text, $bt_rp_kb) = bt_reset_picker_payload($bt_lang, $bt_mask, $textbotlang);
     Editmessagetext($from_id, $message_id, $bt_rp_text, $bt_rp_kb, 'HTML');
@@ -22082,7 +22064,7 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     ]);
     return;
 } elseif (preg_match('/^bt_rstgo\|([a-z]{2})\|(\d{1,3})$/', $datain, $dataget) && $adminrulecheck['rule'] == "administrator") {
-    $bt_lang = in_array($dataget[1], ['fa', 'en', 'ru', 'zh', 'tk'], true) ? $dataget[1] : 'fa';
+    $bt_lang = in_array($dataget[1], panel_langs(), true) ? $dataget[1] : 'fa';
     $bt_mask = ((int) $dataget[2]) & 255;
     if ($bt_mask === 0) {
         telegram('answerCallbackQuery', [
@@ -22102,7 +22084,7 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
 } elseif (preg_match('/^bt_group_resetall\|([^|]+)\|(.+)$/', $datain, $dataget) && $adminrulecheck['rule'] == "administrator") {
     $bt_lang = $dataget[1];
     $bt_group = $dataget[2];
-    if (!in_array($bt_lang, ['fa', 'en', 'ru', 'zh', 'tk'], true)) {
+    if (!in_array($bt_lang, panel_langs(), true)) {
         $bt_lang = 'fa';
     }
     $bt_group_keys = array_column(array_filter($textbotlang['bottext']['items'], function ($it) use ($bt_group) {
@@ -22115,7 +22097,7 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
 } elseif (preg_match('/^bt_group\|([^|]+)\|(.+)$/', $datain, $dataget) && $adminrulecheck['rule'] == "administrator") {
     $bt_lang = $dataget[1];
     $bt_group = $dataget[2];
-    if (!in_array($bt_lang, ['fa', 'en', 'ru', 'zh', 'tk'], true)) {
+    if (!in_array($bt_lang, panel_langs(), true)) {
         $bt_lang = 'fa';
     }
     list($bt_group_text, $bt_group_kb) = keyboard_list_text($bt_lang, $bt_group);
@@ -22123,7 +22105,7 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
 } elseif (preg_match('/^bt_edit\|([^|]+)\|(.+)$/', $datain, $dataget)) {
     $bt_lang = $dataget[1];
     $bt_key = $dataget[2];
-    if (!in_array($bt_lang, ['fa', 'en', 'ru', 'zh', 'tk'], true)) {
+    if (!in_array($bt_lang, panel_langs(), true)) {
         $bt_lang = 'fa';
     }
     list($btm_text, $btm_kb) = bottext_item_menu_payload($bt_key, $bt_lang, $textbotlang);
@@ -22136,7 +22118,7 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     $bt_lang = $userdata['bt_lang'] ?? 'fa';
     $bt_key = $userdata['bt_key'] ?? '';
     $bt_msgid = intval($userdata['bt_msgid'] ?? 0);
-    if (!in_array($bt_lang, ['fa', 'en', 'ru', 'zh', 'tk'], true)) {
+    if (!in_array($bt_lang, panel_langs(), true)) {
         $bt_lang = 'fa';
     }
     $bt_valid = false;

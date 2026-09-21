@@ -2353,13 +2353,7 @@ function keyboard_list_text($lang, $groupFilter = null)
     // still accepts an optional :{group} suffix from round 27, kept as a
     // harmless unused capability rather than reverted
     if ($groupFilter === null) {
-        $keyboard_text['inline_keyboard'][] = [
-            ['text' => ($lang == 'fa' ? "✅" : "") . $textbotlang['bottext']['langs']['fa'], 'callback_data' => "bt_lang:fa", 'style' => 'primary'],
-            ['text' => ($lang == 'en' ? "✅" : "") . $textbotlang['bottext']['langs']['en'], 'callback_data' => "bt_lang:en", 'style' => 'primary'],
-            ['text' => ($lang == 'ru' ? "✅" : "") . $textbotlang['bottext']['langs']['ru'], 'callback_data' => "bt_lang:ru", 'style' => 'primary'],
-            ['text' => ($lang == 'zh' ? "✅" : "") . $textbotlang['bottext']['langs']['zh'], 'callback_data' => "bt_lang:zh", 'style' => 'primary'],
-            ['text' => ($lang == 'tk' ? "✅" : "") . $textbotlang['bottext']['langs']['tk'], 'callback_data' => "bt_lang:tk", 'style' => 'primary'],
-        ];
+        $keyboard_text['inline_keyboard'][] = panel_lang_tabs($lang, "bt_lang:%s");
     }
     // buttons are renamed via the ✏️ نام و نمایش دکمه‌ها manager — keep this section for messages only.
     // textbot.testExpired is also skipped here on purpose: it's only reachable

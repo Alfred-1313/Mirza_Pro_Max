@@ -1655,6 +1655,23 @@ if (!function_exists('app_rows_for_lang')) {
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 }
+if (!function_exists('panel_langs')) {
+    // The languages this bot actually speaks.
+    //
+    // One list, so a language cannot be offered by one screen and rejected by
+    // the next. lang/ru.php, lang/zh.php and lang/tk.php are still shipped and
+    // still load - they are simply not offered any more, which is the owner's
+    // call: keeping a tab for a language nobody maintains means half-translated
+    // screens with silent Persian fallbacks behind them.
+    //
+    // Re-adding one is this list plus nothing else. Values already stored
+    // against a dropped language are left alone rather than deleted, so they
+    // come back with it.
+    function panel_langs()
+    {
+        return ['fa', 'en'];
+    }
+}
 if (!function_exists('lang_tab_texts')) {
     // The text array for ONE specific language, regardless of whose request
     // this is - languagechange() can't do this because it overrides its own
@@ -9094,17 +9111,29 @@ if (!function_exists('mainmenu_layout_get')) {
     }
     // The language-tab row every main-menu editor screen carries, so all four
     // switch tabs the same way. $cb is a sprintf template taking the code.
-    function mainmenu_lang_tabs($lang, $cb)
+    // Used by every screen in the panel that has a language tab row, so a
+    // language can never be offered by one row and missing from the next.
+    // $cb is a sprintf template taking the code; $style is whatever the calling
+    // screen already used (null = no style key, Telegram's own default).
+    function panel_lang_tabs($lang, $cb, $style = 'primary')
     {
         $row = [];
-        foreach (['fa', 'en', 'ru', 'zh', 'tk'] as $code) {
-            $row[] = [
-                'text' => ($lang === $code ? '✅' : '') . (lang_tab_texts('fa')['bottext']['langs'][$code] ?? $code),
+        $names = lang_tab_texts('fa')['bottext']['langs'];
+        foreach (panel_langs() as $code) {
+            $btn = [
+                'text' => ($lang === $code ? '✅' : '') . ($names[$code] ?? $code),
                 'callback_data' => sprintf($cb, $code),
-                'style' => 'primary',
             ];
+            if ($style !== null) {
+                $btn['style'] = $style;
+            }
+            $row[] = $btn;
         }
         return $row;
+    }
+    function mainmenu_lang_tabs($lang, $cb)
+    {
+        return panel_lang_tabs($lang, $cb);
     }
     // One language's menu, ready to render: rows with unusable colours dropped,
     // plus the two whole-menu switches. Both the copy keyboard.php builds at
@@ -14608,7 +14637,7 @@ if (!function_exists('lang_switch_settings')) {
         if (!is_array($ls)) {
             $ls = [];
         }
-        $all = ['fa', 'en', 'ru', 'zh', 'tk'];
+        $all = panel_langs();
         $langs = (is_array($ls['langs'] ?? null) && !empty($ls['langs']))
             ? array_values(array_intersect($all, $ls['langs']))
             : $all;
