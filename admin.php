@@ -670,6 +670,9 @@ if (!function_exists('bottext_item_menu_payload')) {
         // Every caller of this function - 🎨 شخصی‌سازی, the cfgdeliv| delivery
         // screens, the reset confirmation - already passes the tab it is on, so
         // fixing it here fixes all of them without touching one call site.
+        if ($bt_key === 'users.unknownMsg') {
+            $info .= "🔌 وضعیت: " . (unknownmsg_enabled($bt_lang) ? "روشن ✅" : "خاموش ❌ (هیچ جوابی فرستاده نمی‌شه)") . "\n";
+        }
         $info .= "➖➖➖➖➖➖➖➖➖➖\n👁 <b>متن فعلی:</b>\n" . bt_current_text_quote($bt_key, 1200, $bt_lang) . "\n";
         if ($bt_key === 'users.usertest.selectUsernamePrompt') {
             // this one prompt is followed immediately by a second message the
@@ -679,6 +682,17 @@ if (!function_exists('bottext_item_menu_payload')) {
         }
         $info .= "➖➖➖➖➖➖➖➖➖➖\n👇 بخشی که می‌خوای تنظیم کنی رو انتخاب کن:";
         $kb = ['inline_keyboard' => []];
+        // This reply is the one message the bot sends without being asked, so it
+        // is the one that needs an off switch - and off is where every language
+        // starts. Nothing below it does anything until this is on.
+        if ($bt_key === 'users.unknownMsg') {
+            $bt_unk_on = unknownmsg_enabled($bt_lang);
+            $kb['inline_keyboard'][] = [[
+                'text' => $bt_unk_on ? '✅ این قابلیت روشنه' : '❌ این قابلیت خاموشه',
+                'callback_data' => "unkmsg|tog|{$bt_lang}",
+                'style' => $bt_unk_on ? 'success' : 'danger',
+            ]];
+        }
         // [📋 کپشن پیش‌فرض] [✏️ ویرایش کپشن] - the same pair every caption row in
         // 💳 کپشن و دکمه‌های درگاه‌ها uses: the default sits next to the edit
         // instead of at the bottom of the screen, and the edit turns green once
@@ -22096,6 +22110,11 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     }
     list($bt_group_text, $bt_group_kb) = keyboard_list_text($bt_lang, $bt_group);
     Editmessagetext($from_id, $message_id, $bt_group_text, $bt_group_kb, 'HTML');
+} elseif (preg_match('/^unkmsg\|tog\|([a-z]{2})$/', $datain, $dataget) && $adminrulecheck['rule'] == "administrator") {
+    $bt_lang = in_array($dataget[1], panel_langs(), true) ? $dataget[1] : 'fa';
+    unknownmsg_set_enabled($bt_lang, !unknownmsg_enabled($bt_lang));
+    list($btm_text, $btm_kb) = bottext_item_menu_payload('users.unknownMsg', $bt_lang, $textbotlang);
+    Editmessagetext($from_id, $message_id, $btm_text, $btm_kb, 'HTML');
 } elseif (preg_match('/^bt_edit\|([^|]+)\|(.+)$/', $datain, $dataget)) {
     $bt_lang = $dataget[1];
     $bt_key = $dataget[2];

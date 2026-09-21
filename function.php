@@ -15042,6 +15042,36 @@ if (!function_exists('bottext_extras_key_hint')) {
         return $k;
     }
 }
+if (!function_exists('unknownmsg_enabled')) {
+    // Per-language on/off for the unknown-message reply - the one message the
+    // bot sends without being asked, so the one that needs a switch.
+    //
+    // Off until a language is switched on, and strictly that language's own
+    // value: no inheriting from Persian the way feature_value() does, because
+    // turning it on for Persian must not start answering English customers.
+    function unknownmsg_map($fresh = false)
+    {
+        static $cache = null;
+        if ($cache !== null && !$fresh) {
+            return $cache;
+        }
+        $setting = select("setting", "*", null, null, "select");
+        $m = json_decode((string) ($setting['unknownmsg_lang'] ?? ''), true);
+        return $cache = is_array($m) ? $m : [];
+    }
+    function unknownmsg_enabled($lang)
+    {
+        $m = unknownmsg_map();
+        return (string) ($m[$lang] ?? '0') === '1';
+    }
+    function unknownmsg_set_enabled($lang, $on)
+    {
+        $m = unknownmsg_map(true);
+        $m[$lang] = $on ? '1' : '0';
+        update("setting", "unknownmsg_lang", json_encode($m, JSON_UNESCAPED_UNICODE), null, null);
+        unknownmsg_map(true);
+    }
+}
 if (!function_exists('bt_default_stickers')) {
     // Stickers a message ships WITH, as opposed to one an admin attached. Kept
     // out of setting.keyboardmain's text_stickers on purpose: everything in that
@@ -15051,6 +15081,7 @@ if (!function_exists('bt_default_stickers')) {
     {
         return [
             'users.sell.noPaymentMethod' => 'CAACAgQAAxkBAAJyomqmL8XWREbwt2BPYfm8fToL4HqdAAKGDwACnQVRU0jlv2uEhl4wPQQ',
+            'users.unknownMsg' => 'CAACAgQAAxkBAAJy5mqxYm-rS6jwNkdpdLI9_0J0GCQYAAJYDAACm6GYUo8o_EwMQ7lTPQQ',
         ];
     }
     function bt_default_sticker($key)

@@ -7120,10 +7120,16 @@ if (empty($GLOBALS['bt_any_reply']) && !empty($text) && $datain == '') {
     // three settings unreachable the moment the third was filled in - and with
     // a text now shipped by default, they would never have fired at all.
     $unk_lang = (is_array($user) && !empty($user['lang'])) ? $user['lang'] : 'fa';
+    // off until this language is switched on from the item's own screen
+    if (!unknownmsg_enabled($unk_lang)) {
+        return;
+    }
     $unk_setting = select("setting", "*", null, null, "select");
     $unk_layout = json_decode((string) ($unk_setting['keyboardmain'] ?? ''), true);
     $unk_re = bt_media_lookup(is_array($unk_layout['text_reactions'] ?? null) ? $unk_layout['text_reactions'] : [], 'users.unknownMsg', $unk_lang);
-    $unk_st = bt_media_lookup(is_array($unk_layout['text_stickers'] ?? null) ? $unk_layout['text_stickers'] : [], 'users.unknownMsg', $unk_lang);
+    // the admin's sticker when there is one, otherwise the one this message
+    // ships with (bt_default_stickers)
+    $unk_st = bt_effective_sticker(is_array($unk_layout['text_stickers'] ?? null) ? $unk_layout['text_stickers'] : [], 'users.unknownMsg', $unk_lang);
     if ($unk_re !== '' && !empty($update['message']['message_id'])) {
         telegram('setMessageReaction', [
             'chat_id' => $from_id,
