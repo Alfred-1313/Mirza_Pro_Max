@@ -7096,6 +7096,9 @@ if (isset($update['message']['successful_payment'])) {
 }
 if (in_array($from_id, $admin_ids))
     require_once 'admin.php';
+// admin.php answers in Persian and shares this scope, so put the reader's own
+// language back before the shop's reply below.
+$textbotlang = ui_texts();
 
 //----------------[  unknown message reply  ]----------------
 // if nothing in this update produced a bot response and the user sent plain text,

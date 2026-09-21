@@ -1709,8 +1709,15 @@ if (!function_exists('ui_texts')) {
     // comparison that reads it back are both drawn from 'Admin', so they are in
     // the same language as each other without dragging the shop along.
     //
-    // The 'Admin' half is applied for every reader: it never reaches a
-    // customer, so there is nothing to branch on there.
+    // Applied for every reader, not just admins: 'Admin' never reaches a
+    // customer, so there is nothing to branch on and one code path to trust.
+    //
+    // A THIRD attempt then made the swap depend on the reader after all -
+    // whole vocabulary Persian for anyone holding a panel - and broke the shop
+    // the same way the first two did: build_main_keyboard() draws the menu in
+    // the reader's language by design, so an English menu met a Persian
+    // comparison here and every button went dead. Never branch this function
+    // on who is reading. The panel gets its words from panel_texts() below.
     function ui_texts()
     {
         $texts = languagechange();
@@ -1721,24 +1728,26 @@ if (!function_exists('ui_texts')) {
         if (isset($fa['Admin'])) {
             $texts['Admin'] = $fa['Admin'];
         }
-        // 'Admin' alone does not cover the panel. Its screens draw button text
-        // from 'keyboard' 551 times, and from 'users', 'common' and 'bottext'
-        // besides - so swapping only 'Admin' left a panel in two languages,
-        // which is what was reported. Those sections cannot be swapped for
-        // everyone, because the customer's own buttons live in them too
-        // (rejoin, accept-rules, back-to-menu...).
-        //
-        // So a reader who HAS a panel reads the whole vocabulary in Persian,
-        // and nobody else is touched. Their own menu is unaffected either way:
-        // build_main_keyboard() resolves that from the customer's own row, not
-        // from here. The test below is the same one that decides whether the
-        // panel button is drawn at all (keyboard.php), so the two cannot
-        // disagree about who has a panel.
-        global $from_id;
-        if (!empty($from_id) && select("admin", "*", "id_admin", $from_id, "count") != 0) {
-            return $fa;
-        }
         return $texts;
+    }
+}
+if (!function_exists('panel_texts')) {
+    // The admin panel's own vocabulary: Persian, always, for every reader.
+    //
+    // 'Admin' alone never covered the panel - its screens draw button text
+    // from 'keyboard' 551 times, and from 'users', 'common' and 'bottext'
+    // besides, so pinning only that subtree left a panel in two languages.
+    // Those sections cannot be pinned inside ui_texts(), because the shop's
+    // own buttons live in them too (rejoin, accept-rules, back-to-menu...).
+    //
+    // So the split is by SURFACE, not by reader: admin.php and the panel
+    // keyboards in keyboard.php take their words from here, index.php and the
+    // shop keyboards from ui_texts(). Each surface's buttons and the branch
+    // that reads a tapped button back then come from the same array, which is
+    // the property every failed attempt was missing.
+    function panel_texts()
+    {
+        return lang_tab_texts('fa');
     }
 }
 if (!function_exists('payer_texts')) {

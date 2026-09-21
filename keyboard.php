@@ -1,11 +1,20 @@
 <?php
 require_once 'config.php';
 $setting = select("setting", "*", null, null, "select");
-// The same copy index.php answers from: the reader's own language, with the
-// panel's own 'Admin' vocabulary Persian (ui_texts() explains why). Both files
-// have to agree on it - the keyboards are built here and the taps that come
-// back are matched there, by text.
-$textbotlang = ui_texts();
+// This file builds both surfaces, so it needs both vocabularies.
+//
+// $textbotlang is the PANEL's: Persian for every reader, the same copy
+// admin.php answers from, because a panel button built here is matched there
+// by its text. Nearly everything below is panel chrome, which is why it gets
+// the plain name.
+//
+// $customer_texts is the SHOP's: the reader's own language, the same copy
+// index.php answers from. The handful of keyboards a customer actually sees
+// are built from it and are marked as such where they are defined. Getting one
+// of those two wrong is what kills a button - it gets printed in one language
+// and compared in the other.
+$textbotlang = panel_texts();
+$customer_texts = ui_texts();
 if (!function_exists('getPaySettingValue')) {
     function getPaySettingValue($name)
     {
@@ -32,19 +41,21 @@ if ($users == false) {
         'cardpayment' => ""
     );
 }
+// SHOP surface: these are the customer's own main-menu button names, and
+// index.php matches a tap against the same strings.
 $replacements = [
-    'text_usertest' => $textbotlang['textbot']['userTest'],
-    'text_Purchased_services' => $textbotlang['textbot']['purchasedServices'],
-    'text_support' => $textbotlang['textbot']['support'],
-    'text_help' => $textbotlang['textbot']['help'],
-    'accountwallet' => $textbotlang['textbot']['accountWallet'],
-    'addbalance' => $textbotlang['textbot']['addBalance'],
-    'text_sell' => $textbotlang['textbot']['sell'],
-    'text_Tariff_list' => $textbotlang['textbot']['tariffList'],
-    'text_affiliates' => $textbotlang['textbot']['affiliates'],
-    'text_wheel_luck' => $textbotlang['textbot']['wheelLuck'],
-    'text_extend' => $textbotlang['textbot']['extend'],
-    'text_change_language' => $textbotlang['language']['changeButton']
+    'text_usertest' => $customer_texts['textbot']['userTest'],
+    'text_Purchased_services' => $customer_texts['textbot']['purchasedServices'],
+    'text_support' => $customer_texts['textbot']['support'],
+    'text_help' => $customer_texts['textbot']['help'],
+    'accountwallet' => $customer_texts['textbot']['accountWallet'],
+    'addbalance' => $customer_texts['textbot']['addBalance'],
+    'text_sell' => $customer_texts['textbot']['sell'],
+    'text_Tariff_list' => $customer_texts['textbot']['tariffList'],
+    'text_affiliates' => $customer_texts['textbot']['affiliates'],
+    'text_wheel_luck' => $customer_texts['textbot']['wheelLuck'],
+    'text_extend' => $customer_texts['textbot']['extend'],
+    'text_change_language' => $customer_texts['language']['changeButton']
 ];
 $admin_idss = select("admin", "*", "id_admin", $from_id, "count");
 $temp_addtional_key = [];
@@ -322,13 +333,14 @@ if (!function_exists('build_main_keyboard')) {
 }
 $keyboard = build_main_keyboard();
 
+// SHOP surface: the customer's own account screen.
 $kp_accountRows = [
-    [['text' => $textbotlang['textbot']['addBalance'], 'callback_data' => "Add_Balance"]],
+    [['text' => $customer_texts['textbot']['addBalance'], 'callback_data' => "Add_Balance"]],
 ];
 // 🚫 مخفی کردن این دکمه (🎨 شخصی‌سازی) drops the whole row - a row holding
 // nothing is not something Telegram accepts
 if (!bt_button_hidden($users['lang'] ?? 'fa', 'bottext.btnCloseAccount')) {
-    $kp_accountRows[] = [bt_button($users['lang'] ?? 'fa', 'bottext.btnCloseAccount', $textbotlang['bottext']['btnCloseAccount'] ?? $textbotlang['bottext']['btn_close'], 'mmclose:ac')];
+    $kp_accountRows[] = [bt_button($users['lang'] ?? 'fa', 'bottext.btnCloseAccount', $customer_texts['bottext']['btnCloseAccount'] ?? $customer_texts['bottext']['btn_close'], 'mmclose:ac')];
 }
 $keyboardPanel = json_encode([
     'inline_keyboard' => $kp_accountRows,
@@ -494,11 +506,11 @@ $step_payment = [
 if ($PaySettingcard == "oncard" && intval($users['cardpayment']) == 1) {
     if ($PaySettingpv == "oncardpv") {
         $step_payment['inline_keyboard'][] = [
-            ['text' => $textbotlang['textbot']['cartToCart'], 'url' => "https://t.me/$usernamecart"],
+            ['text' => $customer_texts['textbot']['cartToCart'], 'url' => "https://t.me/$usernamecart"],
         ];
     } else {
         $step_payment['inline_keyboard'][] = [
-            ['text' => $textbotlang['textbot']['cartToCart'], 'callback_data' => "cart_to_offline"],
+            ['text' => $customer_texts['textbot']['cartToCart'], 'callback_data' => "cart_to_offline"],
         ];
     }
 }
@@ -506,72 +518,72 @@ if (($paymentexits == 0 && $paymentverify == "onpayverify"))
     unset($step_payment['inline_keyboard']);
 if ($PaySettingnow == "onnowpayment") {
     $step_payment['inline_keyboard'][] = [
-        ['text' => $textbotlang['textbot']['nowPayment'], 'callback_data' => "plisio"]
+        ['text' => $customer_texts['textbot']['nowPayment'], 'callback_data' => "plisio"]
     ];
 }
 if ($payment_status_nowpayment == "1") {
     $step_payment['inline_keyboard'][] = [
-        ['text' => $textbotlang['textbot']['cryptoPayment'], 'callback_data' => "nowpayment"]
+        ['text' => $customer_texts['textbot']['cryptoPayment'], 'callback_data' => "nowpayment"]
     ];
 }
 if ($affilnecurrency == "ondigi") {
     $step_payment['inline_keyboard'][] = [
-        ['text' => $textbotlang['textbot']['nowPaymentTron'], 'callback_data' => "digitaltron"]
+        ['text' => $customer_texts['textbot']['nowPaymentTron'], 'callback_data' => "digitaltron"]
     ];
 }
 if ($Swapino == "onSwapinoBot") {
     $step_payment['inline_keyboard'][] = [
-        ['text' => $textbotlang['textbot']['iranPay2'], 'callback_data' => "iranpay1"]
+        ['text' => $customer_texts['textbot']['iranPay2'], 'callback_data' => "iranpay1"]
     ];
 }
 if ($trnadoo == "onternado") {
     $step_payment['inline_keyboard'][] = [
-        ['text' => $textbotlang['textbot']['iranPay3'], 'callback_data' => "iranpay2"]
+        ['text' => $customer_texts['textbot']['iranPay3'], 'callback_data' => "iranpay2"]
     ];
 }
 if ($arzireyali3 == "oniranpay3" && $paymentexits >= 2) {
     $step_payment['inline_keyboard'][] = [
-        ['text' => $textbotlang['textbot']['iranPay1'], 'callback_data' => "iranpay3"]
+        ['text' => $customer_texts['textbot']['iranPay1'], 'callback_data' => "iranpay3"]
     ];
 }
 if ($PaySettingaqayepardakht == "onaqayepardakht") {
     $step_payment['inline_keyboard'][] = [
-        ['text' => $textbotlang['textbot']['aqayePardakht'], 'callback_data' => "aqayepardakht"]
+        ['text' => $customer_texts['textbot']['aqayePardakht'], 'callback_data' => "aqayepardakht"]
     ];
 }
 if ($zarinpal == "onzarinpal") {
     $step_payment['inline_keyboard'][] = [
-        ['text' => $textbotlang['textbot']['zarinPal'], 'callback_data' => "zarinpal"]
+        ['text' => $customer_texts['textbot']['zarinPal'], 'callback_data' => "zarinpal"]
     ];
 }
 if ($frenzyex == "onfrenzyex") {
     $step_payment['inline_keyboard'][] = [
-        ['text' => $textbotlang['textbot']['frenzyEx'], 'callback_data' => "frenzyex"]
+        ['text' => $customer_texts['textbot']['frenzyEx'], 'callback_data' => "frenzyex"]
     ];
 }
 if ($paymentstatussnotverify == "onverifypay") {
     $step_payment['inline_keyboard'][] = [
-        ['text' => $textbotlang['textbot']['paymentNotVerify'], 'callback_data' => "paymentnotverify"]
+        ['text' => $customer_texts['textbot']['paymentNotVerify'], 'callback_data' => "paymentnotverify"]
     ];
 }
 if (intval($paymentsstartelegram) == 1) {
     $step_payment['inline_keyboard'][] = [
-        ['text' => $textbotlang['textbot']['starTelegram'], 'callback_data' => "startelegrams"]
+        ['text' => $customer_texts['textbot']['starTelegram'], 'callback_data' => "startelegrams"]
     ];
 }
 if (intval(getPaySettingValue('statuston')) == 1) {
     $step_payment['inline_keyboard'][] = [
-        ['text' => $textbotlang['textbot']['tonPayment'], 'callback_data' => "ton"]
+        ['text' => $customer_texts['textbot']['tonPayment'], 'callback_data' => "ton"]
     ];
 }
 if (intval(getPaySettingValue('statustrx')) == 1) {
     $step_payment['inline_keyboard'][] = [
-        ['text' => $textbotlang['textbot']['trxPayment'], 'callback_data' => "trx"]
+        ['text' => $customer_texts['textbot']['trxPayment'], 'callback_data' => "trx"]
     ];
 }
 if (intval(getPaySettingValue('statususdtbep')) == 1) {
     $step_payment['inline_keyboard'][] = [
-        ['text' => $textbotlang['textbot']['usdtbepPayment'], 'callback_data' => "usdtbep"]
+        ['text' => $customer_texts['textbot']['usdtbepPayment'], 'callback_data' => "usdtbep"]
     ];
 }
 // keep only the gateways this user's language is allowed to see (set in
@@ -579,24 +591,24 @@ if (intval(getPaySettingValue('statususdtbep')) == 1) {
 $step_payment['inline_keyboard'] = gateway_filter_rows(
     $step_payment['inline_keyboard'] ?? [],
     $users['lang'] ?? 'fa',
-    $textbotlang['textbot']['cartToCart'] ?? null
+    $customer_texts['textbot']['cartToCart'] ?? null
 );
 // per-language button styling (order/width/emoji/color/rename), set via
 // 🎨 شخصی‌سازی نمایش دکمه‌ها -> 💳 روش‌های پرداخت
 $step_payment['inline_keyboard'] = gateway_apply_button_style(
     $step_payment['inline_keyboard'],
     $users['lang'] ?? 'fa',
-    $textbotlang['textbot']['cartToCart'] ?? null
+    $customer_texts['textbot']['cartToCart'] ?? null
 );
 // If the routing left nothing, telling the buyer to "pick a method below" is
 // worse than useless - every call site uses $noCreditText so they all say the
 // honest thing instead.
 $step_payment_none = empty($step_payment['inline_keyboard']);
 $noCreditText = $step_payment_none
-    ? $textbotlang['users']['sell']['noPaymentMethod']
-    : $textbotlang['users']['sell']['noCredit'];
+    ? $customer_texts['users']['sell']['noPaymentMethod']
+    : $customer_texts['users']['sell']['noCredit'];
 $step_payment['inline_keyboard'][] = [
-    ['text' => $textbotlang['keyboard']['closeList'], 'callback_data' => "colselist", 'style' => 'danger']
+    ['text' => $customer_texts['keyboard']['closeList'], 'callback_data' => "colselist", 'style' => 'danger']
 ];
 $step_payment = json_encode($step_payment);
 $keyboardhelpadmin = json_encode([
@@ -669,10 +681,11 @@ if ($setting['inlinebtnmain'] == "oninline") {
         'resize_keyboard' => true
     ]);
 }
+// SHOP surface: phone verification is something a customer is asked for.
 $request_contact = json_encode([
     'keyboard' => [
-        [['text' => bt_reply_label($kb_userlang, 'keyboard.sendPhoneNumber', $textbotlang['keyboard']['sendPhoneNumber']), 'request_contact' => true]],
-        [['text' => $textbotlang['users']['backbtn']]]
+        [['text' => bt_reply_label($kb_userlang, 'keyboard.sendPhoneNumber', $customer_texts['keyboard']['sendPhoneNumber']), 'request_contact' => true]],
+        [['text' => $customer_texts['users']['backbtn']]]
     ],
     'resize_keyboard' => true
 ]);
@@ -714,7 +727,7 @@ $backadmin = json_encode([
 // purchase flow: pick a custom service name, use a bot-generated random one, or
 // cancel back to the plan list - always inline regardless of the main-menu
 // glass/reply toggle, same as every other purchase-flow action button
-$selectUsernameKb = sell_selectUsername_kb($user['lang'] ?? 'fa', $textbotlang);
+$selectUsernameKb = sell_selectUsername_kb($user['lang'] ?? 'fa', $customer_texts);
 //------------------  [ list panel ]----------------//
 $stmt = $pdo->prepare("SHOW TABLES LIKE 'marzban_panel'");
 $stmt->execute();
@@ -966,7 +979,7 @@ if (feature_value('statusnoteforf', $lp_userlang, $setting['statusnoteforf']) ==
     $statusnote = false;
 if (!bt_button_hidden($lp_userlang, 'bottext.btnCloseBuy')) {
     $list_marzban_panel_users['inline_keyboard'][] = [
-        bt_button($lp_userlang, 'bottext.btnCloseBuy', $textbotlang['bottext']['btnCloseBuy'] ?? $textbotlang['bottext']['btn_close'], 'sellclose'),
+        bt_button($lp_userlang, 'bottext.btnCloseBuy', $customer_texts['bottext']['btnCloseBuy'] ?? $customer_texts['bottext']['btn_close'], 'sellclose'),
     ];
 }
 $list_marzban_panel_user = json_encode($list_marzban_panel_users);
@@ -986,7 +999,7 @@ while ($result = $stmt->fetch(PDO::FETCH_ASSOC)) {
     ];
 }
 $list_marzban_panel_users_om['inline_keyboard'][] = [
-    ['text' => $textbotlang['users']['backbtn'], 'callback_data' => "backuser"],
+    ['text' => $customer_texts['users']['backbtn'], 'callback_data' => "backuser"],
 ];
 $list_marzban_panel_userom = json_encode($list_marzban_panel_users_om);
 
@@ -1023,7 +1036,7 @@ if ($panelcount > 10) {
     }
 }
 $list_marzban_panel_users_change['inline_keyboard'][] = [
-    ['text' => $textbotlang['users']['backbtn'], 'callback_data' => "backorder"],
+    ['text' => $customer_texts['users']['backbtn'], 'callback_data' => "backorder"],
 ];
 $list_marzban_panel_userschange = json_encode($list_marzban_panel_users_change);
 
@@ -1069,7 +1082,7 @@ $list_marzban_panel_usertest['inline_keyboard'] = array_merge(
 // test-account journey, so wording it there should not reword the shop's
 if (!bt_button_hidden($users['lang'] ?? 'fa', 'bottext.btnCloseTest')) {
     $list_marzban_panel_usertest['inline_keyboard'][] = [
-        bt_button($users['lang'] ?? 'fa', 'bottext.btnCloseTest', $textbotlang['bottext']['btnCloseTest'] ?? $textbotlang['bottext']['btn_close'], 'mmclose:te'),
+        bt_button($users['lang'] ?? 'fa', 'bottext.btnCloseTest', $customer_texts['bottext']['btnCloseTest'] ?? $customer_texts['bottext']['btn_close'], 'mmclose:te'),
     ];
 }
 $list_marzban_usertest = json_encode($list_marzban_panel_usertest);
@@ -1181,8 +1194,8 @@ if ($table_exists) {
 // 🖥 نمایش انتخاب پنل is off and a single panel is auto-picked. It is also the
 // one buy-callback that deliberately skips the نام دلخواه note step, so going
 // back never re-asks a question the user already answered.
-$payment = sell_confirm_kb($user['lang'] ?? 'fa', $textbotlang, "confirmandgetservice", "buybacktow");
-$paymentom = sell_confirm_kb($user['lang'] ?? 'fa', $textbotlang, "confirmandgetservice");
+$payment = sell_confirm_kb($user['lang'] ?? 'fa', $customer_texts, "confirmandgetservice", "buybacktow");
+$paymentom = sell_confirm_kb($user['lang'] ?? 'fa', $customer_texts, "confirmandgetservice");
 $change_product = json_encode([
     'keyboard' => [
         [['text' => $textbotlang['keyboard']['price']], ['text' => $textbotlang['keyboard']['volume']], ['text' => $textbotlang['keyboard']['time']]],
@@ -1736,11 +1749,11 @@ if ($setting['inlinebtnmain'] == "oninline") {
     $keyboardagent = [
         'inline_keyboard' => [
             [
-                ['text' => $textbotlang['keyboard']['bulkPurchase'], 'callback_data' => "kharidanbuh"],
-                ['text' => $textbotlang['keyboard']['selectCustomName'], 'callback_data' => "selectname"]
+                ['text' => $customer_texts['keyboard']['bulkPurchase'], 'callback_data' => "kharidanbuh"],
+                ['text' => $customer_texts['keyboard']['selectCustomName'], 'callback_data' => "selectname"]
             ],
             [
-                ['text' => $textbotlang['users']['backbtn'], 'callback_data' => "backuser"]
+                ['text' => $customer_texts['users']['backbtn'], 'callback_data' => "backuser"]
             ]
         ],
         'resize_keyboard' => true
@@ -1751,8 +1764,8 @@ if ($setting['inlinebtnmain'] == "oninline") {
 } else {
     $keyboardagent = [
         'keyboard' => [
-            [['text' => $textbotlang['keyboard']['bulkPurchase']], ['text' => $textbotlang['keyboard']['selectCustomName']]],
-            [['text' => $textbotlang['users']['backbtn']]]
+            [['text' => $customer_texts['keyboard']['bulkPurchase']], ['text' => $customer_texts['keyboard']['selectCustomName']]],
+            [['text' => $customer_texts['users']['backbtn']]]
         ],
         'resize_keyboard' => true
     ];
@@ -1849,7 +1862,7 @@ while ($result = $stmt->fetch(PDO::FETCH_ASSOC)) {
     ];
 }
 $list_departman['inline_keyboard'][] = [
-    ['text' => $textbotlang['users']['backbtn'], 'callback_data' => "backuser"],
+    ['text' => $customer_texts['users']['backbtn'], 'callback_data' => "backuser"],
 ];
 $list_departman = json_encode($list_departman);
 $active_panell = json_encode([
@@ -2202,10 +2215,11 @@ function keyboard_config($config_split, $id_invoice, $back_active = true, $kind 
     }
     return json_encode($keyboard_config);
 }
+// SHOP surface: offered to a customer whose test-account limit ran out.
 $keyboard_buy = json_encode([
     'inline_keyboard' => [
         [
-            ['text' => $textbotlang['keyboard']['buySubscription'], 'callback_data' => 'buy'],
+            ['text' => $customer_texts['keyboard']['buySubscription'], 'callback_data' => 'buy'],
         ],
     ]
 ]);
