@@ -13430,11 +13430,14 @@ if (!function_exists('volumepct_tier_is_custom')) {
                 return true;
             }
         }
-        foreach (['style', 'emoji', 'emojiIcon', 'pos', 'simple'] as $global) {
-            if (!empty($tier[$global])) {
-                return true;
-            }
-        }
+        // style/emoji/emojiIcon/pos/simple are stored once for the whole bot
+        // (volumepct_tier_reset_style() says so where it clears them), so they
+        // are NOT evidence that THIS language was customized. Counting them
+        // turned 🔋 هشدار مصرف بسته green on every language tab the moment one
+        // of them got an emoji - the same mistake configColOrder made on the
+        // usertest row, fixed the same way. Until those fields are given a
+        // language of their own, a shared value must not colour a per-language
+        // screen.
         return false;
     }
 }

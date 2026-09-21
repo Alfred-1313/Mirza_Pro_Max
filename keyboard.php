@@ -2722,9 +2722,14 @@ function keyboard_list_text($lang, $groupFilter = null)
             ]];
         }
         if ($bt_sec_key === 'home_admin') {
-            // green once either switch is away from its default
-            $bt_adm_custom = (string) ($bt_list_setting['admin_test_unlimited'] ?? '1') === '0' || (string) ($bt_list_setting['admin_buy_free'] ?? '0') === '1';
-            $keyboard_text['inline_keyboard'][] = [['text' => '🛡 اکانت تست و خرید ادمین', 'callback_data' => "admperm|open|$lang", 'style' => $bt_adm_custom ? 'success' : 'primary']];
+            // Never green, and marked 🌐 instead: both switches behind this row
+            // (admin_test_unlimited, admin_buy_free) are single bot-wide
+            // settings with no language of their own - there is one set of
+            // admins, not one per language. Colouring it from them made the
+            // row look edited on a tab it was never edited on, which is what
+            // green means everywhere else on this screen. The badge says what
+            // the colour no longer does.
+            $keyboard_text['inline_keyboard'][] = [['text' => '🌐 🛡 اکانت تست و خرید ادمین', 'callback_data' => "admperm|open|$lang", 'style' => 'primary']];
         }
     }
     // Anything ungrouped that isn't in one of the sections above still needs to
