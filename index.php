@@ -483,7 +483,12 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     return;
 } elseif ($text == "version") {
     sendmessage($from_id, $version, null, 'html');
-} elseif ($text == $textbotlang['users']['backbtn'] || $datain == "backuser") {
+// 🏠 بازگشت به منوی اصلی is printed by BOTH surfaces: the shop's own screens
+// carry it in the reader's language, and the panel's keyboards carry it in
+// Persian like the rest of the panel. This branch is the only thing that reads
+// it back, so it has to accept either - matching only the reader's copy left
+// the panel's button dead for anyone who had not picked Persian.
+} elseif ($text == $textbotlang['users']['backbtn'] || $text == panel_texts()['users']['backbtn'] || $datain == "backuser") {
     if ($datain == "backuser")
         deletemessage($from_id, $message_id);
     $message_id = sendmessage($from_id, $textbotlang['users']['back'], $keyboard, 'html');
