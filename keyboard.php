@@ -1383,10 +1383,13 @@ if (!function_exists('panel_menu_submenu_json')) {
 $optionMarzban = json_encode([
     'keyboard' => [
         [['text' => $textbotlang['keyboard']['panelFeatureStatus']]],
+        // first thing under the status row: without it the panel cannot build a
+        // service at all, so it belongs above the settings that only tune one
+        [['text' => $textbotlang['keyboard']['setProtocolInbound']]],
         [['text' => $textbotlang['keyboard']['panelName']], ['text' => $textbotlang['keyboard']['deletePanel']]],
         [['text' => $textbotlang['keyboard']['duplicatePanel']]],
         [['text' => $textbotlang['keyboard']['editPassword']], ['text' => $textbotlang['keyboard']['editUsername']]],
-        [['text' => $textbotlang['keyboard']['editPanelUrl']], ['text' => $textbotlang['keyboard']['setProtocolInbound']]],
+        [['text' => $textbotlang['keyboard']['editPanelUrl']]],
         [['text' => $textbotlang['keyboard']['renewalMethod']], ['text' => $textbotlang['keyboard']['usernameMethod']]],
         [['text' => $textbotlang['keyboard']['accountCreateLimit']], ['text' => $textbotlang['keyboard']['changeUserGroup']]],
         [['text' => $textbotlang['keyboard']['testServiceTime']], ['text' => $textbotlang['keyboard']['testAccountVolume']]],
@@ -1406,10 +1409,13 @@ $optionMarzban = json_encode([
 $optionrebecca = json_encode([
     'keyboard' => [
         [['text' => $textbotlang['keyboard']['panelFeatureStatus']]],
+        // first thing under the status row: without it the panel cannot build a
+        // service at all, so it belongs above the settings that only tune one
+        [['text' => $textbotlang['keyboard']['setProtocolInbound']]],
         [['text' => $textbotlang['keyboard']['panelName']], ['text' => $textbotlang['keyboard']['deletePanel']]],
         [['text' => $textbotlang['keyboard']['duplicatePanel']]],
         [['text' => $textbotlang['keyboard']['editPassword']]],
-        [['text' => $textbotlang['keyboard']['editPanelUrl']], ['text' => $textbotlang['keyboard']['setProtocolInbound']]],
+        [['text' => $textbotlang['keyboard']['editPanelUrl']]],
         [['text' => $textbotlang['keyboard']['renewalMethod']], ['text' => $textbotlang['keyboard']['usernameMethod']]],
         [['text' => $textbotlang['keyboard']['accountCreateLimit']], ['text' => $textbotlang['keyboard']['changeUserGroup']]],
         [['text' => $textbotlang['keyboard']['testServiceTime']], ['text' => $textbotlang['keyboard']['testAccountVolume']]],
@@ -1467,10 +1473,13 @@ $option_mikrotik = json_encode([
 $options_ui = json_encode([
     'keyboard' => [
         [['text' => $textbotlang['keyboard']['panelFeatureStatus']]],
+        // first thing under the status row: without it the panel cannot build a
+        // service at all, so it belongs above the settings that only tune one
+        [['text' => $textbotlang['keyboard']['setProtocolInbound']]],
         [['text' => $textbotlang['keyboard']['panelName']], ['text' => $textbotlang['keyboard']['deletePanel']]],
         [['text' => $textbotlang['keyboard']['duplicatePanel']]],
         [['text' => $textbotlang['keyboard']['editPassword']], ['text' => $textbotlang['keyboard']['editUsername']]],
-        [['text' => $textbotlang['keyboard']['editPanelUrl']], ['text' => $textbotlang['keyboard']['setProtocolInbound']]],
+        [['text' => $textbotlang['keyboard']['editPanelUrl']]],
         [['text' => $textbotlang['keyboard']['renewalMethod']], ['text' => $textbotlang['keyboard']['usernameMethod']]],
         [['text' => $textbotlang['keyboard']['accountCreateLimit']], ['text' => $textbotlang['keyboard']['changeUserGroup']]],
         [['text' => $textbotlang['keyboard']['testServiceTime']], ['text' => $textbotlang['keyboard']['testAccountVolume']]],
@@ -1551,11 +1560,13 @@ $optionManualsale = json_encode([
 $optionX_ui_single = json_encode([
     'keyboard' => [
         [['text' => $textbotlang['keyboard']['panelFeatureStatus']]],
+        // first thing under the status row: without it the panel cannot build a
+        // service at all, so it belongs above the settings that only tune one
+        [['text' => $textbotlang['keyboard']['setProtocolInbound']]],
         [['text' => $textbotlang['keyboard']['panelName']], ['text' => $textbotlang['keyboard']['deletePanel']]],
         [['text' => $textbotlang['keyboard']['duplicatePanel']]],
         [['text' => $textbotlang['keyboard']['editPassword']]],
         [['text' => $textbotlang['keyboard']['editPanelUrl']], ['text' => $textbotlang['keyboard']['renewalMethod']]],
-        [['text' => $textbotlang['keyboard']['setProtocolInbound']]],
         [['text' => $textbotlang['keyboard']['usernameMethod']], ['text' => $textbotlang['keyboard']['subLinkDomain']]],
         [['text' => $textbotlang['keyboard']['changeUserGroup']], ['text' => $textbotlang['keyboard']['accountCreateLimit']]],
         [['text' => $textbotlang['keyboard']['testServiceTime']], ['text' => $textbotlang['keyboard']['testAccountVolume']]],

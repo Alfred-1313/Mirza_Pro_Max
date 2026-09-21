@@ -4345,7 +4345,11 @@ if (!function_exists('panel_feature_keyboard')) {
         };
         $rows = [];
         $rows[] = [$btn($panel['status'] == 'active', $textbotlang['keyboard']['showPanel'], "editpanel-statusbuy-{$panel['status']}-{$code}")];
-        $rows[] = [$btn($panel['TestAccount'] == 'ONTestAccount', $textbotlang['keyboard']['showTestAccount'], "editpanel-statustest-{$panel['TestAccount']}-{$code}")];
+        // says WHY it cannot be switched on, instead of looking available and
+        // refusing on tap
+        $tst_ready = panel_inbound_ready($code);
+        $tst_label = $textbotlang['keyboard']['showTestAccount'] . ($tst_ready ? '' : ' — ⚙️ اینباند تنظیم نشده');
+        $rows[] = [$btn($panel['TestAccount'] == 'ONTestAccount', $tst_label, "editpanel-statustest-{$panel['TestAccount']}-{$code}")];
         $rows[] = [['text' => $textbotlang['keyboard']['autoDeleteExpiredTest'], 'callback_data' => "editpanel-delusertestmenu-x-{$code}"]];
         // ibsng / mikrotik support only the three toggles above
         if (in_array($type, ["ibsng", "mikrotik"], true)) {
@@ -20252,6 +20256,19 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
             $valuenew = "OFFTestAccount";
         } else {
             $valuenew = "ONTestAccount";
+        }
+        // Turning it ON needs the protocol/inbound set first. Without it the
+        // panel is asked to build a service with no inbound, the API refuses,
+        // and the customer gets "خطایی در ساخت اشتراک رخ داده" with nothing on
+        // screen saying why - so the refusal happens here, where the admin can
+        // act on it, rather than later in front of a customer.
+        if ($valuenew === "ONTestAccount" && !panel_inbound_ready($code_panel)) {
+            telegram('answerCallbackQuery', [
+                'callback_query_id' => $callback_query_id,
+                'text' => $textbotlang['Admin']['managepanel']['testNeedsInbound'],
+                'show_alert' => true,
+            ]);
+            return;
         }
         update("marzban_panel", "TestAccount", $valuenew, "code_panel", $code_panel);
     } elseif ($type == "stautsextend") {

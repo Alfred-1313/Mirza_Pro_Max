@@ -15042,6 +15042,32 @@ if (!function_exists('bottext_extras_key_hint')) {
         return $k;
     }
 }
+if (!function_exists('panel_inbound_ready')) {
+    // Is this panel's protocol/inbound actually chosen?
+    //
+    // marzban_panel.proxies holds it, and a panel created without it will take
+    // a service request and fail at the panel's own API - which reaches the
+    // customer as a generic "could not create" and tells nobody what is
+    // missing. The panel types that do not use inbounds at all are exempt:
+    // they either have no such concept or carry their own equivalent.
+    function panel_inbound_ready($code_panel)
+    {
+        $panel = select("marzban_panel", "*", "code_panel", $code_panel, "select");
+        if (!is_array($panel)) {
+            return false;
+        }
+        if (in_array((string) ($panel['type'] ?? ''), ['Manualsale', 'WGDashboard', 'ibsng', 'mikrotik', 'hiddify'], true)) {
+            return true;
+        }
+        $raw = trim((string) ($panel['proxies'] ?? ''));
+        if ($raw === '' || $raw === 'null' || $raw === '[]' || $raw === '{}') {
+            return false;
+        }
+        $decoded = json_decode($raw, true);
+        // a stored value that decodes to nothing usable is the same as unset
+        return !(is_array($decoded) && count($decoded) === 0);
+    }
+}
 if (!function_exists('panels_available_count')) {
     // How many panels this customer can actually be shown, asked with the same
     // three filters the lists in keyboard.php use: agent tier, language, and
