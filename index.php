@@ -7076,10 +7076,18 @@ if (isset($update['message']['successful_payment'])) {
     $lang = $dataget[1];
     update("user", "lang", $lang, "id", $from_id);
     clearSelectCache();
+    // $users was read at the top of keyboard.php, before this switch happened,
+    // so it still carries the OLD language - and build_main_keyboard() below
+    // resolves the menu from exactly that row. Left stale, the first tap built
+    // the menu in the language being left behind, and the switch appeared to
+    // need tapping twice.
+    $users['lang'] = $lang;
+    $user['lang'] = $lang;
     // drop the picker and restart the bot so every button label picks up the new language
     deletemessage($from_id, $message_id);
-    // the admin rule applies here too: rebuilding the main keyboard right after
-    // a language switch is exactly where the panel button used to turn foreign
+    // re-read after the switch, so the welcome text below is already in the
+    // language just chosen - the panel's own vocabulary stays Persian either
+    // way, see ui_texts()
     $textbotlang = ui_texts();
     $keyboard = build_main_keyboard();
     sendmessage($from_id, strtr($textbotlang['users']['text_start'], bottext_user_placeholders($user, $from_id)), $keyboard, 'html');
