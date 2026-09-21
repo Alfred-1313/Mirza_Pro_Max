@@ -2615,8 +2615,6 @@ function keyboard_list_text($lang, $groupFilter = null)
         // off - their messages had no row here at all until now, so they were
         // the only customer-facing flows with no way to reword them
         'home_features' => [],
-        // 🛡 what admins' own test accounts and purchases are held to
-        'home_admin' => [],
     ];
     $bt_home_sectioned_keys = array_merge(...array_values($bt_home_sections));
     foreach ($bt_home_sections as $bt_sec_key => $bt_sec_items) {
@@ -2704,15 +2702,16 @@ function keyboard_list_text($lang, $groupFilter = null)
                 'style' => $bt_sub_custom ? 'success' : 'primary',
             ]];
         }
-        if ($bt_sec_key === 'home_admin') {
-            // Never green, and marked 🌐 instead: both switches behind this row
-            // (admin_test_unlimited, admin_buy_free) are single bot-wide
-            // settings with no language of their own - there is one set of
-            // admins, not one per language. Colouring it from them made the
-            // row look edited on a tab it was never edited on, which is what
-            // green means everywhere else on this screen. The badge says what
-            // the colour no longer does.
-            $keyboard_text['inline_keyboard'][] = [['text' => '🌐 🛡 اکانت تست و خرید ادمین', 'callback_data' => "admperm|open|$lang", 'style' => 'primary']];
+        if ($bt_sec_key === 'home_general') {
+            // the unknown-message reply sits with the other messages the bot
+            // sends on its own, right after the channel join-gate one, instead
+            // of alone at the foot of the screen
+            list($bt_um_label, $bt_um_style) = $bt_decorate('users.unknownMsg', $bt_unknown_label);
+            $keyboard_text['inline_keyboard'][] = [[
+                'text' => $bt_um_label,
+                'callback_data' => "bt_edit|$lang|users.unknownMsg",
+                'style' => ($bt_um_style !== '' ? $bt_um_style : 'primary'),
+            ]];
         }
     }
     // Anything ungrouped that isn't in one of the sections above still needs to
@@ -2747,10 +2746,18 @@ function keyboard_list_text($lang, $groupFilter = null)
     // promoted out of the button-settings hub into its own direct row - it
     // controls the end-user language-picker menu, unrelated to button appearance
     $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['langSwitchLabel'], 'callback_data' => 'bt_langswitch', 'style' => 'primary']];
+    // Sits with the other side tools now, and says on the button what its own
+    // section heading used to say above it. Never green: both switches behind
+    // it (admin_test_unlimited, admin_buy_free) are single bot-wide settings
+    // with no language of their own - there is one set of admins, not one per
+    // language - so colouring it from them made the row look edited on a tab it
+    // was never edited on, which is what green means everywhere else here.
+    $keyboard_text['inline_keyboard'][] = [['text' => '🛡 دسترسی و محدودیت‌های ادمین', 'callback_data' => "admperm|open|$lang", 'style' => 'primary']];
     // 🖼 استیکر دکمه بستن moved from here into each section's own ❌ بستن item
     // (خرید اشتراک, افزایش موجودی, ...) - it is per-section now, not one
     // shared bot-wide switch, so a single row here would no longer mean
     // anything coherent.
+    $keyboard_text['inline_keyboard'][] = [['text' => bt_section_meta('home_alerts')['label'], 'callback_data' => 'bt_sep|home_alerts']];
     // the warning tiers live in their own column and have no bottext key, so this
     // row does its own check instead of going through $bt_decorate. It asks
     // "is anything customized?", NOT "does a threshold exist?" - a bare threshold
@@ -2761,9 +2768,6 @@ function keyboard_list_text($lang, $groupFilter = null)
         $bt_volpct_btn['style'] = 'success';
     }
     $keyboard_text['inline_keyboard'][] = [$bt_volpct_btn];
-    list($bt_um_label, $bt_um_style) = $bt_decorate('users.unknownMsg', $bt_unknown_label);
-    $bt_um_btn = ['text' => $bt_um_label, 'callback_data' => "bt_edit|$lang|users.unknownMsg", 'style' => ($bt_um_style !== '' ? $bt_um_style : 'primary')];
-    $keyboard_text['inline_keyboard'][] = [$bt_um_btn];
     $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['resetAllLabel'], 'callback_data' => "bt_resetall|$lang", 'style' => 'danger']];
     $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']];
     $bt_caption_tpl = $textbotlang['bottext']['home_text'];
