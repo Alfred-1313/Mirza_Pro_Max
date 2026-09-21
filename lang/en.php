@@ -383,6 +383,7 @@ Please use the menu buttons below, or send /start.',
                         'insufficientbalance' => '❌ Your balance is not enough to purchase the service.
 💸 To top up your balance, enter the amount in Toman:
 ✅ Minimum amount %s Toman, maximum amount %s Toman',
+                        'insufficientBalanceSimple' => '❌ Insufficient balance.',
                         'linkpayments' => 'Creating payment link...',
                         'maxpurchasereached' => '❌ You have reached your maximum purchase limit. Please first top up your account, then purchase a new service or renew an existing one',
                         'nowpayments' => '❌ Error 
@@ -1066,13 +1067,20 @@ Support account : @%s',
                         'nullProduct' => '⭕️ No product was found. Please contact support to resolve the issue',
                         'panelCapacityFull' => '❌ Unfortunately, the account creation capacity on this panel has been reached. Use another panel',
                         'capacityFull' => '❌ Unfortunately, the account creation capacity has been reached. Try again in a few hours.',
-                        'nullPanel' => '⭕️ No position was found. Please contact support to resolve the issue',
+                        'nullPanel' => '⛔️ No service is available for sale at the moment. Please check back later.',
                         'selectDuration' => '📌 Select the service duration',
                         'purchaseError' => '❌ The purchase failed. Perform the steps again.',
                         'stockFinished' => '❌ This service\'s volume has run out.',
                         'stockFinishedBuyAnother' => '❌ This service\'s volume has run out. Please purchase another service.',
                         'selectCategoryShort' => '📌 Select a category',
                         'selectCategory' => '📌 Select your category!',
+                        'backToPanelListBtn' => '🔙 Back to the panel list',
+                        'backToPreviousBtn' => '🔙 Back to the category list',
+                        'selectUsernamePrompt' => 'Would you like to choose the service name yourself, or use the default one?
+
+If you have a name in mind, just type it in this chat (English letters and numbers only).
+
+To use the default name, press the green button; to cancel and go back to the plan list, press the red one.',
                         'panelUnavailable' => '❌ This panel is not available. Please make your purchase from another panel.',
                         'restartProcess' => '❌ Please perform the purchase steps again',
                         'creating' => '♻️ Creating your service...',
