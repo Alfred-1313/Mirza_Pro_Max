@@ -8888,6 +8888,15 @@ if (!function_exists('config_delivery_panel_payload')) {
         $info .= "مناسب سرویس‌هایی که چند تا کانفیگ دارن.\n";
         $info .= "➖➖➖➖➖➖➖➖➖➖\n";
         $info .= "الان: <b>حالت " . config_delivery_mode_fa($cur) . "</b>";
+        // Mode 2 also needs the panel's own «ارسال کانفیگ» switch. Without it
+        // the second message is never sent, and this screen used to show
+        // "حالت ۲ ✅" anyway - so the setting looked applied and did nothing.
+        $cd_sendOn = (is_array($panel) && ($panel['config'] ?? '') === 'onconfig');
+        if (!$cd_sendOn) {
+            $info .= "\n\n⚠️ <b>«ارسال کانفیگ» این پنل خاموشه.</b>\n";
+            $info .= "تا روشنش نکنی، حالت ۲ کار نمی‌کنه - صفحه‌ی کانفیگ فرستاده نمی‌شه.\n";
+            $info .= "مسیر: مدیریت پنل‌ها ← همین پنل ← ⚙️ وضعیت قابلیت‌های پنل ← «ارسال کانفیگ».";
+        }
         $qrOn = config_delivery_qr_on($kind, $codePanel);
         $info .= "\n\n📷 <b>QR کد همراه پیام:</b> " . ($qrOn ? "روشن ✅" : "خاموش ❌") . "\n";
         $info .= "QR لینک اشتراک رو نشون می‌ده. اگه لینک اشتراک این پنل خاموش باشه، فقط وقتی سرویس یک کانفیگ داره QR فرستاده می‌شه.";
@@ -8896,7 +8905,7 @@ if (!function_exists('config_delivery_panel_payload')) {
             ['text' => ($cur === '1' ? '✅ ' : '') . 'حالت ۱ — فقط پیام کامل', 'callback_data' => "cfgdeliv|set|{$lang}|{$codePanel}|{$kind}|1|{$origin}", 'style' => $cur === '1' ? 'success' : 'primary'],
         ];
         $kb['inline_keyboard'][] = [
-            ['text' => ($cur === '2' ? '✅ ' : '') . 'حالت ۲ — + صفحه‌ی کانفیگ', 'callback_data' => "cfgdeliv|set|{$lang}|{$codePanel}|{$kind}|2|{$origin}", 'style' => $cur === '2' ? 'success' : 'primary'],
+            ['text' => ($cur === '2' ? '✅ ' : '') . 'حالت ۲ — + صفحه‌ی کانفیگ' . ($cd_sendOn ? '' : ' (بی‌اثر)'), 'callback_data' => "cfgdeliv|set|{$lang}|{$codePanel}|{$kind}|2|{$origin}", 'style' => $cur === '2' ? ($cd_sendOn ? 'success' : 'danger') : 'primary'],
         ];
         $kb['inline_keyboard'][] = [
             ['text' => $qrOn ? '📷 ارسال QR کد: روشن ✅' : '📷 ارسال QR کد: خاموش ❌', 'callback_data' => "cfgdeliv|qr|{$lang}|{$codePanel}|{$kind}|{$origin}", 'style' => $qrOn ? 'success' : 'danger'],

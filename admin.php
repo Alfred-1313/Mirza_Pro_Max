@@ -5947,7 +5947,10 @@ if (preg_match('/^cfgdeliv\|qr\|([a-z]{2})\|([^|]+)\|(purchase|usertest)\|([bu])
 if (preg_match('/^cfgdeliv\|rst\|([a-z]{2})\|([^|]+)\|(purchase|usertest)\|([bu])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
     config_delivery_panel_reset($cd_m[2], $cd_m[3]);
     list($cd_text, $cd_kb) = config_delivery_panel_payload($cd_m[1], $cd_m[2], $cd_m[4]);
-    Editmessagetext($from_id, $message_id, "🔁 این پنل به حالت پیش‌فرض (حالت ۲، QR کد روشن) برگشت.\n\n" . $cd_text, $cd_kb, 'HTML');
+    // names the mode the reset actually restores - config_delivery_default_mode()
+    // returns '1', so this line claiming "حالت ۲" has been telling admins their
+    // panel went somewhere it did not
+    Editmessagetext($from_id, $message_id, "🔁 این پنل به حالت پیش‌فرض (حالت " . config_delivery_mode_fa(config_delivery_default_mode()) . "، QR کد روشن) برگشت.\n\n" . $cd_text, $cd_kb, 'HTML');
     return;
 }
 if (preg_match('/^cfgdeliv\|cfgcol\|([a-z]{2})\|([^|]+)\|([bu])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
