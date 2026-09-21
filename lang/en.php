@@ -269,6 +269,10 @@ Current language: <b>{lang}</b>',
                         'gigabyteAlt' => 'gigabytes',
                         'kilobyte' => 'Kilobyte',
                         'megabyte' => 'megabytes',
+                        'mbShort' => 'MB',
+                        'gbShort' => 'GB',
+                        'hourShort' => 'hours',
+                        'minShort' => 'min',
                         'terabyte' => 'Terabyte',
                 ],
                 'duration' => [
@@ -3739,11 +3743,11 @@ Connection link:
 🧑‍🦯 You can get the connection method by pressing the button below and selecting your operating system',
                 'afterText' => '<b>✅ Service was created successfully</b>
 
-👤 Service username : {username}
-🌿 Service name:  {name_service}
-‏🇺🇳 Location: {location}
-⏳ Duration: {day} hours / {minute} min
-🗜 Service volume:  {volume} MB / {volume_gb} GB
+👤 <b>Service username:</b> {username}
+🌿 <b>Service name:</b> {name_service}
+🇺🇳 <b>Location:</b> {location}
+⏳ <b>Duration:</b> {time_human}
+🗜 <b>Service volume:</b> {volume_human}
 
 <blockquote><b>Connection link:</b></blockquote>
 

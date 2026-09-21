@@ -868,6 +868,10 @@ return array (
       'gigabyteAlt' => 'گیگابایت',
       'kilobyte' => 'کیلوبایت',
       'megabyte' => 'مگابایت',
+      'mbShort' => 'مگابایت',
+      'gbShort' => 'گیگابایت',
+      'hourShort' => 'ساعت',
+      'minShort' => 'دقیقه',
       'terabyte' => 'ترابایت',
     ),
     'duration' => 
@@ -7039,8 +7043,8 @@ nowpayments.io
 👤 <b>نام کاربری سرویس :</b> {username}
 🌿 <b>نام سرویس :</b> {name_service}
 ‏🇺🇳 <b>لوکیشن :</b> {location}
-⏳ <b>مدت زمان :</b> {day} ساعت / {minute} دقیقه
-🗜 <b>حجم سرویس :</b> {volume} مگابایت / {volume_gb} گیگابایت
+⏳ <b>مدت زمان :</b> {time_human}
+🗜 <b>حجم سرویس :</b> {volume_human}
 
 <blockquote><b>لینک اتصال:</b></blockquote>
 

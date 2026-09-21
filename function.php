@@ -15042,6 +15042,42 @@ if (!function_exists('bottext_extras_key_hint')) {
         return $k;
     }
 }
+if (!function_exists('service_volume_human')) {
+    // A test account's size and length written the way a person would say it:
+    // ONE unit, the one that fits, with the word in the reader's language.
+    //
+    // The panel stores volume in megabytes and time in hours, so a 2 GB service
+    // is "2048" and a 30-minute one is "0.5". Printing the stored number with a
+    // fixed unit gives "2048 مگابایت" and "0.5 ساعت"; printing both units gives
+    // "200 MB / 0.2 GB", which is the same fact twice and reads like a range.
+    function bt_trim_number($n)
+    {
+        $s = rtrim(rtrim(number_format((float) $n, 2, '.', ''), '0'), '.');
+        return $s === '' || $s === '-' ? '0' : $s;
+    }
+    function service_volume_human($mb, $lang)
+    {
+        $t = lang_tab_texts($lang);
+        $m = (float) $mb;
+        // the panels treat 0 as "no limit", so saying "0 MB" would be a lie
+        if ($m <= 0) {
+            return (string) ($t['common']['labels']['unlimitedShort'] ?? '0');
+        }
+        if ($m >= 1024) {
+            return bt_trim_number($m / 1024) . ' ' . (string) ($t['common']['units']['gbShort'] ?? 'GB');
+        }
+        return bt_trim_number($m) . ' ' . (string) ($t['common']['units']['mbShort'] ?? 'MB');
+    }
+    function service_time_human($hours, $lang)
+    {
+        $t = lang_tab_texts($lang);
+        $h = (float) $hours;
+        if ($h > 0 && $h < 1) {
+            return bt_trim_number($h * 60) . ' ' . (string) ($t['common']['units']['minShort'] ?? 'min');
+        }
+        return bt_trim_number($h) . ' ' . (string) ($t['common']['units']['hourShort'] ?? 'h');
+    }
+}
 if (!function_exists('panel_inbound_ready')) {
     // Is this panel's protocol/inbound actually chosen?
     //

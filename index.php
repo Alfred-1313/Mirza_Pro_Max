@@ -3622,16 +3622,13 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     $textcreatuser = str_replace('{location}', $marzban_list_get['name_panel'], $textcreatuser);
     $textcreatuser = str_replace('{day}', $marzban_list_get['time_usertest'], $textcreatuser);
     $textcreatuser = str_replace('{volume}', $marzban_list_get['val_usertest'], $textcreatuser);
-    // the same two numbers in the other unit, so a caption can show both.
-    // {day} is hours and {volume} is megabytes for a test account - the panel
-    // stores them that way - so these are derived rather than read.
-    $ut_minutes = intval($marzban_list_get['time_usertest']) * 60;
-    $ut_gb = intval($marzban_list_get['val_usertest']) / 1024;
-    // trims 1.00 to 1 and 1.50 to 1.5, so a round number does not read as a
-    // measurement it is not
-    $ut_gb = rtrim(rtrim(number_format($ut_gb, 2, '.', ''), '0'), '.');
-    $textcreatuser = str_replace('{minute}', (string) $ut_minutes, $textcreatuser);
-    $textcreatuser = str_replace('{volume_gb}', $ut_gb === '' ? '0' : $ut_gb, $textcreatuser);
+    // the same two numbers written the way a person says them - one unit, the
+    // one that fits, with the word in the reader's language. {day} and {volume}
+    // above stay as the raw stored numbers, for captions that supply their own
+    // unit.
+    $ut_lang = $user['lang'] ?? 'fa';
+    $textcreatuser = str_replace('{time_human}', service_time_human($marzban_list_get['time_usertest'], $ut_lang), $textcreatuser);
+    $textcreatuser = str_replace('{volume_human}', service_volume_human($marzban_list_get['val_usertest'], $ut_lang), $textcreatuser);
     $textcreatuser = str_replace('{config}', "<code>{$output_config_link}</code>", $textcreatuser);
     $textcreatuser = str_replace('{links}', $config, $textcreatuser);
     $textcreatuser = str_replace('{links2}', $output_config_link, $textcreatuser);
