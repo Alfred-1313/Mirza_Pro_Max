@@ -11,9 +11,8 @@ require_once 'function.php';
 require_once 'keyboard.php';
 require_once 'vendor/autoload.php';
 require_once 'panels.php';
-// keyboard.php has already settled this for an admin (Persian - see its own
-// note there). Re-deriving it here would undo that and leave Persian buttons
-// under foreign captions, which is exactly the mismatch that note describes.
+// The same copy keyboard.php built its keyboards from, so that a tapped button
+// is matched against the text it was actually printed with. See ui_texts().
 $textbotlang = ui_texts();
 if ($is_bot)
     return;

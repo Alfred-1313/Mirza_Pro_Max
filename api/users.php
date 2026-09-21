@@ -3,7 +3,10 @@
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../function.php';
 require_once __DIR__ . '/utils.php';
-$textbotlang = languagechange();
+// ui_texts(), not languagechange(): the test-service name written from here is
+// read back by the webhook and the crons, and they resolve the 'Admin'
+// vocabulary as Persian whatever language the caller reads in.
+$textbotlang = ui_texts();
 require_once __DIR__ . '/../botapi.php';
 
 header('Content-Type: application/json; charset=UTF-8');

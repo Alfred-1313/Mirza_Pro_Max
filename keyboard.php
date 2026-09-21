@@ -1,7 +1,11 @@
 <?php
 require_once 'config.php';
 $setting = select("setting", "*", null, null, "select");
-$textbotlang = languagechange();
+// The same copy index.php answers from: the reader's own language, with the
+// panel's own 'Admin' vocabulary Persian (ui_texts() explains why). Both files
+// have to agree on it - the keyboards are built here and the taps that come
+// back are matched there, by text.
+$textbotlang = ui_texts();
 if (!function_exists('getPaySettingValue')) {
     function getPaySettingValue($name)
     {
@@ -15,21 +19,6 @@ if (!$adminrulecheck) {
     $adminrulecheck = array(
         'rule' => '',
     );
-}
-// The panel is Persian, for every admin, in every language.
-//
-// It has to be settled here, before a single keyboard below is built: the
-// panel recognises a tapped button by its TEXT, so its keyboards and the
-// comparisons that read them back must be in the same language as each other.
-// Settled any later and the two disagree - which is how the panel became
-// unreachable, openable only by typing its Persian name by hand.
-//
-// This is the panel's language, not the bot's. build_main_keyboard() resolves
-// the customer's own menu from the customer's own language regardless, so an
-// admin still sees their shop in whatever language they picked.
-$mz_admin_viewer = !empty($adminrulecheck['rule']);
-if ($mz_admin_viewer) {
-    $textbotlang = lang_tab_texts('fa');
 }
 $users = select("user", "*", "id", $from_id, "select");
 if ($users == false) {
@@ -114,11 +103,10 @@ if (!function_exists('build_main_keyboard')) {
         global $setting, $users, $admin_idss, $keyboardRows, $simple_emoji_mode, $global_emoji_pos;
         // The customer's own menu, in the customer's own language - always.
         //
-        // $textbotlang is deliberately NOT imported from the global scope here.
-        // An admin's global copy is Persian, so that the panel's keyboards and
-        // the comparisons that read them back are in one language; that must
-        // never reach the buttons an admin sees as a user of their own shop.
-        // Local in, local out: nothing leaks either way.
+        // Resolved from the row rather than taken from the global copy so that
+        // a language just switched in this same request is already in effect:
+        // the caller rebuilds the menu straight after the switch, and the
+        // global was read before it.
         $textbotlang = lang_tab_texts($users['lang'] ?? 'fa');
         $temp_addtional_key = [];
         $replacements = [

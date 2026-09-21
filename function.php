@@ -1681,25 +1681,39 @@ if (!function_exists('lang_tab_texts')) {
     }
 }
 if (!function_exists('ui_texts')) {
-    // The language this request is answered in: the reader's own, always.
+    // The language this request is answered in: the reader's own, plus one
+    // subtree that is Persian for everybody.
     //
-    // It briefly forced Persian for admins, to keep the panel in one language.
-    // That was wrong, and the reason is worth keeping: an admin is also a
-    // customer of their own bot, and forcing Persian here turned THEIR
-    // customer-facing buttons Persian too, whatever language they had picked.
+    // The panel is Persian in every language - the owner's rule. Twice now that
+    // was read as "Persian for an admin" and applied to the whole request, and
+    // twice it broke the shop out from under them: an admin is also a customer
+    // of their own bot, so a Persian request meant Persian captions and Persian
+    // buttons whatever language they had picked. The second attempt carved out
+    // build_main_keyboard() and made it worse - the menu came out in English
+    // while the branch that reads a tapped button back was still comparing
+    // Persian, so the buttons went dead and only answered to their Persian
+    // names typed by hand.
     //
-    // Making only the panel Persian is not a switch that can be thrown here.
-    // The panel is driven by reply keyboards built in keyboard.php, in the same
-    // pass and from the same array as the customer's own, and the panel matches
-    // what comes back by its text - so its keyboards and its comparisons have
-    // to be in the same language as each other. Splitting the two apart is a
-    // separate job in that file, not a change to this one line.
+    // The panel is not a reader, though. It is a vocabulary: lang/*.php keeps
+    // it under 'Admin', apart from the words the shop itself speaks. Swapping
+    // that one subtree for Persian is the whole rule, and it holds the property
+    // the two failed attempts were reaching for - a panel keyboard and the
+    // comparison that reads it back are both drawn from 'Admin', so they are in
+    // the same language as each other without dragging the shop along.
     //
-    // Kept as the single place the question is asked, so that job has one seam
-    // to work with instead of the six scattered re-derivations it replaced.
+    // Applied for every reader, not just admins: 'Admin' never reaches a
+    // customer, so there is nothing to branch on and one code path to trust.
     function ui_texts()
     {
-        return !empty($GLOBALS['mz_admin_viewer']) ? lang_tab_texts('fa') : languagechange();
+        $texts = languagechange();
+        if (!is_array($texts)) {
+            return $texts;
+        }
+        $fa = lang_tab_texts('fa');
+        if (isset($fa['Admin'])) {
+            $texts['Admin'] = $fa['Admin'];
+        }
+        return $texts;
     }
 }
 if (!function_exists('payer_texts')) {

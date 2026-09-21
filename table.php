@@ -375,7 +375,10 @@ try {
 } catch (Exception $e) {
     file_put_contents('error_log channels', $e->getMessage());
 }
-$textbotlang = languagechange();
+// ui_texts(), not languagechange(): the rows seeded below are looked up again
+// from the webhook and the crons, and they resolve the 'Admin' vocabulary the
+// same way there - Persian, whatever language the installer reads in.
+$textbotlang = ui_texts();
 
 //--------------------------------------------------------------
 try {
