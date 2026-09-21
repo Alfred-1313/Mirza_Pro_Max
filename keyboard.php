@@ -2501,10 +2501,17 @@ function keyboard_list_text($lang, $groupFilter = null)
                 // behind one more tap into a separate hub screen. Each still
                 // targets its existing, already-working btnstyle_kindhub:
                 // callback - no new dispatch handler needed for any of them.
+                //
+                // They carry {$lang}, not a hardcoded 'fa'. These three styles
+                // are stored per language like everything else on this screen,
+                // so pinning them to Persian meant the English tab opened the
+                // Persian ones - and said "زبان فعلی: فارسی" while doing it.
+                // Ordered the way the customer meets them: panel, then
+                // category, then product.
                 $keyboard_text['inline_keyboard'][] = [['text' => bt_section_meta('btnstyle')['label'], 'callback_data' => 'bt_sep|btnstyle']];
-                $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['panelStyleBtn'], 'callback_data' => 'btnstyle_kindhub:panel:fa', 'style' => 'primary']];
-                $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['categoryStyleBtn'], 'callback_data' => 'btnstyle_kindhub:category:fa', 'style' => 'primary']];
-                $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['productStyleBtn'], 'callback_data' => 'btnstyle_kindhub:product:fa', 'style' => 'primary']];
+                $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['panelStyleBtn'], 'callback_data' => "btnstyle_kindhub:panel:{$lang}", 'style' => 'primary']];
+                $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['categoryStyleBtn'], 'callback_data' => "btnstyle_kindhub:category:{$lang}", 'style' => 'primary']];
+                $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['productStyleBtn'], 'callback_data' => "btnstyle_kindhub:product:{$lang}", 'style' => 'primary']];
             }
         }
         if ($groupFilter === 'buyflow') {
