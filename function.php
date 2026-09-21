@@ -1701,8 +1701,8 @@ if (!function_exists('ui_texts')) {
     // comparison that reads it back are both drawn from 'Admin', so they are in
     // the same language as each other without dragging the shop along.
     //
-    // Applied for every reader, not just admins: 'Admin' never reaches a
-    // customer, so there is nothing to branch on and one code path to trust.
+    // The 'Admin' half is applied for every reader: it never reaches a
+    // customer, so there is nothing to branch on there.
     function ui_texts()
     {
         $texts = languagechange();
@@ -1712,6 +1712,23 @@ if (!function_exists('ui_texts')) {
         $fa = lang_tab_texts('fa');
         if (isset($fa['Admin'])) {
             $texts['Admin'] = $fa['Admin'];
+        }
+        // 'Admin' alone does not cover the panel. Its screens draw button text
+        // from 'keyboard' 551 times, and from 'users', 'common' and 'bottext'
+        // besides - so swapping only 'Admin' left a panel in two languages,
+        // which is what was reported. Those sections cannot be swapped for
+        // everyone, because the customer's own buttons live in them too
+        // (rejoin, accept-rules, back-to-menu...).
+        //
+        // So a reader who HAS a panel reads the whole vocabulary in Persian,
+        // and nobody else is touched. Their own menu is unaffected either way:
+        // build_main_keyboard() resolves that from the customer's own row, not
+        // from here. The test below is the same one that decides whether the
+        // panel button is drawn at all (keyboard.php), so the two cannot
+        // disagree about who has a panel.
+        global $from_id;
+        if (!empty($from_id) && select("admin", "*", "id_admin", $from_id, "count") != 0) {
+            return $fa;
         }
         return $texts;
     }
