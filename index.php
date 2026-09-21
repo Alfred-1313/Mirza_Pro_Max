@@ -541,7 +541,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             sendmessage($from_id, $textbotlang['users']['usertest']['unavailable'], null, 'HTML');
             return;
         }
-        if (select("marzban_panel", "*", "TestAccount", "ONTestAccount", "count") == 0) {
+        if (panels_available_count($user['lang'] ?? 'fa', $user['agent'], 'test') == 0) {
             sendmessage($from_id, $textbotlang['users']['usertest']['noPanel'], null, 'HTML');
             return;
         }
@@ -1341,7 +1341,11 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         $keyboardsetting['inline_keyboard'] = array_values($keyboardsetting['inline_keyboard']);
         $keyboardsetting = json_encode($keyboardsetting);
     } else {
-        $marzbancount = select("marzban_panel", "*", "status", "active", "count");
+        // per language: 🔄 تغییر لوکیشن is hidden when there is nowhere to move
+        // to, and "nowhere" depends on which panels THIS customer is offered.
+        // The list behind that button (list_marzban_panel_userschange) filters
+        // by language, so a global count left the button on top of an empty one.
+        $marzbancount = panels_available_count($user['lang'] ?? 'fa', $user['agent']);
         if ($DataUserOut['status'] == "active") {
             $namestatus = $textbotlang['users']['status']['btnTurnOff'];
         } else {
@@ -3394,7 +3398,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         sendmessage($from_id, $textbotlang['users']['usertest']['unavailable'], null, 'HTML');
         return;
     }
-    $locationproduct = select("marzban_panel", "*", "TestAccount", "ONTestAccount", "count");
+    $locationproduct = panels_available_count($user['lang'] ?? 'fa', $user['agent'], 'test');
     if ($locationproduct == 0) {
         // its own message now: this is the test-account flow, and it used to
         // borrow the purchase flow's nullPanel, so rewording one reworded both
@@ -3458,7 +3462,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     }
     if ($user['number'] == "none" && feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone")
         return;
-    $locationproduct = select("marzban_panel", "*", "TestAccount", "ONTestAccount", "count");
+    $locationproduct = panels_available_count($user['lang'] ?? 'fa', $user['agent'], 'test');
     // disabled (was auto-picking the single panel and skipping the picker entirely) -
     // pairs with the always-show-picker fix above so a single-panel setup still waits
     // for the explicit locationtest_{code} tap like the multi-panel case does

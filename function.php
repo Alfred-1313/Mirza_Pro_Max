@@ -15042,6 +15042,27 @@ if (!function_exists('bottext_extras_key_hint')) {
         return $k;
     }
 }
+if (!function_exists('panels_available_count')) {
+    // How many panels this customer can actually be shown, asked with the same
+    // three filters the lists in keyboard.php use: agent tier, language, and
+    // which flow is asking.
+    //
+    // $kind 'test' counts the test-account panels, anything else the active
+    // ones a purchase starts from. Counting the table as a whole - which every
+    // gate in index.php used to do - answers a different question: a panel that
+    // exists but is not offered in this language passes it, and the customer
+    // then lands on a list with nothing in it.
+    function panels_available_count($lang, $agent, $kind = 'buy')
+    {
+        global $pdo;
+        $where = ($kind === 'test') ? "TestAccount = 'ONTestAccount'" : "status = 'active'";
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM marzban_panel WHERE {$where} AND (agent = :agent OR agent = 'all') AND (FIND_IN_SET(:userlang, lang) OR lang = 'all' OR lang IS NULL OR lang = '')");
+        $stmt->bindValue(':agent', (string) $agent);
+        $stmt->bindValue(':userlang', (string) ($lang ?: 'fa'), PDO::PARAM_STR);
+        $stmt->execute();
+        return (int) $stmt->fetchColumn();
+    }
+}
 if (!function_exists('products_available_count')) {
     // How many products this customer could actually be sold: their agent tier
     // AND their language, the same two filters every product query downstream

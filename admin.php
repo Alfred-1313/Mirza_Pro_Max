@@ -20098,12 +20098,12 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     topup_disc_code_remove($td_m[1], $td_m[2], (int) $td_m[3]);
     list($td_text, $td_kb) = topup_disc_key_screen($td_m[1], $td_m[2], $textbotlang);
     Editmessagetext($from_id, $message_id, "🗑 کد حذف شد.\n\n" . $td_text, $td_kb, 'HTML');
-} elseif (preg_match('/^langscope_tog:(panel|product|category):(.+):([01]{5})$/', $datain, $ls_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^langscope_tog:(panel|product|category):(.+):([01]+)$/', $datain, $ls_m) && $adminrulecheck['rule'] == "administrator") {
     // pure re-render of the picker with the new in-progress selection - nothing
     // is written until the admin taps ذخیره
     $ls_kb = lang_scope_picker_payload($ls_m[1], $ls_m[2], null, $textbotlang, $ls_m[3]);
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['LangScope']['pickerCaption'], $ls_kb, 'HTML');
-} elseif (preg_match('/^langscope_apply:(panel|product|category):(.+):([01]{5})$/', $datain, $ls_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^langscope_apply:(panel|product|category):(.+):([01]+)$/', $datain, $ls_m) && $adminrulecheck['rule'] == "administrator") {
     $ls_kind = $ls_m[1];
     $ls_id = $ls_m[2];
     $ls_picked = langscope_casc_bitmask_to_langs($ls_m[3]);
@@ -20152,13 +20152,13 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     $lc_bitmask = langscope_casc_lang_to_bitmask($lc_cat['lang'] ?? 'all');
     $lc_kb = langscope_casc_picker_payload($lc_id, $lc_bitmask, $textbotlang);
     Editmessagetext($from_id, $message_id, sprintf($textbotlang['Admin']['LangScope']['cascadePickerCaption'], $lc_cat['remark']), $lc_kb, 'HTML');
-} elseif (preg_match('/^langscope_casc_toggle:(\d+):([01]{5})$/', $datain, $lc_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^langscope_casc_toggle:(\d+):([01]+)$/', $datain, $lc_m) && $adminrulecheck['rule'] == "administrator") {
     $lc_id = $lc_m[1];
     $lc_bitmask = $lc_m[2];
     $lc_cat = select("category", "*", "id", $lc_id, "select");
     $lc_kb = langscope_casc_picker_payload($lc_id, $lc_bitmask, $textbotlang);
     Editmessagetext($from_id, $message_id, sprintf($textbotlang['Admin']['LangScope']['cascadePickerCaption'], $lc_cat['remark'] ?? ''), $lc_kb, 'HTML');
-} elseif (preg_match('/^langscope_casc_apply:(\d+):([01]{5})$/', $datain, $lc_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^langscope_casc_apply:(\d+):([01]+)$/', $datain, $lc_m) && $adminrulecheck['rule'] == "administrator") {
     $lc_id = $lc_m[1];
     $lc_bitmask = $lc_m[2];
     if (strpos($lc_bitmask, '1') === false) {
