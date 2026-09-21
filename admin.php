@@ -411,7 +411,7 @@ if (!function_exists('bottext_item_menu_payload')) {
         $bt_label = $bt_key;
         $bt_item_group = '';
         if ($bt_key === 'users.unknownMsg') {
-            $bt_label = '💬 پیام نام‌شناس';
+            $bt_label = '💬 پیام ناشناس';
         }
         if ($bt_key === 'users.status.getConfigHint') {
             $bt_label = '📌 کپشن صفحه‌ی دریافت کانفیگ';

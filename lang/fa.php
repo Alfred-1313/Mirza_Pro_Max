@@ -3,7 +3,7 @@ return array (
   'bottext' => 
   array (
     'open_button' => '🎨 ' . 'شخصی' . "\u{200C}" . 'سازی پیام' . "\u{200C}" . 'های ربات',
-    'unknownMsgLabel' => '💬 پیام نام‌شناس',
+    'unknownMsgLabel' => '💬 پیام ناشناس',
     'resetAllLabel' => '🔁 ریست همه به پیش‌فرض',
     'groupBuyflowLabel' => '🛒 پیام‌ها و ظاهر مراحل خرید',
     'groupServicesLabel' => '🛍 پیام‌ها و ظاهر سرویس‌های من',

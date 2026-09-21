@@ -2346,7 +2346,7 @@ function keyboard_list_text($lang, $groupFilter = null)
     // made a screen that was half English and half Persian. What the tab's own
     // language actually says is shown by the preview inside each item.
     $keyboard_list_text = $textbotlang['bottext']['items'];
-    $bt_unknown_label = $textbotlang['bottext']['unknownMsgLabel'] ?? '💬 پیام نام‌شناس';
+    $bt_unknown_label = $textbotlang['bottext']['unknownMsgLabel'] ?? '💬 پیام ناشناس';
     // language is chosen exactly once, here on the flat home list - group
     // screens no longer show this row at all, so there is nothing left to
     // "re-select"; the row's own dispatcher (admin.php's bt_lang: handler)
