@@ -1075,6 +1075,7 @@ Support account : @%s',
                         'selectCategoryShort' => '📌 Select a category',
                         'selectCategory' => '📌 Select your category!',
                         'noPaymentMethod' => '⛔️ Top-up is temporarily unavailable.',
+                        'buySubscriptionBtn' => 'Buy a subscription',
                         'backToPanelListBtn' => '🔙 Back to the panel list',
                         'backToPreviousBtn' => '🔙 Back to the category list',
                         'selectUsernamePrompt' => 'Would you like to choose the service name yourself, or use the default one?
@@ -1115,8 +1116,8 @@ To use the default name, press the green button; to cancel and go back to the pl
 👤 Username: <code>%s</code>
 🔐 Service name: %s
 📆 Validity period: %s days
-💶 Original price : <del>%s Toman</del>
-💶 Discounted price: %s  Toman
+💶 Original price: <del>%s</del>
+💶 Discounted price: %s
 👥 Account volume: %s GB
 💵 Your wallet balance : %s
                   
@@ -1126,7 +1127,7 @@ To use the default name, press the green button; to cancel and go back to the pl
 👤 Username: <code>%s</code>
 🔐 Service name: %s
 📆 Validity period: %s days
-💶 Price: %s  Toman
+💶 Price: %s
 👥 Account volume: %s GB
 💵 Your wallet balance : %s
 ⭕️Number of configs : %s
@@ -3867,7 +3868,7 @@ After joining, click the check membership button',
 👤 Username:  {username}
 🔐 Service name: {name_product}
 📆 Validity period: {Service_time} days
-💶 Price:  {price} Toman
+💶 Price:  {price}
 👥 Account volume: {Volume} GB
 🗒 Product note : {note}
 💵 Your wallet balance : {userBalance}
@@ -4199,6 +4200,9 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'panelUptime' => '🎛 Panel uptime',
                 'passargadPanel' => 'Pasargard',
                 'payAndGetService' => '💰 Pay and receive service',
+                'backToPlansBtn' => '🔙 Back',
+                'cancelUsernameBtn' => '❌ Cancel',
+                'useDefaultUsernameBtn' => '✅ Default',
                 'payment' => 'Payment',
                 'pendingReceipts' => '💵 Unapproved receipts',
                 'percentage' => 'Percentage',

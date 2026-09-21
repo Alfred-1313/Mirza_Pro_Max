@@ -7152,6 +7152,29 @@ if (!function_exists('currency_all')) {
         return $cache;
     }
 }
+if (!function_exists('currency_offered')) {
+    // The currencies an admin can actually pick: the ones the bot's own
+    // languages are set to, plus whatever is already in use.
+    //
+    // currency_all() is the whole table and stays that way - a product saved in
+    // a currency nobody offers any more must still render with its own symbol,
+    // so currency_get() is deliberately not filtered. This is only about what a
+    // picker lists.
+    function currency_offered()
+    {
+        $all = currency_all();
+        $map = currency_lang_map();
+        $keep = [];
+        foreach (panel_langs() as $code) {
+            $cur = $map[$code] ?? null;
+            if ($cur !== null && isset($all[$cur])) {
+                $keep[$cur] = $all[$cur];
+            }
+        }
+        // never hand back an empty picker, whatever the settings say
+        return $keep ?: $all;
+    }
+}
 if (!function_exists('currency_default_code')) {
     function currency_default_code()
     {

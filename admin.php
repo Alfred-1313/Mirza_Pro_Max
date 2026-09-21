@@ -4047,59 +4047,12 @@ if (!function_exists('gateway_current_keys')) {
         return (isset($map[$lang]) && is_array($map[$lang])) ? $map[$lang] : gateway_all_keys();
     }
 }
-if (!function_exists('prodcur_lang_keyboard')) {
-    // Reply keyboards send back the label, not a code, so every picker here has
-    // a matching reverse lookup right next to it.
-    function prodcur_lang_keyboard($textbotlang)
-    {
-        $rows = [];
-        $pair = [];
-        foreach (panel_langs() as $l) {
-            $pair[] = ['text' => prodcur_lang_label($l, $textbotlang)];
-            if (count($pair) === 2) {
-                $rows[] = $pair;
-                $pair = [];
-            }
-        }
-        if (!empty($pair)) {
-            $rows[] = $pair;
-        }
-        $rows[] = [['text' => prodcur_lang_label('all', $textbotlang)]];
-        $rows[] = [['text' => $textbotlang['Admin']['backAdminBtn']], ['text' => $textbotlang['Admin']['backMenuBtn']]];
-        return json_encode(['keyboard' => $rows, 'resize_keyboard' => true]);
-    }
-}
-if (!function_exists('prodcur_lang_label')) {
-    // "🇬🇧 English · $" - the symbol keeps the button short enough to sit two to
-    // a row while still making the currency obvious at the moment of choosing
-    function prodcur_lang_label($l, $textbotlang)
-    {
-        $code = ($l === 'all') ? currency_default_code() : currency_for_lang($l);
-        $sym = currency_get($code)['symbol'];
-        $name = ($l === 'all')
-            ? $textbotlang['Admin']['ProdCurrency']['allLangs']
-            : ($textbotlang['bottext']['langs'][$l] ?? $l);
-        return $name . ' · ' . $sym;
-    }
-}
-if (!function_exists('prodcur_lang_from_label')) {
-    function prodcur_lang_from_label($label, $textbotlang)
-    {
-        $label = trim((string) $label);
-        foreach (array_merge(panel_langs(), ['all']) as $l) {
-            if ($label === prodcur_lang_label($l, $textbotlang)) {
-                return $l;
-            }
-        }
-        return null;
-    }
-}
 if (!function_exists('prodcur_currency_keyboard')) {
     function prodcur_currency_keyboard($textbotlang, $suggested)
     {
         $rows = [];
         $pair = [];
-        foreach (currency_all() as $code => $cur) {
+        foreach (currency_offered() as $code => $cur) {
             $mark = ($code === $suggested) ? '✅ ' : '';
             $pair[] = ['text' => $mark . $cur['title']];
             if (count($pair) === 2) {
@@ -4118,7 +4071,7 @@ if (!function_exists('prodcur_currency_from_label')) {
     function prodcur_currency_from_label($label)
     {
         $label = trim(preg_replace('/^✅\s*/u', '', (string) $label));
-        foreach (currency_all() as $code => $cur) {
+        foreach (currency_offered() as $code => $cur) {
             if ($label === $cur['title'] || $label === $code) {
                 return $code;
             }
@@ -8471,7 +8424,7 @@ if (in_array($text, $textadmin) || $datain == "admin") {    if ($datain == "admi
     if (in_array($user['step'], ["updatetime", "val_usertest", "del_usertest", "getlimitnew", "GetusernameNew", "GeturlNew", "protocolset", "updatemethodusername", "GetNameNew", "getprotocol", "getprotocolremove", "GetpaawordNew", "updateextendmethod", "setpricechangelocation"])) {
         $typepanel = select("marzban_panel", "*", "name_panel", $user['Processing_value'], "select");
         outtypepanel($typepanel['type'], $textbotlang['Admin']['backMenu']);
-    } elseif (in_array($user['step'], ["selectloc", "get_limit", "selectlocedite", "GetPriceExtra", "GetPriceexstratime", "GetPricecustomtime", "GetPricecustomvolume", "get_code", "get_codesell", "minbalancebulk", "bulkadd_lang", "bulkadd_lines", "bulkadd_agent", "bulkadd_location", "bulkadd_category", "bulkadd_reset", "bulkadd_note", "addprod_lang", "addprod_changecur"])) {
+    } elseif (in_array($user['step'], ["selectloc", "get_limit", "selectlocedite", "GetPriceExtra", "GetPriceexstratime", "GetPricecustomtime", "GetPricecustomvolume", "get_code", "get_codesell", "minbalancebulk", "bulkadd_lines", "bulkadd_agent", "bulkadd_location", "bulkadd_category", "bulkadd_reset", "bulkadd_note", "addprod_changecur"])) {
         sendmessage($from_id, $textbotlang['Admin']['backMenu'], $shopkeyboard, 'HTML');
     } elseif (in_array($user['step'], ["addchannel", "removechannel"])) {
         sendmessage($from_id, $textbotlang['Admin']['backMenu'], $channelkeyboard, 'HTML');
@@ -12256,16 +12209,10 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
         sendmessage($from_id, $textbotlang['Admin']['managepanel']['nullPanelAdmin'], null, 'HTML');
         return;
     }
-    sendmessage($from_id, $textbotlang['Admin']['ProdCurrency']['bulkAskLang'], prodcur_lang_keyboard($textbotlang), 'HTML');
-    step('bulkadd_lang', $from_id);
-} elseif ($user['step'] == "bulkadd_lang") {
-    $bp_lang = prodcur_lang_from_label($text, $textbotlang);
-    if ($bp_lang === null) {
-        sendmessage($from_id, $textbotlang['Admin']['ProdCurrency']['invalidLang'], prodcur_lang_keyboard($textbotlang), 'HTML');
-        return;
-    }
-    $bp_cur = ($bp_lang === 'all') ? currency_default_code() : currency_for_lang($bp_lang);
-    savedata("clear", "bulk_lang", $bp_lang);
+    // same as the single-product flow above: visibility belongs to
+    // 🌐 مدیریت نمایش بر اساس زبان, not to a question asked while creating
+    $bp_cur = currency_default_code();
+    savedata("clear", "bulk_lang", 'all');
     savedata("save", "bulk_currency", $bp_cur);
     sendmessage(
         $from_id,
@@ -12462,16 +12409,13 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
         return;
     }
     savedata("clear", "name_product", $text);
-    sendmessage($from_id, $textbotlang['Admin']['ProdCurrency']['askLang'], prodcur_lang_keyboard($textbotlang), 'HTML');
-    step('addprod_lang', $from_id);
-} elseif ($user['step'] == "addprod_lang") {
-    $pc_lang = prodcur_lang_from_label($text, $textbotlang);
-    if ($pc_lang === null) {
-        sendmessage($from_id, $textbotlang['Admin']['ProdCurrency']['invalidLang'], prodcur_lang_keyboard($textbotlang), 'HTML');
-        return;
-    }
-    savedata("save", "prod_lang", $pc_lang);
-    savedata("save", "prod_currency", ($pc_lang === 'all') ? currency_default_code() : currency_for_lang($pc_lang));
+    // No "who sees this product?" question: visibility is set per product from
+    // 🌐 مدیریت نمایش بر اساس زبان, so asking here was a second place to answer
+    // the same thing - and the place that could disagree with it. A new product
+    // starts visible to every language, which is what 'all' has always meant,
+    // priced in the default currency.
+    savedata("save", "prod_lang", 'all');
+    savedata("save", "prod_currency", currency_default_code());
     sendmessage($from_id, $textbotlang['Admin']['agent']['setAgentProduct'], $backadmin, 'HTML');
     step('get_agent', $from_id);
 } elseif ($user['step'] == "addprod_changecur") {
@@ -12968,7 +12912,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     $pe_row = select("product", "*", "id", $pe_id, "select");
     $pe_price = $pe_row['price_product'] ?? '0';
     $pe_kb = ['inline_keyboard' => []];
-    foreach (currency_all() as $pe_code => $pe_c) {
+    foreach (currency_offered() as $pe_code => $pe_c) {
         $pe_kb['inline_keyboard'][] = [[
             'text' => (($pe_code === $pe_cur) ? '✅ ' : '') . $pe_c['title'] . '  ·  ' . money($pe_price, $pe_code),
             'callback_data' => "prodcurset:{$pe_code}",
@@ -12977,7 +12921,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     $pe_kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['backAdminBtn'], 'callback_data' => 'backproductadmin']];
     // spelled out because the number is never converted - only relabelled
     $pe_other = null;
-    foreach (array_keys(currency_all()) as $pe_k) {
+    foreach (array_keys(currency_offered()) as $pe_k) {
         if ($pe_k !== $pe_cur) {
             $pe_other = $pe_k;
             break;
