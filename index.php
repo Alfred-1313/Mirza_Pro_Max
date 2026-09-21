@@ -7123,35 +7123,16 @@ if (empty($GLOBALS['bt_any_reply']) && !empty($text) && $datain == '' && !in_arr
         topup_notnumber_notice($from_id, $user['lang'] ?? 'fa', $unk_tp[1], $textbotlang, (int) ($update['message']['message_id'] ?? 0));
         return;
     }
-    // Text, sticker and reaction are three independent rows on this item's own
-    // screen, so all three are sent. They used to be either/or: any text at all
-    // meant the sticker and the reaction never fired, which made two of the
-    // three settings unreachable the moment the third was filled in - and with
-    // a text now shipped by default, they would never have fired at all.
+    // off until this language is switched on, from the item's own screen
     $unk_lang = (is_array($user) && !empty($user['lang'])) ? $user['lang'] : 'fa';
-    // off until this language is switched on from the item's own screen
-    if (!unknownmsg_enabled($unk_lang)) {
+    if (!bt_item_enabled('users.unknownMsg', $unk_lang)) {
         return;
     }
-    $unk_setting = select("setting", "*", null, null, "select");
-    $unk_layout = json_decode((string) ($unk_setting['keyboardmain'] ?? ''), true);
-    $unk_re = bt_media_lookup(is_array($unk_layout['text_reactions'] ?? null) ? $unk_layout['text_reactions'] : [], 'users.unknownMsg', $unk_lang);
-    // the admin's sticker when there is one, otherwise the one this message
-    // ships with (bt_default_stickers)
-    $unk_st = bt_effective_sticker(is_array($unk_layout['text_stickers'] ?? null) ? $unk_layout['text_stickers'] : [], 'users.unknownMsg', $unk_lang);
-    if ($unk_re !== '' && !empty($update['message']['message_id'])) {
-        telegram('setMessageReaction', [
-            'chat_id' => $from_id,
-            'message_id' => $update['message']['message_id'],
-            'reaction' => json_encode([['type' => 'emoji', 'emoji' => $unk_re]]),
-        ]);
-    }
-    if ($unk_st !== '') {
-        telegram('sendSticker', [
-            'chat_id' => $from_id,
-            'sticker' => $unk_st,
-        ]);
-    }
+    // Text only. The sticker and the reaction ride along inside sendmessage()
+    // (bottext_send_extras), which matches the outgoing text to its key and
+    // sends them in the recipient's own language. Sending them here as well -
+    // which an earlier version of this block did, back when no text shipped and
+    // sendmessage() was never reached - posts the sticker twice.
     $unk_text = bottext_resolve_key('users.unknownMsg');
     if ($unk_text !== '') {
         sendmessage($from_id, $unk_text, null, 'HTML');

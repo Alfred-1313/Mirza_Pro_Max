@@ -278,9 +278,9 @@ timeauto_not_verify,status_keyboard_config,cron_status
         // stays in keyboardmain above, so an existing bot's menu carries over
         // untouched and only the other languages start from the factory one.
         addFieldToTable("setting", "keyboardmain_lang", '{}', "TEXT");
-        // per-language on/off for the unknown-message reply; absent = off, which
-        // is what every language starts as
-        addFieldToTable("setting", "unknownmsg_lang", '{}', "TEXT");
+        // per-language on/off for the message items that have a switch; an absent
+        // value means that item's shipped default (see bt_item_switch_defaults)
+        addFieldToTable("setting", "bt_item_lang", '{}', "TEXT");
         addFieldToTable("setting", "Dice", '0', "varchar(45)");
         addFieldToTable("setting", "Debtsettlement", '1', "varchar(45)");
         addFieldToTable("setting", "limitnumber", $limitlist, "varchar(200)");

@@ -222,6 +222,12 @@ if (!function_exists('bottext_send_extras')) {
         if ($bts_extras === null) {
             return 0;
         }
+        // an item whose switch is off for THIS recipient's language sends
+        // neither its sticker nor its reaction; items without a switch are
+        // always on, so nothing else is affected
+        if (function_exists('bt_item_enabled') && !bt_item_enabled($bts_extras['key'], bottext_receiver_lang($chat_id))) {
+            return 0;
+        }
         $bts_uid = $bts_extras['key'] . '|' . $chat_id;
         if (isset($bts_sent[$bts_uid])) {
             return 0;

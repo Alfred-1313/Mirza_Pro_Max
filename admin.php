@@ -670,8 +670,9 @@ if (!function_exists('bottext_item_menu_payload')) {
         // Every caller of this function - 🎨 شخصی‌سازی, the cfgdeliv| delivery
         // screens, the reset confirmation - already passes the tab it is on, so
         // fixing it here fixes all of them without touching one call site.
-        if ($bt_key === 'users.unknownMsg') {
-            $info .= "🔌 وضعیت: " . (unknownmsg_enabled($bt_lang) ? "روشن ✅" : "خاموش ❌ (هیچ جوابی فرستاده نمی‌شه)") . "\n";
+        if (array_key_exists($bt_key, bt_item_switch_defaults())) {
+            $info .= "🔌 " . bt_item_switch_label($bt_key) . ": "
+                . (bt_item_enabled($bt_key, $bt_lang) ? "روشن ✅" : "خاموش ❌") . "\n";
         }
         $info .= "➖➖➖➖➖➖➖➖➖➖\n👁 <b>متن فعلی:</b>\n" . bt_current_text_quote($bt_key, 1200, $bt_lang) . "\n";
         if ($bt_key === 'users.usertest.selectUsernamePrompt') {
@@ -682,15 +683,16 @@ if (!function_exists('bottext_item_menu_payload')) {
         }
         $info .= "➖➖➖➖➖➖➖➖➖➖\n👇 بخشی که می‌خوای تنظیم کنی رو انتخاب کن:";
         $kb = ['inline_keyboard' => []];
-        // This reply is the one message the bot sends without being asked, so it
-        // is the one that needs an off switch - and off is where every language
-        // starts. Nothing below it does anything until this is on.
-        if ($bt_key === 'users.unknownMsg') {
-            $bt_unk_on = unknownmsg_enabled($bt_lang);
+        // Items that carry an on/off switch get it first, above the rows it
+        // gates. What each switch actually turns off differs, so the label says
+        // it (bt_item_switch_label).
+        if (array_key_exists($bt_key, bt_item_switch_defaults())) {
+            $bt_sw_on = bt_item_enabled($bt_key, $bt_lang);
+            $bt_sw_name = bt_item_switch_label($bt_key);
             $kb['inline_keyboard'][] = [[
-                'text' => $bt_unk_on ? '✅ این قابلیت روشنه' : '❌ این قابلیت خاموشه',
-                'callback_data' => "unkmsg|tog|{$bt_lang}",
-                'style' => $bt_unk_on ? 'success' : 'danger',
+                'text' => ($bt_sw_on ? '✅ ' : '❌ ') . $bt_sw_name . ($bt_sw_on ? ' روشنه' : ' خاموشه'),
+                'callback_data' => "btsw|tog|{$bt_lang}|{$bt_key}",
+                'style' => $bt_sw_on ? 'success' : 'danger',
             ]];
         }
         // [📋 کپشن پیش‌فرض] [✏️ ویرایش کپشن] - the same pair every caption row in
@@ -22110,11 +22112,16 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     }
     list($bt_group_text, $bt_group_kb) = keyboard_list_text($bt_lang, $bt_group);
     Editmessagetext($from_id, $message_id, $bt_group_text, $bt_group_kb, 'HTML');
-} elseif (preg_match('/^unkmsg\|tog\|([a-z]{2})$/', $datain, $dataget) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^btsw\|tog\|([a-z]{2})\|(.+)$/', $datain, $dataget) && $adminrulecheck['rule'] == "administrator") {
     $bt_lang = in_array($dataget[1], panel_langs(), true) ? $dataget[1] : 'fa';
-    unknownmsg_set_enabled($bt_lang, !unknownmsg_enabled($bt_lang));
-    list($btm_text, $btm_kb) = bottext_item_menu_payload('users.unknownMsg', $bt_lang, $textbotlang);
-    Editmessagetext($from_id, $message_id, $btm_text, $btm_kb, 'HTML');
+    $bt_key = $dataget[2];
+    // only an item that actually has a switch - anything else is always on and
+    // must not be given an off state by a hand-made callback
+    if (array_key_exists($bt_key, bt_item_switch_defaults())) {
+        bt_item_set_enabled($bt_key, $bt_lang, !bt_item_enabled($bt_key, $bt_lang));
+        list($btm_text, $btm_kb) = bottext_item_menu_payload($bt_key, $bt_lang, $textbotlang);
+        Editmessagetext($from_id, $message_id, $btm_text, $btm_kb, 'HTML');
+    }
 } elseif (preg_match('/^bt_edit\|([^|]+)\|(.+)$/', $datain, $dataget)) {
     $bt_lang = $dataget[1];
     $bt_key = $dataget[2];

@@ -15042,34 +15042,69 @@ if (!function_exists('bottext_extras_key_hint')) {
         return $k;
     }
 }
-if (!function_exists('unknownmsg_enabled')) {
-    // Per-language on/off for the unknown-message reply - the one message the
-    // bot sends without being asked, so the one that needs a switch.
+if (!function_exists('bt_item_enabled')) {
+    // Per-language on/off for the message items that have a switch.
     //
-    // Off until a language is switched on, and strictly that language's own
-    // value: no inheriting from Persian the way feature_value() does, because
-    // turning it on for Persian must not start answering English customers.
-    function unknownmsg_map($fresh = false)
+    // Only the items listed here have one; everything else is always on, so a
+    // key that is not in this map can never be silenced by accident. The
+    // shipped defaults differ per item on purpose:
+    //
+    //   users.unknownMsg  off - the bot speaking uninvited, so an owner opts in
+    //   users.text_start  on  - this one gates the welcome STICKER only, not the
+    //                           text: the welcome message carries the main
+    //                           keyboard, and a bot that does not send it leaves
+    //                           the customer with no menu at all
+    function bt_item_switch_defaults()
+    {
+        return [
+            'users.unknownMsg' => false,
+            'users.text_start' => true,
+        ];
+    }
+    // What the switch says on the item's own screen - each one names what it
+    // actually turns off, because those two are not the same thing.
+    function bt_item_switch_label($key)
+    {
+        return [
+            'users.unknownMsg' => 'جواب خودکار',
+            'users.text_start' => 'استیکر خوش‌آمد',
+        ][$key] ?? 'این قابلیت';
+    }
+    function bt_item_switch_map($fresh = false)
     {
         static $cache = null;
         if ($cache !== null && !$fresh) {
             return $cache;
         }
         $setting = select("setting", "*", null, null, "select");
-        $m = json_decode((string) ($setting['unknownmsg_lang'] ?? ''), true);
+        $m = json_decode((string) ($setting['bt_item_lang'] ?? ''), true);
         return $cache = is_array($m) ? $m : [];
     }
-    function unknownmsg_enabled($lang)
+    // Strictly this language's own value - no inheriting from Persian the way
+    // feature_value() does, because switching something on for Persian must not
+    // switch it on for English customers.
+    function bt_item_enabled($key, $lang)
     {
-        $m = unknownmsg_map();
-        return (string) ($m[$lang] ?? '0') === '1';
+        $defaults = bt_item_switch_defaults();
+        if (!array_key_exists($key, $defaults)) {
+            return true;
+        }
+        $m = bt_item_switch_map();
+        $v = $m[$key][$lang] ?? null;
+        if ($v === null || $v === '') {
+            return (bool) $defaults[$key];
+        }
+        return (string) $v === '1';
     }
-    function unknownmsg_set_enabled($lang, $on)
+    function bt_item_set_enabled($key, $lang, $on)
     {
-        $m = unknownmsg_map(true);
-        $m[$lang] = $on ? '1' : '0';
-        update("setting", "unknownmsg_lang", json_encode($m, JSON_UNESCAPED_UNICODE), null, null);
-        unknownmsg_map(true);
+        $m = bt_item_switch_map(true);
+        if (!isset($m[$key]) || !is_array($m[$key])) {
+            $m[$key] = [];
+        }
+        $m[$key][$lang] = $on ? '1' : '0';
+        update("setting", "bt_item_lang", json_encode($m, JSON_UNESCAPED_UNICODE), null, null);
+        bt_item_switch_map(true);
     }
 }
 if (!function_exists('bt_default_stickers')) {
@@ -15082,6 +15117,7 @@ if (!function_exists('bt_default_stickers')) {
         return [
             'users.sell.noPaymentMethod' => 'CAACAgQAAxkBAAJyomqmL8XWREbwt2BPYfm8fToL4HqdAAKGDwACnQVRU0jlv2uEhl4wPQQ',
             'users.unknownMsg' => 'CAACAgQAAxkBAAJy5mqxYm-rS6jwNkdpdLI9_0J0GCQYAAJYDAACm6GYUo8o_EwMQ7lTPQQ',
+            'users.text_start' => 'CAACAgQAAxkBAAJy6mqxY_xKWxtBsdsM_I8arNldDhf3AAKZEgACdnlZUW2qPBOT3zBNPQQ',
         ];
     }
     function bt_default_sticker($key)
