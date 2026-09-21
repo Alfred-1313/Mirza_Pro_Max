@@ -4888,12 +4888,12 @@ if (!function_exists('feature_status_lang_payload')) {
     function feature_status_lang_payload($textbotlang, $lang = 'fa')
     {
         $setting = select("setting", "*", null, null, "select");
-        // labels come from the tab's OWN language file, not the admin's
-        // account language, so the screen reads in whichever language it is
-        // editing - same as keyboard_list_text() (keyboard.php) does for
-        // 🎨 شخصی‌سازی. Only the language-tab row below stays on the admin's
-        // own $textbotlang, exactly like that screen.
-        $tx = lang_tab_texts($lang);
+        // Panel chrome is Persian in every tab: this screen is a control
+        // surface, not something a customer reads, and an admin has to be able
+        // to configure a language they do not speak. $lang below still selects
+        // WHICH language is being read and written - only the wording here is
+        // pinned.
+        $tx = lang_tab_texts('fa');
         $on = $tx['Admin']['Status']['statuson'];
         $off = $tx['Admin']['Status']['statusoff'];
         $tog = function ($type, $value) use ($lang) {
@@ -5031,8 +5031,10 @@ if (!function_exists('feature_status_lang_payload')) {
 if (!function_exists('feature_status_lang_caption')) {
     function feature_status_lang_caption($textbotlang, $lang = 'fa')
     {
-        // written in the language being edited, like the buttons above it
-        $tx = lang_tab_texts($lang);
+        // Persian, like the buttons above it. {lang} becomes the Persian NAME
+        // of the tab ("انگلیسی"), so the caption still says which language is
+        // being edited.
+        $tx = lang_tab_texts('fa');
         return strtr($tx['Admin']['Status']['featureLangBotTitle'], ['{lang}' => $tx['bottext']['langs'][$lang] ?? ($textbotlang['bottext']['langs'][$lang] ?? $lang)]);
     }
 }
@@ -5102,7 +5104,8 @@ if (!function_exists('feature_phone_prefix_label')) {
 if (!function_exists('feature_section_caption')) {
     function feature_section_caption($textbotlang, $lang, $section)
     {
-        $tx = lang_tab_texts($lang);
+        // Persian wording, $lang data - same split as the screen above it
+        $tx = lang_tab_texts('fa');
         $v = feature_section_effective($lang);
         $langName = $tx['bottext']['langs'][$lang] ?? $lang;
         $s = $tx['Admin']['FeatureSection'];
@@ -5150,7 +5153,8 @@ if (!function_exists('feature_section_caption')) {
 if (!function_exists('feature_section_payload')) {
     function feature_section_payload($textbotlang, $lang, $section)
     {
-        $tx = lang_tab_texts($lang);
+        // Persian wording, $lang data - same split as the screen above it
+        $tx = lang_tab_texts('fa');
         $s = $tx['Admin']['FeatureSection'];
         $v = feature_section_effective($lang);
         $on = $tx['Admin']['Status']['statuson'];
@@ -10494,7 +10498,7 @@ elseif ($datain == "systemsms") {
     if ($fs_sec === null) {
         return;
     }
-    $fs_tx = lang_tab_texts($fs_lang);
+    $fs_tx = lang_tab_texts('fa');
     savedata("clear", "fls_key", $fs_key);
     savedata("save", "fls_lang", $fs_lang);
     step("flsval", $from_id);
@@ -10523,7 +10527,7 @@ elseif ($datain == "systemsms") {
         step("home", $from_id);
         return;
     }
-    $fs_tx = lang_tab_texts($fs_lang);
+    $fs_tx = lang_tab_texts('fa');
     if ($fs_key === 'aff_banner') {
         if (!$photo) {
             sendmessage($from_id, $fs_tx['Admin']['affiliates']['invalidBanner'], null, 'HTML');
@@ -10586,7 +10590,7 @@ elseif ($datain == "systemsms") {
 } elseif ($user['step'] == "flsapplink" && $adminrulecheck['rule'] == "administrator") {
     $fs_data = json_decode((string) $user['Processing_value'], true);
     $fs_lang = $fs_data['fls_lang'] ?? 'fa';
-    $fs_tx = lang_tab_texts($fs_lang);
+    $fs_tx = lang_tab_texts('fa');
     if (!filter_var($text, FILTER_VALIDATE_URL)) {
         sendmessage($from_id, $fs_tx['Admin']['managepanel']['invalidDomain'], null, 'HTML');
         return;
@@ -10607,7 +10611,7 @@ elseif ($datain == "systemsms") {
     Editmessagetext($from_id, $message_id, feature_section_caption($textbotlang, $fs_lang, 'linkapp'), feature_section_payload($textbotlang, $fs_lang, 'linkapp'));
 } elseif (preg_match('/^flsappe:([a-z]{2}):(\d+)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
     $fs_lang = $fs_m[1];
-    $fs_tx = lang_tab_texts($fs_lang);
+    $fs_tx = lang_tab_texts('fa');
     savedata("clear", "fls_key", 'app_link');
     savedata("save", "fls_lang", $fs_lang);
     savedata("save", "fls_appid", (int) $fs_m[2]);
@@ -10618,7 +10622,7 @@ elseif ($datain == "systemsms") {
     Editmessagetext($from_id, $message_id, $fs_tx['Admin']['apps']['askNewLink'], $fs_cancel);
 } elseif (preg_match('/^flsloc:([a-z]{2}):(ask|do)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
     $fs_lang = $fs_m[1];
-    $fs_tx = lang_tab_texts($fs_lang);
+    $fs_tx = lang_tab_texts('fa');
     if ($fs_m[2] === 'ask') {
         $fs_kb = json_encode(['inline_keyboard' => [
             [['text' => $fs_tx['keyboard']['confirmAndZero'], 'callback_data' => "flsloc:{$fs_lang}:do", 'style' => 'danger']],

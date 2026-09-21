@@ -1553,8 +1553,16 @@ if (!function_exists('shop_feature_lang_map')) {
 if (!function_exists('feature_setting_map')) {
     // Per-language overrides for the VALUES behind 🌐 وضعیت قابلیت‌ها (هر زبان)'s
     // ⚙️ تنظیمات sub-screens (affiliate percent, wheel prize, location limits,
-    // ...) - same fallback contract as feature_value(), separate column from
-    // feature_lang because that one holds the on/off flags themselves.
+    // ...) - separate column from feature_lang because that one holds the
+    // on/off flags themselves.
+    //
+    // NOTE: unlike feature_value(), there is deliberately NO fallback to
+    // Persian here, only to the global column. These are amounts, and each
+    // language has its own currency (currency_for_lang): inheriting Persian's
+    // wheel prize or affiliate gift would read a toman figure as dollars.
+    // phone_prefix is the same shape of hazard - English defaults to "any
+    // country" on purpose, and inheriting Persian's would force Iranian
+    // numbers on it. Do not "fix" this into a Persian fallback.
     function feature_setting_map($fresh = false)
     {
         static $cache = null;
