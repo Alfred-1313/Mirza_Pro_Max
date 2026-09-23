@@ -309,10 +309,10 @@ Current language: <b>{lang}</b>',
                 ],
                 'labels' => [
                         'testServiceName' => 'Test service',
-                        'toman' => 'Toman',
+                        'toman' => 'Dollar',
                         'unlimitedShort' => 'Unlimited',
                         'remainingSuffix' => ' Other',
-                        'tomanUnit' => 'Toman',
+                        'tomanUnit' => 'Dollar',
                         'notSent' => '❌<b> Not sent </b>❌',
                         'confirmedByAdminAlt' => '✅ Approved by admin',
                         'firstPurchaseAlt' => '📌 User\'s first purchase',
@@ -381,8 +381,8 @@ Please use the menu buttons below, or send /start.',
                         'expired' => 'The payment link has expired and can no longer be processed',
                         'finished' => 'Your payment has been successfully confirmed',
                         'insufficientbalance' => '❌ Your balance is not enough to purchase the service.
-💸 To top up your balance, enter the amount in Toman:
-✅ Minimum amount %s Toman, maximum amount %s Toman',
+💸 To top up your balance, enter the amount in Dollar:
+✅ Minimum amount %s Dollar, maximum amount %s Dollar',
                         'insufficientBalanceSimple' => '❌ Insufficient balance.',
                         'linkpayments' => 'Creating payment link...',
                         'maxpurchasereached' => '❌ You have reached your maximum purchase limit. Please first top up your account, then purchase a new service or renew an existing one',
@@ -402,23 +402,23 @@ Please use the menu buttons below, or send /start.',
                         'pendingPayment' => '❌ You have an unconfirmed payment. Please wait until the previous payment is reviewed, then send the new payment',
                         'cardEnabledNotice' => '💳 Dear user, the card number has been activated for you; you can now make your purchase.',
                         'cardInstructionAlt' => 'To pay, deposit the amount to the card number below',
-                        'giftDepositAlt' => '🎁 Dear user, the amount of %s Toman has been deposited into your account as a gift.',
+                        'giftDepositAlt' => '🎁 Dear user, the amount of %s Dollar has been deposited into your account as a gift.',
                         'rejectedNotice' => '❌ Dear user, your payment was rejected for the following reason.
 ✍️ %s
 🛒 Payment tracking code: %s
                 
 ',
-                        'giftFromManagement' => '🎁 Dear user, an amount of %s Toman was credited to your wallet as a gift from management.',
-                        'deductedNotice' => '❌ Dear user, an amount of %s Toman was deducted from your wallet balance.',
-                        'addedNotice' => '💎 Dear user, an amount of %s Toman was added to your wallet balance.',
-                        'deductedNotice2' => '❌ Dear user, an amount of %s Toman was deducted from your wallet balance.',
-                        'addedNotice2' => '💎 Dear user, an amount of %s Toman was added to your wallet balance.',
-                        'addedNotice3' => '💎 Dear user, an amount of %s Toman was added to your wallet balance.',
-                        'addedNotice4' => '💰Dear user, an amount of %s Toman was added to your balance.',
-                        'addedNotice5' => '💰Dear user, an amount of %s Toman was added to your balance.',
+                        'giftFromManagement' => '🎁 Dear user, an amount of %s Dollar was credited to your wallet as a gift from management.',
+                        'deductedNotice' => '❌ Dear user, an amount of %s Dollar was deducted from your wallet balance.',
+                        'addedNotice' => '💎 Dear user, an amount of %s Dollar was added to your wallet balance.',
+                        'deductedNotice2' => '❌ Dear user, an amount of %s Dollar was deducted from your wallet balance.',
+                        'addedNotice2' => '💎 Dear user, an amount of %s Dollar was added to your wallet balance.',
+                        'addedNotice3' => '💎 Dear user, an amount of %s Dollar was added to your wallet balance.',
+                        'addedNotice4' => '💰Dear user, an amount of %s Dollar was added to your balance.',
+                        'addedNotice5' => '💰Dear user, an amount of %s Dollar was added to your balance.',
                         'confirmError' => '❌ An error occurred during confirmation. Please perform the payment steps again',
-                        'depositRange' => '❌ The minimum deposit amount for this payment method must be {mainbalance} and the maximum {maxbalance} Toman',
-                        'depositRangePlisio' => '❌ The minimum deposit amount for this payment method must be {mainbalance} and the maximum {maxbalance} Toman',
+                        'depositRange' => '❌ The minimum deposit amount for this payment method must be {mainbalance} and the maximum {maxbalance} Dollar',
+                        'depositRangePlisio' => '❌ The minimum deposit amount for this payment method must be {mainbalance} and the maximum {maxbalance} Dollar',
                         'cardRetrieveError' => '❌ An internal error occurred while retrieving the bank card. Please try again later.',
                         'noActiveCard' => '❌ No active bank card was found for this payment method. Please try again later or contact support.',
                         'receiptCooldown' => '❗ You sent a receipt in the last 2 minutes. Please send a new receipt in 2 minutes.',
@@ -437,12 +437,12 @@ Please use the menu buttons below, or send /start.',
                         'receiptSentExtraVolume' => '🚀 Your receipt was sent and volume will be added to your service after review.',
                         'receiptSentExtraTime' => '🚀 Your receipt was sent and time will be added to your service after review',
                         'amountRangeError' => '❌ Error 
-💬 The amount must be at least %s Toman and at most %s Toman',
-                        'added' => '💎 Dear user, an amount of %s Toman was added to your wallet balance.',
-                        'chargedThanks' => '💎 Dear user, an amount of %s Toman was credited to your wallet. Thank you for your payment.
+💬 The amount must be at least %s Dollar and at most %s Dollar',
+                        'added' => '💎 Dear user, an amount of %s Dollar was added to your wallet balance.',
+                        'chargedThanks' => '💎 Dear user, an amount of %s Dollar was credited to your wallet. Thank you for your payment.
                 
 🛒 Your tracking code: %s',
-                        'deducted' => '❌ Dear user, an amount of %s Toman was deducted from your wallet balance.',
+                        'deducted' => '❌ Dear user, an amount of %s Dollar was deducted from your wallet balance.',
                         'lessThanPrice' => 'The balance is less than the product price',
                         'cardInstruction' => 'To pay, deposit the amount to the card number below',
                         'cryptoInstruction' => '
@@ -461,7 +461,7 @@ Please use the menu buttons below, or send /start.',
 🔹 cafearz.com
 🔸 pay98.app
 🔢 Invoice number : %s
-💰 Invoice amount : %s Toman
+💰 Invoice amount : %s Dollar
 📊 Dollar price: %s Toman as of now
 
 Use the button below to pay👇🏻',
@@ -481,7 +481,7 @@ Use the button below to pay👇🏻',
 🔹 cafearz.com
 🔸 pay98.app
 🔢 Invoice number : %s
-💰 Invoice amount : %s Toman
+💰 Invoice amount : %s Dollar
 📊 Dollar price: %s Toman as of now
 
 
@@ -489,23 +489,23 @@ Use the button below to pay👇🏻',
 
 
 Use the button below to pay👇🏻',
-                        'debtRequired' => '❌ You have a debt; you must pay at least %s Toman.
+                        'debtRequired' => '❌ You have a debt; you must pay at least %s Dollar.
          Send your amount again',
-                        'enterAmount' => '💸 Enter the amount in Toman:
+                        'enterAmount' => '💸 Enter the amount in Dollar:
 
-⚠️  The minimum amount is <b>%s</b> and the maximum is <b>%s</b> Toman',
-                        'giftDeposit' => '🎁 Dear user, the amount of %s Toman has been deposited into your account as a gift.',
+⚠️  The minimum amount is <b>%s</b> and the maximum is <b>%s</b> Dollar',
+                        'giftDeposit' => '🎁 Dear user, the amount of %s Dollar has been deposited into your account as a gift.',
                         'invoiceExpired' => '⭕️ Dear user, the invoice below expired due to non-payment within the specified time .
 ❗️Please do not pay any amount for this invoice under any circumstances and create a new invoice .
 
 🛒 Your payment method : %s
 📌 Invoice code : <code>%s</code>
-🪙 Invoice amount :  %s Toman',
-                        'giftDepositIranpay' => '🎁 Dear user, the amount of %s Toman has been deposited into your account as a gift.',
+🪙 Invoice amount :  %s Dollar',
+                        'giftDepositIranpay' => '🎁 Dear user, the amount of %s Dollar has been deposited into your account as a gift.',
                         'invoiceCreated' => '✅ Payment invoice was created.
 
 🔢 Invoice number : %s
-💰 Invoice amount : %s Toman
+💰 Invoice amount : %s Dollar
 
 ❌ This transaction is valid for one hour; after that, payment for this transaction is not possible.        
 
@@ -516,7 +516,7 @@ Use the button below to pay👇🏻',
 ✅ Payment invoice was created.
             
 🔢 Invoice number : %s
-💰 Invoice amount : %s Toman
+💰 Invoice amount : %s Dollar
 
 ❌ This transaction is valid for one day; after that, payment for this transaction is not possible.        
 
@@ -526,17 +526,17 @@ Use the button below to pay👇🏻',
                         'queueBusy' => 'The number of people in the payment gateway queue is extremely high 📊
 
 ‼️Please use another payment method for now',
-                        'giftDepositPlisio' => '🎁 Dear user, the amount of %s Toman has been deposited into your account as a gift.',
+                        'giftDepositPlisio' => '🎁 Dear user, the amount of %s Dollar has been deposited into your account as a gift.',
                         'plisioExpired' => '❌ The transaction below expired due to non-payment. Please do not pay any amount for this transaction
 
 🛒 Order code: %s
-💰 Amount:  %s Toman',
-                        'refundCreateFailed' => '💎  Dear user, because the service was not created, an amount of %s Toman was added to your wallet.',
-                        'refundRenewFailed' => '💎  Dear user, because the service was not renewed, an amount of %s Toman was added to your wallet.',
+💰 Amount:  %s Dollar',
+                        'refundCreateFailed' => '💎  Dear user, because the service was not created, an amount of %s Dollar was added to your wallet.',
+                        'refundRenewFailed' => '💎  Dear user, because the service was not renewed, an amount of %s Dollar was added to your wallet.',
                         'transactionCreated' => '✅ Your transaction was created
         
 🛒 Tracking code:  <code>%s</code> 
-💲 Transaction amount in Toman  : <code>%s</code>
+💲 Transaction amount in Dollar  : <code>%s</code>
 
 
 💢 Please note these points before payment 👇
@@ -548,7 +548,7 @@ Use the button below to pay👇🏻',
                         'transactionCreated2' => '✅ Your transaction was created
         
 🛒 Tracking code:  <code>%s</code> 
-💲 Transaction amount in Toman  : <code>%s</code>
+💲 Transaction amount in Dollar  : <code>%s</code>
 
 💢 Please note these points before payment 👇
         
@@ -559,7 +559,7 @@ Use the button below to pay👇🏻',
                         'transactionCreated3' => '✅ Your transaction was created
         
 🛒 Tracking code:  <code>%s</code> 
-💲 Transaction amount in Toman  : <code>%s</code> Toman
+💲 Transaction amount in Dollar  : <code>%s</code> Dollar
 
 
 💢 Please note these points before payment 👇
@@ -572,7 +572,7 @@ Use the button below to pay👇🏻',
 🛒 Tracking code: <code>%s</code>
 💲 Transaction amount: %s ⭐ (equivalent to %s Toman)
 
-📌 Please convert the amount of %s Toman to Telegram Stars and deposit it.
+📌 Please convert the amount of %s Dollar to Telegram Stars and deposit it.
 
 💢 Important points before payment: 👇
 🔹 Each transaction is valid for 1 day; after expiry, refrain from depositing.
@@ -602,9 +602,9 @@ Use the button below to pay👇🏻',
                         'firstdiscount' => '❌ This discount code is only for the first purchase.',
                         'getcode' => '💝 To receive your balance, send your gift code',
                         'getcodesell' => '🧑‍💻 Send your discount code',
-                        'gift-deposit' => '🎁 Dear user, the amount of %s Toman has been deposited into your account as a gift.',
+                        'gift-deposit' => '🎁 Dear user, the amount of %s Dollar has been deposited into your account as a gift.',
                         'giftcodeonce' => '📌 This code can only be used once.',
-                        'giftcodesuccess' => 'The gift code was successfully registered and the amount of %s Toman was added to your balance. 🥳',
+                        'giftcodesuccess' => 'The gift code was successfully registered and the amount of %s Dollar was added to your balance. 🥳',
                         'giftcodeused' => '⭕️ A user with username @%s and numeric ID %s used the gift code %s.',
                         'notcode' => '❌ The code is invalid',
                         'invalidCode' => '❌ The discount code is invalid',
@@ -618,7 +618,7 @@ Use the button below to pay👇🏻',
                         'title' => '📌 Send the number of services you want to purchase 
 ⚠️ The minimum is 1 and the maximum is 15',
                         'disabled' => '❌ This section is currently disabled',
-                        'minBalance' => '❌ For bulk purchase you must have at least {PaySetting} Toman balance.',
+                        'minBalance' => '❌ For bulk purchase you must have at least {PaySetting} Dollar balance.',
                 ],
                 'account' => [
                         'verifiedByAdmin' => '💎 Dear user, your account has been successfully verified by the admin and you can now make your purchase',
@@ -631,7 +631,7 @@ Use the button below to pay👇🏻',
 👨‍👩‍👦 Your referral code : <code>%s</code>
 📱 Contact number :%s
 ⌚️Registration time : %s
-💰 Balance: %s Toman
+💰 Balance: %s Dollar
 🛒 Number of purchased services : %s
 📑 Number of paid invoices :  : %s
 🤝 Number of your referrals : %s people
@@ -668,16 +668,16 @@ Use the button below to pay👇🏻',
         An amount of %s was credited to your wallet from your referral',
                         'commissionPaidFn' => '🎁  Commission payment 
         
-        An amount of %s Toman was credited to your wallet from your referral',
+        An amount of %s Dollar was credited to your wallet from your referral',
                         'commissionPaidFn2' => '🎁  Commission payment 
         
-        An amount of %s Toman was credited to your wallet from your referral',
+        An amount of %s Dollar was credited to your wallet from your referral',
                         'commissionPaidMiniapp' => '🎁  Commission payment 
             
-            An amount of %s Toman was credited to your wallet from your referral',
+            An amount of %s Dollar was credited to your wallet from your referral',
                         'commissionPaidMiniapp2' => '🎁  Commission payment 
         
-        An amount of %s Toman was credited to your wallet from your referral',
+        An amount of %s Dollar was credited to your wallet from your referral',
                         'newReferralJoined' => '<b>🎉 A new referral!</b>
 User <b>@%s</b> joined the bot with your invite link ✅
 
@@ -736,7 +736,7 @@ Description: %s',
                         'endrequest' => '✅ Your request has been submitted. The result will be announced after review.',
                         'insufficientbalanceagent' => '❌ Your balance is not enough for an agent request. Please first top up your account, then send the request
 
-💸 Cost of obtaining an agency: %s Toman',
+💸 Cost of obtaining an agency: %s Dollar',
                         'isagent' => '❌ You are currently an agent, so you cannot submit an agent request.',
                         'rejectrequest' => '❌ Reject request',
                         'requestreport' => '❌ You have a request already submitted, so a new request is not possible.',
@@ -774,7 +774,7 @@ You can now use the bot ✔️',
                         'notPossible' => '❌ Transfer to the panel is not possible.',
                         'configUnused' => '❌ Your config is in unused status and transferring the service location is not possible.',
                         'confirmPrompt' => '📍 By confirming the service location transfer, your service will be deleted from this location and transferred to the new location.
-💰 The transfer cost is %s Toman
+💰 The transfer cost is %s Dollar
 📌 Your remaining limit : %s (remaining free limit :‌%s)
 
 ✅ To confirm the transfer, click the button below',
@@ -842,13 +842,13 @@ You can now use the bot ✔️',
                         'errorSupport2' => '❌ An error occurred while renewing the service; contact support',
                         'genericError' => '❌ An error occurred during renewal. Contact support',
                         'giftCharged' => 'Congratulations 🎉
-📌 As a renewal gift, an amount of %s Toman was credited to your account',
+📌 As a renewal gift, an amount of %s Dollar was credited to your account',
                         'giftChargedFn' => 'Congratulations 🎉
-📌 As a renewal gift, an amount of %s Toman was credited to your account',
+📌 As a renewal gift, an amount of %s Dollar was credited to your account',
                         'invoiceCreated' => '📜 Your renewal invoice for username %s was created.
         
 🛍 Product name :%s
-💸 Renewal amount : %s Toman
+💸 Renewal amount : %s Dollar
 ⏱ Renewal duration :%s days
 🔋 Renewal volume :%s GB
 ✍️ Description : %s
@@ -869,21 +869,21 @@ You can now use the bot ✔️',
  
 ▫️Service name : %s
 ▫️Product name : %s
-▫️Renewal amount %s Toman
+▫️Renewal amount %s Dollar
 
 ',
                         'success2' => '✅ Your service was renewed successfully
  
 ▫️Service name : %s
 ▫️Product name : %s
-▫️Renewal amount %s Toman
+▫️Renewal amount %s Dollar
 
 ',
                         'successFn' => '✅ Your service was renewed successfully
  
 ▫️Service name : %s
 ▫️Product name : %s
-▫️Renewal amount %s Toman
+▫️Renewal amount %s Dollar
 
 ',
                 ],
@@ -893,9 +893,9 @@ You can now use the bot ✔️',
                         'notSupportedPanel' => '❌ Purchasing extra time is not possible on this panel',
                         'invoiceCreated' => '📜 An extra time purchase invoice was created for you.
         
-📌 Daily rate for extra time : %s Toman
+📌 Daily rate for extra time : %s Dollar
 📆 Requested number of extra days : %s days
-💰 Your invoice amount : %s Toman
+💰 Your invoice amount : %s Dollar
         
 ✅ To pay and add the time, click the button below',
                         'prompt' => '📆 Enter the desired number of extra days ( in days ) :
@@ -906,23 +906,23 @@ You can now use the bot ✔️',
 ▫️Service name : %s
 ▫️Added time : %s days
 
-▫️Time addition amount : %s Toman',
+▫️Time addition amount : %s Dollar',
                         'successFn' => '✅ Time was added to your service successfully
  
 ▫️Service name : %s
 ▫️Added time : %s days
 
-▫️Time addition amount : %s Toman',
+▫️Time addition amount : %s Dollar',
                 ],
                 'extraVolume' => [
                         'enterextravolume' => '🔋 Enter the desired amount of extra volume (in gigabytes):
 
-📌 Price per GB: %s Toman',
+📌 Price per GB: %s Dollar',
                         'extracheck' => 'Confirm and receive extra volume',
                         'extravolumeinvoice' => '📇 An invoice for purchasing extra volume has been created for you.
 
-💰 Price per gigabyte of extra volume: %s Toman
-📝 Your invoice amount: %s Toman
+💰 Price per gigabyte of extra volume: %s Dollar
+📝 Your invoice amount: %s Dollar
 📥 Requested extra volume: %s gigabytes
 
 ✅ To pay and add the volume, click the button below.',
@@ -932,26 +932,26 @@ You can now use the bot ✔️',
                         'serviceError' => '❌An error occurred while purchasing extra volume for the service. Contact support',
                         'invoiceCreated' => '📜 An extra volume purchase invoice was created for you.
         
-📌 Rate per gigabyte of extra volume : %s Toman
+📌 Rate per gigabyte of extra volume : %s Dollar
 🔋 Requested extra volume : %s gigabytes
-💰 Your invoice amount : %s Toman
+💰 Your invoice amount : %s Dollar
         
 ✅ To pay and add the volume, click the button below',
                         'prompt' => ' ⭕️ Send the amount of volume you want to purchase.
 ❌ Send the amount in English.
-        ⚠️ Each gigabyte of extra volume is %s Toman.',
+        ⚠️ Each gigabyte of extra volume is %s Dollar.',
                         'success' => '✅ Volume was added to your service successfully
  
 ▫️Service name  : %s
 ▫️Added volume : %s GB
 
-▫️Volume addition amount : %s Toman',
+▫️Volume addition amount : %s Dollar',
                         'successFn' => '✅ Volume was added to your service successfully
  
 ▫️Service name  : %s
 ▫️Added volume : %s GB
 
-▫️Volume addition amount : %s Toman',
+▫️Volume addition amount : %s Dollar',
                 ],
                 'help' => [
                         'btninlinebuy' => '📚 View usage tutorial ',
@@ -962,7 +962,7 @@ You can now use the bot ✔️',
                 'lottery' => [
                         'winnerNotice' => '🎁 Lottery result 
 
-😎 Dear user, congratulations! You are person %s and won %s Toman balance, and your account was charged.',
+😎 Dear user, congratulations! You are person %s and won %s Dollar balance, and your account was charged.',
                 ],
                 'note' => [
                         'changednote' => '✅ The note was changed successfully.',
@@ -1041,7 +1041,7 @@ Support account : @%s',
                         'previous' => 'Previous',
                 ],
                 'priceArze' => [
-                        'tetherPrice' => 'The current Tether price is: %s Toman',
+                        'tetherPrice' => 'The current Tether price is: %s Dollar',
                         'tronPrice' => 'The current TRON price is: %s Toman',
                         'fetchError' => '❌ Retrieving the price is not possible at the moment. Please try again later.',
                 ],
@@ -1089,25 +1089,25 @@ To use the default name, press the green button; to cancel and go back to the pl
                         'restartFromStart' => '❌ Perform the purchase steps from the beginning again',
                         'noPurchaseUsersOnly' => '❌ Unfortunately, this option is only active for users who have not made any purchase from the bot.',
                         'customTimePrompt' => '⌛️ Select your service time 
-📌 Daily rate  : %s  Toman
+📌 Daily rate  : %s  Dollar
 ⚠️ You can purchase a minimum of %s days and a maximum of %s days',
                         'customTimePrompt2' => '⌛️ Select your service time 
-📌 Daily rate  : %s  Toman
+📌 Daily rate  : %s  Dollar
 ⚠️ You can purchase a minimum of %s days and a maximum of %s days',
                         'customVolumePrompt' => '📌 Send your requested volume.
-🔔The price per gigabyte of volume is %s Toman.
+🔔The price per gigabyte of volume is %s Dollar.
 🔔 The minimum volume is %s gigabytes and the maximum is %s gigabytes.',
                         'customVolumePrompt2' => '📌 Send your requested volume.
-🔔The price per gigabyte of volume is %s Toman.
+🔔The price per gigabyte of volume is %s Dollar.
 🔔 The minimum volume is %s gigabytes and the maximum is %s gigabytes.',
                         'customVolumePrompt3' => '📌 Send your requested volume.
-🔔The price per gigabyte of volume is %s Toman.
+🔔The price per gigabyte of volume is %s Dollar.
 🔔 The minimum volume is %s gigabytes and the maximum is %s gigabytes.',
                         'customVolumePrompt4' => '📌 Send your requested volume.
-🔔The price per gigabyte of volume is %s Toman.
+🔔The price per gigabyte of volume is %s Dollar.
 🔔 The minimum volume is %s gigabytes and the maximum is %s gigabytes.',
                         'customVolumePrompt5' => '📌 Send your requested volume.
-🔔The price per gigabyte of volume is %s Toman.
+🔔The price per gigabyte of volume is %s Dollar.
 🔔 The minimum volume is %s gigabytes and the maximum is %s gigabytes.',
                         'invalidTimeRestart' => 'The time is invalid. Perform the purchase from the beginning',
                         'invalidVolumeRestart' => 'The volume is invalid. Perform the purchase from the beginning',
@@ -1155,7 +1155,7 @@ To use the default name, press the green button; to cancel and go back to the pl
 
 🧑‍🦯 You can get the connection method by pressing the button below and selecting your operating system',
                         'timePrompt' => '⌛️ Select your service time 
-📌 Daily rate  : %s  Toman
+📌 Daily rate  : %s  Dollar
 ⚠️ You can purchase a minimum of %s days and a maximum of %s days',
                         'volumePrompt' => '🔋 Please enter the desired service volume ( in gigabytes ) :
 📌 Rate per gigabyte :  %s 
@@ -1430,7 +1430,7 @@ Example:
                         'negativeBalance' => '⚜️ Send the user\'s numeric ID 
 Description: To deduct the user\'s balance, first send the user\'s numeric ID',
                         'negativeBalanceUser' => '✅ The amount was deducted from the user\'s balance',
-                        'priceBalance' => 'The numeric ID was received. Send the amount you want to deduct from the user; the amount should be in Toman',
+                        'priceBalance' => 'The numeric ID was received. Send the amount you want to deduct from the user; the amount should be in Dollar',
                         'askUserGroup' => '📌 Which of the following user groups should the top-up be deposited to?',
                         'askTargetUsers' => '📌 Which user should the public top-up be sent to?',
                         'askNotify' => '📌 Should a top-up notification message be sent to the users or not?
@@ -1439,7 +1439,7 @@ No: 0',
                         'operationStarted' => '✅ The message-sending operation has begun. You will be notified when it finishes.',
                         'btnDecrease' => '⬇️ Decrease balance',
                         'maxAmountRial' => '📌 The maximum amount is 100 million Rials.',
-                        'maxAmountToman' => '❌ The maximum amount is 100 million Toman',
+                        'maxAmountToman' => '❌ The maximum amount is 100 million Dollar',
                         'askMinCharge' => '📌 Set the minimum amount you want the user to top up their account with',
                         'askMinChargeGroup' => '📌 For which user group should the minimum balance apply?
 f
@@ -1455,7 +1455,7 @@ If you want the user to purchase unlimited, send the number 0',
                         'askMaxDeposit' => '📌 Send the maximum deposit amount',
                         'maxDepositSaved' => '✅ The maximum deposit amount was set.',
                         'askChargeAmount' => '📌 Send the amount you want to charge the user\'s account.',
-                        'addedToUserNotice' => '❌ An amount of %s Toman was added to the user\'s balance.',
+                        'addedToUserNotice' => '❌ An amount of %s Dollar was added to the user\'s balance.',
                         'resetToZero' => 'The user\'s balance of %s was reset to zero',
                 ],
                 'Channel' => [
@@ -1572,17 +1572,17 @@ In this section you can view unapproved payments and approve or reject them.
 🛒 Payment tracking code: %s
 ⚜️ Username: @%s
 💎 Balance after approval: %s
-💸 Paid amount: %s Toman
+💸 Paid amount: %s Dollar
 ',
                         'detailRow' => '🛒 Payment number:  <code>%s</code>
 🙍‍♂️ User ID: <code>%s</code>
-💰 Paid amount: %s Toman
+💰 Paid amount: %s Dollar
 ⚜️ Payment status: %s
 ⭕️ Payment method: %s 
 📆 Purchase date:  %s',
                         'detailRow2' => '🛒 Payment number:  <code>%s</code>
 🙍‍♂️ User ID: <code>%s</code>
-💰 Paid amount: %s Toman
+💰 Paid amount: %s Dollar
 ⚜️ Payment status: %s
 ⭕️ Payment method: %s 
 📆 Purchase date:  %s',
@@ -1601,7 +1601,7 @@ If you want the volume to be unlimited, send the number 0',
                         'getPrice' => '
 Send the subscription price.
 Note:
-The product is in Toman, and send the price without any extra characters.',
+The product is in Dollar, and send the price without any extra characters.',
                         'getTime' => '
 Enter the subscription duration. Note: the time unit for the subscription is days.
 If you want the time to be unlimited, send the number 0',
@@ -2163,9 +2163,9 @@ Error reason : %s',
 🔰 Total purchases: %s
 🔰 User discount percentage: %s
 🔰 Sales count in the last hour: %s
-🔰 Total sales in the last hour: %s Toman
+🔰 Total sales in the last hour: %s Dollar
 🔰 Sales count in the last month: %s
-🔰 Total sales in the last month: %s Toman
+🔰 Total sales in the last month: %s Dollar
 
 
 ',
@@ -2423,7 +2423,7 @@ Number of remaining people :  %s',
 👤 Subscription username:  <code>%s</code> 
 📍 Service location:  %s
 🛍 Product name:  %s
-💰 Service paid price: %s Toman
+💰 Service paid price: %s Dollar
 ⚜️ Purchased service volume: %s
 ⏳ Purchased service time: %s 
 📆 Purchase date: %s  
@@ -2461,7 +2461,7 @@ User subscription link:
 👤 Subscription username:  %s
 📍 Service location:  %s
 🛍 Product name:  %s
-💰 Service paid price: %s Toman
+💰 Service paid price: %s Dollar
 ⚜️ Purchased service volume: %s
 ⏳ Purchased service time: %s 
 📆 Purchase date: %s  
@@ -2594,9 +2594,9 @@ Current amount: %s',
                         'dailyBot' => '📌 Daily bot performance report :
 
 🧲 Number of renewals today : %s
-💰 Total renewals today : %s Toman
+💰 Total renewals today : %s Dollar
 🛍 Number of orders today : %s
-🛍 Total order amount today : %s Toman
+🛍 Total order amount today : %s Dollar
 🔑 Test accounts today : %s
 🔋 Total volume sold : %s gigabytes
 Number of users who joined the bot today : %s people
@@ -2605,7 +2605,7 @@ Number of users who joined the bot today : %s people
                         'dailyPanelRow' => '
 Panel name : %s
 🛍 Number of orders today : %s
-🛍 Total order amount today : %s Toman
+🛍 Total order amount today : %s Dollar
 🔋 Total volume sold : %s gigabytes
 ---------------
 
@@ -2665,15 +2665,15 @@ Numeric ID: %s',
 ▫️ Product name: %s
 ▫️ Product volume: %s
 ▫️ Product time: %s
-▫️ Renewal amount: %s Toman
-▫️ User balance: %s Toman
+▫️ Renewal amount: %s Dollar
+▫️ User balance: %s Dollar
 ▫️ Purchase time: %s',
                         'volumePurchase' => '⭕️ A user purchased extra volume
 
 User information:
 🪪 Numeric ID: %s
 🛍 Purchased volume: %s
-💰 Amount paid: %s Toman
+💰 Amount paid: %s Dollar
 User\'s balance before purchase: %s
 👤 Config username: %s',
                         'checkReportGroup' => '❌ An error occurred while creating the subscription; to fix the issue, check the cause of the error in your report group',
@@ -2739,7 +2739,7 @@ Transaction amount deposited by admin: %s',
 Information of the approving user: 
 
 🪪 Numeric ID: <code>%s</code>
-💰 Refunded amount: %s Toman
+💰 Refunded amount: %s Dollar
 👤 Username: %s
         Numeric ID of the cancellation requester: %s',
                         'deleteRequestApproved2' => '⭕️ An admin approved the user\'s service that had a deletion request
@@ -2747,7 +2747,7 @@ Information of the approving user:
 Information of the approving user: 
 
 🪪 Numeric ID: <code>%s</code>
-💰 Refunded amount: %s Toman
+💰 Refunded amount: %s Dollar
 👤 Username: %s
 Numeric ID of the cancellation requester: %s',
                         'errorConfigCreateAdmin' => '
@@ -2798,14 +2798,14 @@ User service location: %s',
 ▫️Product name :%s
 ▫️Purchased time :%s days
 ▫️Purchased volume : %s GB
-▫️Balance before purchase : %s Toman
-▫️Balance after purchase : %s Toman
+▫️Balance before purchase : %s Dollar
+▫️Balance after purchase : %s Dollar
 ▫️Tracking code: %s
 ▫️User type : %s
 ▫️User phone number : %s
 ▫️Product category : %s
-▫️Product price : %s Toman
-▫️Final price : %s Toman
+▫️Product price : %s Dollar
+▫️Final price : %s Dollar
 ▫️Purchase time : %s',
                         'accountCreatedAfterPay' => '📣 Account creation details were registered in the bot after payment .
 
@@ -2817,13 +2817,13 @@ User service location: %s',
 ▫️Purchased time :%s days
 ▫️Purchased product name :%s
 ▫️Purchased volume : %s GB
-▫️Balance before purchase : %s Toman
-▫️Balance after purchase : %s Toman
+▫️Balance before purchase : %s Dollar
+▫️Balance after purchase : %s Dollar
 ▫️Tracking code: %s
 ▫️User type : %s
 ▫️User phone number : %s
-▫️Product price : %s Toman
-▫️Final price : %s Toman
+▫️Product price : %s Dollar
+▫️Final price : %s Dollar
 ▫️Purchase time : %s',
                         'accountCreatedMiniapp' => '📣 Account creation details were registered in the mini app .
         
@@ -2835,13 +2835,13 @@ User service location: %s',
 ▫️Product name :%s
 ▫️Purchased time :%s days
 ▫️Purchased volume : %s GB
-▫️Balance before purchase : %s Toman
-▫️Balance after purchase : %s Toman
+▫️Balance before purchase : %s Dollar
+▫️Balance after purchase : %s Dollar
 ▫️Tracking code: %s
 ▫️User type : %s
 ▫️User phone number : %s
 ▫️Product category : %s
-▫️Product price : %s Toman
+▫️Product price : %s Dollar
 ▫️Purchase time : %s',
                         'userDeletedService' => 'Dear admin, a user has deleted their service after its volume or time ended
 Config username : %s',
@@ -2888,13 +2888,13 @@ Panel name : %s',
 ▫️Product name :%s
 ▫️Purchased time :%s days
 ▫️Purchased volume : %s GB
-▫️Balance before purchase : %s Toman
-▫️Balance after purchase : %s Toman
+▫️Balance before purchase : %s Dollar
+▫️Balance after purchase : %s Dollar
 ▫️Tracking code: %s
 ▫️User type : %s
 ▫️User phone number : %s
-▫️Product price : %s Toman
-▫️Final price : %s Toman
+▫️Product price : %s Dollar
+▫️Final price : %s Dollar
 ▫️Number of configs : %s
 ▫️Purchase time : %s',
                         'linkChanged' => '📣 Link change details were registered in your bot .
@@ -2921,7 +2921,7 @@ Service location change
 🔻New panel name : %s
 🔻 Customer username in panel  :%s
 🔻Final service volume : %s
-🔻User balance : %s Toman',
+🔻User balance : %s Dollar',
                         'errorConfigCreate' => '
 ⭕️ Error creating config
 ✍️ Error reason : 
@@ -2995,14 +2995,14 @@ Error reason : %s',
 User information : 
 🪪 Numeric ID : %s
 🛍 Purchased time  : %s days
-💰 Paid amount : %s Toman
+💰 Paid amount : %s Dollar
 👤 Config username : %s',
                         'extraTimeFn' => '⭕️ A user purchased extra time
         
 User information : 
 🪪 Numeric ID : %s
 🛍 Purchased time  : %s days
-💰 Paid amount : %s Toman
+💰 Paid amount : %s Dollar
 👤 Config username %s',
                         'errorExtraVolume' => 'Error purchasing extra volume
 Panel name : %s
@@ -3021,7 +3021,7 @@ Error reason : %s',
 User information : 
 🪪 Numeric ID : %s
 🛍 Purchased volume  : %s GB
-💰 Paid amount : %s Toman
+💰 Paid amount : %s Dollar
 👤 Config username : %s
 User balance before purchase : %s
 
@@ -3031,7 +3031,7 @@ User balance before purchase : %s
 User information : 
 🪪 Numeric ID : %s
 🛍 Purchased volume  : %s GB
-💰 Paid amount : %s Toman
+💰 Paid amount : %s Dollar
 👤 Config username %s
 User balance before purchase : %s
 
@@ -3066,11 +3066,11 @@ Payment method :  Automatic approval without review
 Balance increase            
 👤 User account name : %s
 👤 User ID:  <a href = "tg://user?id=%s">%s</a>
-💸 User current balance : %s Toman
+💸 User current balance : %s Dollar
 🛒 Payment tracking code: %s
 ⚜️ Username: @%s
 💵 User\'s total payments : %s
-💸 Paid amount: %s Toman
+💸 Paid amount: %s Dollar
                 
 Description: %s %s
 ✍️ If the receipt is correct, approve the payment.',
@@ -3079,10 +3079,10 @@ Description: %s %s
 Balance increase            
 👤 User account name : %s
 👤 User ID:  <a href = "tg://user?id=%s">%s</a>
-💸 User current balance : %s Toman
+💸 User current balance : %s Dollar
 🛒 Payment tracking code: %s
 ⚜️ Username: @%s
-💸 Paid amount: %s Toman
+💸 Paid amount: %s Dollar
                 
 ✍️ If the receipt is correct, approve the payment.',
                         'newPaymentBalanceFn' => '⭕️ A new payment has been made
@@ -3090,7 +3090,7 @@ Balance increase
 👤 User ID: <code>%s</code>
 🛒 Payment tracking code: %s
 ⚜️ Username: @%s
-💸 Paid amount: %s Toman
+💸 Paid amount: %s Dollar
 💎 Balance before increase : %s
 ✍️ Description : %s',
                         'newPaymentExtraTime' => '
@@ -3102,11 +3102,11 @@ Service username : %s
 Number of days purchased  : %s
 👤 User account name : %s
 👤 User ID:  <a href = "tg://user?id=%s">%s</a>
-💸 User current balance : %s Toman
+💸 User current balance : %s Dollar
 🛒 Payment tracking code: %s
 ⚜️ Username: @%s
 💵 User\'s total payments : %s
-💸 Paid amount: %s Toman
+💸 Paid amount: %s Dollar
                 
 Description: %s %s
 ✍️ If the receipt is correct, approve the payment.',
@@ -3119,10 +3119,10 @@ Service username : %s
 Number of days purchased  : %s
 👤 User account name : %s
 👤 User ID:  <a href = "tg://user?id=%s">%s</a>
-💸 User current balance : %s Toman
+💸 User current balance : %s Dollar
 🛒 Payment tracking code: %s
 ⚜️ Username: @%s
-💸 Paid amount: %s Toman
+💸 Paid amount: %s Dollar
                 
 ✍️ If the receipt is correct, approve the payment.',
                         'newPaymentExtraVolume' => '
@@ -3134,11 +3134,11 @@ Service username : %s
 Purchased volume  : %s
 👤 User account name : %s
 👤 User ID:  <a href = "tg://user?id=%s">%s</a>
-💸 User current balance : %s Toman
+💸 User current balance : %s Dollar
 🛒 Payment tracking code: %s
 ⚜️ Username: @%s
 💵 User\'s total payments : %s
-💸 Paid amount: %s Toman
+💸 Paid amount: %s Dollar
                 
 Description: %s %s
 ✍️ If the receipt is correct, approve the payment.',
@@ -3151,10 +3151,10 @@ Service username : %s
 Purchased volume  : %s
 👤 User account name : %s
 👤 User ID:  <a href = "tg://user?id=%s">%s</a>
-💸 User current balance : %s Toman
+💸 User current balance : %s Dollar
 🛒 Payment tracking code: %s
 ⚜️ Username: @%s
-💸 Paid amount: %s Toman
+💸 Paid amount: %s Dollar
                 
 ✍️ If the receipt is correct, approve the payment.',
                         'newPaymentService' => '
@@ -3169,11 +3169,11 @@ Product volume : %s GB
 Product time : %s days
 👤 User account name : %s
 👤 User ID:  <a href = "tg://user?id=%s">%s</a>
-💸 User current balance : %s Toman
+💸 User current balance : %s Dollar
 🛒 Payment tracking code: %s
 ⚜️ Username: @%s
 💵 User\'s total payments : %s
-💸 Paid amount: %s Toman
+💸 Paid amount: %s Dollar
                 
 Description: %s %s
 ✍️ If the receipt is correct, approve the payment.',
@@ -3189,10 +3189,10 @@ Product volume : %s GB
 Product time : %s days
 👤 User account name : %s
 👤 User ID:  <a href = "tg://user?id=%s">%s</a>
-💸 User current balance : %s Toman
+💸 User current balance : %s Dollar
 🛒 Payment tracking code: %s
 ⚜️ Username: @%s
-💸 Paid amount: %s Toman
+💸 Paid amount: %s Dollar
                 
 ✍️ If the receipt is correct, approve the payment.',
                         'newPaymentRenew' => '
@@ -3204,11 +3204,11 @@ Service username : %s
 Product name : %s
 👤 User account name : %s
 👤 User ID:  <a href = "tg://user?id=%s">%s</a>
-💸 User current balance : %s Toman
+💸 User current balance : %s Dollar
 🛒 Payment tracking code: %s
 ⚜️ Username: @%s
 💵 User\'s total payments : %s
-💸 Paid amount: %s Toman
+💸 Paid amount: %s Dollar
                 
 Description: %s %s
 ✍️ If the receipt is correct, approve the payment.',
@@ -3221,10 +3221,10 @@ Service username : %s
 Product name : %s
 👤 User account name : %s
 👤 User ID:  <a href = "tg://user?id=%s">%s</a>
-💸 User current balance : %s Toman
+💸 User current balance : %s Dollar
 🛒 Payment tracking code: %s
 ⚜️ Username: @%s
-💸 Paid amount: %s Toman
+💸 Paid amount: %s Dollar
                 
 ✍️ If the receipt is correct, approve the payment.',
                         'paymentConfirmedExtraTime' => '✅ Payment approved
@@ -3235,7 +3235,7 @@ Product name : %s
 🛒 Payment tracking code: %s
 ⚜️ Username: @%s
 💎 Balance before increase : %s
-💸 Paid amount: %s Toman
+💸 Paid amount: %s Dollar
 
 ',
                         'paymentConfirmedExtraVolume' => '✅ Payment approved
@@ -3246,7 +3246,7 @@ Product name : %s
 🛒 Payment tracking code: %s
 ⚜️ Username: @%s
 💎 Balance before increase : %s
-💸 Paid amount: %s Toman
+💸 Paid amount: %s Dollar
 
 ',
                         'paymentConfirmedService' => '✅ Payment approved
@@ -3257,7 +3257,7 @@ Product name : %s
 🛒 Payment tracking code: %s
 ⚜️ Username: @%s
 💎 Balance before purchase  : %s
-💸 Paid amount: %s Toman
+💸 Paid amount: %s Dollar
 ✍️ Description : %s
 
 
@@ -3271,7 +3271,7 @@ Product name : %s
 🛒 Payment tracking code: %s
 ⚜️ Username: @%s
 💎 Balance before renewal  : %s
-💸 Paid amount: %s Toman
+💸 Paid amount: %s Dollar
 ✍️ Description : %s
 
 
@@ -3315,9 +3315,9 @@ User username : @%s',
 ▫️Product name : %s
 ▫️Product volume : %s
 ▫️Product time : %s
-▫️Renewal amount : %s Toman
-▫️Balance before purchase : %s Toman
-▫️Balance after purchase : %s Toman
+▫️Renewal amount : %s Dollar
+▫️Balance before purchase : %s Dollar
+▫️Balance after purchase : %s Dollar
 ▫️Purchase time : %s',
                         'renewedFn' => '📣 Account renewal details were registered in your bot .
     
@@ -3328,8 +3328,8 @@ User username : @%s',
 ▫️Product name : %s
 ▫️Product volume : %s
 ▫️Product time : %s
-▫️Renewal amount : %s Toman
-▫️Balance before purchase : %s Toman
+▫️Renewal amount : %s Dollar
+▫️Balance before purchase : %s Dollar
 ▫️Purchase time : %s',
                         'errorRenewService' => 'Service renewal error
 Panel name : %s
@@ -3434,16 +3434,16 @@ User username : @%s',
 👥 <b>Total users:</b> <code>%s</code> people  
 💳 <b>Users with purchases:</b> <code>%s</code> people  
 🧪 <b>Test accounts:</b> <code>%s</code> people  
-💰 <b>Total user balance:</b> <code>%s</code> Toman  
+💰 <b>Total user balance:</b> <code>%s</code> Dollar  
 
 🧾 <b>Total sales count:</b> <code>%s</code>  
 🧾 <b>Total sales count of active services:</b> <code>%s</code>  
-💵 <b>Total sales:</b> <code>%s</code> Toman  
-💵 <b>Total sales of active services:</b> <code>%s</code> Toman  
-🔄 <b>Total renewals:</b> <code>%s</code> Toman  
+💵 <b>Total sales:</b> <code>%s</code> Dollar  
+💵 <b>Total sales of active services:</b> <code>%s</code> Dollar  
+🔄 <b>Total renewals:</b> <code>%s</code> Dollar  
 📈 <b>Conversion rate to customer:</b> <code>%s</code>٪  
-💳 <b>Average purchase per customer:</b> <code>%s</code> Toman  
-📅 <b>Projected monthly revenue:</b> <code>%s</code> Toman  
+💳 <b>Average purchase per customer:</b> <code>%s</code> Dollar  
+📅 <b>Projected monthly revenue:</b> <code>%s</code> Dollar  
 📊 <b>Renewal percentage of sales:</b> <code>%s</code>٪  
 
 
@@ -3458,19 +3458,19 @@ User username : @%s',
 
 
 🛍 Number of orders: %s
-💸 Total order amount: %s Toman
+💸 Total order amount: %s Dollar
 
 🧲 Number of renewals: %s
-💰 Total renewal amount: %s Toman
+💰 Total renewal amount: %s Dollar
 
 📦 Extra volumes: %s
-💰 Extra volume amount: %s Toman
+💰 Extra volume amount: %s Dollar
 
 ⏱️ Extra times: %s
-💰 Extra time amount: %s Toman
+💰 Extra time amount: %s Dollar
 
 📍 Location changes: %s
-💰 Location change amount: %s Toman
+💰 Location change amount: %s Dollar
 
 🔑 Test accounts: %s
 👤 Number of users: %s people
@@ -3481,19 +3481,19 @@ User username : @%s',
 ⏳ Time range: %s to%s
 
 🛍 Number of orders: %s
-💸 Total order amount: %s Toman
+💸 Total order amount: %s Dollar
 
 🧲 Number of renewals: %s
-💰 Total renewal amount: %s Toman
+💰 Total renewal amount: %s Dollar
 
 📦 Extra volumes: %s
-💰 Extra volume amount: %s Toman
+💰 Extra volume amount: %s Dollar
 
 ⏱️ Extra times: %s
-💰 Extra time amount: %s Toman
+💰 Extra time amount: %s Dollar
 
 📍 Location changes: %s
-💰 Location change amount: %s Toman
+💰 Location change amount: %s Dollar
 
 🔑 Test accounts: %s
 👤 Number of users: %s people
@@ -3504,19 +3504,19 @@ User username : @%s',
 ⏳ Time range: %s to%s
 
 🛍 Number of orders: %s
-💸 Total order amount: %s Toman
+💸 Total order amount: %s Dollar
 
 🧲 Number of renewals: %s
-💰 Total renewal amount: %s Toman
+💰 Total renewal amount: %s Dollar
 
 📦 Extra volumes: %s
-💰 Extra volume amount: %s Toman
+💰 Extra volume amount: %s Dollar
 
 ⏱️ Extra times: %s
-💰 Extra time amount: %s Toman
+💰 Extra time amount: %s Dollar
 
 📍 Location changes: %s
-💰 Location change amount: %s Toman
+💰 Location change amount: %s Dollar
 
 🔑 Test accounts: %s
 👤 Number of users: %s people
@@ -3527,19 +3527,19 @@ User username : @%s',
 ⏳ Time range: %s to%s
 
 🛍 Number of orders: %s
-💸 Total order amount: %s Toman
+💸 Total order amount: %s Dollar
 
 🧲 Number of renewals: %s
-💰 Total renewal amount: %s Toman
+💰 Total renewal amount: %s Dollar
 
 📦 Extra volumes: %s
-💰 Extra volume amount: %s Toman
+💰 Extra volume amount: %s Dollar
 
 ⏱️ Extra times: %s
-💰 Extra time amount: %s Toman
+💰 Extra time amount: %s Dollar
 
 📍 Location changes: %s
-💰 Location change amount: %s Toman
+💰 Location change amount: %s Dollar
 
 🔑 Test accounts: %s
 👤 Number of users: %s people
@@ -3550,19 +3550,19 @@ User username : @%s',
 ⏳ Time range: %s to%s
 
 🛍 Number of orders: %s
-💸 Total order amount: %s Toman
+💸 Total order amount: %s Dollar
 
 🧲 Number of renewals: %s
-💰 Total renewal amount: %s Toman
+💰 Total renewal amount: %s Dollar
 
 📦 Extra volumes: %s
-💰 Extra volume amount: %s Toman
+💰 Extra volume amount: %s Dollar
 
 ⏱️ Extra times: %s
-💰 Extra time amount: %s Toman
+💰 Extra time amount: %s Dollar
 
 📍 Location changes: %s
-💰 Location change amount: %s Toman
+💰 Location change amount: %s Dollar
 
 🔑 Test accounts: %s
 👤 Number of users: %s people
@@ -3573,19 +3573,19 @@ User username : @%s',
 ⏳ Time range: %s to %s
 
 🛍 Number of orders: %s
-💸 Total order amount: %s Toman
+💸 Total order amount: %s Dollar
 
 🧲 Number of renewals: %s
-💰 Total renewal amount: %s Toman
+💰 Total renewal amount: %s Dollar
 
 📦 Extra volumes: %s
-💰 Extra volume amount: %s Toman
+💰 Extra volume amount: %s Dollar
 
 ⏱️ Extra times: %s
-💰 Extra time amount: %s Toman
+💰 Extra time amount: %s Dollar
 
 📍 Location changes: %s
-💰 Location change amount: %s Toman
+💰 Location change amount: %s Dollar
 
 🔑 Test accounts: %s
 👤 Number of users: %s people
@@ -3601,7 +3601,7 @@ Your panel statistics👇:
 💻 Marzban panel RAM usage: %s
 🌐 Total traffic consumed ( upload / download ): %s
 🛍 Total sales count on this panel: %s
-🛍 Total sales on this panel: %s Toman
+🛍 Total sales on this panel: %s Dollar
 User group:%s
         
 ⭕️ To manage the panel, select one of the options below',
@@ -3620,7 +3620,7 @@ Your panel statistics👇:
 👥  Total users: %s
 👤 Number of active users: %s
 🛍 Total sales count on this panel: %s
-🛍 Total sales on this panel: %s Toman
+🛍 Total sales on this panel: %s Dollar
 User group:%s
         
 ⭕️ To manage the panel, select one of the options below',
@@ -3629,7 +3629,7 @@ Your panel statistics👇:
 
 🖥 Panel connection status: ✅ Panel is connected
 🛍 Total sales count on this panel: %s
-🛍 Total sales on this panel: %s Toman
+🛍 Total sales on this panel: %s Dollar
 User group:%s
 
 ⭕️ To manage the panel, select one of the options below',
@@ -3775,7 +3775,7 @@ Connection link:
                 'agentRequestDesc' => '📌 Send your description to submit an agency request.',
                 'aqayePardakht' => '🔵 Aghaye Pardakht gateway',
                 'botOff' => '❌ The bot is off, please check back in a few minutes',
-                'cart' => 'To increase your balance, deposit the amount of <code>{price}</code>  Toman  to the account number below 👇🏻
+                'cart' => 'To increase your balance, deposit the amount of <code>{price}</code>  Dollar  to the account number below 👇🏻
         
         ==================== 
         <code>{card_number}</code>
@@ -4390,13 +4390,13 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'dashStatusWarning' => 'Warning',
                 'dashTodaySpan' => ' Today</span>',
                 'dashTodayTransaction' => 'Today\'s transactions',
-                'dashTomanShort' => 'T',
-                'dashTomanShort2' => 'T',
+                'dashTomanShort' => '$',
+                'dashTomanShort2' => '$',
                 'dashTotalRevenue' => 'Total revenue',
                 'dashTotalSales' => 'Total sales',
                 'dashTotalUsers' => 'Total users',
-                'dashUnitMillionToman' => '<small>M T</small>',
-                'dashUnitToman' => '<small>T</small>',
+                'dashUnitMillionToman' => '<small>M $</small>',
+                'dashUnitToman' => '<small>$</small>',
                 'dashViewAll' => 'All ←',
                 'dashViewAll2' => 'All ←',
                 'dashboardTitle' => 'Dashboard',
@@ -4495,7 +4495,7 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'loginWelcomeBack' => 'Welcome, ',
                 'loginWrongCredentials' => 'The username or password is incorrect.',
                 'paymentAllMethods' => 'Since the start of activity',
-                'paymentAllStatuses' => 'Toman',
+                'paymentAllStatuses' => 'Dollar',
                 'paymentClearBtn' => 'Transaction record',
                 'paymentCloseBtn' => 'From',
                 'paymentColAmount' => 'New transaction today',
@@ -4568,7 +4568,7 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'productDetailTime' => 'Duration (days)',
                 'productDetailTitle' => 'Edit product',
                 'productDetailType' => 'Panel',
-                'productDetailVolume' => 'Price (Toman)',
+                'productDetailVolume' => 'Price (Dollar)',
                 'productEditBtn' => 'Edit',
                 'productEditProductTitle' => 'Category',
                 'productEdited' => 'Product edited.',
@@ -4588,7 +4588,7 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'productNameRequired' => 'Product name is required.',
                 'productNoProductFound' => 'Volume',
                 'productNoProductYet' => 'Duration',
-                'productSaveBtn' => 'Price (Toman)',
+                'productSaveBtn' => 'Price (Dollar)',
                 'productSearchPlaceholder' => 'Search...',
                 'productThirtyValue' => '۳۰',
                 'productTomanUnit' => 'Cancel',
@@ -4695,7 +4695,7 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'userAffiliateCountLabel' => 'No transaction registered',
                 'userAmountPlaceholder' => 'e.g. 50000',
                 'userBackToUsersBtn' => 'Telegram',
-                'userBalanceAddedSuffix' => ' Toman was added to the balance.',
+                'userBalanceAddedSuffix' => ' Dollar was added to the balance.',
                 'userBalanceLabel' => 'Total purchases',
                 'userBlockUserBtn' => 'T',
                 'userCancelBtn' => 'Balance increase',
@@ -4722,14 +4722,14 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'userDetailAmount' => 'Current balance:',
                 'userDetailDate' => 'Cancel',
                 'userDetailDescription' => 'Cancel',
-                'userDetailMethod' => 'Toman',
+                'userDetailMethod' => 'Dollar',
                 'userDetailPanel' => 'Current group:',
                 'userDetailProduct' => 'Change user group',
                 'userDetailService' => 'Group',
                 'userDetailStatus' => 'Add',
                 'userDetailTitle' => 'Product',
                 'userDetailTrackingCode' => 'Save',
-                'userDetailUser' => 'Amount (Toman)',
+                'userDetailUser' => 'Amount (Dollar)',
                 'userEditNoteBtn' => 'Name',
                 'userFirstNameLabel' => 'Wallet',
                 'userGroupChangedPrefix' => 'User group changed to «',
@@ -4748,7 +4748,7 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'userMethodRial3' => 'Rial 3',
                 'userMethodTelegramStar' => 'Telegram Stars',
                 'userMethodZarinpal' => 'ZarinPal',
-                'userMinAmountToman' => 'The minimum amount is 1,000 Toman.',
+                'userMinAmountToman' => 'The minimum amount is 1,000 Dollar.',
                 'userNoName' => 'No name',
                 'userNoOrderForUser' => 'Referral',
                 'userNoServiceForUser' => 'Operation',
@@ -4789,8 +4789,8 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'userTotalServicesLabel' => 'Status',
                 'userTransactionsTabLabel' => 'Referrer',
                 'userUnblockUserBtn' => 'User group',
-                'userUnitMillionToman' => '<small>M T</small>',
-                'userUnitToman' => '<small>T</small>',
+                'userUnitMillionToman' => '<small>M $</small>',
+                'userUnitToman' => '<small>$</small>',
                 'userWalletLabel' => 'Method',
                 'usernameLabel' => 'T',
                 'usersAllGroups' => 'Search',
@@ -4862,7 +4862,7 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'statusSuccess' => 'Payment successful',
                 'statusFailed' => 'Failed',
                 'descThanks' => 'Thank you for completing the transaction!',
-                'giftReport' => '🎁 Dear user, the amount of %s Toman has been deposited into your account as a gift.',
+                'giftReport' => '🎁 Dear user, the amount of %s Dollar has been deposited into your account as a gift.',
                 'lowAmount' => '❌ The user deposited less than the specified amount.',
                 'reportZarinpal' => '💵 New payment
         
@@ -4890,7 +4890,7 @@ Information :
 💰 Payment amount : %s
 👤  User numeric ID : %s 
 👤 User username : @%s 
-User balance : %s Toman
+User balance : %s Dollar
 Payment tracking code : %s',
                 'reportTronado' => '💵 New payment
 %s
@@ -4909,7 +4909,7 @@ Payment tracking code : %s',
                 'invoiceTitle' => 'Payment invoice',
                 'invoiceTransactionNo' => 'Transaction number:',
                 'invoiceAmount' => 'Paid amount:',
-                'invoiceAmountUnit' => 'Toman',
+                'invoiceAmountUnit' => 'Dollar',
                 'invoiceDate' => 'Date:',
         ],
         'db_defaults' => [
