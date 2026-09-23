@@ -1928,8 +1928,8 @@ function database_menu() {
         _kv "Password" "${C_DIM}hidden · option 1 shows it${CR}"
         echo ""
         _mi "1" "Show password"
-        _mi "2" "Change password"
-        _mi "3" "phpMyAdmin port"
+        _mi "2" "Change phpMyAdmin password"
+        _mi "3" "Change phpMyAdmin port"
         _mi "0" "Back"
         _rule
         echo ""
