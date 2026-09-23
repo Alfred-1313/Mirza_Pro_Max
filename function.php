@@ -10834,7 +10834,10 @@ if (!function_exists('genbtn_hub_payload')) {
     {
         $key = genbtn_alias_to_key($alias);
         $btns = [];
-        foreach (genbtn_defs($alias, $textbotlang) as $idx => $d) {
+        // the tab's own labels: these rows preview the customer's button, and
+        // $textbotlang here is the panel's Persian - so the English tab used to
+        // show Persian default names under English overrides
+        foreach (genbtn_defs($alias, lang_tab_texts($lang)) as $idx => $d) {
             $ov = genbtn_override($lang, $key, $idx);
             $b = genbtn_render($d, $ov, 'none');
             if (genbtn_is_hidden($d, $ov)) {
@@ -10849,11 +10852,44 @@ if (!function_exists('genbtn_hub_payload')) {
         return [['text' => $textbotlang['Admin']['LangScope']['backToHubBtn'], 'callback_data' => "gbs|hub|{$lang}|{$alias}{$sfx}", 'style' => 'danger']];
     }
 
+    // Button-only items whose screen quotes the button's current name, so an
+    // admin can see what it actually says in the tab they are on before
+    // touching it. The 🛒 buy-flow back/close buttons; extend here.
+    function genbtn_preview_aliases()
+    {
+        return ['rc', 'rp', 'bu'];
+    }
+    // The button exactly as this language's customer receives it - built by
+    // genbtn_render(), the same function that builds the real one, so rename,
+    // ordinary emoji and its position, "simple" mode and a premium emoji are all
+    // reflected without a second copy of that logic to drift. A premium emoji
+    // travels as an icon beside the button, so here it is drawn in front of the
+    // text; ⭐ is only what shows where custom emoji cannot be displayed.
+    function genbtn_label_preview_html($alias, $lang)
+    {
+        $key = (string) genbtn_alias_to_key($alias);
+        $lines = [];
+        foreach (genbtn_defs($alias, lang_tab_texts($lang)) as $idx => $d) {
+            $ov = genbtn_override($lang, $key, $idx);
+            $btn = genbtn_render($d, $ov, 'none');
+            $txt = htmlspecialchars((string) $btn['text'], ENT_QUOTES, 'UTF-8');
+            if (!empty($btn['icon_custom_emoji_id'])) {
+                $txt = '<tg-emoji emoji-id="' . htmlspecialchars((string) $btn['icon_custom_emoji_id'], ENT_QUOTES) . '">⭐</tg-emoji> ' . $txt;
+            }
+            if (genbtn_is_hidden($d, $ov)) {
+                $txt .= ' (🚫 مخفی)';
+            }
+            $lines[] = $txt;
+        }
+        return '<blockquote>' . implode("\n", $lines) . '</blockquote>';
+    }
     function genbtn_hub_payload($alias, $lang, $textbotlang, $origin = '', $note = '')
     {
         $key = (string) genbtn_alias_to_key($alias);
         $sfx = ($origin === 'u') ? '|u' : '';
-        $defs = genbtn_defs($alias, $textbotlang);
+        // labels from the tab being edited, not the panel's Persian - the
+        // show/hide rows and the preview below both name the customer's button
+        $defs = genbtn_defs($alias, lang_tab_texts($lang));
         $h = $textbotlang['Admin']['Help'];
         $hasLayout = genbtn_layout_default($alias) !== null;
         $csKey = genbtn_close_sticker_key($alias, $key, 0);
@@ -10861,6 +10897,9 @@ if (!function_exists('genbtn_hub_payload')) {
         $groupNote = genbtn_group_note($alias, $textbotlang);
         if ($groupNote !== '') {
             $info .= "ℹ️ {$groupNote}\n";
+        }
+        if (in_array($alias, genbtn_preview_aliases(), true)) {
+            $info .= "\n👁 <b>نام فعلی دکمه:</b>\n" . genbtn_label_preview_html($alias, $lang) . "\n";
         }
         if ($csKey !== '') {
             $info .= close_sticker_caption_block($csKey, $note);
