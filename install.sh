@@ -846,7 +846,7 @@ bot_section() {
     elif [ -n "$SSL_DOMAIN" ]; then
         _kv "Domain" "$(_dot warn) ${C_WARN}${SSL_DOMAIN}${CR} ${C_DIM}· no certificate${CR}"
     fi
-    [ -n "$SSL_DOMAIN" ] && _kv "Database" "${C_DIM}https://${SSL_DOMAIN}/phpmyadmin${CR}"
+    [ -n "$SSL_DOMAIN" ] && _kv "Database" "${C_DIM}$(pma_url "$SSL_DOMAIN" "$(bots_registry_pma_port "$BOT_DIR_DEFAULT")")${CR}"
 }
 
 # Read the Telegram webhook using the bot token from config.php.
@@ -1261,10 +1261,11 @@ function show_menu() {
     _mi "6" "Backup"    "database dump, sent to Telegram"
     _mi "7" "Restore"   "import a .sql dump ${C_WARN}(beta)${CR}"
     _mi "8" "Help"      "commands and flags for scripts"
+    _mi "9" "phpMyAdmin" "move it to another port, per bot"
     _mi "0" "Exit"      ""
     _rule
     echo ""
-    printf  "  ${C_PROMPT}❯${CR} Choose ${C_DIM}[0-8]${CR}: "
+    printf  "  ${C_PROMPT}❯${CR} Choose ${C_DIM}[0-9]${CR}: "
     read -r option
     case $option in
         1) install_bot ;;
@@ -1275,7 +1276,8 @@ function show_menu() {
         6) backup_bot ;;
         7) import_bot ;;
         8) show_help_screen ;;
-        0|9) echo -e "\n${C_OK}Bye.${CR}"; exit 0 ;;
+        9) change_pma_port ;;
+        0) echo -e "\n${C_OK}Bye.${CR}"; exit 0 ;;
         *) echo -e "\n${C_BAD}Not an option. Try again.${CR}"; sleep 1; show_menu ;;
     esac
 }
@@ -1489,6 +1491,7 @@ bots_registry_ensure() {
 
 # bots_registry_add NAME DIR DOMAIN - insert, or update if DIR is already
 # registered (so re-running install on the same directory does not duplicate).
+# An update keeps the entry's other fields (pma_port).
 bots_registry_add() {
     local name="$1" dir="$2" domain="$3"
     _ensure_jq
@@ -1497,7 +1500,7 @@ bots_registry_add() {
     local tmp; tmp=$(mktemp)
     jq --arg name "$name" --arg dir "$dir" --arg domain "$domain" '
         (map(.dir) | index($dir)) as $i
-        | if $i != null then .[$i] = {name:$name,dir:$dir,domain:$domain}
+        | if $i != null then .[$i] += {name:$name,dir:$dir,domain:$domain}
           else . + [{name:$name,dir:$dir,domain:$domain}]
           end
     ' "$BOTS_REGISTRY" > "$tmp" && mv "$tmp" "$BOTS_REGISTRY"
@@ -1564,6 +1567,239 @@ pick_bot_instance() {
     PICKED_DIR=$(jq -r ".[$idx].dir" "$BOTS_REGISTRY")
     PICKED_DOMAIN=$(jq -r ".[$idx].domain" "$BOTS_REGISTRY")
     return 0
+}
+
+# ── phpMyAdmin port ───────────────────────────────────────────
+# phpMyAdmin is included in each bot's own vhosts, so it answers at
+# https://<bot domain>/phpmyadmin - on 443, next to the webhook. A bot can
+# move it to a port of its own instead: https://<bot domain>:<port>/phpmyadmin.
+# The webhook never moves (Telegram only calls 443). Several bots may share
+# one port: Apache tells them apart by domain (SNI), exactly as on 443.
+# The registry's pma_port is the source of truth; pma_sync_all turns it
+# into Apache config.
+PMA_CONF="/etc/apache2/conf-available/phpmyadmin.conf"
+PMA_PORTS_CONF="/etc/apache2/conf-available/mirza-pma-ports.conf"
+
+# bots_registry_pma_port DIR - that bot's phpMyAdmin port (443 when unset)
+bots_registry_pma_port() {
+    local p
+    p=$(jq -r --arg d "$1" '.[] | select(.dir==$d) | .pma_port // empty' "$BOTS_REGISTRY" 2>/dev/null | head -1)
+    echo "${p:-443}"
+}
+
+bots_registry_set_pma_port() {
+    local tmp; tmp=$(mktemp)
+    jq --arg d "$1" --arg p "$2" 'map(if .dir==$d then .pma_port=($p|tonumber) else . end)' \
+        "$BOTS_REGISTRY" > "$tmp" && mv "$tmp" "$BOTS_REGISTRY"
+}
+
+# pma_url DOMAIN PORT [PROTO]
+pma_url() {
+    if [ "$2" = "443" ]; then
+        echo "${3:-https}://$1/phpmyadmin"
+    else
+        echo "https://$1:$2/phpmyadmin"
+    fi
+}
+
+# Prints why PORT cannot carry phpMyAdmin and returns 1; silent when it can.
+pma_port_problem() {
+    local p="$1" held who
+    if ! [[ "$p" =~ ^[1-9][0-9]{0,4}$ ]]; then echo "Enter a port number."; return 1; fi
+    [ "$p" -eq 443 ] && return 0
+    if [ "$p" -lt 1024 ] || [ "$p" -gt 65535 ]; then
+        echo "Use 443, or a port from 1024 to 65535."; return 1
+    fi
+    held=$(ss -ltnp "( sport = :$p )" 2>/dev/null | tail -n +2)
+    [ -z "$held" ] && return 0
+    who=$(printf '%s' "$held" | grep -o 'users:(("[^"]*"' | head -1 | cut -d'"' -f2)
+    # Apache already on it for another bot's phpMyAdmin: sharing is fine
+    if [ "$who" = "apache2" ] \
+        && jq -e --arg p "$p" 'any(.[]; .pma_port == ($p|tonumber))' "$BOTS_REGISTRY" >/dev/null 2>&1; then
+        return 0
+    fi
+    echo "Port $p is already used by ${who:-another program}. Pick another one."
+    return 1
+}
+
+# Asked while a bot is being set up; Enter keeps 443. Sets PMA_PORT.
+ask_pma_port() {
+    local p why
+    while true; do
+        printf "\e[33m[+] \e[36mphpMyAdmin port ${CR}${C_DIM}[default: 443]${CR}: "
+        read -r p
+        [ -z "$p" ] && p=443
+        if why=$(pma_port_problem "$p"); then break; fi
+        echo -e "\e[91m${why}\033[0m"
+    done
+    PMA_PORT="$p"
+}
+
+_pma_restore() {
+    local d
+    for d in sites-available sites-enabled conf-available conf-enabled; do
+        rm -rf "/etc/apache2/$d" && cp -a "$1/$d" /etc/apache2/
+    done
+}
+
+# Write every bot's phpMyAdmin wiring from the registry, then reload Apache.
+# A bot on 443 keeps phpMyAdmin inside its own two vhosts, as the installer
+# writes them; a bot on another port has it taken out of those and served
+# from <domain>-pma.conf instead, on that port with the bot's certificate.
+# Apache's config is backed up first and put back if Apache rejects the
+# result, so a bad port can never take the webhooks down with it.
+pma_sync_all() {
+    bots_registry_ensure
+    local sa="/etc/apache2/sites-available" rows domain port ports="" f p
+    rows=$(jq -r '.[] | select(.domain != null and .domain != "" and .domain != "null") | "\(.domain) \(.pma_port // 443)"' "$BOTS_REGISTRY" 2>/dev/null)
+    # Nothing ever moved: leave Apache exactly as the installer wrote it
+    if [ -z "$(printf '%s\n' "$rows" | awk '$2 != "" && $2 != 443')" ] \
+        && [ ! -f "$PMA_PORTS_CONF" ] && ! ls "$sa"/*-pma.conf >/dev/null 2>&1; then
+        return 0
+    fi
+    local bak; bak=$(mktemp -d)
+    cp -a /etc/apache2/sites-available /etc/apache2/sites-enabled \
+          /etc/apache2/conf-available /etc/apache2/conf-enabled "$bak"/
+
+    while read -r domain port; do
+        [ -z "$domain" ] && continue
+        if [ "$port" != "443" ] && [ ! -f "/etc/letsencrypt/live/${domain}/fullchain.pem" ]; then
+            printf "    ${C_WARN}!${CR} ${C_WARN}%s has no SSL certificate - its phpMyAdmin stays on 443.${CR}\n" "$domain"
+            port=443
+        fi
+        if [ "$port" = "443" ]; then
+            for f in "$sa/${domain}.conf" "$sa/${domain}-ssl.conf"; do
+                [ -f "$f" ] || continue
+                grep -qF "Include $PMA_CONF" "$f" && continue
+                awk -v inc="    Include $PMA_CONF" '/<\/VirtualHost>/{print inc} {print}' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+            done
+            if [ -f "$sa/${domain}-pma.conf" ]; then
+                a2dissite "${domain}-pma.conf" >/dev/null 2>&1 </dev/null
+                rm -f "$sa/${domain}-pma.conf"
+            fi
+        else
+            for f in "$sa/${domain}.conf" "$sa/${domain}-ssl.conf"; do
+                [ -f "$f" ] && sed -i '/^[[:space:]]*Include[[:space:]].*phpmyadmin\.conf/d' "$f"
+            done
+            tee "$sa/${domain}-pma.conf" > /dev/null <<EOF
+<VirtualHost *:${port}>
+    ServerName $domain
+    DocumentRoot /usr/share/phpmyadmin
+    SSLEngine on
+    SSLCertificateFile /etc/letsencrypt/live/$domain/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/$domain/privkey.pem
+    Include $PMA_CONF
+    ErrorLog \${APACHE_LOG_DIR}/${domain}-error.log
+    CustomLog \${APACHE_LOG_DIR}/${domain}-access.log combined
+</VirtualHost>
+EOF
+            a2ensite "${domain}-pma.conf" >/dev/null 2>&1 </dev/null
+            ports="$ports $port"
+        fi
+    done <<< "$rows"
+
+    ports=$(printf '%s\n' $ports | sort -un | tr '\n' ' ')
+    if [ -n "${ports// /}" ]; then
+        {
+            echo "# Written by the mirza script: ports that carry a bot's phpMyAdmin."
+            for p in $ports; do echo "Listen $p https"; done
+        } > "$PMA_PORTS_CONF"
+        a2enconf mirza-pma-ports >/dev/null 2>&1
+        # The phpMyAdmin package enables /phpmyadmin for every site on its
+        # own, which would keep it on 443 for a bot that just moved away.
+        # Bots still on 443 carry their own Include (made sure of above).
+        a2disconf phpmyadmin >/dev/null 2>&1
+    else
+        a2disconf mirza-pma-ports >/dev/null 2>&1
+        rm -f "$PMA_PORTS_CONF"
+    fi
+
+    local out
+    if ! out=$(apache2ctl configtest 2>&1); then
+        _pma_restore "$bak"; rm -rf "$bak"
+        printf "    ${C_BAD}●${CR} ${C_BAD}Apache rejected the new config - it was put back as it was.${CR}\n"
+        printf '%s\n' "$out" | tail -n 5 | sed 's/^/      /'
+        return 1
+    fi
+    systemctl reload apache2 >/dev/null 2>&1 || systemctl restart apache2 >/dev/null 2>&1
+    sleep 1
+    # A reload does not always open a brand-new Listen port; a restart does
+    for p in $ports; do
+        if [ -z "$(ss -ltn "( sport = :$p )" 2>/dev/null | tail -n +2)" ]; then
+            systemctl restart apache2 >/dev/null 2>&1; sleep 1; break
+        fi
+    done
+    if ! systemctl is-active --quiet apache2; then
+        _pma_restore "$bak"; rm -rf "$bak"
+        systemctl restart apache2 >/dev/null 2>&1
+        printf "    ${C_BAD}●${CR} ${C_BAD}Apache would not start with the new port - the old setup is back.${CR}\n"
+        return 1
+    fi
+    if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
+        for p in $ports; do ufw allow "$p/tcp" >/dev/null 2>&1; done
+    fi
+    rm -rf "$bak"
+    return 0
+}
+
+# pma_set_port DIR PORT - store it and apply it; on failure the old port
+# is stored again (pma_sync_all has already put Apache back).
+pma_set_port() {
+    local dir="$1" port="$2" old
+    old=$(bots_registry_pma_port "$dir")
+    bots_registry_set_pma_port "$dir" "$port"
+    pma_sync_all && return 0
+    bots_registry_set_pma_port "$dir" "$old"
+    return 1
+}
+
+# Menu 9 - move one bot's phpMyAdmin to another port, or back to 443.
+function change_pma_port() {
+    clear 2>/dev/null || true
+    banner
+    _sec "phpMyAdmin port"
+    if ! pick_bot_instance "change the phpMyAdmin port of"; then
+        [ "$(bots_registry_count)" = "0" ] && sleep 2
+        show_menu; return 0
+    fi
+    local dir="$PICKED_DIR" domain="$PICKED_DOMAIN" cur p why
+    if [ -z "$domain" ] || [ "$domain" = "null" ]; then
+        printf "    ${C_BAD}●${CR} ${C_BAD}No domain is on record for %s.${CR}\n" "$PICKED_NAME"
+        sleep 2; show_menu; return 1
+    fi
+    cur=$(bots_registry_pma_port "$dir")
+    _kv "Bot" "${C_KEY}${PICKED_NAME}${CR} ${C_DIM}${domain}${CR}"
+    _kv "Now" "${C_DIM}$(pma_url "$domain" "$cur")${CR}"
+    echo ""
+    printf "    ${C_DIM}443 is the default (the bot's own address). The webhook stays on${CR}\n"
+    printf "    ${C_DIM}443 whatever you pick, and several bots may share one port.${CR}\n"
+    echo ""
+    while true; do
+        printf "  ${C_PROMPT}❯${CR} New port ${C_DIM}[0 = back]${CR}: "
+        read -r p
+        if [ -z "$p" ] || [ "$p" = "0" ]; then show_menu; return 0; fi
+        if ! why=$(pma_port_problem "$p"); then
+            printf "    ${C_BAD}●${CR} ${C_BAD}%s${CR}\n" "$why"; continue
+        fi
+        if [ "$p" != "443" ] && [ ! -f "/etc/letsencrypt/live/${domain}/fullchain.pem" ]; then
+            printf "    ${C_BAD}●${CR} ${C_BAD}%s has no SSL certificate yet - renew it first (menu 5).${CR}\n" "$domain"; continue
+        fi
+        break
+    done
+    echo ""
+    if [ "$p" = "$cur" ]; then
+        printf "    ${C_DIM}Already on port %s - nothing to change.${CR}\n" "$p"
+    elif pma_set_port "$dir" "$p"; then
+        _sec "Done"
+        _kv "phpMyAdmin" "${C_OK}$(pma_url "$domain" "$p")${CR}"
+        [ "$p" != "443" ] && printf "    ${C_DIM}If your server provider has its own firewall, open port %s there too.${CR}\n" "$p"
+    else
+        printf "    ${C_BAD}●${CR} ${C_BAD}Port %s could not be used - phpMyAdmin is still at %s${CR}\n" "$p" "$(pma_url "$domain" "$cur")"
+    fi
+    echo ""
+    printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "
+    read -r _
+    show_menu
 }
 
 # Whole-server pre-flight before installing
@@ -2090,6 +2326,14 @@ EOF
         state_set BOTLABEL "$YOUR_BOTLABEL"
     fi
 
+    PMA_PORT="$(state_get PMA_PORT)"
+    if [ -n "$PMA_PORT" ]; then
+        echo -e "\e[33m[+] \e[36mphpMyAdmin port (resumed):\e[0m ${PMA_PORT}"
+    else
+        ask_pma_port
+        state_set PMA_PORT "$PMA_PORT"
+    fi
+
     ROOT_PASSWORD=$(cat /root/confmirza/dbrootmirza.txt | grep '$pass' | cut -d"'" -f2)
     ROOT_USER="root"
     echo "SELECT 1" | mysql -u$ROOT_USER -p$ROOT_PASSWORD 2>/dev/null || {
@@ -2239,6 +2483,8 @@ EOF
     # ── Done ──
     mark_phase COMPLETE
     bots_registry_add "$YOUR_BOTLABEL" "$BOT_DIR" "$YOUR_DOMAIN"
+    local pma_failed=0
+    pma_set_port "$BOT_DIR" "${PMA_PORT:-443}" || pma_failed=1
     clear 2>/dev/null || true
     banner
     _sec "Installation complete"
@@ -2248,7 +2494,8 @@ EOF
     _sec "Access"
     _kv "Name" "${C_DIM}${YOUR_BOTLABEL}${CR}"
     _kv "Bot URL" "${C_DIM}https://${YOUR_DOMAIN}${CR}"
-    _kv "phpMyAdmin" "${C_DIM}https://${YOUR_DOMAIN}/phpmyadmin${CR}"
+    _kv "phpMyAdmin" "${C_DIM}$(pma_url "$YOUR_DOMAIN" "$(bots_registry_pma_port "$BOT_DIR")")${CR}"
+    [ "$pma_failed" -eq 1 ] && printf "    ${C_WARN}!${CR} ${C_DIM}Port ${PMA_PORT} could not be used, so phpMyAdmin stayed on 443. Try another from menu 9.${CR}\n"
 
     _sec "Database"
     _kv "Name" "${C_KEY}${dbname}${CR}"
@@ -2339,6 +2586,8 @@ function install_second_bot() {
     printf "\e[33m[+] \e[36mName for this bot ${CR}${C_DIM}[default: ${YOUR_BOTNAME}]${CR}: "
     read YOUR_BOTLABEL
     [ -z "$YOUR_BOTLABEL" ] && YOUR_BOTLABEL="$YOUR_BOTNAME"
+    local PMA_PORT
+    ask_pma_port
 
     # ── Download & extract ────────────────────────────────────
     print_header "Downloading Bot Files"
@@ -2474,6 +2723,14 @@ EOF
         || show_step_error
     curl -s -X POST "https://api.telegram.org/bot${YOUR_BOT_TOKEN}/sendMessage" -d chat_id="${YOUR_CHAT_ID}" -d text="✅ The Mirza bot is installed! for start the bot send /start command." > /dev/null 2>&1
     bots_registry_add "$YOUR_BOTLABEL" "$NEW_BOT_DIR" "$DOMAIN_NAME"
+    local pma_note=""
+    if [ "$PMA_PORT" != "443" ]; then
+        if [ "$ssl_ok" -ne 1 ]; then
+            pma_note="No SSL certificate yet, so phpMyAdmin stayed on the bot's address. Change it later from menu 9."
+        elif ! pma_set_port "$NEW_BOT_DIR" "$PMA_PORT"; then
+            pma_note="Port ${PMA_PORT} could not be used, so phpMyAdmin stayed on the bot's address. Try another from menu 9."
+        fi
+    fi
 
     clear 2>/dev/null || true
     banner
@@ -2482,6 +2739,8 @@ EOF
     echo ""
     _kv "Name"       "${C_DIM}${YOUR_BOTLABEL}${CR}"
     _kv "Bot URL"    "${C_DIM}${proto}://${DOMAIN_NAME}${CR}"
+    _kv "phpMyAdmin" "${C_DIM}$(pma_url "$DOMAIN_NAME" "$(bots_registry_pma_port "$NEW_BOT_DIR")" "$proto")${CR}"
+    [ -n "$pma_note" ] && printf "    ${C_WARN}!${CR} ${C_DIM}%s${CR}\n" "$pma_note"
     _kv "Directory"  "${C_DIM}${NEW_BOT_DIR}${CR}"
     _kv "Database"   "${C_KEY}${NEW_DB}${CR}"
     _kv "DB User"    "${C_KEY}${dbuser}${CR}"
@@ -3159,6 +3418,8 @@ EOF
     else
         printf "    ${C_WARN}!${CR} ${C_WARN}Apache config test failed - not reloading.${CR}\n"
     fi
+    # The vhosts above carry no phpMyAdmin; put it back where its port says
+    pma_sync_all
 }
 
 
@@ -3203,8 +3464,9 @@ remove_bot_scoped() {
     if [ -n "$domain" ] && [ "$domain" != "null" ]; then
         a2dissite "${domain}.conf" >/dev/null 2>&1
         a2dissite "${domain}-ssl.conf" >/dev/null 2>&1
-        rm -f "/etc/apache2/sites-available/${domain}.conf" "/etc/apache2/sites-available/${domain}-ssl.conf"
-        rm -f "/etc/apache2/sites-enabled/${domain}.conf" "/etc/apache2/sites-enabled/${domain}-ssl.conf"
+        a2dissite "${domain}-pma.conf" >/dev/null 2>&1
+        rm -f "/etc/apache2/sites-available/${domain}.conf" "/etc/apache2/sites-available/${domain}-ssl.conf" "/etc/apache2/sites-available/${domain}-pma.conf"
+        rm -f "/etc/apache2/sites-enabled/${domain}.conf" "/etc/apache2/sites-enabled/${domain}-ssl.conf" "/etc/apache2/sites-enabled/${domain}-pma.conf"
         systemctl reload apache2 >/dev/null 2>&1
         command -v certbot >/dev/null 2>&1 && certbot delete --cert-name "$domain" --non-interactive >/dev/null 2>&1
         echo -e "\e[92mVirtual host and certificate for $domain removed.\033[0m"
@@ -3216,6 +3478,8 @@ remove_bot_scoped() {
     fi
 
     bots_registry_remove_by_dir "$dir"
+    # Its phpMyAdmin port may now be unused: drop that Listen
+    pma_sync_all
     echo -e "\e[92m\"$name\" has been removed.\033[0m"
 }
 function remove_bot() {
