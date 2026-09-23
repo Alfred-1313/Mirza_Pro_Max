@@ -779,9 +779,11 @@ _sec() { printf "\n  ${C_ACCENT}▎${CR}${C_TITLE}%s${CR}\n" "$1"; _rule; }
 _kv()  { printf "    ${C_LABEL}%-12s${CR} %b${CR}\n" "$1" "$2"; }
 
 # Read the installed version from the source 'version' file
+# $1 = bot directory (default: the first bot's)
 get_installed_version() {
-    if [ -f "$BOT_DIR_DEFAULT/version" ]; then
-        tr -d ' \t\r\n' < "$BOT_DIR_DEFAULT/version"
+    local dir="${1:-$BOT_DIR_DEFAULT}"
+    if [ -f "$dir/version" ]; then
+        tr -d ' \t\r\n' < "$dir/version"
     else
         echo ""
     fi
@@ -815,10 +817,12 @@ get_server_ip() {
 }
 
 # ── Dashboard sections ───────────────────────────────────────
+# The three bot sections take the bot's directory; version_section also
+# takes the block's title.
 version_section() {
     local inst
-    inst=$(get_installed_version)
-    _sec "Bot"
+    inst=$(get_installed_version "$1")
+    _sec "${2:-Bot}"
     if [ -n "$inst" ]; then
         _kv "Version" "$(_dot ok) ${C_OK}${inst}${CR}"
     else
@@ -827,11 +831,12 @@ version_section() {
 }
 
 bot_section() {
+    local dir="${1:-$BOT_DIR_DEFAULT}"
     SSL_DOMAIN=""
-    if [ ! -f "$CONFIG_FILE_DEFAULT" ]; then
+    if [ ! -f "$dir/config.php" ]; then
         return
     fi
-    SSL_DOMAIN=$(grep '^\$domainhosts' "$CONFIG_FILE_DEFAULT" | cut -d"'" -f2 | cut -d'/' -f1)
+    SSL_DOMAIN=$(grep '^\$domainhosts' "$dir/config.php" | cut -d"'" -f2 | cut -d'/' -f1)
     if [ -n "$SSL_DOMAIN" ] && [ -f "/etc/letsencrypt/live/$SSL_DOMAIN/cert.pem" ]; then
         local expiry days
         expiry=$(openssl x509 -enddate -noout -in "/etc/letsencrypt/live/$SSL_DOMAIN/cert.pem" 2>/dev/null | cut -d= -f2)
@@ -846,7 +851,7 @@ bot_section() {
     elif [ -n "$SSL_DOMAIN" ]; then
         _kv "Domain" "$(_dot warn) ${C_WARN}${SSL_DOMAIN}${CR} ${C_DIM}· no certificate${CR}"
     fi
-    [ -n "$SSL_DOMAIN" ] && _kv "Database" "${C_DIM}$(pma_url "$SSL_DOMAIN" "$(bots_registry_pma_port "$BOT_DIR_DEFAULT")")${CR}"
+    [ -n "$SSL_DOMAIN" ] && _kv "Database" "${C_DIM}$(pma_url "$SSL_DOMAIN" "$(bots_registry_pma_port "$dir")")${CR}"
 }
 
 # Read the Telegram webhook using the bot token from config.php.
@@ -854,11 +859,12 @@ bot_section() {
 webhook_section() {
     # No header of its own: this belongs under "Bot". One line when healthy,
     # detail only when something is actually wrong.
-    if [ ! -f "$CONFIG_FILE_DEFAULT" ]; then
+    local dir="${1:-$BOT_DIR_DEFAULT}"
+    if [ ! -f "$dir/config.php" ]; then
         return
     fi
     local token info ok url pending err errdate apierr when host
-    token=$(grep '^\$APIKEY' "$CONFIG_FILE_DEFAULT" | cut -d"'" -f2)
+    token=$(grep '^\$APIKEY' "$dir/config.php" | cut -d"'" -f2)
     if [ -z "$token" ]; then
         _kv "Webhook" "$(_dot bad) ${C_BAD}no token in config.php${CR}"
         return
@@ -952,12 +958,35 @@ resources_section() {
     _kv "Load" "${C_DIM}${load}${CR} ${C_BORDER}·${CR} ${C_DIM}${cores} ${corelbl}${CR} ${C_BORDER}·${CR} ${C_DIM}up ${up}${CR}"
 }
 
+# One block per bot, numbered and named when there are two or more. A
+# single bot (or a server whose registry does not exist yet) gets the one
+# "Bot" block it always had. Read-only: never installs jq from here.
+bots_dashboard() {
+    local rows="" count dir name i=1
+    if [ -f "$BOTS_REGISTRY" ] && command -v jq >/dev/null 2>&1; then
+        rows=$(jq -r '.[] | "\(.dir)\t\(.name)"' "$BOTS_REGISTRY" 2>/dev/null)
+    fi
+    count=$(printf '%s\n' "$rows" | grep -c .)
+    if [ "$count" -lt 2 ]; then
+        dir="$BOT_DIR_DEFAULT"
+        [ "$count" = "1" ] && dir=$(printf '%s' "$rows" | cut -f1)
+        version_section "$dir"
+        bot_section "$dir"
+        webhook_section "$dir"
+        return
+    fi
+    while IFS=$'\t' read -r dir name; do
+        version_section "$dir" "Bot $i · $name"
+        bot_section "$dir"
+        webhook_section "$dir"
+        i=$((i + 1))
+    done <<< "$rows"
+}
+
 function show_logo() {
     clear 2>/dev/null || true
     banner
-    version_section
-    bot_section
-    webhook_section
+    bots_dashboard
     system_section
     resources_section
 }
@@ -1261,7 +1290,7 @@ function show_menu() {
     _mi "6" "Backup"    "database dump, sent to Telegram"
     _mi "7" "Restore"   "import a .sql dump ${C_WARN}(beta)${CR}"
     _mi "8" "Help"      "commands and flags for scripts"
-    _mi "9" "phpMyAdmin" "move it to another port, per bot"
+    _mi "9" "Database"  "password, login info, phpMyAdmin port"
     _mi "0" "Exit"      ""
     _rule
     echo ""
@@ -1276,7 +1305,7 @@ function show_menu() {
         6) backup_bot ;;
         7) import_bot ;;
         8) show_help_screen ;;
-        9) change_pma_port ;;
+        9) database_menu ;;
         0) echo -e "\n${C_OK}Bye.${CR}"; exit 0 ;;
         *) echo -e "\n${C_BAD}Not an option. Try again.${CR}"; sleep 1; show_menu ;;
     esac
@@ -1753,31 +1782,108 @@ pma_set_port() {
     return 1
 }
 
-# Menu 9 - move one bot's phpMyAdmin to another port, or back to 443.
-function change_pma_port() {
-    clear 2>/dev/null || true
-    banner
-    _sec "phpMyAdmin port"
-    if ! pick_bot_instance "change the phpMyAdmin port of"; then
-        [ "$(bots_registry_count)" = "0" ] && sleep 2
-        show_menu; return 0
+_back_prompt() {
+    echo ""
+    printf "  ${C_PROMPT}❯${CR} Press Enter to go back... "
+    read -r _
+}
+
+# ALTER USER statements giving USER the password PASS on every host MySQL
+# has it on ($3 = "host<TAB>plugin" rows), each keeping its own auth plugin.
+_db_alter_sql() {
+    local user="$1" pass="$2" h plugin sql=""
+    while IFS=$'\t' read -r h plugin; do
+        [[ "$h" =~ ^[A-Za-z0-9._%:-]+$ ]] && [[ "$plugin" =~ ^[a-z0-9_]+$ ]] || continue
+        sql+="ALTER USER '${user}'@'${h}' IDENTIFIED WITH ${plugin} BY '${pass}'; "
+    done <<< "$3"
+    echo "$sql"
+}
+
+# db_set_password CONFIG NEWPASS - a new password for the bot's MySQL user,
+# in MySQL and in config.php together. If config.php cannot take it, or the
+# bot cannot log in with it, MySQL gets the old one back and config.php is
+# restored, so the bot is never left holding a password that fails.
+# Prints the reason and returns 1 on failure.
+db_set_password() {
+    local cfg="$1" new="$2" dbuser dbname dbhost old rootpass rows sql bak err
+    dbuser=$(grep '^\$usernamedb' "$cfg" | cut -d"'" -f2)
+    dbname=$(grep '^\$dbname' "$cfg" | cut -d"'" -f2)
+    dbhost=$(grep '^\$dbhost' "$cfg" | cut -d"'" -f2)
+    old=$(grep '^\$passworddb' "$cfg" | cut -d"'" -f2)
+    rootpass=$(grep '$pass' /root/confmirza/dbrootmirza.txt 2>/dev/null | cut -d"'" -f2)
+    [ -z "$dbhost" ] && dbhost="localhost"
+    if ! valid_db_ident "$dbuser"; then echo "config.php has no usable database username."; return 1; fi
+    if [ -z "$rootpass" ]; then echo "Could not read the MySQL root password."; return 1; fi
+    rows=$(mysql -u root -p"$rootpass" -N -B -e "SELECT host, plugin FROM mysql.user WHERE user='${dbuser}';" 2>/dev/null)
+    sql=$(_db_alter_sql "$dbuser" "$new" "$rows")
+    if [ -z "$sql" ]; then echo "MySQL has no user named ${dbuser} (or the root login failed)."; return 1; fi
+    if ! err=$(mysql -u root -p"$rootpass" -e "$sql" 2>&1); then
+        echo "MySQL refused the change: $(printf '%s\n' "$err" | grep -v 'password on the command line' | tail -n 1)"
+        return 1
     fi
-    local dir="$PICKED_DIR" domain="$PICKED_DOMAIN" cur p why
+    bak=$(mktemp); cp -p "$cfg" "$bak"
+    sed -i -E "s/^(\\\$passworddb[[:space:]]*=[[:space:]]*')[^']*'/\\1${new}'/" "$cfg"
+    if [ "$(grep '^\$passworddb' "$cfg" | cut -d"'" -f2)" != "$new" ] \
+        || ! mysql -h "$dbhost" -u "$dbuser" -p"$new" -e "SELECT 1;" "$dbname" >/dev/null 2>&1; then
+        cat "$bak" > "$cfg"; rm -f "$bak"
+        [ -n "$old" ] && mysql -u root -p"$rootpass" -e "$(_db_alter_sql "$dbuser" "$old" "$rows")" >/dev/null 2>&1
+        echo "The bot could not log in with the new password, so the old one was put back."
+        return 1
+    fi
+    rm -f "$bak"
+    # mod_php may still hold the old config.php in its opcode cache
+    systemctl reload apache2 >/dev/null 2>&1
+    return 0
+}
+
+db_show_password() {
+    echo ""
+    _kv "Password" "${C_KEY}$(grep '^\$passworddb' "$1" | cut -d"'" -f2)${CR}"
+    printf "    ${C_DIM}Only root can open this script, and config.php already holds this${CR}\n"
+    printf "    ${C_DIM}password - still, keep it out of screenshots and shared screens.${CR}\n"
+    _back_prompt
+}
+
+db_change_password() {
+    local cfg="$1" new out
+    echo ""
+    printf "    ${C_DIM}6 to 64 characters: letters, digits and _ only.${CR}\n"
+    while true; do
+        printf "  ${C_PROMPT}❯${CR} New password ${C_DIM}[Enter = random, 0 = back]${CR}: "
+        read -r new
+        [ "$new" = "0" ] && return 0
+        [ -z "$new" ] && new=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | cut -c1-16)
+        valid_db_pass "$new" && break
+        printf "    ${C_BAD}●${CR} ${C_BAD}Use 6 to 64 characters: letters, digits and _ only.${CR}\n"
+    done
+    echo ""
+    if out=$(db_set_password "$cfg" "$new"); then
+        _kv "Password" "${C_OK}${new}${CR}"
+        printf "    ${C_OK}●${CR} ${C_OK}Changed in MySQL and in config.php - the bot keeps working.${CR}\n"
+        printf "    ${C_DIM}Use it to log in to phpMyAdmin from now on. Save it somewhere safe.${CR}\n"
+    else
+        printf "    ${C_BAD}●${CR} ${C_BAD}%s${CR}\n" "$out"
+        printf "    ${C_DIM}The password was not changed.${CR}\n"
+    fi
+    _back_prompt
+}
+
+# Move this bot's phpMyAdmin to another port, or back to 443.
+pma_port_screen() {
+    local dir="$1" domain="$2" cur p why
+    echo ""
     if [ -z "$domain" ] || [ "$domain" = "null" ]; then
-        printf "    ${C_BAD}●${CR} ${C_BAD}No domain is on record for %s.${CR}\n" "$PICKED_NAME"
-        sleep 2; show_menu; return 1
+        printf "    ${C_BAD}●${CR} ${C_BAD}No domain is on record for this bot.${CR}\n"
+        _back_prompt; return 1
     fi
     cur=$(bots_registry_pma_port "$dir")
-    _kv "Bot" "${C_KEY}${PICKED_NAME}${CR} ${C_DIM}${domain}${CR}"
-    _kv "Now" "${C_DIM}$(pma_url "$domain" "$cur")${CR}"
-    echo ""
     printf "    ${C_DIM}443 is the default (the bot's own address). The webhook stays on${CR}\n"
     printf "    ${C_DIM}443 whatever you pick, and several bots may share one port.${CR}\n"
     echo ""
     while true; do
-        printf "  ${C_PROMPT}❯${CR} New port ${C_DIM}[0 = back]${CR}: "
+        printf "  ${C_PROMPT}❯${CR} New port ${C_DIM}[now %s, 0 = back]${CR}: " "$cur"
         read -r p
-        if [ -z "$p" ] || [ "$p" = "0" ]; then show_menu; return 0; fi
+        if [ -z "$p" ] || [ "$p" = "0" ]; then return 0; fi
         if ! why=$(pma_port_problem "$p"); then
             printf "    ${C_BAD}●${CR} ${C_BAD}%s${CR}\n" "$why"; continue
         fi
@@ -1790,16 +1896,52 @@ function change_pma_port() {
     if [ "$p" = "$cur" ]; then
         printf "    ${C_DIM}Already on port %s - nothing to change.${CR}\n" "$p"
     elif pma_set_port "$dir" "$p"; then
-        _sec "Done"
-        _kv "phpMyAdmin" "${C_OK}$(pma_url "$domain" "$p")${CR}"
+        printf "    ${C_OK}●${CR} ${C_OK}phpMyAdmin is now at %s${CR}\n" "$(pma_url "$domain" "$p")"
         [ "$p" != "443" ] && printf "    ${C_DIM}If your server provider has its own firewall, open port %s there too.${CR}\n" "$p"
     else
         printf "    ${C_BAD}●${CR} ${C_BAD}Port %s could not be used - phpMyAdmin is still at %s${CR}\n" "$p" "$(pma_url "$domain" "$cur")"
     fi
-    echo ""
-    printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "
-    read -r _
-    show_menu
+    _back_prompt
+}
+
+# Menu 9 - one bot's database: its login, its password, its phpMyAdmin port.
+function database_menu() {
+    clear 2>/dev/null || true
+    banner
+    _sec "Database"
+    if ! pick_bot_instance "manage the database of"; then
+        [ "$(bots_registry_count)" = "0" ] && sleep 2
+        show_menu; return 0
+    fi
+    local dir="$PICKED_DIR" name="$PICKED_NAME" domain="$PICKED_DOMAIN" cfg="$PICKED_DIR/config.php" choice
+    if [ ! -f "$cfg" ]; then
+        printf "    ${C_BAD}●${CR} ${C_BAD}config.php not found in %s.${CR}\n" "$dir"
+        sleep 2; show_menu; return 1
+    fi
+    while true; do
+        clear 2>/dev/null || true
+        banner
+        _sec "Database · ${name}"
+        _kv "phpMyAdmin" "${C_DIM}$(pma_url "$domain" "$(bots_registry_pma_port "$dir")")${CR}"
+        _kv "Database" "${C_KEY}$(grep '^\$dbname' "$cfg" | cut -d"'" -f2)${CR}"
+        _kv "Username" "${C_KEY}$(grep '^\$usernamedb' "$cfg" | cut -d"'" -f2)${CR}"
+        _kv "Password" "${C_DIM}hidden · option 1 shows it${CR}"
+        echo ""
+        _mi "1" "Show password"
+        _mi "2" "Change password"
+        _mi "3" "phpMyAdmin port"
+        _mi "0" "Back"
+        _rule
+        echo ""
+        printf "  ${C_PROMPT}❯${CR} Choose ${C_DIM}[0-3]${CR}: "
+        read -r choice
+        case "$choice" in
+            1) db_show_password "$cfg" ;;
+            2) db_change_password "$cfg" ;;
+            3) pma_port_screen "$dir" "$domain" ;;
+            0) show_menu; return 0 ;;
+        esac
+    done
 }
 
 # Whole-server pre-flight before installing
