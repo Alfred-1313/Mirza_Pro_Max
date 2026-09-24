@@ -8777,9 +8777,10 @@ if (!function_exists('config_delivery_cfgcol_touched')) {
     }
 }
 if (!function_exists('config_delivery_default_mode')) {
-    // Mode '1' = deliver the full service message only.
-    // Mode '2' = that same message, PLUS a second message carrying the
-    //            config-picker buttons (useful for multi-config services).
+    // Mode '1' = deliver the full service message (with its QR when on).
+    // Mode '2' = deliver the config page INSTEAD: one message carrying the
+    //            config-picker buttons (useful for multi-config services),
+    //            never a QR.
     // Every panel starts on mode 1, for both purchase and usertest, including
     // panels added later - the admin asked for that explicitly, so it is a
     // hardcoded default rather than something inherited from the legacy
@@ -8830,6 +8831,9 @@ if (!function_exists('config_delivery_set_mode')) {
             }
         } else {
             $map[$kind][$codePanel] = $mode;
+            // mode 2 sends no QR, so its switch goes off with it rather than
+            // sitting there saying "on" for a photo that never goes out
+            $map['qroff'][$kind][$codePanel] = true;
         }
         config_delivery_map_save($map);
     }
@@ -8949,9 +8953,10 @@ if (!function_exists('config_delivery_panel_payload')) {
         $info .= "📌 نحوه‌ی نمایش کانفیگ (هنگام {$kindLabel})\n➖➖➖➖➖➖➖➖➖➖\n";
         $info .= "بعد از اینکه سرویس تحویل داده شد، کاربر چی ببینه؟\n\n";
         $info .= "🔹 <b>حالت ۱ — فقط پیام کامل</b>\n";
-        $info .= "مشخصات سرویس (نام، لوکیشن، مدت، حجم) و لینک اتصال، توی یک پیام.\n\n";
-        $info .= "🔹 <b>حالت ۲ — پیام کامل + صفحه‌ی کانفیگ</b>\n";
-        $info .= "همون پیام بالا، بعلاوه‌ی یه پیام جدا با دکمه‌های انتخاب کانفیگ.\n";
+        $info .= "مشخصات سرویس (نام، لوکیشن، مدت، حجم) و لینک اتصال، توی یک پیام.\n";
+        $info .= "اگه طولانی‌تر از حد تلگرام بشه، چند تیکه فرستاده می‌شه.\n\n";
+        $info .= "🔹 <b>حالت ۲ — فقط صفحه‌ی کانفیگ</b>\n";
+        $info .= "به‌جای پیام کامل، یه پیام با دکمه‌های انتخاب کانفیگ. بدون QR.\n";
         $info .= "مناسب سرویس‌هایی که چند تا کانفیگ دارن.\n";
         $info .= "➖➖➖➖➖➖➖➖➖➖\n";
         $info .= "الان: <b>حالت " . config_delivery_mode_fa($cur) . "</b>";
@@ -8961,21 +8966,28 @@ if (!function_exists('config_delivery_panel_payload')) {
         $cd_sendOn = (is_array($panel) && ($panel['config'] ?? '') === 'onconfig');
         if (!$cd_sendOn) {
             $info .= "\n\n⚠️ <b>«ارسال کانفیگ» این پنل خاموشه.</b>\n";
-            $info .= "تا روشنش نکنی، حالت ۲ کار نمی‌کنه - صفحه‌ی کانفیگ فرستاده نمی‌شه.\n";
+            $info .= "تا روشنش نکنی، حالت ۲ کار نمی‌کنه - به‌جای صفحه‌ی کانفیگ همون پیام کامل (حالت ۱) فرستاده می‌شه.\n";
             $info .= "مسیر: مدیریت پنل‌ها ← همین پنل ← ⚙️ وضعیت قابلیت‌های پنل ← «ارسال کانفیگ».";
         }
         $qrOn = config_delivery_qr_on($kind, $codePanel);
-        $info .= "\n\n📷 <b>QR کد همراه پیام:</b> " . ($qrOn ? "روشن ✅" : "خاموش ❌") . "\n";
-        $info .= "QR لینک اشتراک رو نشون می‌ده. اگه لینک اشتراک این پنل خاموش باشه، فقط وقتی سرویس یک کانفیگ داره QR فرستاده می‌شه.";
+        if ($cur === '2') {
+            $info .= "\n\n📷 <b>QR کد:</b> ❌ در حالت ۲ فرستاده نمی‌شه.";
+        } else {
+            $info .= "\n\n📷 <b>QR کد همراه پیام:</b> " . ($qrOn ? "روشن ✅" : "خاموش ❌") . "\n";
+            $info .= "QR لینک اشتراک رو نشون می‌ده. اگه لینک اشتراک این پنل خاموش باشه، فقط وقتی سرویس یک کانفیگ داره QR فرستاده می‌شه.";
+        }
         $kb = ['inline_keyboard' => []];
         $kb['inline_keyboard'][] = [
             ['text' => ($cur === '1' ? '✅ ' : '') . 'حالت ۱ — فقط پیام کامل', 'callback_data' => "cfgdeliv|set|{$lang}|{$codePanel}|{$kind}|1|{$origin}", 'style' => $cur === '1' ? 'success' : 'primary'],
         ];
         $kb['inline_keyboard'][] = [
-            ['text' => ($cur === '2' ? '✅ ' : '') . 'حالت ۲ — + صفحه‌ی کانفیگ' . ($cd_sendOn ? '' : ' (بی‌اثر)'), 'callback_data' => "cfgdeliv|set|{$lang}|{$codePanel}|{$kind}|2|{$origin}", 'style' => $cur === '2' ? ($cd_sendOn ? 'success' : 'danger') : 'primary'],
+            ['text' => ($cur === '2' ? '✅ ' : '') . 'حالت ۲ — فقط صفحه‌ی کانفیگ' . ($cd_sendOn ? '' : ' (بی‌اثر)'), 'callback_data' => "cfgdeliv|set|{$lang}|{$codePanel}|{$kind}|2|{$origin}", 'style' => $cur === '2' ? ($cd_sendOn ? 'success' : 'danger') : 'primary'],
         ];
+        $qrLabel = ($cur === '2')
+            ? '📷 ارسال QR کد: خاموش (حالت ۲) ❌'
+            : ($qrOn ? '📷 ارسال QR کد: روشن ✅' : '📷 ارسال QR کد: خاموش ❌');
         $kb['inline_keyboard'][] = [
-            ['text' => $qrOn ? '📷 ارسال QR کد: روشن ✅' : '📷 ارسال QR کد: خاموش ❌', 'callback_data' => "cfgdeliv|qr|{$lang}|{$codePanel}|{$kind}|{$origin}", 'style' => $qrOn ? 'success' : 'danger'],
+            ['text' => $qrLabel, 'callback_data' => "cfgdeliv|qr|{$lang}|{$codePanel}|{$kind}|{$origin}", 'style' => ($qrOn && $cur !== '2') ? 'success' : 'danger'],
         ];
         $kb['inline_keyboard'][] = [['text' => bt_section_meta('cfgdeliv_edit')['label'], 'callback_data' => 'bt_sep|cfgdeliv_edit']];
         if ($kind === 'purchase') {
@@ -15530,6 +15542,73 @@ function isBase64($string)
     }
     return false;
 }
+if (!function_exists('telegram_html_chunks')) {
+    // Telegram refuses a text message over 4096 characters (counted after the
+    // HTML is parsed), and a purchase message listing every config of a big
+    // service passes that easily - it then arrived as nothing at all. Splits
+    // at line breaks only; a tag still open at a cut is closed at the end of
+    // that piece and reopened at the start of the next, so every piece parses
+    // on its own. A single plain line over the limit is cut by length.
+    function telegram_html_chunks($html, $limit = 4000)
+    {
+        $len = static function ($s) {
+            return mb_strlen(html_entity_decode(strip_tags((string) $s), ENT_QUOTES, 'UTF-8'), 'UTF-8');
+        };
+        $html = (string) $html;
+        if ($len($html) <= $limit) {
+            return [$html];
+        }
+        $lines = [];
+        foreach (explode("\n", $html) as $line) {
+            if ($len($line) > $limit && strpos($line, '<') === false) {
+                foreach (mb_str_split($line, $limit, 'UTF-8') as $piece) {
+                    $lines[] = $piece;
+                }
+            } else {
+                $lines[] = $line;
+            }
+        }
+        $chunks = [];
+        $cur = '';
+        $open = [];
+        foreach ($lines as $line) {
+            $next = ($cur === '') ? $line : $cur . "\n" . $line;
+            if ($cur !== '' && $len($next) > $limit) {
+                $close = '';
+                foreach (array_reverse($open) as $t) {
+                    $close .= '</' . $t[0] . '>';
+                }
+                $chunks[] = $cur . $close;
+                $reopen = '';
+                foreach ($open as $t) {
+                    $reopen .= $t[1];
+                }
+                $next = $reopen . $line;
+            }
+            $cur = $next;
+            if (preg_match_all('#<(/?)([a-zA-Z][a-zA-Z0-9-]*)[^>]*>#', $line, $m, PREG_SET_ORDER)) {
+                foreach ($m as $tag) {
+                    $name = strtolower($tag[2]);
+                    if ($tag[1] === '/') {
+                        for ($i = count($open) - 1; $i >= 0; $i--) {
+                            if ($open[$i][0] === $name) {
+                                array_splice($open, $i, 1);
+                                break;
+                            }
+                        }
+                    } else {
+                        $open[] = [$name, $tag[0]];
+                    }
+                }
+            }
+        }
+        $chunks[] = $cur;
+        // Telegram also refuses an empty message
+        return array_values(array_filter($chunks, static function ($c) {
+            return trim(strip_tags($c)) !== '';
+        }));
+    }
+}
 function sendMessageService($panel_info, $config, $sub_link, $username_service, $reply_markup, $caption, $invoice_id, $user_id = null, $image = 'images.jpg', $kind = 'purchase')
 {
     global $setting, $from_id, $textbotlang;
@@ -15541,10 +15620,43 @@ function sendMessageService($panel_info, $config, $sub_link, $username_service, 
     if (!mainmenu_btn_active($sms_row['lang'] ?? 'fa', "text_help"))
         $reply_markup = null;
     $configCount = is_array($config) ? count($config) : 0;
+    // Mode 2 is the config page INSTEAD of the full message, not as well as it
+    // (it used to send both, which read as "mode 1 is still on"). It needs the
+    // panel's «ارسال کانفیگ» and at least one config; without them there is no
+    // page to show, so the customer gets the full message (mode 1) instead of
+    // nothing. No QR either way in mode 2.
+    if ($panel_info['config'] == "onconfig" && $configCount > 0
+        && config_delivery_mode($kind, $panel_info['code_panel'] ?? null) === "2") {
+        $cd_hintKey = ($kind === 'usertest') ? 'textbot.getConfigHintTest' : 'textbot.getConfigHintBuy';
+        $cd_hintText = bottext_resolve_key($cd_hintKey);
+        // sendMessageService's own $kind is 'purchase'|'usertest' - keyboard_config()'s
+        // is 'usertest'|'buy', so normalize rather than let 'purchase' silently
+        // fall through to the usertest column/button settings below
+        $cc_kbKind = ($kind === 'usertest') ? 'usertest' : 'buy';
+        $cd_kb = json_decode(keyboard_config($config, $invoice_id, false, $cc_kbKind), true);
+        // the 📚 tutorial button the full message carried comes along underneath
+        $cd_help = is_string($reply_markup) ? json_decode($reply_markup, true) : null;
+        if (is_array($cd_help) && !empty($cd_help['inline_keyboard'])) {
+            foreach ($cd_help['inline_keyboard'] as $cd_row) {
+                $cd_kb['inline_keyboard'][] = $cd_row;
+            }
+        }
+        sendmessage($user_id, $cd_hintText !== '' ? $cd_hintText : $textbotlang['hardcoded']['getConfigHint'], json_encode($cd_kb), 'HTML');
+        return;
+    }
+    // the full message, split when it runs past Telegram's length limit; the
+    // buttons go under the last piece
+    $sendFull = static function ($text) use ($user_id, $reply_markup) {
+        $parts = telegram_html_chunks($text);
+        $last = count($parts) - 1;
+        foreach ($parts as $i => $part) {
+            sendmessage($user_id, $part, $i === $last ? $reply_markup : null, 'HTML');
+        }
+    };
     if ($panel_info['type'] == "WGDashboard") {
         // WireGuard delivers its .conf file rather than a QR - unchanged
         if ($panel_info['config'] == "onconfig" && $configCount != 1) {
-            sendmessage($user_id, $caption, $reply_markup, 'HTML');
+            $sendFull($caption);
         } else {
             $urlimage = "{$panel_info['inboundid']}_{$invoice_id}.conf";
             file_put_contents($urlimage, $sub_link);
@@ -15595,18 +15707,7 @@ function sendMessageService($panel_info, $config, $sub_link, $username_service, 
         }
         // the service details must reach the customer even when the QR could not
         if (!$captionSent) {
-            sendmessage($user_id, $caption, $reply_markup, 'HTML');
-        }
-    }
-    if ($panel_info['config'] == "onconfig" && config_delivery_mode($kind, $panel_info['code_panel'] ?? null) === "2") {
-        if (is_array($config)) {
-            $cd_hintKey = ($kind === 'usertest') ? 'textbot.getConfigHintTest' : 'textbot.getConfigHintBuy';
-            $cd_hintText = bottext_resolve_key($cd_hintKey);
-            // sendMessageService's own $kind is 'purchase'|'usertest' - keyboard_config()'s
-            // is 'usertest'|'buy', so normalize rather than let 'purchase' silently
-            // fall through to the usertest column/button settings below
-            $cc_kbKind = ($kind === 'usertest') ? 'usertest' : 'buy';
-            sendmessage($user_id, $cd_hintText !== '' ? $cd_hintText : $textbotlang['hardcoded']['getConfigHint'], keyboard_config($config, $invoice_id, false, $cc_kbKind), 'HTML');
+            $sendFull($caption);
         }
     }
 }

@@ -5892,6 +5892,17 @@ if (preg_match('/^admperm\|(open|test|buy)\|([a-z]{2})$/', $datain, $ap_m) && $a
     return;
 }
 if (preg_match('/^cfgdeliv\|qr\|([a-z]{2})\|([^|]+)\|(purchase|usertest)\|([bu])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
+    // mode 2 sends the config page only - there is no message for a QR to ride
+    // on, so it cannot be switched on there (only off, if an old setting has it)
+    if (config_delivery_mode($cd_m[3], $cd_m[2]) === '2' && !config_delivery_qr_on($cd_m[3], $cd_m[2])) {
+        telegram('answerCallbackQuery', [
+            'callback_query_id' => $callback_query_id,
+            'text' => "❌ در حالت ۲ ارسال QR کد ممکن نیست.\n\nحالت ۲ فقط صفحه‌ی کانفیگ رو می‌فرسته. برای QR، اول «حالت ۱» رو انتخاب کن.",
+            'show_alert' => true,
+            'cache_time' => 1,
+        ]);
+        return;
+    }
     config_delivery_set_qr($cd_m[3], $cd_m[2], !config_delivery_qr_on($cd_m[3], $cd_m[2]));
     list($cd_text, $cd_kb) = config_delivery_panel_payload($cd_m[1], $cd_m[2], $cd_m[4]);
     Editmessagetext($from_id, $message_id, $cd_text, $cd_kb, 'HTML');
