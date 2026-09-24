@@ -3123,16 +3123,9 @@ function update_bot() {
     run_step "Backing up the current install" \
         "tar --warning=no-file-changed -czf '$ROLLBACK' -C '$(dirname "$BOT_DIR")' --exclude='*.bak*' --exclude='.git' --exclude='log.txt' --exclude='error_log' --exclude='update_request' --exclude='update_request.running' --exclude='rollback_request' --exclude='update_progress.json' --exclude='update_status.json' --exclude='update_backups.json' '$(basename "$BOT_DIR")'" \
         || { show_step_error; printf "  ${C_BAD}Could not create a rollback archive. Refusing to continue.${CR}\n"; sleep 3; show_menu; return 1; }
-    # keep this bot's 2 most recent - the bot lists exactly these for
-    # "بازگشت به نسخه قبلی", so the two numbers are one number. The folder is
-    # shared: another bot's snapshots (told apart by the directory inside, as
-    # the bot's own list does) are never counted or deleted.
-    local _kept=0 _snap
-    for _snap in $(ls -1t "$BK_DIR"/pre-update_*.tar.gz 2>/dev/null); do
-        [ "$(tar -tzf "$_snap" 2>/dev/null | head -1 | cut -d/ -f1)" = "$(basename "$BOT_DIR")" ] || continue
-        _kept=$((_kept + 1))
-        [ "$_kept" -gt 2 ] && rm -f "$_snap"
-    done
+    # keep only this bot's newest MIRZA_SNAPSHOTS_KEEP - the bot lists exactly
+    # these for "بازگشت به نسخه قبلی"; another bot's are never touched
+    _snapshots_prune "$BOT_DIR"
 
     # ── 2. Fetch and validate the new code ───────────────────
     TEMP_DIR="/tmp/mirzaprobot_update"
@@ -3369,6 +3362,9 @@ MIRZA_ROLLBACK_REQUEST="rollback_request"
 MIRZA_BACKUPS_LIST="update_backups.json"
 # the same folder update_bot() drops its pre-update snapshot into
 MIRZA_BACKUP_DIR="/root/mirza-backups"
+# how many of those each bot keeps - on the server and so in its own
+# "بازگشت به نسخه قبلی" list (bot_update_backups() shows no more either)
+MIRZA_SNAPSHOTS_KEEP=2
 # where the bot leaves the chat, message and already-translated wording for the
 # progress bar. Written next to the request rather than inside it: the request
 # is claimed and deleted early, and this has to outlive that.
@@ -3488,13 +3484,29 @@ _selfupdate_status() {
     chmod 664 "${dir}/${MIRZA_UPDATE_STATUS}" 2>/dev/null
 }
 
+# _snapshots_prune BOTDIR - delete all but that bot's MIRZA_SNAPSHOTS_KEEP
+# newest snapshots. The folder is shared by every bot on the server; a
+# snapshot belongs to the bot whose directory it holds (where it would unpack
+# to), so another bot's are never counted or deleted.
+_snapshots_prune() {
+    local base; base=$(basename "$1")
+    local n=0 f
+    for f in $(ls -1t "$MIRZA_BACKUP_DIR"/pre-update_*.tar.gz 2>/dev/null); do
+        [ "$(tar -tzf "$f" 2>/dev/null | head -1 | cut -d/ -f1)" = "$base" ] || continue
+        n=$((n + 1))
+        [ "$n" -gt "$MIRZA_SNAPSHOTS_KEEP" ] && rm -f "$f"
+    done
+}
+
 # Which snapshots belong to THIS bot, newest first, each with the version it
 # holds - so the admin picks "the 1.0.2 from this morning" rather than a
 # filename. Ownership is not cosmetic: on a two-bot server every snapshot
 # lands in the same folder, and unpacking one bot's tree over another's would
 # be a disaster, so the archive's own top-level directory has to match.
+# Pruned first, so the list never names more than the server keeps.
 _selfupdate_publish_backups() {
     local dir="$1"
+    _snapshots_prune "$dir"
     local base; base=$(basename "$dir")
     local out="[" first=1 f top ver at size
     for f in $(ls -1t "$MIRZA_BACKUP_DIR"/pre-update_*.tar.gz 2>/dev/null); do
@@ -3539,9 +3551,13 @@ selfupdate_watch() {
         # Refresh the list the bot shows only when a new snapshot has actually
         # appeared - rebuilding it means reading inside every archive, which is
         # not something to do every single minute for nothing.
+        # A list naming more than are kept was written before the limit (or by
+        # an older copy of this script) - rebuilding it prunes the folder too,
+        # so the limit holds within the minute, not only after the next update.
         newest=$(ls -1t "$MIRZA_BACKUP_DIR"/pre-update_*.tar.gz 2>/dev/null | head -1)
         if [ ! -f "${dir}/${MIRZA_BACKUPS_LIST}" ] \
-            || { [ -n "$newest" ] && [ "$newest" -nt "${dir}/${MIRZA_BACKUPS_LIST}" ]; }; then
+            || { [ -n "$newest" ] && [ "$newest" -nt "${dir}/${MIRZA_BACKUPS_LIST}" ]; } \
+            || [ "$(jq 'length' "${dir}/${MIRZA_BACKUPS_LIST}" 2>/dev/null || echo 0)" -gt "$MIRZA_SNAPSHOTS_KEEP" ]; then
             _selfupdate_publish_backups "$dir"
         fi
         # ── going back to an earlier snapshot ────────────────

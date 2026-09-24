@@ -3059,12 +3059,14 @@ if (!function_exists('bot_update_request_path')) {
             || file_exists(bot_update_request_path() . '.running')
             || file_exists(__DIR__ . '/rollback_request');
     }
-    // The snapshots root's watcher says belong to this bot, newest first.
+    // The snapshots root's watcher says belong to this bot, newest first - at
+    // most the two the server keeps (MIRZA_SNAPSHOTS_KEEP in install.sh); a
+    // list written by an older watcher may still name more.
     function bot_update_backups()
     {
         $raw = @file_get_contents(__DIR__ . '/update_backups.json');
         $out = json_decode((string) $raw, true);
-        return is_array($out) ? $out : [];
+        return is_array($out) ? array_slice($out, 0, 2) : [];
     }
     // This name travels from a button to a script running as root, so its
     // shape is pinned down on both sides - nothing else is ever written here,
