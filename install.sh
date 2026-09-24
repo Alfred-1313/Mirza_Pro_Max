@@ -4037,239 +4037,349 @@ function remove_bot() {
     [ -n "$_dump" ] && echo -e "\e[92mThe bot's database is kept in $_dump\033[0m" | tee -a "$LOG_FILE"
 }
 
+# ── Migrate an original Mirza to Pro Max ──────────────────────
+# The old bot keeps running, untouched, until the new code is completely
+# ready beside it. Its database stays exactly where it is - same name, user
+# and password - and table.php only ADDS what Pro Max needs, the way Update
+# upgrades an original install, so no table, row, setting, admin, channel or
+# panel status is dropped or changed. The database and the old files are
+# copied to /root first, and a failure before the switch leaves the old bot
+# exactly as it was; a failure during it puts the old bot back.
+
+_mig_fail() {
+    printf "\n    ${C_BAD}●${CR} ${C_BAD}%s${CR}\n" "$1"
+    [ -n "${2-}" ] && printf "    ${C_DIM}%s${CR}\n" "$2"
+    echo ""
+    printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "
+    read -r _
+    show_menu
+}
+
+# Put the old bot's files back where they were ($1 = new dir, $2 = old dir)
+_mig_undo_files() {
+    local target="$1" old="$2"
+    if [ -d "${old}.premigrate" ]; then
+        rm -rf "$target"
+        mv "${old}.premigrate" "$old"
+    elif [ "$target" != "$old" ]; then
+        rm -rf "$target"
+    fi
+}
+
 function migrate_to_pro() {
     clear 2>/dev/null || true
-    echo -e "\033[1;33mStarting Migration to Mirza Pro Max...\033[0m"
-    if ! ensure_connectivity; then
-        echo -e "  ${C_BAD}●${CR} ${C_BAD}No internet connection (even after DNS reset). Aborting.${CR}"
-        sleep 2; show_menu; return 1
-    fi
-    OLD_BOT_DIR=""
+    banner
+    _sec "Migrate to Pro Max"
+
+    # 1) The original install: a config.php and no Pro Max version file
+    local OLD_BOT_DIR="" _cand _promax=""
     for _cand in "/var/www/html/mirzabotconfig" "/var/www/html/mirzaprobotconfig"; do
-        [ -f "$_cand/config.php" ] && { OLD_BOT_DIR="$_cand"; break; }
+        [ -f "$_cand/config.php" ] || continue
+        if [ -f "$_cand/version" ]; then _promax="$_cand"; continue; fi
+        OLD_BOT_DIR="$_cand"; break
     done
     if [ -z "$OLD_BOT_DIR" ]; then
-        echo -e "\033[31m[ERROR] No existing Mirza install found (checked mirzabotconfig and mirzaprobotconfig).\033[0m"
-        exit 1
+        if [ -n "$_promax" ]; then
+            _mig_fail "This server already runs Mirza Pro Max - there is nothing to migrate." \
+                "Use option 2 (Update) to bring it up to date."
+        else
+            _mig_fail "No original Mirza install found (looked in /var/www/html/mirzabotconfig and mirzaprobotconfig)."
+        fi
+        return 1
     fi
-    if [ -f "$OLD_BOT_DIR/version" ]; then
-        echo -e "\033[33mThis server already runs Mirza Pro Max ($(cat "$OLD_BOT_DIR/version" 2>/dev/null)). Nothing to migrate - use option 2 (Update) instead.\033[0m"
-        exit 0
+    local cfg="$OLD_BOT_DIR/config.php"
+    local dbhost dbname dbuser dbpass token admin botname hosts domain
+    dbhost=$(grep '^\$dbhost' "$cfg" | head -1 | cut -d"'" -f2)
+    dbname=$(grep '^\$dbname' "$cfg" | head -1 | cut -d"'" -f2)
+    dbuser=$(grep '^\$usernamedb' "$cfg" | head -1 | cut -d"'" -f2)
+    dbpass=$(grep '^\$passworddb' "$cfg" | head -1 | cut -d"'" -f2)
+    token=$(grep '^\$APIKEY' "$cfg" | head -1 | cut -d"'" -f2)
+    admin=$(grep '^\$adminnumber' "$cfg" | head -1 | cut -d"'" -f2)
+    botname=$(grep '^\$usernamebot' "$cfg" | head -1 | cut -d"'" -f2)
+    hosts=$(grep '^\$domainhosts' "$cfg" | head -1 | cut -d"'" -f2)
+    domain=$(printf '%s' "$hosts" | cut -d'/' -f1)
+    [ -z "$dbhost" ] && dbhost="localhost"
+    if [ -z "$dbname" ] || [ -z "$dbuser" ] || [ -z "$token" ] || [ -z "$domain" ]; then
+        _mig_fail "Could not read the old bot's settings from $cfg." "Nothing was changed."
+        return 1
     fi
-    if ! systemctl is-active --quiet mysql; then
-        echo -e "\033[31m[ERROR] MySQL service is not active or not installed.\033[0m"
-        echo -e "\033[33mPlease ensure MySQL is running locally.\033[0m"
-        exit 1
-    else
-        echo -e "\033[32mMySQL is running.\033[0m"
+
+    # 2) Everything that would stop it half way is checked before anything moves
+    local phpv; phpv=$(php -r 'echo PHP_VERSION_ID;' 2>/dev/null)
+    if [ -z "$phpv" ] || [ "$phpv" -lt 80200 ]; then
+        _mig_fail "Pro Max needs PHP 8.2 or newer; this server runs PHP $(active_php_ver)." "Nothing was changed."
+        return 1
     fi
-    echo ""
-    read -p "Are you sure you want to migrate this bot to Mirza Pro Max? (y/n): " confirm_mig
-    if [[ "$confirm_mig" != "y" && "$confirm_mig" != "Y" ]]; then
-        echo -e "\033[31mMigration aborted.\033[0m"
-        exit 0
+    if ! mysql -h "$dbhost" -u "$dbuser" -p"$dbpass" -e "SELECT 1;" "$dbname" >/dev/null 2>&1; then
+        _mig_fail "Could not log in to the old database ($dbname) with the old bot's own credentials." \
+            "Is MySQL running? Nothing was changed."
+        return 1
     fi
-    echo ""
-    read -p "Have you created a backup of your database? (y/n): " confirm_backup
-    if [[ "$confirm_backup" != "y" && "$confirm_backup" != "Y" ]]; then
-        echo -e "\033[31mPlease create a backup first!\033[0m"
-        exit 1
+    if [ ! -f "/etc/letsencrypt/live/${domain}/fullchain.pem" ]; then
+        _mig_fail "No SSL certificate found for ${domain} (/etc/letsencrypt/live/${domain})." \
+            "The webhook needs HTTPS. Nothing was changed."
+        return 1
     fi
-    BACKUP_FILE=$(ls -t /root/mirza_backup_*.sql /root/mirzabot_backup.sql 2>/dev/null | head -1)
-    if [ -z "$BACKUP_FILE" ] || [ ! -s "$BACKUP_FILE" ]; then
-        echo -e "\033[31m[ERROR] No database backup found in /root.\033[0m"
-        echo -e "\033[33mRun 'mirza' and use option 6 (Backup Database) first, then try again.\033[0m"
-        exit 1
-    else
-        echo -e "\033[32mBackup file found: $BACKUP_FILE\033[0m"
+    bots_registry_ensure
+    if jq -e --arg d "$domain" --arg o "$OLD_BOT_DIR" 'any(.[]; .domain == $d and .dir != $o)' "$BOTS_REGISTRY" >/dev/null 2>&1; then
+        _mig_fail "Another Pro Max bot on this server already uses ${domain}." "Nothing was changed."
+        return 1
     fi
-    echo ""
-    echo -e "\033[43;30m[WARNING] Additional Bots Notice\033[0m"
-    echo -e "\033[33mThis migration process will reconfigure Apache for the Pro version.\033[0m"
-    echo -e "\033[33mOnly the main bot ($(basename "$OLD_BOT_DIR")) will be migrated.\033[0m"
-    echo -e "\033[33mExisting Additional Bots in /var/www/html/ might stop working.\033[0m"
-    echo -e "\033[36mFound directories:\033[0m"
-    ls -d /var/www/html/*/ 2>/dev/null | grep -v "$(basename "$OLD_BOT_DIR")"
-    echo ""
-    read -p "Do you understand and want to proceed? (y/n): " confirm_add
-    if [[ "$confirm_add" != "y" && "$confirm_add" != "Y" ]]; then
-        echo -e "\033[31mMigration aborted.\033[0m"
-        exit 0
+    if ! ensure_connectivity; then
+        _mig_fail "No internet connection (even after a DNS reset)." "Nothing was changed."
+        return 1
     fi
-    echo -e "\n\033[36mChecking Database Credentials...\033[0m"
-    ROOT_CRED_FILE="/root/confmirza/dbrootmirza.txt"
-    ROOT_PASS=""
-    ROOT_USER="root"
-    if [ -f "$ROOT_CRED_FILE" ]; then
-        ROOT_PASS=$(grep '$pass' "$ROOT_CRED_FILE" | cut -d"'" -f2)
-    fi
-    if [ -z "$ROOT_PASS" ]; then
-        echo -e "\033[33mRoot password not found in config file.\033[0m"
-        read -s -p "Please enter MySQL root password: " ROOT_PASS
-        echo ""
-    fi
-    if ! mysql -u "$ROOT_USER" -p"$ROOT_PASS" -e "SELECT 1;" &>/dev/null; then
-        echo -e "\033[31m[ERROR] Incorrect MySQL root password. Migration stopped.\033[0m"
-        exit 1
-    fi
-    echo -e "\033[32mDatabase connection successful.\033[0m"
-    OLD_DB=$(grep '^\$dbname' "$OLD_BOT_DIR/config.php" | cut -d"'" -f2)
-    NEW_DB="mirzaprobot"
-    if [ -z "$OLD_DB" ]; then
-        echo -e "\033[31m[ERROR] Could not read the database name from $OLD_BOT_DIR/config.php.\033[0m"
-        exit 1
-    fi
-    if [ "$OLD_DB" = "$NEW_DB" ]; then
-        echo -e "\033[33mThis install already uses the database Pro Max uses ($NEW_DB). Nothing to migrate - use option 2 (Update) instead.\033[0m"
-        exit 0
-    fi
-    if ! mysql -u "$ROOT_USER" -p"$ROOT_PASS" -e "USE $OLD_DB;" &>/dev/null; then
-        echo -e "\033[31m[ERROR] Database '$OLD_DB' not found!\033[0m"
-        exit 1
-    fi
-    echo -e "\033[33mCleaning up old tables (setting, admin, channels)...\033[0m"
-    mysql -u "$ROOT_USER" -p"$ROOT_PASS" "$OLD_DB" -e "DROP TABLE IF EXISTS setting, admin, channels;"
-    echo -e "\033[33mUpdating panel status...\033[0m"
-    if mysql -u "$ROOT_USER" -p"$ROOT_PASS" "$OLD_DB" -e "DESCRIBE marzban_panel;" &>/dev/null; then
-         mysql -u "$ROOT_USER" -p"$ROOT_PASS" "$OLD_DB" -e "UPDATE marzban_panel SET status = 'active';"
-    fi
-    echo -e "\033[33mMigrating Database from $OLD_DB to $NEW_DB...\033[0m"
-    mysql -u "$ROOT_USER" -p"$ROOT_PASS" -e "CREATE DATABASE IF NOT EXISTS $NEW_DB;"
-    TABLES=$(mysql -u "$ROOT_USER" -p"$ROOT_PASS" -N -e "SHOW TABLES FROM $OLD_DB")
-    for t in $TABLES; do
-        mysql -u "$ROOT_USER" -p"$ROOT_PASS" -e "RENAME TABLE $OLD_DB.$t TO $NEW_DB.$t"
+
+    # 3) Where it goes: the first Pro Max folder not already taken by another
+    #    bot - so a Pro Max bot already on this server is never written over
+    local TARGET n=""
+    while :; do
+        TARGET="/var/www/html/mirzaprobotconfig${n}"
+        { [ "$TARGET" = "$OLD_BOT_DIR" ] || [ ! -e "$TARGET" ]; } && break
+        n=$(( ${n:-1} + 1 ))
     done
-    mysql -u "$ROOT_USER" -p"$ROOT_PASS" -e "DROP DATABASE IF EXISTS $OLD_DB;"
-    echo -e "\033[32mDatabase migrated successfully.\033[0m"
-    OLD_CONFIG="$OLD_BOT_DIR/config.php"
-    OLD_DB_USER=$(grep '$usernamedb' "$OLD_CONFIG" | cut -d"'" -f2)
-    if [ -n "$OLD_DB_USER" ]; then
-        echo -e "\033[33mRemoving old database user ($OLD_DB_USER)...\033[0m"
-        mysql -u "$ROOT_USER" -p"$ROOT_PASS" -e "DROP USER IF EXISTS '$OLD_DB_USER'@'localhost';"
-        mysql -u "$ROOT_USER" -p"$ROOT_PASS" -e "DROP USER IF EXISTS '$OLD_DB_USER'@'%';"
+    # agents' own bots, living inside the old folder
+    local agents=() _a
+    for _a in "$OLD_BOT_DIR"/vpnbot/*/; do
+        _a=$(basename "$_a")
+        case "$_a" in Default|update|'*') continue ;; esac
+        agents+=("$_a")
+    done
+    # anything else the old default site was serving from /var/www/html
+    local others="" _d
+    for _d in /var/www/html/*/; do
+        _d=${_d%/}
+        [ "$_d" = "$OLD_BOT_DIR" ] && continue
+        jq -e --arg d "$_d" 'any(.[]; .dir == $d)' "$BOTS_REGISTRY" >/dev/null 2>&1 && continue
+        others="${others}${_d}"$'\n'
+    done
+
+    _kv "Old bot" "${C_KEY}${botname:+@}${botname:-?}${CR} ${C_DIM}· original Mirza${CR}"
+    _kv "Domain" "${C_DIM}${domain}${CR}"
+    _kv "From" "${C_DIM}${OLD_BOT_DIR}${CR}"
+    _kv "To" "${C_DIM}${TARGET}${CR}"
+    _kv "Database" "${C_DIM}${dbname} · kept as it is${CR}"
+    [ "${#agents[@]}" -gt 0 ] && _kv "Agent bots" "${C_DIM}${#agents[@]} - moved along${CR}"
+    echo ""
+    printf "    ${C_DIM}Nothing is deleted from the database: users, orders, settings,${CR}\n"
+    printf "    ${C_DIM}admins, channels and panels all stay; Pro Max only adds to it.${CR}\n"
+    printf "    ${C_DIM}The database and the old files are saved to /root first.${CR}\n"
+    if [ -n "$others" ]; then
+        printf "\n    ${C_WARN}!${CR} ${C_WARN}The old setup also served these folders; after the move they no${CR}\n"
+        printf "    ${C_WARN}  longer answer on %s:${CR}\n" "$domain"
+        printf '%s' "$others" | sed 's/^/      /'
     fi
-    NEW_DB_USER=$(openssl rand -base64 10 | tr -dc 'a-zA-Z' | cut -c1-8)
-    NEW_DB_PASS=$(openssl rand -base64 12 | tr -dc 'a-zA-Z0-9' | cut -c1-10)
-    echo -e "\033[33mCreating new database user...\033[0m"
-    mysql -u "$ROOT_USER" -p"$ROOT_PASS" -e "CREATE USER '$NEW_DB_USER'@'localhost' IDENTIFIED WITH mysql_native_password BY '$NEW_DB_PASS';"
-    mysql -u "$ROOT_USER" -p"$ROOT_PASS" -e "GRANT ALL PRIVILEGES ON $NEW_DB.* TO '$NEW_DB_USER'@'localhost';"
-    mysql -u "$ROOT_USER" -p"$ROOT_PASS" -e "CREATE USER '$NEW_DB_USER'@'%' IDENTIFIED WITH mysql_native_password BY '$NEW_DB_PASS';"
-    mysql -u "$ROOT_USER" -p"$ROOT_PASS" -e "GRANT ALL PRIVILEGES ON $NEW_DB.* TO '$NEW_DB_USER'@'%';"
-    mysql -u "$ROOT_USER" -p"$ROOT_PASS" -e "FLUSH PRIVILEGES;"
-    echo -e "\033[33mReading old configuration...\033[0m"
-    OLD_API_KEY=$(grep '$APIKEY' "$OLD_CONFIG" | cut -d"'" -f2)
-    OLD_ADMIN_ID=$(grep '$adminnumber' "$OLD_CONFIG" | cut -d"'" -f2)
-    OLD_BOT_NAME=$(grep '$usernamebot' "$OLD_CONFIG" | cut -d"'" -f2)
-    OLD_DOMAIN_FULL=$(grep '$domainhosts' "$OLD_CONFIG" | cut -d"'" -f2)
-    DOMAIN_NAME=$(echo "$OLD_DOMAIN_FULL" | cut -d'/' -f1)
-    echo -e "\033[32mDomain detected: $DOMAIN_NAME\033[0m"
-    NEW_BOT_DIR="/var/www/html/mirzaprobotconfig"
-    rm -rf "$OLD_BOT_DIR"
-    mkdir -p "$NEW_BOT_DIR"
-    ZIP_URL="https://github.com/Alfred-1313/Mirza_Pro_Max/archive/refs/heads/master.zip"
-    TEMP_DIR="/tmp/mirzabot_mig"
-    mkdir -p "$TEMP_DIR"
-    run_step "Downloading Mirza source" "wget -q -O '$TEMP_DIR/bot.zip' '$ZIP_URL'" \
-        || { show_step_error; echo -e "\033[31mError: Failed to download Mirza source.\033[0m"; exit 1; }
-    run_step "Extracting source files" "unzip -o -q '$TEMP_DIR/bot.zip' -d '$TEMP_DIR'" \
-        || { show_step_error; echo -e "\033[31mError: Failed to extract source files.\033[0m"; exit 1; }
-    EXTRACTED_DIR=$(find "$TEMP_DIR" -mindepth 1 -maxdepth 1 -type d | head -1)
-    if [ -z "$EXTRACTED_DIR" ] || [ ! -d "$EXTRACTED_DIR" ]; then
-        echo -e "\033[31mError: Extracted source folder not found. Aborting migration.\033[0m"
-        rm -rf "$TEMP_DIR"; exit 1
+    echo ""
+    printf "  ${C_PROMPT}❯${CR} Migrate now? ${C_DIM}[y/N]${CR}: "
+    local confirm; read -r confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        printf "\n    ${C_DIM}Nothing was changed.${CR}\n"
+        sleep 1; show_menu; return 0
     fi
-    mv "$EXTRACTED_DIR"/* "$NEW_BOT_DIR"
+    echo ""
+
+    # 4) Copies first
+    local stamp; stamp=$(date +%Y-%m-%d_%H-%M-%S)
+    local DB_BK="/root/mirza_before_migrate_${dbname}_${stamp}.sql"
+    local FILES_BK="/root/mirza_before_migrate_files_${stamp}.tar.gz"
+    run_step "Saving the database" \
+        "mysqldump -h '$dbhost' -u '$dbuser' -p'$dbpass' --no-tablespaces '$dbname' > '$DB_BK' && [ -s '$DB_BK' ]" \
+        || { show_step_error; rm -f "$DB_BK"; _mig_fail "Could not save the database." "Nothing was changed."; return 1; }
+    run_step "Saving the old files" \
+        "tar -czf '$FILES_BK' -C '$(dirname "$OLD_BOT_DIR")' '$(basename "$OLD_BOT_DIR")'" \
+        || { show_step_error; rm -f "$FILES_BK"; _mig_fail "Could not save the old files." "Nothing was changed."; return 1; }
+
+    # 5) The new code, built beside the running bot (outside the web root)
+    choose_source
+    local STAGE="/var/www/.mirzaprobot_migrate" TEMP_DIR="/tmp/mirzabot_mig"
+    rm -rf "$STAGE" "$TEMP_DIR"; mkdir -p "$TEMP_DIR"
+    run_step "Downloading Mirza Pro Max" \
+        "curl -fsSL --max-time 180 -o '$TEMP_DIR/bot.zip' '$SRC_ZIP_URL' || wget -q -O '$TEMP_DIR/bot.zip' '$SRC_ZIP_URL'" \
+        || { show_step_error; rm -rf "$TEMP_DIR"; _mig_fail "Download failed." "Nothing was changed."; return 1; }
+    run_step "Extracting the package" "unzip -o -q '$TEMP_DIR/bot.zip' -d '$TEMP_DIR'" \
+        || { show_step_error; rm -rf "$TEMP_DIR"; _mig_fail "The package could not be extracted." "Nothing was changed."; return 1; }
+    local EXTRACTED; EXTRACTED=$(find "$TEMP_DIR" -mindepth 1 -maxdepth 1 -type d | head -1)
+    if [ -z "$EXTRACTED" ] || [ ! -f "$EXTRACTED/index.php" ] || [ ! -f "$EXTRACTED/table.php" ] || [ ! -f "$EXTRACTED/admin.php" ]; then
+        rm -rf "$TEMP_DIR"
+        _mig_fail "The downloaded package does not look like Mirza Pro Max." "Nothing was changed."
+        return 1
+    fi
+    rm -f "$EXTRACTED/config.php"
+    mv "$EXTRACTED" "$STAGE"
     rm -rf "$TEMP_DIR"
-    NEW_SECRET_TOKEN=$(openssl rand -base64 10 | tr -dc 'a-zA-Z0-9' | cut -c1-8)
-    cat <<EOF > "$NEW_BOT_DIR/config.php"
+    cat <<EOF > "$STAGE/config.php"
 <?php
 // This variable added for high load panels which their response time is long and bot can't communicate with online panel!
 // null for default settings
 \$request_exec_timeout = null;
-\$dbhost = 'localhost';
-\$dbname = '$NEW_DB';
-\$usernamedb = '$NEW_DB_USER';
-\$passworddb = '$NEW_DB_PASS';
+\$dbhost = '${dbhost}';
+\$dbname = '${dbname}';
+\$usernamedb = '${dbuser}';
+\$passworddb = '${dbpass}';
 \$connect = mysqli_connect(\$dbhost, \$usernamedb, \$passworddb, \$dbname);
 if (\$connect->connect_error) { die("error" . \$connect->connect_error); }
 mysqli_set_charset(\$connect, "utf8mb4");
 \$options = [ PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC, PDO::ATTR_EMULATE_PREPARES => false, ];
 \$dsn = "mysql:host=\$dbhost;dbname=\$dbname;charset=utf8mb4";
 try { \$pdo = new PDO(\$dsn, \$usernamedb, \$passworddb, \$options); } catch (\PDOException \$e) { error_log("Database connection failed: " . \$e->getMessage()); }
-\$APIKEY = '${OLD_API_KEY}';
-\$adminnumber = '${OLD_ADMIN_ID}';
-\$domainhosts = '${DOMAIN_NAME}';
-\$usernamebot = '${OLD_BOT_NAME}';
+\$APIKEY = '${token}';
+\$adminnumber = '${admin}';
+\$domainhosts = '${domain}';
+\$usernamebot = '${botname}';
 ?>
 EOF
-    chown -R www-data:www-data "$NEW_BOT_DIR"
-    chmod -R 755 "$NEW_BOT_DIR"
-    run_step "Installing PHP dependencies (composer)" "install_php_deps '$NEW_BOT_DIR'" \
-        || { show_step_error; echo -e "\033[31mError: Failed to install PHP dependencies.\033[0m"; exit 1; }
-    echo -e "\033[33mReconfiguring Apache...\033[0m"
-    a2dissite 000-default.conf 2>/dev/null || true
-    a2dissite 000-default-le-ssl.conf 2>/dev/null || true
-    rm -f /etc/apache2/sites-enabled/000-default* 2>/dev/null
-    rm -f /etc/apache2/sites-available/000-default* 2>/dev/null
-    VHOST_FILE="/etc/apache2/sites-available/${DOMAIN_NAME}.conf"
-    cat <<EOF > "$VHOST_FILE"
+    run_step "Installing PHP dependencies (composer)" "install_php_deps '$STAGE'" \
+        || { show_step_error; rm -rf "$STAGE"; _mig_fail "Could not install PHP dependencies." "Nothing was changed."; return 1; }
+    local f bad=""
+    for f in index.php admin.php function.php keyboard.php table.php config.php; do
+        [ -f "$STAGE/$f" ] || continue
+        php -l "$STAGE/$f" >/dev/null 2>&1 || bad="$bad $f"
+    done
+    if [ -n "$bad" ]; then
+        rm -rf "$STAGE"
+        _mig_fail "PHP rejects the new code on this server:${bad}" "Nothing was changed."
+        return 1
+    fi
+
+    # 6) The switch. From here a failure puts the old bot back.
+    if [ "$TARGET" = "$OLD_BOT_DIR" ]; then
+        rm -rf "${OLD_BOT_DIR}.premigrate"
+        mv "$OLD_BOT_DIR" "${OLD_BOT_DIR}.premigrate"
+    fi
+    mv "$STAGE" "$TARGET"
+    local OLD_NOW="$OLD_BOT_DIR"
+    [ -d "${OLD_BOT_DIR}.premigrate" ] && OLD_NOW="${OLD_BOT_DIR}.premigrate"
+    # agents' bots move along, keeping their data; a config naming the old
+    # folder by its full path is pointed at the new one
+    for _a in "${agents[@]}"; do
+        cp -a "$OLD_NOW/vpnbot/$_a" "$TARGET/vpnbot/" 2>/dev/null
+        [ -f "$TARGET/vpnbot/$_a/config.php" ] \
+            && sed -i "s#${OLD_BOT_DIR}/#${TARGET}/#g" "$TARGET/vpnbot/$_a/config.php"
+    done
+    chown -R www-data:www-data "$TARGET"
+    chmod -R 755 "$TARGET"
+
+    # additive only: creates what is missing, adds missing columns, keeps rows
+    if ! run_step "Upgrading the database (adds only)" "cd '$TARGET' && php table.php"; then
+        show_step_error
+        _mig_undo_files "$TARGET" "$OLD_BOT_DIR"
+        _mig_fail "The database upgrade failed - the old bot was put back." \
+            "Anything table.php added is harmless to it. Copy of the database: $DB_BK"
+        return 1
+    fi
+    chown -R www-data:www-data "$TARGET" 2>/dev/null
+
+    local abak; abak=$(mktemp -d)
+    cp -a /etc/apache2/sites-available /etc/apache2/sites-enabled \
+          /etc/apache2/conf-available /etc/apache2/conf-enabled "$abak"/
+    a2dissite 000-default.conf >/dev/null 2>&1
+    a2dissite 000-default-le-ssl.conf >/dev/null 2>&1
+    a2dissite default-ssl.conf >/dev/null 2>&1
+    tee "/etc/apache2/sites-available/${domain}.conf" > /dev/null <<EOF
 <VirtualHost *:80>
-    ServerName $DOMAIN_NAME
-    DocumentRoot $NEW_BOT_DIR
-    <Directory $NEW_BOT_DIR>
+    ServerName $domain
+    DocumentRoot $TARGET
+    <Directory $TARGET>
         Options Indexes FollowSymLinks
         AllowOverride All
         Require all granted
     </Directory>
     Include /etc/apache2/conf-available/phpmyadmin.conf
-    ErrorLog \${APACHE_LOG_DIR}/${DOMAIN_NAME}-error.log
-    CustomLog \${APACHE_LOG_DIR}/${DOMAIN_NAME}-access.log combined
+    ErrorLog \${APACHE_LOG_DIR}/${domain}-error.log
+    CustomLog \${APACHE_LOG_DIR}/${domain}-access.log combined
 </VirtualHost>
 EOF
-    VHOST_SSL_FILE="/etc/apache2/sites-available/${DOMAIN_NAME}-ssl.conf"
-    cat <<EOF > "$VHOST_SSL_FILE"
+    tee "/etc/apache2/sites-available/${domain}-ssl.conf" > /dev/null <<EOF
 <VirtualHost *:443>
-    ServerName $DOMAIN_NAME
-    DocumentRoot $NEW_BOT_DIR
+    ServerName $domain
+    DocumentRoot $TARGET
     SSLEngine on
-    SSLCertificateFile /etc/letsencrypt/live/$DOMAIN_NAME/fullchain.pem
-    SSLCertificateKeyFile /etc/letsencrypt/live/$DOMAIN_NAME/privkey.pem
-    <Directory $NEW_BOT_DIR>
+    SSLCertificateFile /etc/letsencrypt/live/$domain/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/$domain/privkey.pem
+    <Directory $TARGET>
         Options Indexes FollowSymLinks
         AllowOverride All
         Require all granted
     </Directory>
     Include /etc/apache2/conf-available/phpmyadmin.conf
-    ErrorLog \${APACHE_LOG_DIR}/${DOMAIN_NAME}-error.log
-    CustomLog \${APACHE_LOG_DIR}/${DOMAIN_NAME}-access.log combined
+    ErrorLog \${APACHE_LOG_DIR}/${domain}-error.log
+    CustomLog \${APACHE_LOG_DIR}/${domain}-access.log combined
 </VirtualHost>
 EOF
-    a2ensite "${DOMAIN_NAME}.conf"
-    a2ensite "${DOMAIN_NAME}-ssl.conf"
-    a2enmod ssl
-    a2enmod rewrite
-    systemctl restart apache2
-    echo -e "\033[33mUpdating database tables...\033[0m"
-    curl -k "https://${DOMAIN_NAME}/table.php" > /dev/null 2>&1
-    sleep 2
-    echo -e "\033[33mUpdating webhook...\033[0m"
-    curl -F "url=https://${DOMAIN_NAME}/index.php" \
-         -F "secret_token=${NEW_SECRET_TOKEN}" \
-         "https://api.telegram.org/bot${OLD_API_KEY}/setWebhook"
-    sed -i 's/\r$//' /root/install.sh
-    chmod +x /root/install.sh
-    rm -f /usr/local/bin/mirza
-    ln -sf /root/install.sh /usr/local/bin/mirza
-    clear 2>/dev/null || true
-    echo -e "\033[32m====================================================\033[0m"
-    echo -e "\033[32m     MIGRATION TO MIRZA PRO MAX SUCCESSFUL         \033[0m"
-    echo -e "\033[32m====================================================\033[0m"
-    echo -e "\033[36mNew Database:\033[0m $NEW_DB"
-    echo -e "\033[36mNew User:\033[0m     $NEW_DB_USER"
-    echo -e "\033[36mNew Pass:\033[0m     $NEW_DB_PASS"
-    echo -e "\033[36mBot Domain:\033[0m   https://$DOMAIN_NAME"
-    echo -e "\033[33mUse command 'mirza' to manage the bot from now on.\033[0m"
+    a2ensite "${domain}.conf" >/dev/null 2>&1
+    a2ensite "${domain}-ssl.conf" >/dev/null 2>&1
+    a2enmod ssl rewrite >/dev/null 2>&1
+    local aout
+    if ! aout=$(apache2ctl configtest 2>&1); then
+        _pma_restore "$abak"; rm -rf "$abak"
+        _mig_undo_files "$TARGET" "$OLD_BOT_DIR"
+        printf '%s\n' "$aout" | tail -n 5 | sed 's/^/      /'
+        _mig_fail "Apache rejected the new site - everything was put back as it was."
+        return 1
+    fi
+    systemctl reload apache2 >/dev/null 2>&1 || systemctl restart apache2 >/dev/null 2>&1
+    if ! systemctl is-active --quiet apache2; then
+        _pma_restore "$abak"; rm -rf "$abak"
+        _mig_undo_files "$TARGET" "$OLD_BOT_DIR"
+        systemctl restart apache2 >/dev/null 2>&1
+        _mig_fail "Apache would not start with the new site - everything was put back as it was."
+        return 1
+    fi
+    rm -rf "$abak"
+    printf "    ${C_OK}✔${CR} ${C_DIM}Apache now serves %s from %s${CR}\n" "$domain" "$TARGET"
+
+    # 7) Telegram: the bot, and every agent bot that came along
+    local secret hook
+    secret=$(openssl rand -base64 10 | tr -dc 'a-zA-Z0-9' | cut -c1-8)
+    hook=$(curl -s --max-time 20 -F "url=https://${domain}/index.php" -F "secret_token=${secret}" \
+        "https://api.telegram.org/bot${token}/setWebhook" 2>/dev/null)
+    local hook_ok=0
+    printf '%s' "$hook" | grep -q '"ok":true' && hook_ok=1
+    local agents_hooked=0 _row _tok _uid _uname
+    if [ "${#agents[@]}" -gt 0 ]; then
+        while IFS=$'\t' read -r _tok _uid _uname; do
+            [ -n "$_tok" ] && [ -d "$TARGET/vpnbot/${_uid}${_uname}" ] || continue
+            curl -s --max-time 20 "https://api.telegram.org/bot${_tok}/setWebhook?url=https://${domain}/vpnbot/${_uid}${_uname}/index.php" \
+                | grep -q '"ok":true' && agents_hooked=$((agents_hooked + 1))
+        done < <(mysql -N -B -h "$dbhost" -u "$dbuser" -p"$dbpass" "$dbname" \
+                    -e "SELECT bot_token, id_user, username FROM botsaz;" 2>/dev/null)
+    fi
+
+    # 8) A Pro Max bot like any other from here on
+    bots_registry_add "${botname:-Bot}" "$TARGET" "$domain"
+    _ensure_selfupdate_cron
+    # the old bot's scheduled jobs call its old address; the new bot adds its
+    # own the first time the admin opens the panel (activecron)
+    [ "$hosts" != "$domain" ] && _bot_crons_remove "$hosts"
+    ssl_renewal_ensure "$domain"
+    if [ -d "${OLD_BOT_DIR}.premigrate" ]; then
+        rm -rf "${OLD_BOT_DIR}.premigrate"
+    elif [ "$TARGET" != "$OLD_BOT_DIR" ]; then
+        rm -rf "$OLD_BOT_DIR"
+    fi
+    ln -sf /root/install.sh /usr/local/bin/mirza 2>/dev/null
+
+    _sec "Migrated to Pro Max"
+    _kv "Bot" "${C_KEY}${botname:+@}${botname:-?}${CR}"
+    _kv "Domain" "${C_DIM}https://${domain}${CR}"
+    _kv "Folder" "${C_DIM}${TARGET}${CR}"
+    _kv "Database" "${C_DIM}${dbname} · kept, upgraded in place${CR}"
+    if [ "$hook_ok" -eq 1 ]; then
+        _kv "Webhook" "$(_dot ok) ${C_OK}set${CR}"
+    else
+        _kv "Webhook" "$(_dot bad) ${C_BAD}not set${CR} ${C_DIM}· run option 2 (Update) once to retry${CR}"
+    fi
+    [ "${#agents[@]}" -gt 0 ] && _kv "Agent bots" "${C_DIM}${#agents[@]} moved · ${agents_hooked} webhook(s) re-pointed${CR}"
+    _kv "Copies" "${C_DIM}${DB_BK}${CR}"
+    _kv "" "${C_DIM}${FILES_BK}${CR}"
     echo ""
+    printf "    ${C_WARN}!${CR} ${C_WARN}Open the admin panel in the bot once: that is when it sets up its${CR}\n"
+    printf "    ${C_WARN}  scheduled jobs (payment checks, notices).${CR}\n"
+    printf "    ${C_DIM}Manage it with ${CR}${C_KEY}mirza${CR}${C_DIM} from now on.${CR}\n"
+    echo ""
+    printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "
+    read -r _
+    show_menu
 }
 
 # ── Command-line argument parsing ────────────────────────────
