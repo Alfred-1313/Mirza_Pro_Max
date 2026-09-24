@@ -991,6 +991,36 @@ function show_logo() {
     resources_section
 }
 
+# certbot's Apache plugin answers the Let's Encrypt challenge through the
+# running Apache. The first bot's install never pulled it in (it issues in
+# standalone mode, before Apache is set up), so it is added on first need.
+ssl_apache_plugin_ensure() {
+    certbot plugins 2>/dev/null | grep -qi apache && return 0
+    apt-get install -y python3-certbot-apache >/dev/null 2>&1
+    certbot plugins 2>/dev/null | grep -qi apache
+}
+
+# Make DOMAIN's certificate renew by itself. certbot renews a certificate the
+# way it was issued, and the first bot's is issued in standalone mode -
+# certbot binding port 80 itself, which Apache holds from then on - so the
+# twice-daily certbot.timer run fails on it and the certificate simply runs
+# out after 90 days, taking the webhook with it. Switched to the Apache
+# plugin (the way every additional bot is issued) it renews through the
+# running Apache instead. Silent when there is nothing to switch; returns 1
+# only when it had to and could not.
+ssl_renewal_ensure() {
+    local conf="/etc/letsencrypt/renewal/${1}.conf"
+    [ -n "$1" ] && [ -f "$conf" ] || return 0
+    grep -qE '^authenticator *= *standalone *$' "$conf" || return 0
+    if ssl_apache_plugin_ensure; then
+        sed -i -E 's/^authenticator *= *standalone *$/authenticator = apache/' "$conf"
+        printf "    ${C_OK}✔${CR} ${C_DIM}SSL for %s now renews by itself (through Apache)${CR}\n" "$1"
+        return 0
+    fi
+    printf "    ${C_WARN}!${CR} ${C_WARN}Could not install certbot's Apache plugin - SSL for %s will not renew by itself.${CR}\n" "$1"
+    return 1
+}
+
 # Renew (or issue) the SSL certificate for the bot's domain.
 function renew_ssl() {
     clear 2>/dev/null || true
@@ -999,10 +1029,14 @@ function renew_ssl() {
 
     # 1) Detect the bot domain: the registry (name + domain, prompts only
     #    when more than one bot exists), then config.php, then saved state
-    local domain=""
+    local domain="" name=""
     if pick_bot_instance "renew the certificate for"; then
         domain="$PICKED_DOMAIN"
+        name="$PICKED_NAME"
         [ "$domain" = "null" ] && domain=""
+    elif [ "$(bots_registry_count)" != "0" ]; then
+        # [0] in the bot list is "back" - not "renew the first bot instead"
+        show_menu; return 0
     fi
     if [ -z "$domain" ]; then
         local cfg="/var/www/html/mirzaprobotconfig/config.php"
@@ -1017,6 +1051,7 @@ function renew_ssl() {
         echo -e "  ${C_BAD}●${CR} ${C_BAD}No domain found. Aborting.${CR}"
         sleep 1; show_menu; return 1
     fi
+    [ -n "$name" ] && _kv "Bot" "${C_KEY}${name}${CR}"
     _kv "Domain" "${C_KEY}${domain}${CR}"
 
     if ! command -v certbot >/dev/null 2>&1; then
@@ -1044,6 +1079,12 @@ function renew_ssl() {
 
     # Use the apache authenticator so it works while Apache is running (no downtime).
     # certonly updates the existing cert lineage in place; Apache already points at it.
+    if ! certbot plugins 2>/dev/null | grep -qi apache; then
+        run_step "Installing Apache certbot plugin" "apt-get install -y python3-certbot-apache" \
+            || { show_step_error; echo -e "\n  ${C_BAD}●${CR} ${C_BAD}certbot's Apache plugin could not be installed. Nothing was changed.${CR}"; echo ""; printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "; read -r _; show_menu; return 1; }
+    fi
+    # and from now on renew the same way by itself
+    ssl_renewal_ensure "$domain"
     run_step "Renewing certificate for ${domain}" \
         "certbot certonly --apache --non-interactive --agree-tos --register-unsafely-without-email --keep-until-expiring --cert-name '${domain}' -d '${domain}' ${force_flag}" \
         || { show_step_error; echo -e "\n  ${C_BAD}●${CR} ${C_BAD}Renewal failed. See the details above.${CR}"; echo ""; printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "; read -r _; show_menu; return 1; }
@@ -1051,11 +1092,23 @@ function renew_ssl() {
     run_step "Reloading Apache" "systemctl reload apache2 2>/dev/null || systemctl restart apache2"
 
     _sec "Done"
+    [ -n "$name" ] && _kv "Bot" "${C_KEY}${name}${CR}"
     _kv "Domain" "${C_KEY}${domain}${CR}"
     if [ -f "$certfile" ]; then
         local newexp
         newexp=$(openssl x509 -enddate -noout -in "$certfile" 2>/dev/null | cut -d= -f2)
         [ -n "$newexp" ] && _kv "Valid until" "${C_OK}${newexp}${CR}"
+    fi
+    # renewing by itself needs the timer running AND a method that works
+    # while Apache is up (a snap certbot brings its own timer)
+    systemctl is-active --quiet certbot.timer 2>/dev/null \
+        || systemctl is-active --quiet snap.certbot.renew.timer 2>/dev/null \
+        || systemctl enable --now certbot.timer >/dev/null 2>&1
+    if { systemctl is-active --quiet certbot.timer 2>/dev/null || systemctl is-active --quiet snap.certbot.renew.timer 2>/dev/null; } \
+        && ! grep -qE '^authenticator *= *standalone *$' "/etc/letsencrypt/renewal/${domain}.conf" 2>/dev/null; then
+        _kv "Auto-renew" "${C_OK}on${CR} ${C_DIM}· checked twice a day, renewed 30 days before expiry${CR}"
+    else
+        _kv "Auto-renew" "${C_BAD}off${CR} ${C_DIM}· run this option again before the date above${CR}"
     fi
     echo ""
     printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "
@@ -2744,6 +2797,9 @@ EOF
     bots_registry_add "$YOUR_BOTLABEL" "$BOT_DIR" "$YOUR_DOMAIN"
     local pma_failed=0
     pma_set_port "$BOT_DIR" "${PMA_PORT:-443}" || pma_failed=1
+    # issued in standalone mode above (Apache was not set up yet); switch it
+    # to renew through Apache, or it cannot renew at all
+    ssl_renewal_ensure "$YOUR_DOMAIN" >/dev/null
     clear 2>/dev/null || true
     banner
     _sec "Installation complete"
@@ -3197,6 +3253,8 @@ function update_bot() {
     # ── 7. Apache: only fix what is actually missing ─────────
     if [ -n "$DOMAIN_NAME" ]; then
         _ensure_vhost "$DOMAIN_NAME" "$BOT_DIR"
+        # a certificate still set to renew in standalone mode never will
+        ssl_renewal_ensure "$DOMAIN_NAME"
     fi
 
     # ── 8. Is the bot actually answering? ────────────────────
