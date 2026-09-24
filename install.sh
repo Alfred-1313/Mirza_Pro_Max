@@ -1148,126 +1148,243 @@ function backup_bot() {
     show_menu
 }
 
-function import_bot() {
-    clear 2>/dev/null || true
-    banner
-    _sec "Import Database"
+# ── Restore ───────────────────────────────────────────────────
+_is_zip() { [ "$(head -c 4 "$1" 2>/dev/null | od -An -tx1 | tr -d ' \n')" = "504b0304" ]; }
 
-    if ! pick_bot_instance "restore"; then
-        echo ""
-        printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "
-        read -r _
-        show_menu
-        return 1
-    fi
-    CONFIG_PATH="$PICKED_DIR/config.php"
-    if [ ! -f "$CONFIG_PATH" ]; then
-        printf "    ${C_BAD}●${CR} ${C_BAD}Mirza is not installed. config.php not found.${CR}\n"
-        echo ""
-        printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "
-        read -r _
-        show_menu
-        return 1
-    fi
+# Does FILE look like an SQL dump? (a dump header or statements in its first MB)
+_restore_is_sql() {
+    head -c 1048576 "$1" 2>/dev/null \
+        | grep -qaiE '^(-- MySQL dump|-- MariaDB dump|-- phpMyAdmin SQL Dump|CREATE TABLE|INSERT INTO|DROP TABLE)'
+}
 
-    local dbhost dbname dbuser dbpass
-    dbhost=$(grep '^\$dbhost' "$CONFIG_PATH" | cut -d"'" -f2)
-    dbname=$(grep '^\$dbname' "$CONFIG_PATH" | cut -d"'" -f2)
-    dbuser=$(grep '^\$usernamedb' "$CONFIG_PATH" | cut -d"'" -f2)
-    dbpass=$(grep '^\$passworddb' "$CONFIG_PATH" | cut -d"'" -f2)
-    [ -z "$dbhost" ] && dbhost="localhost"
+# The database a dump (on stdin) was taken from, from its mysqldump or
+# phpMyAdmin header; empty when the header does not say.
+_sql_source_db() {
+    head -n 40 | grep -m1 -aoE 'Database: `?[A-Za-z0-9_]+' | sed -E 's/Database: `?//'
+}
 
-    if [ -z "$dbname" ] || [ -z "$dbuser" ] || [ -z "$dbpass" ]; then
-        printf "    ${C_BAD}●${CR} ${C_BAD}Could not read database credentials from config.php${CR}\n"
-        echo ""
-        printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "
-        read -r _
-        show_menu
-        return 1
-    fi
+# The name of the bot on this server that uses DBNAME, or DBNAME itself
+_db_owner_label() {
+    local d n
+    while IFS=$'\t' read -r d n; do
+        if [ "$(grep '^\$dbname' "$d/config.php" 2>/dev/null | cut -d"'" -f2)" = "$1" ]; then
+            echo "$n"; return
+        fi
+    done < <(jq -r '.[] | "\(.dir)\t\(.name)"' "$BOTS_REGISTRY" 2>/dev/null)
+    echo "$1"
+}
 
-    _kv "Database" "${C_DIM}${dbname}${CR}"
-    _kv "DB User" "${C_DIM}${dbuser}${CR}"
-    _kv "DB Host" "${C_DIM}${dbhost}${CR}"
-    echo ""
-
-    echo -e "  ${C_DIM}Available backup files in /root/:${CR}"
-    local files=()
-    local i=1
-    while IFS= read -r f; do
-        files+=("$f")
-        local sz
-        sz=$(du -h "$f" 2>/dev/null | awk '{print $1}')
-        printf "    ${C_KEY}[%d]${CR}  ${C_TXT}%s${CR}  ${C_DIM}(%s)${CR}\n" "$i" "$(basename "$f")" "$sz"
-        i=$((i + 1))
-    done < <(find /root -maxdepth 1 -name 'mirza_backup_*.sql' -type f 2>/dev/null | sort -r)
-
-    if [ "${#files[@]}" -eq 0 ]; then
-        printf "    ${C_WARN}!${CR} ${C_WARN}No backup files found in /root/${CR}\n"
-    fi
-
-    echo ""
-    printf "    ${C_KEY}[0]${CR}  ${C_TXT}Enter a custom file path${CR}\n"
-    echo ""
-    printf "  ${C_PROMPT}❯${CR} Select a file ${C_DIM}[0-%d]${CR} or enter path: " "${#files[@]}"
-    read -r choice
-
-    local sql_file=""
-    if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#files[@]}" ]; then
-        sql_file="${files[$((choice - 1))]}"
-    elif [ "$choice" = "0" ] || [ -z "$choice" ]; then
-        printf "  ${C_PROMPT}❯${CR} Enter the full path to the .sql file: "
-        read -r sql_file
+# One short note per listed file: whose data it is, or why it cannot be used
+_restore_file_note() {
+    local f="$1" entry src
+    if _is_zip "$f"; then
+        entry=$(unzip -Z1 "$f" 2>/dev/null | grep -iE '\.sql$' | head -1)
+        if [ -z "$entry" ]; then echo "zip · no .sql inside"; return; fi
+        if unzip -Z -v "$f" "$entry" 2>/dev/null | grep -q 'file security status:[[:space:]]*encrypted'; then
+            echo "zip · password"; return
+        fi
+        src=$(unzip -p "$f" "$entry" 2>/dev/null | _sql_source_db)
     else
-        sql_file="$choice"
+        src=$(_sql_source_db < "$f")
     fi
+    [ -n "$src" ] && echo "from $(_db_owner_label "$src")"
+}
 
-    if [ -z "$sql_file" ] || [ ! -f "$sql_file" ]; then
-        printf "\n    ${C_BAD}●${CR} ${C_BAD}File not found: %s${CR}\n" "$sql_file"
-        echo ""
-        printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "
-        read -r _
-        show_menu
+# Turn the chosen file into an .sql to import: a plain dump is used as it
+# is, a zip has its .sql extracted into WORK (asking for the password the
+# bot's backup settings put on it, if any). Sets RESTORE_SQL and
+# RESTORE_ENTRY. Returns 0 ready, 1 unusable (reason printed), 2 back.
+_restore_prepare() {
+    local f="$1" work="$2" entries n pick pw rc
+    RESTORE_SQL=""; RESTORE_ENTRY=""
+    if ! _is_zip "$f"; then
+        if ! _restore_is_sql "$f"; then
+            printf "    ${C_BAD}●${CR} ${C_BAD}This file is not a database backup (.sql or .zip).${CR}\n"
+            return 1
+        fi
+        RESTORE_SQL="$f"; return 0
+    fi
+    entries=$(unzip -Z1 "$f" 2>/dev/null | grep -iE '\.sql$')
+    if [ -z "$entries" ]; then
+        printf "    ${C_BAD}●${CR} ${C_BAD}This zip has no .sql file inside - it is not a database backup.${CR}\n"
         return 1
     fi
-
-    local file_size
-    file_size=$(du -h "$sql_file" 2>/dev/null | awk '{print $1}')
-    _kv "File" "${C_DIM}${sql_file}${CR}"
-    _kv "Size" "${C_DIM}${file_size}${CR}"
-    echo ""
-
-    printf "    ${C_WARN}!${CR} ${C_WARN}This will OVERWRITE the current database (${dbname}).${CR}\n"
-    printf "  ${C_PROMPT}❯${CR} Are you sure? ${C_DIM}[y/N]${CR}: "
-    read -r confirm
-    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-        printf "\n    ${C_DIM}Import cancelled.${CR}\n"
-        echo ""
-        printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "
-        read -r _
-        show_menu
-        return 0
+    n=$(printf '%s\n' "$entries" | wc -l)
+    RESTORE_ENTRY=$(printf '%s\n' "$entries" | head -1)
+    if [ "$n" -gt 1 ]; then
+        printf "    ${C_DIM}This zip holds %d .sql files:${CR}\n" "$n"
+        printf '%s\n' "$entries" | awk -v k="$C_KEY" -v t="$C_TXT" -v r="$CR" '{printf "    %s[%d]%s %s%s%s\n", k, NR, r, t, $0, r}'
+        printf "  ${C_PROMPT}❯${CR} Which one? ${C_DIM}[1-%d, 0 = back]${CR}: " "$n"
+        read -r pick
+        [[ "$pick" =~ ^[0-9]+$ ]] && [ "$pick" -ge 1 ] && [ "$pick" -le "$n" ] || return 2
+        RESTORE_ENTRY=$(printf '%s\n' "$entries" | sed -n "${pick}p")
     fi
-    echo ""
-
-    run_step "Importing database (${dbname})" \
-        "mysql -h '$dbhost' -u '$dbuser' -p'$dbpass' '$dbname' < '$sql_file'" \
-        || { show_step_error; echo -e "\n  ${C_BAD}●${CR} ${C_BAD}Import failed. See details above.${CR}"; echo ""; printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "; read -r _; show_menu; return 1; }
-
-    local DOMAIN_NAME=""
-    if [ -f "$CONFIG_PATH" ]; then
-        DOMAIN_NAME=$(grep '^\$domainhosts' "$CONFIG_PATH" | cut -d"'" -f2 | cut -d'/' -f1)
+    # A dummy password is ignored by an unprotected zip and simply fails on a
+    # protected one - unzip never stops to ask on the terminal this way.
+    unzip -p -P "mirza-no-password" "$f" "$RESTORE_ENTRY" > "$work/restore.sql" 2>/dev/null
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+        printf "    ${C_DIM}This zip is password-protected (the password from the bot's backup settings).${CR}\n"
+        while true; do
+            printf "  ${C_PROMPT}❯${CR} Zip password ${C_DIM}[0 = back]${CR}: "
+            read -rs pw; echo ""
+            if [ -z "$pw" ] || [ "$pw" = "0" ]; then return 2; fi
+            unzip -p -P "$pw" "$f" "$RESTORE_ENTRY" > "$work/restore.sql" 2>/dev/null && break
+            printf "    ${C_BAD}●${CR} ${C_BAD}Wrong password, or the zip is damaged. Try again.${CR}\n"
+        done
     fi
-    if [ -n "$DOMAIN_NAME" ]; then
-        run_step "Updating database tables" "curl -s 'https://${DOMAIN_NAME}/table.php' > /dev/null" || true
+    if ! _restore_is_sql "$work/restore.sql"; then
+        printf "    ${C_BAD}●${CR} ${C_BAD}%s inside the zip is not a database dump.${CR}\n" "$RESTORE_ENTRY"
+        return 1
     fi
+    RESTORE_SQL="$work/restore.sql"
+    return 0
+}
 
-    echo ""
-    printf "    ${C_OK}✔${CR} ${C_OK}Database imported successfully from:${CR} ${C_KEY}${sql_file}${CR}\n"
+# DROP statements for everything now in the database, so a restore replaces
+# it instead of piling onto it (phpMyAdmin exports carry no DROP TABLE)
+_restore_drop_sql() {
+    mysql -N -B -h "$1" -u "$2" -p"$3" "$4" -e 'SHOW FULL TABLES' 2>/dev/null \
+        | while IFS=$'\t' read -r t type; do
+            if [ "$type" = "VIEW" ]; then echo "DROP VIEW IF EXISTS \`$t\`;"
+            else echo "DROP TABLE IF EXISTS \`$t\`;"; fi
+        done
+}
+
+_restore_finish() {
+    [ -n "$1" ] && rm -rf "$1"
     echo ""
     printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "
     read -r _
     show_menu
+}
+
+# Menu 7 - put a backup (.sql, or the .zip the bot sends) into one bot's
+# database. The database is saved first; if the import fails half way it
+# is put back from that copy, so a bad file never leaves the bot empty.
+function import_bot() {
+    clear 2>/dev/null || true
+    banner
+    _sec "Restore database"
+    if ! pick_bot_instance "restore a backup into"; then
+        [ "$(bots_registry_count)" = "0" ] && sleep 2
+        show_menu; return 0
+    fi
+    local dir="$PICKED_DIR" name="$PICKED_NAME" cfg="$PICKED_DIR/config.php"
+    if [ ! -f "$cfg" ]; then
+        printf "    ${C_BAD}●${CR} ${C_BAD}Mirza is not installed. config.php not found.${CR}\n"
+        _restore_finish; return 1
+    fi
+
+    local dbhost dbname dbuser dbpass
+    dbhost=$(grep '^\$dbhost' "$cfg" | cut -d"'" -f2)
+    dbname=$(grep '^\$dbname' "$cfg" | cut -d"'" -f2)
+    dbuser=$(grep '^\$usernamedb' "$cfg" | cut -d"'" -f2)
+    dbpass=$(grep '^\$passworddb' "$cfg" | cut -d"'" -f2)
+    [ -z "$dbhost" ] && dbhost="localhost"
+    if [ -z "$dbname" ] || [ -z "$dbuser" ] || [ -z "$dbpass" ]; then
+        printf "    ${C_BAD}●${CR} ${C_BAD}Could not read database credentials from config.php${CR}\n"
+        _restore_finish; return 1
+    fi
+
+    _kv "Bot" "${C_KEY}${name}${CR}"
+    _kv "Database" "${C_DIM}${dbname}${CR}"
+    echo ""
+    printf "    ${C_DIM}Put the backup in /root - a .sql file, or the .zip the bot${CR}\n"
+    printf "    ${C_DIM}sends you - and it shows up here (newest first).${CR}\n"
+    echo ""
+    local files=() f i=1
+    while IFS= read -r f; do
+        files+=("$f")
+        printf "    ${C_KEY}[%d]${CR} ${C_TXT}%-38s${CR} ${C_DIM}%5s  %s  %s${CR}\n" "$i" "$(basename "$f")" \
+            "$(du -h "$f" 2>/dev/null | cut -f1)" "$(date -r "$f" '+%d %b %H:%M' 2>/dev/null)" "$(_restore_file_note "$f")"
+        i=$((i + 1))
+    done < <(find /root -maxdepth 1 -type f \( -iname '*.sql' -o -iname '*.zip' \) -printf '%T@\t%p\n' 2>/dev/null \
+                | sort -rn | head -n 15 | cut -f2-)
+    [ "${#files[@]}" -eq 0 ] && printf "    ${C_WARN}!${CR} ${C_WARN}No .sql or .zip file in /root yet.${CR}\n"
+    printf "    ${C_KEY}[0]${CR} ${C_TXT}Back to menu${CR}\n"
+    echo ""
+    printf "  ${C_PROMPT}❯${CR} Choose a file, or type its full path: "
+    local choice file=""
+    read -r choice
+    if [ -z "$choice" ] || [ "$choice" = "0" ]; then show_menu; return 0; fi
+    if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -le "${#files[@]}" ]; then
+        file="${files[$((choice - 1))]}"
+    else
+        file="$choice"
+    fi
+    if [ ! -f "$file" ]; then
+        printf "\n    ${C_BAD}●${CR} ${C_BAD}File not found: %s${CR}\n" "$file"
+        _restore_finish; return 1
+    fi
+
+    local work; work=$(mktemp -d /root/.mirza_restore.XXXXXX)
+    echo ""
+    _restore_prepare "$file" "$work"
+    case $? in
+        0) ;;
+        2) rm -rf "$work"; show_menu; return 0 ;;
+        *) _restore_finish "$work"; return 1 ;;
+    esac
+
+    local src owner shown
+    src=$(_sql_source_db < "$RESTORE_SQL")
+    shown="$(basename "$file")"
+    [ -n "$RESTORE_ENTRY" ] && shown="$shown → $RESTORE_ENTRY"
+    _sec "Restore into ${name}"
+    _kv "File" "${C_DIM}${shown}${CR} ${C_DIM}($(du -h "$RESTORE_SQL" 2>/dev/null | cut -f1))${CR}"
+    if [ -n "$src" ]; then
+        owner=$(_db_owner_label "$src")
+        if [ "$owner" = "$src" ]; then _kv "Made from" "${C_DIM}${src}${CR}"
+        else _kv "Made from" "${C_DIM}${owner} (${src})${CR}"; fi
+    fi
+    _kv "Into" "${C_KEY}${dbname}${CR} ${C_DIM}(${name})${CR}"
+    echo ""
+    if [ -n "$src" ] && [ "$src" != "$dbname" ]; then
+        printf "    ${C_WARN}!${CR} ${C_WARN}This backup was made from another database (%s).${CR}\n" "$src"
+    fi
+    printf "    ${C_WARN}!${CR} ${C_WARN}Everything in %s is replaced. A copy of it is saved first.${CR}\n" "$dbname"
+    printf "  ${C_PROMPT}❯${CR} Continue? ${C_DIM}[y/N]${CR}: "
+    local confirm; read -r confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        printf "\n    ${C_DIM}Restore cancelled - nothing was changed.${CR}\n"
+        _restore_finish "$work"; return 0
+    fi
+    echo ""
+
+    local safe="/root/mirza_before_restore_${dbname}_$(date +%Y-%m-%d_%H-%M-%S).sql"
+    local my="mysql -h '$dbhost' -u '$dbuser' -p'$dbpass' '$dbname'"
+    if ! run_step "Saving the current database" \
+        "mysqldump -h '$dbhost' -u '$dbuser' -p'$dbpass' --no-tablespaces --ssl-mode=DISABLED '$dbname' > '$safe'"; then
+        show_step_error; rm -f "$safe"
+        printf "\n    ${C_BAD}●${CR} ${C_BAD}Could not save the current database - nothing was changed.${CR}\n"
+        _restore_finish "$work"; return 1
+    fi
+    _restore_drop_sql "$dbhost" "$dbuser" "$dbpass" "$dbname" > "$work/drop.sql"
+    # A dump may name its own database (CREATE DATABASE / USE); drop those
+    # lines so it always lands in this bot's database, never another one.
+    if ! run_step "Importing $(basename "${RESTORE_ENTRY:-$file}")" \
+        "{ echo 'SET FOREIGN_KEY_CHECKS=0;'; cat '$work/drop.sql'; sed -E '/^(CREATE DATABASE |USE \`)/d' '$RESTORE_SQL'; } | $my"; then
+        show_step_error
+        _restore_drop_sql "$dbhost" "$dbuser" "$dbpass" "$dbname" > "$work/drop.sql"
+        if run_step "Putting the previous database back" \
+            "{ echo 'SET FOREIGN_KEY_CHECKS=0;'; cat '$work/drop.sql'; cat '$safe'; } | $my"; then
+            printf "\n    ${C_BAD}●${CR} ${C_BAD}The import failed, so the database was put back as it was.${CR}\n"
+        else
+            show_step_error
+            printf "\n    ${C_BAD}●${CR} ${C_BAD}The import failed and the old data could not be put back.${CR}\n"
+            printf "    ${C_DIM}It is saved in %s${CR}\n" "$safe"
+        fi
+        _restore_finish "$work"; return 1
+    fi
+    # An older backup gets the columns and tables this version expects
+    run_step "Updating tables for this version" "cd '$dir' && php table.php" || show_step_error
+    chown -R www-data:www-data "$dir" 2>/dev/null
+
+    echo ""
+    printf "    ${C_OK}✔${CR} ${C_OK}Restored into %s (%s).${CR}\n" "$dbname" "$name"
+    printf "    ${C_DIM}The data it had before is kept in %s${CR}\n" "$safe"
+    _restore_finish "$work"
 }
 
 function show_menu() {
@@ -1288,7 +1405,7 @@ function show_menu() {
     _mi "4" "Migrate to Pro Max" "bring an original Mirza install over ${C_WARN}(beta)${CR}"
     _mi "5" "Renew SSL" "reissue the domain certificate"
     _mi "6" "Backup"    "database dump, sent to Telegram"
-    _mi "7" "Restore"   "import a .sql dump ${C_WARN}(beta)${CR}"
+    _mi "7" "Restore"   "import a .sql or .zip backup ${C_WARN}(beta)${CR}"
     _mi "8" "Help"      "commands and flags for scripts"
     _mi "9" "Database"  "password, login info, phpMyAdmin port"
     _mi "0" "Exit"      ""
@@ -1324,7 +1441,7 @@ function show_help_screen() {
     _kv "addbot" "${C_DIM}Install a second, independent bot on this server${CR}"
     _kv "renew" "${C_DIM}Renew the bot domain SSL certificate${CR}"
     _kv "backup" "${C_DIM}Backup database & send to Telegram${CR}"
-    _kv "import" "${C_DIM}Import database from SQL file (Beta)${CR}"
+    _kv "import" "${C_DIM}Import a database backup, .sql or .zip (Beta)${CR}"
     _kv "menu" "${C_DIM}Open this interactive panel (default)${CR}"
 
     _sec "Install parameters"
@@ -3981,7 +4098,7 @@ print_usage() {
     addbot             Install a second, independent bot on this server
     renew              Reissue the domain's SSL certificate
     backup             Dump the database and send it to Telegram
-    import             Restore the database from a .sql dump (beta)
+    import             Restore the database from a .sql or .zip backup (beta)
     menu               Open the interactive menu (default)
 
   Options:
