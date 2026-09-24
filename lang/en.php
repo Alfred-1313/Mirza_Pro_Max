@@ -809,6 +809,8 @@ You can now use the bot ✔️',
                 ],
                 'extend' => [
                         'confirm' => 'Confirm renewal',
+                        'insufficientBalanceAlert' => '📝 Your balance is not enough to renew this service.
+💰 Tap «💰 Increase balance» to go to the payment page.',
                         'discount' => '🎁 Apply discount code',
                         'emptyServiceforExtend' => '❌ You have no service to renew.',
                         'renewalerror' => '❌ An error occurred during renewal. Please perform your renewal steps again',
@@ -918,6 +920,12 @@ You can now use the bot ✔️',
 ▫️Time addition amount : %s Dollar',
                 ],
                 'extraVolume' => [
+                        'changedPrice' => '✅ The price was saved.',
+                        'gettypeextra' => '📌 Which user type is this price for?
+User types:
+f = regular user
+n = regular agent
+n2 = agent with more features',
                         'enterextravolume' => '🔋 Enter the desired amount of extra volume (in gigabytes):
 
 📌 Price per GB: %s Dollar',
@@ -1040,6 +1048,7 @@ Support account : @%s',
                 ],
                 'page' => [
                         'next' => 'Next',
+                        'nextPageBtn' => 'Next page',
                         'notusernameme' => '🔎 My username is not in the list',
                         'previous' => 'Previous',
                 ],
@@ -1171,6 +1180,11 @@ To use the default name, press the green button; to cancel and go back to the pl
                         'active' => '✅ Active',
                         'activedconfig' => '✅ Your service has been successfully activated',
                         'backinfo' => '↪️ Back',
+                        'backToPreviousMenuBtn' => '🔙 Back to previous menu',
+                        'acceptRequests' => '✅ Registered successfully',
+                        'invalidUsername' => '❌ Invalid username.
+🔄 Please send your username again',
+                        'requestadmin' => '📌 The request to reject the removal was registered. Send the reason it was not approved',
                         'backlist' => '🏠 Back to service list',
                         'backservice' => '🏠 Back to service details',
                         'config' => '🔰 Get config',

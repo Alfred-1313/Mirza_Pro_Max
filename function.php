@@ -10241,7 +10241,9 @@ if (!function_exists('genbtn_alias_to_key')) {
         if ($key !== null && function_exists('bt_btnitem_keys') && in_array($key, bt_btnitem_keys(), true)) {
             return true;
         }
-        $extras = ['ab' => [0], 'ut' => [0], 'bc' => [0], 'ns' => [0], 'te' => [0], 'sc' => [0], 'hb' => [0], 'hv' => [0], 'td' => [0, 1], 'su' => [1]];
+        // sc: close, quick search and back can go; next/previous stay - without
+        // them the services past page one could not be reached at all
+        $extras = ['ab' => [0], 'ut' => [0], 'bc' => [0], 'ns' => [0], 'te' => [0], 'sc' => [0, 2, 5], 'hb' => [0], 'hv' => [0], 'td' => [0, 1], 'su' => [1]];
         return in_array((int) $idx, $extras[$alias] ?? [], true);
     }
 }
@@ -10285,8 +10287,16 @@ if (!function_exists('genbtn_defs')) {
             ];
         }
         if ($alias === 'sc') {
+            // 1-5: the paging row that appears once a customer has more services
+            // than one page holds - page 1 carries only «صفحه بعد», later pages
+            // carry search / next / previous / back
             return [
                 0 => ['name' => '🔴 دکمه بستن', 'text' => $textbotlang['bottext']['btn_close'], 'style' => 'danger', 'callback_data' => 'servclose'],
+                1 => ['name' => '🟢 دکمه صفحه بعد (صفحه اول)', 'text' => $textbotlang['users']['page']['nextPageBtn'], 'style' => 'success', 'callback_data' => 'next_page'],
+                2 => ['name' => '🟢 دکمه جستجو سریع', 'text' => $textbotlang['users']['search']['title'], 'style' => 'success', 'callback_data' => 'searchservice'],
+                3 => ['name' => '🟢 دکمه بعدی', 'text' => $textbotlang['users']['page']['next'], 'style' => 'success', 'callback_data' => 'next_page'],
+                4 => ['name' => '🟢 دکمه قبلی', 'text' => $textbotlang['users']['page']['previous'], 'style' => 'success', 'callback_data' => 'previous_page'],
+                5 => ['name' => '🟢 دکمه بازگشت به منوی اصلی', 'text' => $textbotlang['keyboard']['backToMainMenu'], 'style' => 'success', 'callback_data' => 'backuser'],
             ];
         }
         if ($alias === 'td') {
@@ -10555,6 +10565,17 @@ if (!function_exists('myservices_close_btn')) {
         $defs = genbtn_defs('sc', $textbotlang);
         $ov = genbtn_override($lang, 'users.sell.service_sell', 0);
         return genbtn_render($defs[0], $ov, $defs[0]['callback_data']);
+    }
+    // One of 🛍 سرویس‌های من's paging buttons (genbtn 'sc' 1-5) as this tab's
+    // admin set it up, or null when it is hidden there.
+    function myservices_page_btn($lang, $textbotlang, $idx)
+    {
+        $defs = genbtn_defs('sc', $textbotlang);
+        $ov = genbtn_override($lang, 'users.sell.service_sell', $idx);
+        if (genbtn_is_hidden($defs[$idx], $ov)) {
+            return null;
+        }
+        return genbtn_render($defs[$idx], $ov, $defs[$idx]['callback_data']);
     }
 }
 if (!function_exists('afterpay_help_kb')) {

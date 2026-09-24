@@ -645,9 +645,9 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         $keyboardlists['inline_keyboard'][] = [['text' => $textbotlang['users']['page']['notusernameme'], 'callback_data' => 'notusernameme']];
     }
     if ($ms_rowCount >= $items_per_page) {
-        $keyboardlists['inline_keyboard'][] = [
-            ['text' => $textbotlang['users']['page']['nextPageBtn'], 'callback_data' => 'next_page'],
-        ];
+        // customizable per language (genbtn 'sc' 1), and never hidden - it is
+        // the only way past page one
+        $keyboardlists['inline_keyboard'][] = [myservices_page_btn($user['lang'] ?? 'fa', $textbotlang, 1)];
     }
     if (!bt_button_hidden($user['lang'] ?? 'fa', 'users.sell.service_sell')) {
         $keyboardlists['inline_keyboard'][] = [myservices_close_btn($user['lang'] ?? 'fa', $textbotlang)];
@@ -845,28 +845,26 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             ];
         }
     }
+    // the paging rows, as this language's admin set them up in 🎨
+    // شخصی‌سازی -> 🛍 سرویس‌های من (genbtn 'sc' 2-5); next/previous can not
+    // be hidden, search and back can
+    $ms_lang = $user['lang'] ?? 'fa';
+    $ms_search = myservices_page_btn($ms_lang, $textbotlang, 2);
     $pagination_buttons = [
-        [
-            'text' => $textbotlang['users']['page']['next'],
-            'callback_data' => 'next_page'
-        ],
-        [
-            'text' => $textbotlang['users']['page']['previous'],
-            'callback_data' => 'previous_page'
-        ]
+        myservices_page_btn($ms_lang, $textbotlang, 3),
+        myservices_page_btn($ms_lang, $textbotlang, 4),
     ];
-    $backuser = [
-        [
-            'text' => $textbotlang['keyboard']['backToMainMenu'],
-            'callback_data' => 'backuser'
-        ]
-    ];
-    $keyboardlists['inline_keyboard'][] = [['text' => $textbotlang['users']['search']['title'], 'callback_data' => 'searchservice']];
+    $ms_back = myservices_page_btn($ms_lang, $textbotlang, 5);
+    if ($ms_search !== null) {
+        $keyboardlists['inline_keyboard'][] = [$ms_search];
+    }
     if (feature_value('NotUser', $user['lang'] ?? 'fa', $setting['NotUser']) == "onnotuser") {
         $keyboardlists['inline_keyboard'][] = [['text' => $textbotlang['users']['page']['notusernameme'], 'callback_data' => 'notusernameme']];
     }
     $keyboardlists['inline_keyboard'][] = $pagination_buttons;
-    $keyboardlists['inline_keyboard'][] = $backuser;
+    if ($ms_back !== null) {
+        $keyboardlists['inline_keyboard'][] = [$ms_back];
+    }
     $keyboard_json = json_encode($keyboardlists);
     update("user", "pagenumber", $next_page, "id", $from_id);
     // 🛍 سرویس‌های من might have JUST fired its own sticker on this exact tap -
@@ -938,28 +936,26 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             ];
         }
     }
+    // the paging rows, as this language's admin set them up in 🎨
+    // شخصی‌سازی -> 🛍 سرویس‌های من (genbtn 'sc' 2-5); next/previous can not
+    // be hidden, search and back can
+    $ms_lang = $user['lang'] ?? 'fa';
+    $ms_search = myservices_page_btn($ms_lang, $textbotlang, 2);
     $pagination_buttons = [
-        [
-            'text' => $textbotlang['users']['page']['next'],
-            'callback_data' => 'next_page'
-        ],
-        [
-            'text' => $textbotlang['users']['page']['previous'],
-            'callback_data' => 'previous_page'
-        ]
+        myservices_page_btn($ms_lang, $textbotlang, 3),
+        myservices_page_btn($ms_lang, $textbotlang, 4),
     ];
-    $backuser = [
-        [
-            'text' => $textbotlang['keyboard']['backToMainMenu'],
-            'callback_data' => 'backuser'
-        ]
-    ];
-    $keyboardlists['inline_keyboard'][] = [['text' => $textbotlang['users']['search']['title'], 'callback_data' => 'searchservice']];
+    $ms_back = myservices_page_btn($ms_lang, $textbotlang, 5);
+    if ($ms_search !== null) {
+        $keyboardlists['inline_keyboard'][] = [$ms_search];
+    }
     if (feature_value('NotUser', $user['lang'] ?? 'fa', $setting['NotUser']) == "onnotuser") {
         $keyboardlists['inline_keyboard'][] = [['text' => $textbotlang['users']['page']['notusernameme'], 'callback_data' => 'notusernameme']];
     }
     $keyboardlists['inline_keyboard'][] = $pagination_buttons;
-    $keyboardlists['inline_keyboard'][] = $backuser;
+    if ($ms_back !== null) {
+        $keyboardlists['inline_keyboard'][] = [$ms_back];
+    }
     $keyboard_json = json_encode($keyboardlists);
     update("user", "pagenumber", $previous_page, "id", $from_id);
     // 🛍 سرویس‌های من might have JUST fired its own sticker on this exact tap -
@@ -1573,7 +1569,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $linksubBack = json_encode([
         'inline_keyboard' => [
             [
-                ['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "productcheckdata", 'style' => 'danger'],
+                ['text' => $textbotlang['users']['status']['backToPreviousMenuBtn'], 'callback_data' => "productcheckdata", 'style' => 'danger'],
             ]
         ]
     ]);
@@ -3346,7 +3342,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $bakinfos = json_encode([
         'inline_keyboard' => [
             [
-                ['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "product_" . $nameloc['id_invoice'], 'style' => 'danger'],
+                ['text' => $textbotlang['users']['status']['backToPreviousMenuBtn'], 'callback_data' => "product_" . $nameloc['id_invoice'], 'style' => 'danger'],
             ]
         ]
     ]);

@@ -2208,7 +2208,7 @@ function keyboard_config($config_split, $id_invoice, $back_active = true, $kind 
         // the buy path got its own red "بازگشت به منوی قبل" per admin request -
         // usertest's back button is untouched, still the shared "↪️ بازگشت"
         if ($kind === 'buy') {
-            $keyboard_config['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "product_$id_invoice", 'style' => 'danger']];
+            $keyboard_config['inline_keyboard'][] = [['text' => $textbotlang['users']['status']['backToPreviousMenuBtn'], 'callback_data' => "product_$id_invoice", 'style' => 'danger']];
         } else {
             $keyboard_config['inline_keyboard'][] = [['text' => $textbotlang['users']['status']['backinfo'], 'callback_data' => "product_$id_invoice"]];
         }
