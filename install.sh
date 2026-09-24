@@ -3244,7 +3244,13 @@ $db     = getenv('MIRZA_DB') ?: '';
 $backup = getenv('MIRZA_BACKUP') ?: '';
 $esc = function ($v) { return htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8'); };
 
-$lines = ["✅ <b>ربات آپدیت شد</b>", ""];
+$lines = ["✅ <b>ربات آپدیت شد</b>"];
+// which bot: with two on one server the same admin may hear from both
+$who = ltrim(trim((string) ($usernamebot ?? '')), '@');
+if ($who !== '') {
+    $lines[] = "<blockquote>🤖 @" . $esc($who) . "</blockquote>";
+}
+$lines[] = "";
 if ($domain !== '') {
     $lines[] = "دامنه: <code>" . $esc($domain) . "</code>";
 }

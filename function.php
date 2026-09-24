@@ -3096,10 +3096,32 @@ if (!function_exists('bot_update_request_path')) {
         $v = is_array($t) ? (string) ($t[$key] ?? '') : '';
         return $v !== '' ? $v : $fa;
     }
+    // Which bot these screens belong to - "🤖 @username", or '' when config.php
+    // has none. On a server with two bots the admin may run both; each one only
+    // ever updates itself (the request lands in its own directory), so this is
+    // there to say which one, never to choose.
+    function bot_update_who()
+    {
+        global $usernamebot;
+        $u = ltrim(trim((string) $usernamebot), '@');
+        return $u === '' ? '' : '🤖 @' . htmlspecialchars($u, ENT_QUOTES);
+    }
+    // A screen's title quote, with the bot named on its second line
+    function bot_update_title_quote($title)
+    {
+        $who = bot_update_who();
+        return "<blockquote><b>" . $title . "</b>" . ($who !== '' ? "\n" . $who : '') . "</blockquote>";
+    }
+    // A progress/finish heading, with the bot named in a quote under it
+    function bot_update_head_who($head)
+    {
+        $who = bot_update_who();
+        return $head . ($who !== '' ? "\n<blockquote>" . $who . "</blockquote>" : '');
+    }
     function bot_update_backups_caption($lang = 'fa', $textbotlang = null)
     {
         $list = bot_update_backups();
-        $out = "<blockquote><b>" . bot_update_text($textbotlang, 'rollbackTitle', '♻️ بازگشت به نسخه قبلی') . "</b></blockquote>\n\n";
+        $out = bot_update_title_quote(bot_update_text($textbotlang, 'rollbackTitle', '♻️ بازگشت به نسخه قبلی')) . "\n\n";
         if (empty($list)) {
             return $out . bot_update_text(
                 $textbotlang,
@@ -3152,8 +3174,8 @@ if (!function_exists('bot_update_request_path')) {
                 $at = (int) ($b['at'] ?? 0);
             }
         }
-        $out = "<blockquote><b>" . bot_update_text($textbotlang, 'confirmTitle', '♻️ برگشت به نسخه') . ' '
-            . htmlspecialchars($ver, ENT_QUOTES) . "</b></blockquote>\n\n";
+        $out = bot_update_title_quote(bot_update_text($textbotlang, 'confirmTitle', '♻️ برگشت به نسخه') . ' '
+            . htmlspecialchars($ver, ENT_QUOTES)) . "\n\n";
         $out .= strtr(bot_update_text($textbotlang, 'confirmBody', 'ربات به حالت <b>{when}</b> برمی‌گردد.'), [
             '{when}' => bot_update_when($at, $lang),
         ]) . "\n\n";
@@ -3201,7 +3223,7 @@ if (!function_exists('bot_update_request_path')) {
         $ver = trim((string) @file_get_contents(__DIR__ . '/version'));
         $st = bot_update_status();
         $state = (string) ($st['state'] ?? '');
-        $out = "<blockquote><b>" . bot_update_text($textbotlang, 'title', '🔄 آپدیت ربات') . "</b></blockquote>\n\n";
+        $out = bot_update_title_quote(bot_update_text($textbotlang, 'title', '🔄 آپدیت ربات')) . "\n\n";
         $out .= bot_update_text($textbotlang, 'currentVersion', 'نسخه فعلی') . ": <b>"
             . htmlspecialchars($ver === '' ? '—' : $ver, ENT_QUOTES) . "</b>\n";
         // one moment in time, written in the reader's own calendar
@@ -3257,12 +3279,12 @@ if (!function_exists('bot_update_request_path')) {
     function bot_update_ctx_write($from_id, $message_id, $lang, $textbotlang, $kind)
     {
         $bar = bot_update_text($textbotlang, 'barLine', '{bar}  <b>{percent}٪</b>');
-        $head = $kind === 'rollback'
+        $head = bot_update_head_who($kind === 'rollback'
             ? bot_update_text($textbotlang, 'progressRollback', '♻️ <b>در حال بازگشت به نسخه قبلی…</b>')
-            : bot_update_text($textbotlang, 'progressUpdate', '🔄 <b>در حال به‌روزرسانی ربات…</b>');
-        $done = $kind === 'rollback'
+            : bot_update_text($textbotlang, 'progressUpdate', '🔄 <b>در حال به‌روزرسانی ربات…</b>'));
+        $done = bot_update_head_who($kind === 'rollback'
             ? bot_update_text($textbotlang, 'doneRollback', '✅ <b>ربات به نسخه قبلی برگشت.</b>')
-            : bot_update_text($textbotlang, 'doneUpdate', '✅ <b>ربات به‌روزرسانی شد.</b>');
+            : bot_update_text($textbotlang, 'doneUpdate', '✅ <b>ربات به‌روزرسانی شد.</b>'));
         $ctx = [
             'chat_id' => (int) $from_id,
             'message_id' => (int) $message_id,
@@ -3285,7 +3307,7 @@ if (!function_exists('bot_update_request_path')) {
                     'doneBackup',
                     "<blockquote>📦 نسخه قبلی نگه داشته شد با نام:\n<code>{backup}</code>\nهر وقت خواستی از «بازگشت به نسخه قبلی» به همان برمی‌گردی.</blockquote>"
                 )),
-            'fail' => bot_update_text($textbotlang, 'failedTitle', '❌ <b>کار ناتمام ماند.</b>') . "\n\n" . bot_update_text(
+            'fail' => bot_update_head_who(bot_update_text($textbotlang, 'failedTitle', '❌ <b>کار ناتمام ماند.</b>')) . "\n\n" . bot_update_text(
                 $textbotlang,
                 'failedNote',
                 '<blockquote>ربات روی همان نسخه قبلی باقی ماند و چیزی از دست نرفت.</blockquote>'
@@ -3298,9 +3320,9 @@ if (!function_exists('bot_update_request_path')) {
     function bot_update_progress_now($textbotlang, $kind, $percent = 0)
     {
         $bar = str_repeat('█', (int) round($percent / 10)) . str_repeat('░', 10 - (int) round($percent / 10));
-        $head = $kind === 'rollback'
+        $head = bot_update_head_who($kind === 'rollback'
             ? bot_update_text($textbotlang, 'progressRollback', '♻️ <b>در حال بازگشت به نسخه قبلی…</b>')
-            : bot_update_text($textbotlang, 'progressUpdate', '🔄 <b>در حال به‌روزرسانی ربات…</b>');
+            : bot_update_text($textbotlang, 'progressUpdate', '🔄 <b>در حال به‌روزرسانی ربات…</b>'));
         $line = strtr(bot_update_text($textbotlang, 'barLine', '{bar}  <b>{percent}٪</b>'), [
             '{bar}' => $bar,
             '{percent}' => (int) $percent,
