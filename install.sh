@@ -3726,64 +3726,131 @@ EOF
 }
 
 
+# Save a bot's database to /root before it is deleted: prints the file and
+# returns 0, or returns 1 when it could not be saved.
+_db_dump_before_remove() {
+    local dbname="$1" rootpass dump
+    rootpass=$(grep '$pass' /root/confmirza/dbrootmirza.txt 2>/dev/null | cut -d"'" -f2)
+    [ -n "$dbname" ] && [ -n "$rootpass" ] || return 1
+    dump="/root/mirza_before_remove_${dbname}_$(date +%Y-%m-%d_%H-%M-%S).sql"
+    if mysqldump -u root -p"$rootpass" --no-tablespaces "$dbname" > "$dump" 2>/dev/null && [ -s "$dump" ]; then
+        echo "$dump"; return 0
+    fi
+    rm -f "$dump"; return 1
+}
+
+# Drop one bot's scheduled jobs: the cronbot/ lines its panel put in
+# www-data's crontab, every one calling https://<its $domainhosts>/cronbot/.
+# Every other line - another bot's, anything an admin added - stays.
+# Returns 1 when there was nothing of this bot's to remove.
+_bot_crons_remove() {
+    local hosts="$1" cur
+    [ -n "$hosts" ] && command -v crontab >/dev/null 2>&1 || return 1
+    cur=$(crontab -u www-data -l 2>/dev/null) || return 1
+    printf '%s\n' "$cur" | grep -qF "://${hosts}/cronbot/" || return 1
+    printf '%s\n' "$cur" | grep -vF "://${hosts}/cronbot/" | crontab -u www-data -
+}
+
 # Remove exactly one bot - its directory, its own database and DB user, its
-# own Apache vhost files, its own SSL certificate - and leave MySQL, Apache
-# itself, phpMyAdmin and every other bot on this server untouched. Used only
-# when more than one bot is registered; a single-bot server keeps the old
-# whole-server removal below.
+# own Apache vhost files, its own SSL certificate, its scheduled jobs and its
+# rollback snapshots - and leave MySQL, Apache itself, phpMyAdmin and every
+# other bot on this server untouched. Used only when more than one bot is
+# registered; a single-bot server keeps the whole-server removal below.
 remove_bot_scoped() {
     local name="$1" dir="$2" domain="$3"
-    echo -e "\e[33mRemoving \"$name\" ($domain) only - other bots on this server are not touched.\033[0m"
-    read -p "Are you sure? (y/n): " choice
-    if [[ ! "$choice" =~ ^[Yy]$ ]]; then
-        echo "Aborting..."
-        return 0
-    fi
-
-    local cfg="$dir/config.php"
-    local dbname dbuser dbhost
+    local cfg="$dir/config.php" dbname="" dbuser="" hosts=""
+    [ "$domain" = "null" ] && domain=""
     if [ -f "$cfg" ]; then
         dbname=$(grep '^\$dbname' "$cfg" | cut -d"'" -f2)
         dbuser=$(grep '^\$usernamedb' "$cfg" | cut -d"'" -f2)
-        dbhost=$(grep '^\$dbhost' "$cfg" | cut -d"'" -f2)
+        hosts=$(grep '^\$domainhosts' "$cfg" | cut -d"'" -f2)
     fi
-    [ -z "$dbhost" ] && dbhost="localhost"
+    [ -z "$hosts" ] && hosts="$domain"
 
-    if [ -n "$dbname" ]; then
-        local ROOT_PASS
-        ROOT_PASS=$(grep '$pass' /root/confmirza/dbrootmirza.txt 2>/dev/null | cut -d"'" -f2)
-        if [ -n "$ROOT_PASS" ]; then
-            mysql -u root -p"$ROOT_PASS" -e "DROP DATABASE IF EXISTS \`$dbname\`;" 2>/dev/null \
-                && echo -e "\e[92mDatabase removed: $dbname\033[0m" \
-                || echo -e "\e[91mCould not drop database $dbname (continuing).\033[0m"
-            if [ -n "$dbuser" ]; then
-                mysql -u root -p"$ROOT_PASS" -e "DROP USER IF EXISTS '$dbuser'@'localhost'; DROP USER IF EXISTS '$dbuser'@'%';" 2>/dev/null
-            fi
-        else
-            echo -e "\e[91mCould not read the MySQL root password - skipping database removal.\033[0m"
-        fi
+    _sec "Remove ${name}"
+    _kv "Domain" "${C_DIM}${domain:--}${CR}"
+    _kv "Directory" "${C_DIM}${dir}${CR}"
+    [ -n "$dbname" ] && _kv "Database" "${C_DIM}${dbname}${CR}"
+    echo ""
+    printf "    ${C_WARN}!${CR} ${C_WARN}Deletes this bot's files, database, certificate, web config,${CR}\n"
+    printf "    ${C_WARN}  scheduled jobs and rollback snapshots.${CR}\n"
+    printf "    ${C_DIM}The other bot(s) on this server are not touched. The database is${CR}\n"
+    printf "    ${C_DIM}saved to /root first.${CR}\n"
+    printf "  ${C_PROMPT}❯${CR} Remove %s? ${C_DIM}[y/N]${CR}: " "$name"
+    local choice; read -r choice
+    if [[ ! "$choice" =~ ^[Yy]$ ]]; then
+        printf "\n    ${C_DIM}Cancelled - nothing was changed.${CR}\n"
+        return 0
     fi
+    echo ""
 
-    if [ -n "$domain" ] && [ "$domain" != "null" ]; then
+    # 1. Offline first: no webhook and no scheduled job may touch the
+    #    database while it is being saved and dropped.
+    if [ -n "$domain" ]; then
         a2dissite "${domain}.conf" >/dev/null 2>&1
         a2dissite "${domain}-ssl.conf" >/dev/null 2>&1
         a2dissite "${domain}-pma.conf" >/dev/null 2>&1
         rm -f "/etc/apache2/sites-available/${domain}.conf" "/etc/apache2/sites-available/${domain}-ssl.conf" "/etc/apache2/sites-available/${domain}-pma.conf"
         rm -f "/etc/apache2/sites-enabled/${domain}.conf" "/etc/apache2/sites-enabled/${domain}-ssl.conf" "/etc/apache2/sites-enabled/${domain}-pma.conf"
         systemctl reload apache2 >/dev/null 2>&1
-        command -v certbot >/dev/null 2>&1 && certbot delete --cert-name "$domain" --non-interactive >/dev/null 2>&1
-        echo -e "\e[92mVirtual host and certificate for $domain removed.\033[0m"
+        printf "    ${C_OK}✔${CR} ${C_DIM}Web config for %s removed${CR}\n" "$domain"
+    fi
+    _bot_crons_remove "$hosts" && printf "    ${C_OK}✔${CR} ${C_DIM}Scheduled jobs removed${CR}\n"
+
+    # 2. The database: saved, then dropped
+    if [ -n "$dbname" ]; then
+        local dump
+        if dump=$(_db_dump_before_remove "$dbname"); then
+            printf "    ${C_OK}✔${CR} ${C_DIM}Database saved to %s${CR}\n" "$dump"
+        else
+            printf "    ${C_WARN}!${CR} ${C_WARN}Could not save the database %s first.${CR}\n" "$dbname"
+            printf "  ${C_PROMPT}❯${CR} Delete it anyway? ${C_DIM}[y/N]${CR}: "
+            local anyway; read -r anyway
+            if [[ ! "$anyway" =~ ^[Yy]$ ]]; then
+                printf "    ${C_DIM}Database %s kept.${CR}\n" "$dbname"
+                dbname=""
+            fi
+        fi
+    fi
+    if [ -n "$dbname" ]; then
+        local ROOT_PASS
+        ROOT_PASS=$(grep '$pass' /root/confmirza/dbrootmirza.txt 2>/dev/null | cut -d"'" -f2)
+        if [ -n "$ROOT_PASS" ]; then
+            if mysql -u root -p"$ROOT_PASS" -e "DROP DATABASE IF EXISTS \`$dbname\`;" 2>/dev/null; then
+                printf "    ${C_OK}✔${CR} ${C_DIM}Database %s removed${CR}\n" "$dbname"
+            else
+                printf "    ${C_BAD}●${CR} ${C_BAD}Could not drop database %s (continuing).${CR}\n" "$dbname"
+            fi
+            if [ -n "$dbuser" ]; then
+                mysql -u root -p"$ROOT_PASS" -e "DROP USER IF EXISTS '$dbuser'@'localhost'; DROP USER IF EXISTS '$dbuser'@'%';" 2>/dev/null
+            fi
+        else
+            printf "    ${C_BAD}●${CR} ${C_BAD}Could not read the MySQL root password - database left in place.${CR}\n"
+        fi
     fi
 
+    # 3. Certificate, files, and the snapshots - a bot installed into this
+    #    same directory later must never be offered this one's (restoring one
+    #    would bring back its config.php, token and all)
+    if [ -n "$domain" ] && command -v certbot >/dev/null 2>&1; then
+        certbot delete --cert-name "$domain" --non-interactive >/dev/null 2>&1 \
+            && printf "    ${C_OK}✔${CR} ${C_DIM}SSL certificate removed${CR}\n"
+    fi
+    MIRZA_SNAPSHOTS_KEEP=0 _snapshots_prune "$dir"
+    printf "    ${C_OK}✔${CR} ${C_DIM}Rollback snapshots removed${CR}\n"
     if [ -d "$dir" ]; then
-        rm -rf "$dir" && echo -e "\e[92mBot directory removed: $dir\033[0m" \
-            || echo -e "\e[91mFailed to remove $dir.\033[0m"
+        if rm -rf "$dir"; then
+            printf "    ${C_OK}✔${CR} ${C_DIM}Bot directory removed: %s${CR}\n" "$dir"
+        else
+            printf "    ${C_BAD}●${CR} ${C_BAD}Failed to remove %s.${CR}\n" "$dir"
+        fi
     fi
 
     bots_registry_remove_by_dir "$dir"
     # Its phpMyAdmin port may now be unused: drop that Listen
     pma_sync_all
-    echo -e "\e[92m\"$name\" has been removed.\033[0m"
+    echo ""
+    printf "    ${C_OK}✔${CR} ${C_OK}%s has been removed.${CR}\n" "$name"
 }
 function remove_bot() {
     bots_registry_ensure
@@ -3791,9 +3858,9 @@ function remove_bot() {
     if [ -n "$_bot_count" ] && [ "$_bot_count" -gt 1 ]; then
         clear 2>/dev/null || true
         banner
-        if pick_bot_instance "remove"; then
-            remove_bot_scoped "$PICKED_NAME" "$PICKED_DIR" "$PICKED_DOMAIN"
-        fi
+        # [0] in the bot list goes straight back
+        pick_bot_instance "remove" || { show_menu; return 0; }
+        remove_bot_scoped "$PICKED_NAME" "$PICKED_DIR" "$PICKED_DOMAIN"
         echo ""
         printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "
         read -r _
@@ -3804,20 +3871,51 @@ function remove_bot() {
     echo -e "\e[33mStarting Mirza Bot removal process...\033[0m"
     LOG_FILE="/var/log/remove_bot.log"
     echo "Log file: $LOG_FILE" > "$LOG_FILE"
+    # The last bot left is not always in the default directory: remove the
+    # first of two bots and the second one is all that remains.
     BOT_DIR="/var/www/html/mirzaprobotconfig"
-    if [ ! -d "$BOT_DIR" ]; then
-        echo -e "\e[31m[ERROR]\033[0m Mirza Bot is not installed (/var/www/html/mirzaprobotconfig not found)." | tee -a "$LOG_FILE"
-        echo -e "\e[33mNothing to remove. Exiting...\033[0m" | tee -a "$LOG_FILE"
+    [ "$_bot_count" = "1" ] && BOT_DIR=$(jq -r '.[0].dir' "$BOTS_REGISTRY" 2>/dev/null)
+    if [ -z "$BOT_DIR" ] || [ ! -d "$BOT_DIR" ]; then
+        echo -e "\e[31m[ERROR]\033[0m Mirza Bot is not installed (${BOT_DIR:-/var/www/html/mirzaprobotconfig} not found)." | tee -a "$LOG_FILE"
+        echo -e "\e[33mNothing to remove.\033[0m" | tee -a "$LOG_FILE"
         sleep 2
-        exit 1
+        show_menu
+        return 1
     fi
     read -p "Are you sure you want to remove Mirza Bot and its dependencies? (y/n): " choice
     if [[ ! "$choice" =~ ^[Yy]$ ]]; then
         echo "Aborting..." | tee -a "$LOG_FILE"
-        exit 0
+        sleep 1
+        show_menu
+        return 0
     fi
     echo "Removing Mirza Bot..." | tee -a "$LOG_FILE"
-    CONFIG_PATH="/var/www/html/mirzaprobotconfig/config.php"
+    CONFIG_PATH="$BOT_DIR/config.php"
+    # Before anything goes: a copy of the database (MySQL itself is purged
+    # below), and what this bot has outside its directory - its scheduled
+    # jobs, its rollback snapshots, and the update watcher (no bot is left
+    # for it to watch).
+    local _db _hosts _dump
+    _db=$(grep '^\$dbname' "$CONFIG_PATH" 2>/dev/null | cut -d"'" -f2)
+    _hosts=$(grep '^\$domainhosts' "$CONFIG_PATH" 2>/dev/null | cut -d"'" -f2)
+    if [ -n "$_db" ]; then
+        if _dump=$(_db_dump_before_remove "$_db"); then
+            echo -e "\e[92mDatabase saved to $_dump\033[0m" | tee -a "$LOG_FILE"
+        else
+            echo -e "\e[93mCould not save the database $_db first.\033[0m" | tee -a "$LOG_FILE"
+            read -p "Remove everything anyway? (y/n): " choice
+            if [[ ! "$choice" =~ ^[Yy]$ ]]; then
+                echo "Aborting..." | tee -a "$LOG_FILE"
+                sleep 1
+                show_menu
+                return 0
+            fi
+        fi
+    fi
+    _bot_crons_remove "$_hosts" && echo -e "\e[92mScheduled jobs removed.\033[0m" | tee -a "$LOG_FILE"
+    MIRZA_SNAPSHOTS_KEEP=0 _snapshots_prune "$BOT_DIR"
+    rmdir "$MIRZA_BACKUP_DIR" 2>/dev/null
+    ( crontab -l 2>/dev/null | grep -vF "mirza selfupdate-watch" ) | crontab - 2>/dev/null
     if [ -f "$CONFIG_PATH" ]; then
         sudo shred -u -n 5 "$CONFIG_PATH" && echo -e "\e[92mConfig file securely removed: $CONFIG_PATH\033[0m" | tee -a "$LOG_FILE" || {
             echo -e "\e[91mFailed to securely remove config file: $CONFIG_PATH\033[0m" | tee -a "$LOG_FILE"
@@ -3878,6 +3976,7 @@ function remove_bot() {
     # Clear Mirza install state so a fresh install is allowed afterwards
     sudo rm -rf /root/confmirza
     echo -e "\e[92mMirza Bot, MySQL, and their dependencies have been completely removed.\033[0m" | tee -a "$LOG_FILE"
+    [ -n "$_dump" ] && echo -e "\e[92mThe bot's database is kept in $_dump\033[0m" | tee -a "$LOG_FILE"
 }
 
 function migrate_to_pro() {
