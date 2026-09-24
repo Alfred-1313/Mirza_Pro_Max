@@ -962,25 +962,38 @@ resources_section() {
 # single bot (or a server whose registry does not exist yet) gets the one
 # "Bot" block it always had. Read-only: never installs jq from here.
 bots_dashboard() {
-    local rows="" count dir name i=1
+    local rows="" count dir name stopped i=1
     if [ -f "$BOTS_REGISTRY" ] && command -v jq >/dev/null 2>&1; then
-        rows=$(jq -r '.[] | "\(.dir)\t\(.name)"' "$BOTS_REGISTRY" 2>/dev/null)
+        rows=$(jq -r '.[] | "\(.dir)\t\(.name)\t\(.stopped // false)"' "$BOTS_REGISTRY" 2>/dev/null)
     fi
     count=$(printf '%s\n' "$rows" | grep -c .)
     if [ "$count" -lt 2 ]; then
-        dir="$BOT_DIR_DEFAULT"
-        [ "$count" = "1" ] && dir=$(printf '%s' "$rows" | cut -f1)
-        version_section "$dir"
-        bot_section "$dir"
-        webhook_section "$dir"
+        dir="$BOT_DIR_DEFAULT"; stopped="false"
+        if [ "$count" = "1" ]; then
+            dir=$(printf '%s' "$rows" | cut -f1)
+            stopped=$(printf '%s' "$rows" | cut -f3)
+        fi
+        _bot_dashboard_block "$dir" "Bot" "$stopped"
         return
     fi
-    while IFS=$'\t' read -r dir name; do
-        version_section "$dir" "Bot $i · $name"
-        bot_section "$dir"
-        webhook_section "$dir"
+    while IFS=$'\t' read -r dir name stopped; do
+        _bot_dashboard_block "$dir" "Bot $i · $name" "$stopped"
         i=$((i + 1))
     done <<< "$rows"
+}
+# A stopped bot's webhook belongs to wherever it runs now, so asking Telegram
+# about it here would only describe the other server.
+_bot_dashboard_block() {
+    local dir="$1" title="$2" stopped="$3"
+    if [ "$stopped" = "true" ]; then
+        version_section "$dir" "$title · ⏸ stopped"
+        bot_section "$dir"
+        _kv "Webhook" "$(_dot none) ${C_DIM}stopped on this server · option 11 starts it again${CR}"
+        return
+    fi
+    version_section "$dir" "$title"
+    bot_section "$dir"
+    webhook_section "$dir"
 }
 
 function show_logo() {
@@ -1462,10 +1475,11 @@ function show_menu() {
     _mi "8" "Help"      "commands and flags for scripts"
     _mi "9" "Database"  "password, login info, phpMyAdmin port"
     _mi "10" "Transfer"  "move a bot to another server"
+    _mi "11" "Start/Stop" "pause a bot here, or bring it back"
     _mi "0" "Exit"      ""
     _rule
     echo ""
-    printf  "  ${C_PROMPT}❯${CR} Choose ${C_DIM}[0-10]${CR}: "
+    printf  "  ${C_PROMPT}❯${CR} Choose ${C_DIM}[0-11]${CR}: "
     read -r option
     case $option in
         1) install_bot ;;
@@ -1478,6 +1492,7 @@ function show_menu() {
         8) show_help_screen ;;
         9) database_menu ;;
         10) transfer_bot ;;
+        11) startstop_menu ;;
         0) echo -e "\n${C_OK}Bye.${CR}"; exit 0 ;;
         *) echo -e "\n${C_BAD}Not an option. Try again.${CR}"; sleep 1; show_menu ;;
     esac
@@ -1752,10 +1767,11 @@ pick_bot_instance() {
     fi
     _sec "Which bot do you want to $action?"
     local i=1
-    while IFS=$'\t' read -r name domain; do
-        printf "    ${C_KEY}[%d]${CR} ${C_TXT}%s${CR}  ${C_DIM}%s${CR}\n" "$i" "$name" "$domain"
+    while IFS=$'\t' read -r name domain stopped; do
+        printf "    ${C_KEY}[%d]${CR} ${C_TXT}%s${CR}  ${C_DIM}%s%s${CR}\n" "$i" "$name" "$domain" \
+            "$([ "$stopped" = "true" ] && echo " · ⏸ stopped")"
         i=$((i + 1))
-    done < <(jq -r '.[] | "\(.name)\t\(.domain)"' "$BOTS_REGISTRY")
+    done < <(jq -r '.[] | "\(.name)\t\(.domain)\t\(.stopped // false)"' "$BOTS_REGISTRY")
     printf "    ${C_KEY}[0]${CR} ${C_TXT}Back to menu${CR}\n"
     echo ""
     printf "  ${C_PROMPT}❯${CR} Choose ${C_DIM}[0-%d]${CR}: " "$((count))"
@@ -1786,6 +1802,18 @@ bots_registry_pma_port() {
     local p
     p=$(jq -r --arg d "$1" '.[] | select(.dir==$d) | .pma_port // empty' "$BOTS_REGISTRY" 2>/dev/null | head -1)
     echo "${p:-443}"
+}
+
+# A bot stopped on this server (option 11, or after a transfer): its sites
+# are switched off and its jobs removed, but its files, database and
+# certificate stay, so it can be started again.
+bots_registry_set_stopped() {
+    local tmp; tmp=$(mktemp)
+    jq --arg d "$1" --arg s "$2" 'map(if .dir==$d then (if $s == "true" then .stopped=true else del(.stopped) end) else . end)' \
+        "$BOTS_REGISTRY" > "$tmp" && mv "$tmp" "$BOTS_REGISTRY"
+}
+bots_registry_is_stopped() {
+    [ "$(jq -r --arg d "$1" '.[] | select(.dir==$d) | .stopped // false' "$BOTS_REGISTRY" 2>/dev/null | head -1)" = "true" ]
 }
 
 bots_registry_set_pma_port() {
@@ -1852,7 +1880,8 @@ _pma_restore() {
 pma_sync_all() {
     bots_registry_ensure
     local sa="/etc/apache2/sites-available" rows domain port ports="" f p
-    rows=$(jq -r '.[] | select(.domain != null and .domain != "" and .domain != "null") | "\(.domain) \(.pma_port // 443)"' "$BOTS_REGISTRY" 2>/dev/null)
+    # a stopped bot's sites stay switched off - including its phpMyAdmin port
+    rows=$(jq -r '.[] | select(.domain != null and .domain != "" and .domain != "null" and (.stopped // false) != true) | "\(.domain) \(.pma_port // 443)"' "$BOTS_REGISTRY" 2>/dev/null)
     # Nothing ever moved: leave Apache exactly as the installer wrote it
     if [ -z "$(printf '%s\n' "$rows" | awk '$2 != "" && $2 != 443')" ] \
         && [ ! -f "$PMA_PORTS_CONF" ] && ! ls "$sa"/*-pma.conf >/dev/null 2>&1; then
@@ -4455,6 +4484,23 @@ chown -R www-data:www-data "$BOT"
 ( cd "$BOT" && php table.php >/dev/null 2>&1 ) || echo "TABLE_WARN=1"
 chown -R www-data:www-data "$BOT"
 systemctl reload apache2 >/dev/null 2>&1
+# its scheduled jobs (payment checks, notices...) - registered the way its
+# admin panel does, as www-data, instead of waiting for the admin to open it
+cat > /tmp/mirza_cron_setup.php <<PHPEOF
+<?php
+chdir('$BOT');
+require 'config.php';
+require 'botapi.php';
+require 'panels.php';
+require 'function.php';
+require 'jdf.php';
+require 'vendor/autoload.php';
+if (!function_exists('activecron')) { exit(3); }
+activecron();
+PHPEOF
+chmod 644 /tmp/mirza_cron_setup.php
+if ( cd "$BOT" && runuser -u www-data -- php /tmp/mirza_cron_setup.php ) >/dev/null 2>&1; then echo "CRONS=1"; fi
+rm -f /tmp/mirza_cron_setup.php
 echo "RESULT=OK"
 EOF
 }
@@ -4695,17 +4741,177 @@ EOF
     else
         _kv "Webhook" "$(_dot warn) ${C_WARN}not confirmed${CR} ${C_DIM}· run option 2 (Update) on the new server${CR}"
     fi
+    if printf '%s\n' "$res" | grep -qx 'CRONS=1'; then
+        _kv "Jobs" "$(_dot ok) ${C_OK}registered on the new server${CR}"
+    else
+        _kv "Jobs" "$(_dot warn) ${C_WARN}not registered${CR} ${C_DIM}· open the bot's admin panel once${CR}"
+    fi
     _kv "Here" "${C_DIM}scheduled jobs stopped; files and database left as they were${CR}"
     echo ""
 
-    # 10) Keep it here or not - default: keep
-    printf "  ${C_PROMPT}❯${CR} Remove %s from THIS server now? ${C_DIM}[y/N]${CR}: " "$name"
-    local rm_here; read -r rm_here
-    if [[ "$rm_here" =~ ^[Yy]$ ]]; then
-        echo ""
+    # 10) This server's copy: stopped by default - if the new server does not
+    #     work out, point the domain back and start it with option 11 - or
+    #     deleted for good
+    printf "  ${C_TXT}What should happen to %s on THIS server?${CR}\n" "$name"
+    _mi "1" "Stop it"   "keep its files and database - start it again with option 11"
+    _mi "2" "Delete it" "remove its files, database and certificate from this server"
+    printf "  ${C_PROMPT}❯${CR} Choose ${C_DIM}[1-2, Enter = 1]${CR}: "
+    local here_choice; read -r here_choice
+    echo ""
+    if [ "$here_choice" = "2" ]; then
         remove_bot_scoped "$name" "$dir" "$domain" yes
     else
-        printf "\n    ${C_DIM}Kept here. Remove it later with option 3 once the new server is fine.${CR}\n"
+        bot_stop_scoped "$name" "$dir" "$domain"
+    fi
+    echo ""
+    printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "
+    read -r _
+    show_menu
+}
+
+# ── Stop / start a bot on this server ─────────────────────────
+# Stopping switches the bot's sites off and removes its scheduled jobs, and
+# nothing else: files, database and certificate stay. So a transfer can be
+# undone - point the domain back here, start it, and it carries on.
+
+# Registers a bot's scheduled jobs the way its own admin panel does -
+# activecron(), run as www-data, whose crontab they live in. Returns
+# non-zero when the bot's code could not do it.
+_bot_register_crons() {
+    local dir="$1" php_file rc
+    php_file=$(mktemp /tmp/mirza_cron_XXXXXX.php)
+    cat > "$php_file" <<EOF
+<?php
+chdir('$dir');
+require 'config.php';
+require 'botapi.php';
+require 'panels.php';
+require 'function.php';
+require 'jdf.php';
+require 'vendor/autoload.php';
+if (!function_exists('activecron')) { exit(3); }
+activecron();
+EOF
+    chmod 644 "$php_file"
+    ( cd "$dir" && runuser -u www-data -- php "$php_file" ) >/dev/null 2>&1
+    rc=$?
+    rm -f "$php_file"
+    return $rc
+}
+
+# bot_stop_scoped NAME DIR DOMAIN
+bot_stop_scoped() {
+    local name="$1" dir="$2" domain="$3" hosts
+    [ "$domain" = "null" ] && domain=""
+    hosts=$(grep '^\$domainhosts' "$dir/config.php" 2>/dev/null | head -1 | cut -d"'" -f2)
+    [ -z "$hosts" ] && hosts="$domain"
+    # flagged first, so the phpMyAdmin port sync below leaves its sites off
+    bots_registry_set_stopped "$dir" true
+    _bot_crons_remove "$hosts" >/dev/null 2>&1
+    printf "    ${C_OK}✔${CR} ${C_DIM}Scheduled jobs removed${CR}\n"
+    if [ -n "$domain" ]; then
+        a2dissite "${domain}.conf" >/dev/null 2>&1
+        a2dissite "${domain}-ssl.conf" >/dev/null 2>&1
+        a2dissite "${domain}-pma.conf" >/dev/null 2>&1
+        # its phpMyAdmin port may now be unused
+        pma_sync_all >/dev/null 2>&1
+        apache2ctl configtest >/dev/null 2>&1 && systemctl reload apache2 >/dev/null 2>&1
+        printf "    ${C_OK}✔${CR} ${C_DIM}%s switched off on this server${CR}\n" "$domain"
+    fi
+    printf "    ${C_OK}✔${CR} ${C_OK}%s is stopped here - files, database and certificate kept.${CR}\n" "$name"
+    printf "    ${C_DIM}Start it again any time with option 11.${CR}\n"
+}
+
+# bot_start_scoped NAME DIR DOMAIN - returns 2 when the admin backs out
+bot_start_scoped() {
+    local name="$1" dir="$2" domain="$3" token myip resolved k secret hook
+    [ "$domain" = "null" ] && domain=""
+    if [ ! -f "$dir/config.php" ] || [ -z "$domain" ]; then
+        printf "    ${C_BAD}●${CR} ${C_BAD}%s has no config.php or domain here - it cannot be started.${CR}\n" "$name"
+        return 1
+    fi
+    token=$(grep '^\$APIKEY' "$dir/config.php" | head -1 | cut -d"'" -f2)
+    # 1) Only once the domain points here again: until then the other server
+    #    gets the traffic, and with jobs on both, every job would run twice.
+    myip=$(get_server_ip)
+    while :; do
+        resolved=$(getent ahostsv4 "$domain" 2>/dev/null | awk '{print $1; exit}')
+        if [ "$resolved" = "$myip" ]; then
+            printf "    ${C_OK}●${CR} ${C_OK}%s points at this server (%s)${CR}\n" "$domain" "$myip"
+            break
+        fi
+        printf "    ${C_WARN}!${CR} ${C_WARN}%s points at %s, not at this server (%s).${CR}\n" "$domain" "${resolved:-nothing}" "$myip"
+        printf "    ${C_DIM}Change its A record back to %s first (on Cloudflare: DNS only).${CR}\n" "$myip"
+        printf "  ${C_PROMPT}❯${CR} ${C_DIM}Enter = check again, c = start anyway, 0 = back${CR}: "
+        read -r k
+        [ "$k" = "0" ] && return 2
+        [[ "$k" =~ ^[Cc]$ ]] && break
+    done
+    # 2) Its sites back on (and its phpMyAdmin port, if it has its own)
+    bots_registry_set_stopped "$dir" false
+    [ -f "/etc/apache2/sites-available/${domain}.conf" ] && a2ensite "${domain}.conf" >/dev/null 2>&1
+    [ -f "/etc/apache2/sites-available/${domain}-ssl.conf" ] && a2ensite "${domain}-ssl.conf" >/dev/null 2>&1
+    pma_sync_all >/dev/null 2>&1
+    if ! apache2ctl configtest >/dev/null 2>&1; then
+        a2dissite "${domain}.conf" >/dev/null 2>&1
+        a2dissite "${domain}-ssl.conf" >/dev/null 2>&1
+        bots_registry_set_stopped "$dir" true
+        printf "    ${C_BAD}●${CR} ${C_BAD}Apache rejected the bot's sites - it stays stopped.${CR}\n"
+        return 1
+    fi
+    systemctl reload apache2 >/dev/null 2>&1 || systemctl restart apache2 >/dev/null 2>&1
+    printf "    ${C_OK}✔${CR} ${C_DIM}%s answers on this server again${CR}\n" "$domain"
+    # 3) Telegram delivers here again
+    secret=$(openssl rand -base64 10 | tr -dc 'a-zA-Z0-9' | cut -c1-8)
+    hook=$(curl -s --max-time 20 -F "url=https://${domain}/index.php" -F "secret_token=${secret}" \
+        "https://api.telegram.org/bot${token}/setWebhook" 2>/dev/null)
+    if printf '%s' "$hook" | grep -q '"ok":true'; then
+        printf "    ${C_OK}✔${CR} ${C_DIM}Webhook set to https://%s/index.php${CR}\n" "$domain"
+    else
+        printf "    ${C_WARN}!${CR} ${C_WARN}Telegram did not confirm the webhook - run option 2 (Update) once.${CR}\n"
+    fi
+    # 4) and its scheduled jobs run here again
+    if _bot_register_crons "$dir"; then
+        printf "    ${C_OK}✔${CR} ${C_DIM}Scheduled jobs registered${CR}\n"
+    else
+        printf "    ${C_WARN}!${CR} ${C_WARN}Could not register the scheduled jobs - open the bot's admin panel once.${CR}\n"
+    fi
+    printf "    ${C_OK}✔${CR} ${C_OK}%s is running on this server again.${CR}\n" "$name"
+}
+
+# Menu 11
+function startstop_menu() {
+    clear 2>/dev/null || true
+    banner
+    _sec "Start / stop a bot"
+    if ! pick_bot_instance "start or stop"; then
+        [ "$(bots_registry_count)" = "0" ] && sleep 2
+        show_menu; return 0
+    fi
+    local name="$PICKED_NAME" dir="$PICKED_DIR" domain="$PICKED_DOMAIN" k
+    [ "$domain" = "null" ] && domain=""
+    _kv "Bot" "${C_KEY}${name}${CR} ${C_DIM}· ${domain:--}${CR}"
+    if bots_registry_is_stopped "$dir"; then
+        _kv "State" "$(_dot none) ${C_DIM}stopped on this server${CR}"
+        echo ""
+        printf "  ${C_PROMPT}❯${CR} Start it again here? ${C_DIM}[Y/n]${CR}: "
+        read -r k
+        if [[ ! "$k" =~ ^[Nn]$ ]]; then
+            echo ""
+            bot_start_scoped "$name" "$dir" "$domain"
+            [ $? -eq 2 ] && { show_menu; return 0; }
+        fi
+    else
+        _kv "State" "$(_dot ok) ${C_OK}running${CR}"
+        echo ""
+        printf "    ${C_DIM}Stopping switches its site off here and removes its scheduled jobs.${CR}\n"
+        printf "    ${C_DIM}Files, database and certificate stay - start it again any time.${CR}\n"
+        printf "  ${C_PROMPT}❯${CR} Stop it on this server? ${C_DIM}[y/N]${CR}: "
+        read -r k
+        if [[ "$k" =~ ^[Yy]$ ]]; then
+            echo ""
+            bot_stop_scoped "$name" "$dir" "$domain"
+        fi
     fi
     echo ""
     printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "
