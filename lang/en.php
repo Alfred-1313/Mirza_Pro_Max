@@ -1278,22 +1278,57 @@ Product name :%s
 📅 Expiry date :  %s (%s)
 
 %s',
-                        'infoFull' => '📊Service status : %s
-👤 Service name : <code>%s</code>
-%s
-%s
-🌍 Service location :%s
-🗂 Product name :%s
+                        'infoFull' => '<blockquote><b>📡 Subscription QR Code</b></blockquote>
 
-🔋 Traffic : %s
-📥 Consumed volume : %s
-💢 Remaining volume : %s (%s%%)
+👤 <b>User:</b> <code>{username}</code>
+📦 <b>Total volume:</b> {traffic}
+📊 <b>Used volume:</b> {used}
+📅 <b>Expires:</b> {expiration}
+<b>Subscription status:</b> {status}
 
-📅 Expiry date : %s (%s)
+<blockquote><b>📶 Usage chart</b></blockquote>
 
-%s
+{usage_bar}
+{usage_line}
 
-💡 To cut off others\' access, just click the "Change link" option.',
+<blockquote><b>🌐 Usage by location</b></blockquote>
+{location_block}
+
+<blockquote><b>🕐 Last online</b></blockquote>
+
+{online_block}',
+                        'svcUsageReportBtn' => '📊 Usage report',
+                        'svcUnlimited' => 'Unlimited ♾️',
+                        'svcNoExpire' => 'No expiry ♾️',
+                        'svcLocationMore' => '➕ and {n} more locations ({volume})',
+                        'svcUsageOf' => '🎛 {used} used of {total} ({percent}%)',
+                        'svcUsageOfUnlimited' => '🎛 {used} used of {total}',
+                        'svcOnlineBlock' => 'Date → {date}
+Time → {time} ({ago})',
+                        'svcNeverOnline' => 'Not connected yet',
+                        'svcAgoNow' => 'just now',
+                        'svcAgoMinutes' => '{n} minutes ago',
+                        'svcAgoHours' => '{n} hours ago',
+                        'svcAgoDays' => '{n} days ago',
+                        'svcUsageMenuTitle' => '📊 <b>Usage report</b>
+
+Choose one of the options below:',
+                        'svcReportBtnYesterday' => '📅 Yesterday\'s usage',
+                        'svcReportBtn2' => '📅 Usage 2 days ago',
+                        'svcReportBtn10' => '📅 Usage 10 days ago',
+                        'svcReportBtnAll' => '📈 All usage',
+                        'svcBackToInfo' => '🔙 Back to service info',
+                        'svcReportAllTitle' => '📊 Full usage report',
+                        'svcReportSummary' => '🟢 Active days: <b>{days}</b>
+💾 Total usage: <b>{total}</b>',
+                        'svcReportOneDay' => '<blockquote><b>📊 Usage on {date}</b></blockquote>
+
+💾 Total usage: <b>{amount}</b>',
+                        'svcReportEmpty' => '💭 No usage was recorded on {date}.',
+                        'svcReportNothingYet' => '💭 No usage has been recorded for this service yet.',
+                        'svcUsageUnavailable' => '📊 The usage report is not available for this service.
+
+This service\'s panel does not provide it, or is not responding right now. Your total usage is shown above.',
                         'summary' => '
   
  Service status: %s
