@@ -387,6 +387,29 @@ Please use the menu buttons below, or send /start.',
 💸 To top up your balance, enter the amount in Dollar:
 ✅ Minimum amount %s Dollar, maximum amount %s Dollar',
                         'insufficientBalanceSimple' => '❌ Insufficient balance.',
+                        'topupDiscHaveCodeBtn' => '🎁 I have a discount code',
+                        'topupDiscBackBtn' => '🔙 Back to previous menu',
+                        'topupDiscPrompt' => '🎁 Send your discount code:',
+                        'topupDiscInvalid' => '❌ {reason}',
+                        'topupDiscErrNotFound' => 'This code is not valid.',
+                        'topupDiscErrWrongLang' => 'This code is not for your language.',
+                        'topupDiscErrExpired' => 'This code has expired.',
+                        'topupDiscErrExhausted' => 'This code has been used up.',
+                        'topupDiscErrInactive' => 'This code is not active right now.',
+                        'topupDiscErrUsed' => 'You have already used this code.',
+                        'topupDiscActivated' => '✅ Your discount code is active.',
+                        'topupDiscActiveBlock' => '🎟 {title}
+💳 Only for: {gateway}
+🔁 Uses left: {uses}
+⏳ Valid until: {expiry}',
+                        'topupDiscAutoBlock' => '🎯 Automatic discount (no code)
+{lines}
+⏳ Valid until: {expiry}',
+                        'topupDiscAutoLine' => '• {gateway}: {value}
+  🔁 Uses left: {uses}',
+                        'topupDiscUsesLimited' => '{left} of {total}',
+                        'topupDiscUsesUnlimited' => 'unlimited',
+                        'topupDiscExpiryNone' => 'no time limit',
                         'linkpayments' => 'Creating payment link...',
                         'maxpurchasereached' => '❌ You have reached your maximum purchase limit. Please first top up your account, then purchase a new service or renew an existing one',
                         'nowpayments' => '❌ Error 
@@ -4957,5 +4980,20 @@ Payment tracking code : %s',
         'db_defaults' => [
                 'namecardNotSet' => 'Not set',
                 'departmanGeneral' => '☎️ General section',
+        ],
+        'hardcoded' => [
+                'topupDiscPercentCaption' => '🎁 Top up your balance and get {value}% extra!',
+                'topupDiscFixedCaption' => '🎁 Every top-up comes with a {value} gift!',
+                'topupDiscGroupPercentCaption' => '🎁 Top up with {group} and get {value}% extra!',
+                'topupDiscGroupFixedCaption' => '🎁 Top up with {group} and get a {value} gift!',
+                'topupDiscAllPercentCaption' => '🎁 Get {value}% extra on every top-up!',
+                'topupDiscAllFixedCaption' => '🎁 Get a {value} gift with every top-up!',
+                'topupDiscPkgPercent' => '🎁 This top-up comes with a {bonus} gift — that is {value}% more than {amount}!',
+                'topupDiscPkgFixed' => '🎁 This top-up comes with a {bonus} gift!',
+                'topupDiscMinPercentCaption' => '🎁 Top up {min} or more and get {value}% extra!',
+                'topupDiscMinFixedCaption' => '🎁 Top up {min} or more and get {value} extra!',
+                'topupDiscMinPkgPercent' => '🎁 Since you top up {min} or more, you get a {bonus} gift — that is {value}% more!',
+                'topupDiscMinPkgFixed' => '🎁 Since you top up {min} or more, you get a {bonus} gift!',
+                'topupDiscMinSuffix' => '({min} and up)',
         ],
 ];

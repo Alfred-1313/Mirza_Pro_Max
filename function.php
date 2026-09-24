@@ -12186,17 +12186,20 @@ if (!function_exists('topup_disc_method_keyboard')) {
         if (!is_array($kb) || !isset($kb['inline_keyboard'])) {
             return $kbJson;
         }
-        // only offer these rows when the shop actually uses discounts, so a shop
-        // that never configured any sees no clutter
+        // only offer these rows when the shop actually has a code a customer of
+        // this language could use. Codes live in two places - per gateway
+        // (topup_discounts) and per category / every gateway (topup_disc_groups)
+        // - and this used to look only at the first, so a code made for a
+        // category or for all gateways existed with nowhere to enter it.
         $anyCodes = false;
-        foreach (topup_disc_map() as $mLang => $byGw) {
-            if ((string) $mLang !== (string) $lang) {
-                continue;
-            }
-            foreach ((array) $byGw as $bucket) {
-                if (!empty($bucket['codes'])) {
-                    $anyCodes = true;
-                    break 2;
+        $tdm_stores = [topup_disc_map()[$lang] ?? [], topup_disc_group_map()[$lang] ?? []];
+        foreach ($tdm_stores as $byKey) {
+            foreach ((array) $byKey as $bucket) {
+                foreach ((array) ($bucket['codes'] ?? []) as $tdm_c) {
+                    if (is_array($tdm_c) && topup_disc_code_status($tdm_c) === 'active') {
+                        $anyCodes = true;
+                        break 3;
+                    }
                 }
             }
         }
@@ -12455,6 +12458,10 @@ if (!function_exists('topup_disc_gw_list_payload')) {
     // the category screen: the discount for the whole family, then its gateways
     function topup_disc_group_list_payload($lang, $group, $textbotlang)
     {
+        $single = topup_disc_group_is_single($lang, $group, $textbotlang);
+        if ($single !== null) {
+            return topup_disc_hub_payload($lang, $single, $textbotlang);
+        }
         $members = topup_disc_scope_members($group, $lang, $textbotlang);
         $groupLabel = topup_disc_scope_label($group, $textbotlang);
         $isAll = ($group === 'all');
@@ -12466,6 +12473,11 @@ if (!function_exists('topup_disc_gw_list_payload')) {
         if ($isAll) {
             $info .= "هرچی اینجا تنظیم کنی روی <b>هر " . count($members) . " درگاه فعال</b> این زبان اعمال می‌شه.\n";
             $info .= "با روشن کردنش، تخفیف دسته‌ها و تخفیف تک‌تک درگاه‌ها <b>خاموش</b> می‌شن تا همین یکی اعمال بشه.\n";
+        } elseif (count($members) === 1) {
+            // only reached when an older setup left a group discount here
+            $info .= "⚠️ این دسته فقط <b>یک</b> درگاه داره، پس تخفیف گروهی اینجا همون تخفیف خود درگاهه.\n";
+            $info .= "بهتره تخفیف رو از خود درگاه (پایین) تنظیم کنی و تخفیف گروهی و کدهای گروهی رو خاموش یا حذف کنی.\n";
+            $info .= "وقتی این دو خالی بشن، این صفحه دیگه نمیاد و مستقیم می‌ری سراغ خود درگاه.\n";
         } else {
             $info .= "تخفیف <b>گروهی</b> روی همه‌ی " . count($members) . " درگاه این دسته اعمال می‌شه.\n";
             $info .= "تخفیف <b>تک‌درگاهی</b> هم می‌تونی جدا بذاری — روی هم سوار نمی‌شن، هرکدوم به کاربر بیشتر بده همون اعمال می‌شه.\n";
@@ -12544,9 +12556,11 @@ if (!function_exists('topup_disc_gw_list_payload')) {
         if (empty($gws)) {
             $info .= "برای این زبان هیچ درگاه فعالی وجود نداره.\nاول از 💳 درگاه‌های پرداخت یکی رو فعال کن.";
         } else {
-            $info .= "درگاه‌های فعال این زبان بر اساس نوعشون دسته‌بندی شدن.\n";
-            $info .= "روی هر دسته بزن تا هم برای <b>کل دسته</b> تخفیف بذاری، هم برای <b>تک‌تک درگاه‌هاش</b>.\n";
-            $info .= "➖➖➖➖➖➖➖➖➖➖\n👇 دسته رو انتخاب کن:";
+            $info .= "کاربر همون مبلغ رو می‌پردازه ولی بیشتر شارژ می‌شه. دو جور تخفیف داری:\n\n";
+            $info .= "🎯 <b>تخفیف خودکار</b> — بدون کد، خودش روی شارژ اعمال می‌شه.\n";
+            $info .= "🎟 <b>کد تخفیف</b> — کاربر توی «💰 افزایش موجودی» دکمه‌ی «🎁 کد تخفیف دارم» رو می‌زنه و کد رو وارد می‌کنه.\n\n";
+            $info .= "هر دو رو می‌شه برای <b>یک درگاه</b>، برای <b>یک دسته</b> از درگاه‌ها، یا برای <b>همه‌ی درگاه‌ها</b> گذاشت.\n";
+            $info .= "➖➖➖➖➖➖➖➖➖➖\n👇 درگاه یا دسته رو انتخاب کن:";
         }
         $kb = ['inline_keyboard' => []];
         // One row per category that has at least one live gateway. Always blue,
@@ -12585,8 +12599,10 @@ if (!function_exists('topup_disc_gw_list_payload')) {
                         : trim(strip_tags((string) $mLabel)) . " ({$full})";
                 }
             }
+            // one gateway in the category: its own discount is the category's,
+            // "تکی" would only suggest a group one exists beside it
             if (count($ownVals) === 1) {
-                $bits[] = array_key_first($ownVals) . ' تکی';
+                $bits[] = array_key_first($ownVals) . (count($members) === 1 ? '' : ' تکی');
             } elseif (count($ownVals) > 1) {
                 $bits[] = 'تکی';
             }
@@ -12627,6 +12643,15 @@ if (!function_exists('topup_disc_gw_list_payload')) {
         if (!empty($report)) {
             $info .= "\n\n<blockquote>🎯 <b>تخفیف‌های فعال</b>\n" . implode("\n", $report) . '</blockquote>';
         }
+        // one setting for the whole shop, so it sits here once instead of
+        // repeating on every gateway's screen
+        $tpd_ncfg = topup_disc_notify_get();
+        $tpd_nOn = (!empty($tpd_ncfg['perUse']) || !empty($tpd_ncfg['periodic']));
+        $kb['inline_keyboard'][] = [[
+            'text' => ($tpd_nOn ? '✅ ' : '') . '🔔 اعلان‌های تخفیف',
+            'callback_data' => "tpdnotif:{$lang}:list",
+            'style' => $tpd_nOn ? 'success' : 'primary',
+        ]];
         $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به بسته‌های شارژ', 'callback_data' => "topuplang:{$lang}", 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'] ?? '❌ بستن', 'callback_data' => 'dsclose', 'style' => 'danger']];
         return [$info, json_encode($kb)];
@@ -12696,8 +12721,9 @@ if (!function_exists('topup_disc_hub_payload')) {
         $codes = topup_disc_codes_for($lang, $key);
         $autoOn = !empty($auto['enabled']) && floatval($auto['value'] ?? 0) > 0;
 
-        $info = "🎁 <b>تخفیف شارژ</b> — <code>{$key}</code>\n➖➖➖➖➖➖➖➖➖➖\n";
-        $info .= "تخفیف روی شارژ کیف پول: کاربر همون مبلغ رو پرداخت می‌کنه، ولی بیشتر شارژ می‌شه.\n";
+        $info = "🎁 <b>تخفیف شارژ</b> — " . topup_disc_gateway_label($key, $textbotlang) . "\n➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= "کاربر همون مبلغ رو پرداخت می‌کنه، ولی بیشتر شارژ می‌شه.\n";
+        $info .= "🎟 کد تخفیف رو کاربر توی «💰 افزایش موجودی» با دکمه‌ی «🎁 کد تخفیف دارم» وارد می‌کنه.\n";
         $info .= "➖➖➖➖➖➖➖➖➖➖\n";
         $info .= "🎯 تخفیف خودکار (بدون کد): " . ($autoOn ? topup_disc_admin_value_label($auto) . ' ✅' : 'خاموش') . "\n";
         $info .= "🎟 کدهای تخفیف: " . count($codes) . "\n";
@@ -12731,17 +12757,14 @@ if (!function_exists('topup_disc_hub_payload')) {
             ]];
         }
         $kb['inline_keyboard'][] = [['text' => '➕ افزودن کد تخفیف', 'callback_data' => "tpdadd:{$lang}:{$key}", 'style' => 'primary']];
-        $tpd_ncfg = topup_disc_notify_get();
-        $tpd_nOn = (!empty($tpd_ncfg['perUse']) || !empty($tpd_ncfg['periodic']));
-        $kb['inline_keyboard'][] = [[
-            'text' => ($tpd_nOn ? '✅ ' : '') . '🔔 اعلان‌های تخفیف (عمومی)',
-            'callback_data' => "tpdnotif:{$lang}:{$key}",
-            'style' => $tpd_nOn ? 'success' : 'primary',
-        ]];
         // back to the category this gateway was opened from, not past it to the
-        // category list - one screen back, the way every other level here works
+        // category list - one screen back, the way every other level here works.
+        // A one-gateway category opened straight onto this screen, so back
+        // skips it: going "back" into it would only land here again.
         $tpd_grp = gateway_disc_group_of($key);
-        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => $tpd_grp === null ? "dslang:{$lang}" : "dsgrp:{$lang}:{$tpd_grp}", 'style' => 'danger']];
+        $tpd_back = ($tpd_grp === null || topup_disc_group_is_single($lang, $tpd_grp, $textbotlang) === $key)
+            ? "dslang:{$lang}" : "dsgrp:{$lang}:{$tpd_grp}";
+        $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => $tpd_back, 'style' => 'danger']];
         return [$info, json_encode($kb)];
     }
 }
@@ -12756,7 +12779,7 @@ if (!function_exists('topup_disc_auto_payload')) {
         $perUser = intval($auto['limitPerUser'] ?? 1);
         $newOnly = !empty($auto['newUserOnly']);
 
-        $info = "🎯 <b>تخفیف خودکار</b> — <code>{$key}</code>\n➖➖➖➖➖➖➖➖➖➖\n";
+        $info = "🎯 <b>تخفیف خودکار</b> — " . topup_disc_gateway_label($key, $textbotlang) . "\n➖➖➖➖➖➖➖➖➖➖\n";
         $info .= "بدون نیاز به کد، برای همه‌ی کاربرهای این زبان و این درگاه.\n";
         $info .= "➖➖➖➖➖➖➖➖➖➖\n";
         $info .= "وضعیت: " . ($on ? 'روشن ✅' : 'خاموش') . "\n";
@@ -13137,18 +13160,44 @@ if (!function_exists('topup_disc_scope_of_key')) {
     }
     // Where a code screen's "back" goes: to the gateway's own discount screen,
     // or to the scope's. One place, so every code screen agrees.
+    // 'list' is the 🎁 تخفیف شارژ screen itself - the discount notifications
+    // are one setting for the whole shop, so they open from there.
     function topup_disc_key_back_cb($lang, $key)
     {
+        if ($key === 'list') {
+            return "dslang:{$lang}";
+        }
         $scope = topup_disc_scope_of_key($key);
         return $scope !== null ? "dsgrp:{$lang}:{$scope}" : "topupdisc:{$lang}:{$key}";
     }
     // ...and the screen itself, for the handlers that re-render after an edit
     function topup_disc_key_screen($lang, $key, $textbotlang)
     {
+        if ($key === 'list') {
+            return topup_disc_gw_list_payload($lang, $textbotlang);
+        }
         $scope = topup_disc_scope_of_key($key);
         return $scope !== null
             ? topup_disc_group_list_payload($lang, $scope, $textbotlang)
             : topup_disc_hub_payload($lang, $key, $textbotlang);
+    }
+    // A category with one live gateway is that gateway: a separate "group"
+    // discount on it only duplicated the gateway's own. Returns that gateway's
+    // key so its screen opens instead - unless an older setup left a live
+    // group discount or group codes there, which then stay reachable to be
+    // seen and switched off. null for 'all' and for real (2+) categories.
+    function topup_disc_group_is_single($lang, $group, $textbotlang)
+    {
+        if ($group === 'all') {
+            return null;
+        }
+        $members = topup_disc_scope_members($group, $lang, $textbotlang);
+        if (count($members) !== 1) {
+            return null;
+        }
+        $legacy = topup_disc_group_live($lang, $group) !== null
+            || !empty(topup_disc_codes_for($lang, topup_disc_scope_key($group)));
+        return $legacy ? null : (string) array_key_first($members);
     }
     function topup_disc_scope_key($scope)
     {
