@@ -263,6 +263,9 @@ Current language: <b>{lang}</b>',
         'common' => [
                 'units' => [
                         'dayShort' => 'day',
+                        'dayOne' => 'day',
+                        'dayMany' => 'days',
+                        'hourOne' => 'hour',
                         'byte' => 'Byte',
                         'gb' => 'GB',
                         'gigabyte' => 'gigabytes',
@@ -1138,22 +1141,18 @@ To use the default name, press the green button; to cancel and go back to the pl
                         'productNotFound' => 'The selected product was not found',
                         'created' => '✅ Service was created successfully
 
-👤 Service username : {username}
-🌿 Service name:  {name_service}
-‏🇺🇳 Location: {location}
-⏳ Duration: {day}  hours
-🗜 Service volume:  {volume} megabytes
-
-🧑‍🦯 You can get the connection method by pressing the button below and selecting your operating system',
+👤 Service username: {username}
+🌿 Service name: {name_service}
+🇺🇳 Location: {location}
+⏳ Duration: {time_human}
+🗜 Service volume: {volume_human}',
                         'created2' => '✅ Service was created successfully
 
-👤 Service username : {username}
-🌿 Service name:  {name_service}
-‏🇺🇳 Location: {location}
-⏳ Duration: {day}  days
-🗜 Service volume:  {volume} gigabytes
-
-🧑‍🦯 You can get the connection method by pressing the button below and selecting your operating system',
+👤 Service username: {username}
+🌿 Service name: {name_service}
+🇺🇳 Location: {location}
+⏳ Duration: {time_human}
+🗜 Service volume: {volume_human}',
                         'timePrompt' => '⌛️ Select your service time 
 📌 Daily rate  : %s  Dollar
 ⚠️ You can purchase a minimum of %s days and a maximum of %s days',
@@ -3775,26 +3774,23 @@ Follow the steps above, then send the address below:
                 'getConfigHintTest' => '📌 To get the config, click the Get config button',
                 'afterPay' => '✅ Service was created successfully
 
-👤 Service username : {username}
-🌿 Service name:  {name_service}
-‏🇺🇳 Location: {location}
-⏳ Duration: {day}  days
-🗜 Service volume:  {volume} gigabytes
+👤 Service username: {username}
+🌿 Service name: {name_service}
+🇺🇳 Location: {location}
+⏳ Duration: {time_human}
+🗜 Service volume: {volume_human}
 
 Connection link:
 {config}
-{links}
-🧑‍🦯 You can get the connection method by pressing the button below and selecting your operating system',
+{links}',
                 'afterPayIbsng' => '✅ Service was created successfully
 
-👤 Service username : {username}
-🔑 Service password :  <code>{password}</code>
-🌿 Service name:  {name_service}
-‏🇺🇳 Location: {location}
-⏳ Duration: {day}  days
-🗜 Service volume:  {volume} gigabytes
-
-🧑‍🦯 You can get the connection method by pressing the button below and selecting your operating system',
+👤 Service username: {username}
+🔑 Service password: <code>{password}</code>
+🌿 Service name: {name_service}
+🇺🇳 Location: {location}
+⏳ Duration: {time_human}
+🗜 Service volume: {volume_human}',
                 'afterText' => '<b>✅ Service was created successfully</b>
 
 👤 <b>Service username:</b> {username}
@@ -3889,13 +3885,12 @@ After joining, click the check membership button',
                 'iranPay3' => '💸 Third Rial payment gateway',
                 'manual' => '✅ Service was created successfully
 
-👤 Service username : {username}
-🌿 Service name:  {name_service}
-‏🇺🇳 Location: {location}
+👤 Service username: {username}
+🌿 Service name: {name_service}
+🇺🇳 Location: {location}
 
- Service information :
-{config}
-🧑‍🦯 You can get the connection method by pressing the button below and selecting your operating system',
+Service information:
+{config}',
                 'nowPayment' => '💰 Crypto Payment with Plisio',
                 'nowPaymentTron' => '💵 Tron crypto deposit',
                 'paymentNotVerify' => 'Rial gateway',
@@ -3933,13 +3928,11 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'userTest' => '🔑 Test account',
                 'wgDashboard' => '✅ Service was created successfully
 
-👤 Service username : {username}
-🌿 Service name:  {name_service}
-‏🇺🇳 Location: {location}
-⏳ Duration: {day}  days
-🗜 Service volume:  {volume} gigabytes
-
-🧑‍🦯 You can get the connection method by pressing the button below and selecting your operating system',
+👤 Service username: {username}
+🌿 Service name: {name_service}
+🇺🇳 Location: {location}
+⏳ Duration: {time_human}
+🗜 Service volume: {volume_human}',
                 'wheelLuck' => '🎲 Wheel of fortune',
                 'zarinPal' => '🟡 ZarinPal',
         ],

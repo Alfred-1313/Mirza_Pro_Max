@@ -730,6 +730,34 @@ function formatBytes($bytes, $precision = 2): string
     ];
     return round(pow(1024, $base - $power), $precision) . ' ' . $suffixes[$power];
 }
+if (!function_exists('username_method_is')) {
+    // A panel's MethodUsername is saved as the label the admin tapped - in the
+    // panel's language (Persian). The shop compared it with its own label in
+    // the READER's language, so for an English customer no method ever
+    // matched: generateUsername() returned nothing and the service was named
+    // "<random>_" instead of "<id>_<random>", the custom-username question
+    // never came, sequential counters never moved. This asks the only
+    // question that matters - is the stored value this method's label in any
+    // panel language - and ignores who happens to be reading.
+    // $key is the dotted text key, e.g. 'keyboard.numericIdRandom'.
+    function username_method_is($stored, $key)
+    {
+        $stored = (string) $stored;
+        if ($stored === '') {
+            return false;
+        }
+        foreach (panel_langs() as $l) {
+            $v = lang_tab_texts($l);
+            foreach (explode('.', $key) as $part) {
+                $v = is_array($v) ? ($v[$part] ?? null) : null;
+            }
+            if (is_string($v) && $v === $stored) {
+                return true;
+            }
+        }
+        return false;
+    }
+}
 function generateUsername($from_id, $Metode, $username, $randomString, $text, $namecustome, $usernamecustom)
 {
     global $textbotlang;
@@ -741,27 +769,27 @@ function generateUsername($from_id, $Metode, $username, $randomString, $text, $n
             'number_username' => '',
         );
     }
-    if ($Metode == $textbotlang['keyboard']['numericIdRandom']) {
+    if (username_method_is($Metode, 'keyboard.numericIdRandom')) {
         return $from_id . "_" . $randomString;
-    } elseif ($Metode == $textbotlang['keyboard']['usernameSequential']) {
+    } elseif (username_method_is($Metode, 'keyboard.usernameSequential')) {
         if ($username == "NOT_USERNAME") {
             if (preg_match('/^\w{3,32}$/', $namecustome)) {
                 $username = $namecustome;
             }
         }
         return $username . "_" . $user['number_username'];
-    } elseif ($Metode == $textbotlang['keyboard']['customUsername'])
+    } elseif (username_method_is($Metode, 'keyboard.customUsername'))
         return $text;
-    elseif ($Metode == $textbotlang['keyboard']['customUsernameRandom']) {
+    elseif (username_method_is($Metode, 'keyboard.customUsernameRandom')) {
         $random_number = rand(1000000, 9999999);
         return $text . "_" . $random_number;
-    } elseif ($Metode == $textbotlang['keyboard']['customTextRandom']) {
+    } elseif (username_method_is($Metode, 'keyboard.customTextRandom')) {
         return $namecustome . "_" . $randomString;
-    } elseif ($Metode == $textbotlang['keyboard']['customTextSequential']) {
+    } elseif (username_method_is($Metode, 'keyboard.customTextSequential')) {
         return $namecustome . "_" . $setting['numbercount'];
-    } elseif ($Metode == $textbotlang['keyboard']['numericIdSequential']) {
+    } elseif (username_method_is($Metode, 'keyboard.numericIdSequential')) {
         return $from_id . "_" . $user['number_username'];
-    } elseif ($Metode == $textbotlang['keyboard']['agentCustomTextSequential']) {
+    } elseif (username_method_is($Metode, 'keyboard.agentCustomTextSequential')) {
         if ($usernamecustom == "none") {
             return $namecustome . "_" . $setting['numbercount'];
         }
@@ -912,6 +940,8 @@ function DirectPayment($order_id, $image = 'images.jpg')
         $textcreatuser = str_replace('{location}', $marzban_list_get['name_panel'], $textcreatuser);
         $textcreatuser = str_replace('{day}', $get_invoice['Service_time'], $textcreatuser);
         $textcreatuser = str_replace('{volume}', $get_invoice['Volume'], $textcreatuser);
+        $textcreatuser = str_replace('{time_human}', service_days_text(intval($get_invoice['Service_time']), $textbotlang), $textcreatuser);
+        $textcreatuser = str_replace('{volume_human}', service_volume_text(intval($get_invoice['Volume']) * 1024, $textbotlang), $textcreatuser);
         $textcreatuser = str_replace('{config}', "<code>{$output_config_link}</code>", $textcreatuser);
         $textcreatuser = str_replace('{links}', $config, $textcreatuser);
         $textcreatuser = str_replace('{links2}', "{$output_config_link}", $textcreatuser);
@@ -979,10 +1009,10 @@ function DirectPayment($order_id, $image = 'images.jpg')
                 sendmessage($Balance_id['affiliates'], $textadd, null, 'HTML');
             }
         }
-        if ($marzban_list_get['MethodUsername'] == $textbotlang['keyboard']['customTextSequential'] || $marzban_list_get['MethodUsername'] == $textbotlang['keyboard']['usernameSequential'] || $marzban_list_get['MethodUsername'] == $textbotlang['keyboard']['numericIdSequential'] || $marzban_list_get['MethodUsername'] == $textbotlang['keyboard']['agentCustomTextSequential']) {
+        if (username_method_is($marzban_list_get['MethodUsername'], 'keyboard.customTextSequential') || username_method_is($marzban_list_get['MethodUsername'], 'keyboard.usernameSequential') || username_method_is($marzban_list_get['MethodUsername'], 'keyboard.numericIdSequential') || username_method_is($marzban_list_get['MethodUsername'], 'keyboard.agentCustomTextSequential')) {
             $value = intval($Balance_id['number_username']) + 1;
             update("user", "number_username", $value, "id", $Balance_id['id']);
-            if ($marzban_list_get['MethodUsername'] == $textbotlang['keyboard']['customTextSequential'] || $marzban_list_get['MethodUsername'] == $textbotlang['keyboard']['agentCustomTextSequential']) {
+            if (username_method_is($marzban_list_get['MethodUsername'], 'keyboard.customTextSequential') || username_method_is($marzban_list_get['MethodUsername'], 'keyboard.agentCustomTextSequential')) {
                 $value = intval($setting['numbercount']) + 1;
                 update("setting", "numbercount", $value);
             }
@@ -15191,7 +15221,13 @@ if (!function_exists('service_volume_human')) {
     }
     function service_volume_human($mb, $lang)
     {
-        $t = lang_tab_texts($lang);
+        return service_volume_text($mb, lang_tab_texts($lang));
+    }
+    // The same, in the language of the text set $t - the purchase messages use
+    // this with the very $textbotlang their template came from, so the unit
+    // can never be in a different language from the sentence around it.
+    function service_volume_text($mb, $t)
+    {
         $m = (float) $mb;
         // the panels treat 0 as "no limit", so saying "0 MB" would be a lie
         if ($m <= 0) {
@@ -15209,7 +15245,20 @@ if (!function_exists('service_volume_human')) {
         if ($h > 0 && $h < 1) {
             return bt_trim_number($h * 60) . ' ' . (string) ($t['common']['units']['minShort'] ?? 'min');
         }
-        return bt_trim_number($h) . ' ' . (string) ($t['common']['units']['hourShort'] ?? 'h');
+        // "1 hour", not "1 hours"
+        $unit = ($h == 1) ? ($t['common']['units']['hourOne'] ?? null) : null;
+        return bt_trim_number($h) . ' ' . (string) ($unit ?? $t['common']['units']['hourShort'] ?? 'h');
+    }
+    // A purchase's length in days: "1 day", "30 days", or unlimited for 0.
+    function service_days_text($days, $t)
+    {
+        $d = (int) $days;
+        if ($d <= 0) {
+            return (string) ($t['common']['labels']['unlimitedShort'] ?? '0');
+        }
+        $u = $t['common']['units'] ?? [];
+        $unit = ($d === 1) ? ($u['dayOne'] ?? $u['dayShort'] ?? '') : ($u['dayMany'] ?? $u['dayShort'] ?? '');
+        return trim($d . ' ' . $unit);
     }
 }
 if (!function_exists('panel_inbound_ready')) {

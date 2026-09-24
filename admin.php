@@ -6872,6 +6872,8 @@ if (preg_match('/^btact\|text\|([a-z]{2})\|(.+)$/', $datain, $btm) && $adminrule
             . "• نام پنل: <code>{location}</code>\n"
             . "• مدت زمان: <code>{day}</code>\n"
             . "• حجم: <code>{volume}</code>\n"
+            . "• مدت زمان با واحد (۳۰ روز / 1 day): <code>{time_human}</code>\n"
+            . "• حجم با واحد (۵ گیگابایت / 5 GB): <code>{volume_human}</code>\n"
             . "• کد کانفیگ آماده: <code>{config}</code>\n"
             . "• متن کامل کانفیگ: <code>{links}</code>\n"
             . "• لینک ساده کانفیگ: <code>{links2}</code>\n"
@@ -6881,6 +6883,8 @@ if (preg_match('/^btact\|text\|([a-z]{2})\|(.+)$/', $datain, $btm) && $adminrule
             . "• نام پنل: <code>{location}</code>\n"
             . "• مدت زمان: <code>{day}</code>\n"
             . "• حجم: <code>{volume}</code>\n"
+            . "• مدت زمان با واحد (۱ ساعت / 1 hour): <code>{time_human}</code>\n"
+            . "• حجم با واحد (۲۰۰ مگابایت / 200 MB): <code>{volume_human}</code>\n"
             . "• کد کانفیگ آماده: <code>{config}</code>\n"
             . "• متن کامل کانفیگ: <code>{links}</code>\n"
             . "• لینک ساده کانفیگ: <code>{links2}</code>\n"
@@ -16291,6 +16295,8 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     $textcreatuser = str_replace('{location}', $marzban_list_get['name_panel'], $textcreatuser);
     $textcreatuser = str_replace('{day}', $info_product['Service_time'], $textcreatuser);
     $textcreatuser = str_replace('{volume}', $info_product['Volume_constraint'], $textcreatuser);
+    $textcreatuser = str_replace('{time_human}', service_days_text(intval($info_product['Service_time']), $textbotlang), $textcreatuser);
+    $textcreatuser = str_replace('{volume_human}', service_volume_text(intval($info_product['Volume_constraint']) * 1024, $textbotlang), $textcreatuser);
     $textcreatuser = str_replace('{config}', "<code>{$output_config_link}</code>", $textcreatuser);
     $textcreatuser = str_replace('{links}', $config, $textcreatuser);
     $textcreatuser = str_replace('{links2}', $output_config_link, $textcreatuser);
@@ -16689,6 +16695,8 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         $textcreatuser = str_replace('{location}', $panel['name_panel'], $textcreatuser);
         $textcreatuser = str_replace('{day}', $text, $textcreatuser);
         $textcreatuser = str_replace('{volume}', $user['Processing_value_tow'], $textcreatuser);
+        $textcreatuser = str_replace('{time_human}', service_days_text(intval($text), $textbotlang), $textcreatuser);
+        $textcreatuser = str_replace('{volume_human}', service_volume_text(intval($user['Processing_value_tow']) * 1024, $textbotlang), $textcreatuser);
         $textcreatuser = str_replace('{config}', $output_config_link, $textcreatuser);
         $textcreatuser = str_replace('{links}', $config, $textcreatuser);
         $textcreatuser = str_replace('{links2}', $output_config_link, $textcreatuser);
