@@ -3110,20 +3110,28 @@ function update_bot() {
     # ── 1. Safety net: a restorable snapshot BEFORE anything moves ──
     local BK_DIR="/root/mirza-backups"
     local STAMP; STAMP=$(date +%Y%m%d_%H%M%S)
-    local ROLLBACK="${BK_DIR}/pre-update_${STAMP}.tar.gz"
+    # Named after the bot it belongs to - its @username, or its directory when
+    # config.php has none - so two bots' snapshots are told apart at a glance
+    # in this shared folder. Only a label: which bot a snapshot really belongs
+    # to is still decided by the directory inside it, since that is where it
+    # would unpack to.
+    local BK_TAG
+    BK_TAG=$(grep '^\$usernamebot' "$CONFIG_PATH" 2>/dev/null | cut -d"'" -f2 | tr -cd 'A-Za-z0-9_' | cut -c1-32)
+    [ -z "$BK_TAG" ] && BK_TAG=$(basename "$BOT_DIR" | tr -cd 'A-Za-z0-9_' | cut -c1-32)
+    local ROLLBACK="${BK_DIR}/pre-update_${BK_TAG}_${STAMP}.tar.gz"
     mkdir -p "$BK_DIR"
     run_step "Backing up the current install" \
         "tar --warning=no-file-changed -czf '$ROLLBACK' -C '$(dirname "$BOT_DIR")' --exclude='*.bak*' --exclude='.git' --exclude='log.txt' --exclude='error_log' --exclude='update_request' --exclude='update_request.running' --exclude='rollback_request' --exclude='update_progress.json' --exclude='update_status.json' --exclude='update_backups.json' '$(basename "$BOT_DIR")'" \
         || { show_step_error; printf "  ${C_BAD}Could not create a rollback archive. Refusing to continue.${CR}\n"; sleep 3; show_menu; return 1; }
-    # keep this bot's 10 most recent, so this never fills the disk - the bot
-    # lists exactly these for "بازگشت به نسخه قبلی", so the two numbers are one
-    # number. The folder is shared: another bot's snapshots (told apart by the
-    # directory inside, as the bot's own list does) are never counted or deleted.
+    # keep this bot's 2 most recent - the bot lists exactly these for
+    # "بازگشت به نسخه قبلی", so the two numbers are one number. The folder is
+    # shared: another bot's snapshots (told apart by the directory inside, as
+    # the bot's own list does) are never counted or deleted.
     local _kept=0 _snap
     for _snap in $(ls -1t "$BK_DIR"/pre-update_*.tar.gz 2>/dev/null); do
         [ "$(tar -tzf "$_snap" 2>/dev/null | head -1 | cut -d/ -f1)" = "$(basename "$BOT_DIR")" ] || continue
         _kept=$((_kept + 1))
-        [ "$_kept" -gt 10 ] && rm -f "$_snap"
+        [ "$_kept" -gt 2 ] && rm -f "$_snap"
     done
 
     # ── 2. Fetch and validate the new code ───────────────────

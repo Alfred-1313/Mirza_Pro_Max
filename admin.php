@@ -12590,12 +12590,20 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
 } elseif ($datain == "botupdatelist" && $adminrulecheck['rule'] == "administrator") {
     $bu_lang = $user['lang'] ?? 'fa';
     Editmessagetext($from_id, $message_id, bot_update_backups_caption($bu_lang, $textbotlang), bot_update_backups_keyboard($bu_lang, $textbotlang), 'HTML');
-} elseif (preg_match('/^botupdaterb:(pre-update_[0-9]{8}_[0-9]{6}\.tar\.gz)$/', (string) $datain, $bot_rb_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^botupdaterb:(?:pre-update_)?([0-9]{8}_[0-9]{6})(?:\.tar\.gz)?$/', (string) $datain, $bot_rb_m) && $adminrulecheck['rule'] == "administrator") {
+    // The button carries only the snapshot's date (older messages still carry
+    // the whole old-style name); the full name comes from this bot's own list.
     $bu_lang = $user['lang'] ?? 'fa';
-    Editmessagetext($from_id, $message_id, bot_update_rollback_caption($bot_rb_m[1], $bu_lang, $textbotlang), bot_update_rollback_keyboard($bot_rb_m[1], $textbotlang), 'HTML');
-} elseif (preg_match('/^botupdaterbgo:(pre-update_[0-9]{8}_[0-9]{6}\.tar\.gz)$/', (string) $datain, $bot_rb_m) && $adminrulecheck['rule'] == "administrator") {
+    $bot_rb_name = bot_update_backup_by_stamp($bot_rb_m[1]);
+    if ($bot_rb_name === '') {
+        // gone since the list was drawn - show what is there now
+        Editmessagetext($from_id, $message_id, bot_update_backups_caption($bu_lang, $textbotlang), bot_update_backups_keyboard($bu_lang, $textbotlang), 'HTML');
+    } else {
+        Editmessagetext($from_id, $message_id, bot_update_rollback_caption($bot_rb_name, $bu_lang, $textbotlang), bot_update_rollback_keyboard($bot_rb_name, $textbotlang), 'HTML');
+    }
+} elseif (preg_match('/^botupdaterbgo:(?:pre-update_)?([0-9]{8}_[0-9]{6})(?:\.tar\.gz)?$/', (string) $datain, $bot_rb_m) && $adminrulecheck['rule'] == "administrator") {
     $bu_lang = $user['lang'] ?? 'fa';
-    Editmessagetext($from_id, $message_id, bot_update_rollback_write($bot_rb_m[1], $from_id, $message_id, $bu_lang, $textbotlang), null, 'HTML');
+    Editmessagetext($from_id, $message_id, bot_update_rollback_write(bot_update_backup_by_stamp($bot_rb_m[1]), $from_id, $message_id, $bu_lang, $textbotlang), null, 'HTML');
 } elseif ($text == $textbotlang['keyboard']['miniAppSettingsBtn'] && $adminrulecheck['rule'] == "administrator") {
     sendmessage($from_id, miniapp_hub_caption($textbotlang), miniapp_hub_keyboard($textbotlang), 'HTML');
 } elseif ($datain == "miniappHubToggle" && $adminrulecheck['rule'] == "administrator") {

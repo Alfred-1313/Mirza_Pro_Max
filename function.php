@@ -3068,10 +3068,30 @@ if (!function_exists('bot_update_request_path')) {
     }
     // This name travels from a button to a script running as root, so its
     // shape is pinned down on both sides - nothing else is ever written here,
-    // and the watcher refuses anything else it is handed.
+    // and the watcher refuses anything else it is handed. Snapshots carry the
+    // bot's username (pre-update_<bot>_<date>_<time>); older ones have none.
     function bot_update_backup_valid($name)
     {
-        return (bool) preg_match('/^pre-update_[0-9]{8}_[0-9]{6}\.tar\.gz$/', (string) $name);
+        return (bool) preg_match('/^pre-update_(?:[A-Za-z0-9_]{1,64}_)?[0-9]{8}_[0-9]{6}\.tar\.gz$/', (string) $name);
+    }
+    // The date part of a snapshot's name ("20260923_171500"). A button carries
+    // only this: Telegram caps callback data at 64 bytes, which a name holding a
+    // long username would outgrow and take the whole keyboard down with it.
+    function bot_update_backup_stamp($name)
+    {
+        return preg_match('/([0-9]{8}_[0-9]{6})\.tar\.gz$/', (string) $name, $m) ? $m[1] : '';
+    }
+    // ...and back: the snapshot with that date in THIS bot's own list, or ''
+    // when it is no longer there (only the newest two are kept).
+    function bot_update_backup_by_stamp($stamp)
+    {
+        foreach (bot_update_backups() as $b) {
+            $name = (string) ($b['name'] ?? '');
+            if ($stamp !== '' && bot_update_backup_valid($name) && bot_update_backup_stamp($name) === $stamp) {
+                return $name;
+            }
+        }
+        return '';
     }
     // A moment in time is one moment; only how it is written differs. The
     // project's own convention decides that: Jalali for Persian, Gregorian for
@@ -3132,7 +3152,7 @@ if (!function_exists('bot_update_request_path')) {
         $out .= bot_update_text(
             $textbotlang,
             'rollbackIntro',
-            'هر ردیف، عکسی است از ربات درست پیش از یکی از آپدیت‌ها. با زدن هر کدام، ربات دقیقاً به همان حالت برمی‌گردد.'
+            'هر ردیف، عکسی است از ربات درست پیش از یکی از آپدیت‌ها. با زدن هر کدام، ربات دقیقاً به همان حالت برمی‌گردد. فقط دو نسخه آخر نگه داشته می‌شود.'
         ) . "\n\n";
         foreach ($list as $b) {
             $out .= "• <b>" . htmlspecialchars((string) ($b['version'] ?? '?'), ENT_QUOTES) . "</b> — "
@@ -3154,7 +3174,7 @@ if (!function_exists('bot_update_request_path')) {
             }
             $rows[] = [[
                 'text' => '♻️ ' . ($b['version'] ?? '?') . ' — ' . bot_update_when($b['at'] ?? 0, $lang),
-                'callback_data' => 'botupdaterb:' . $name,
+                'callback_data' => 'botupdaterb:' . bot_update_backup_stamp($name),
                 'style' => 'danger',
             ]];
         }
@@ -3191,7 +3211,7 @@ if (!function_exists('bot_update_request_path')) {
         return json_encode(['inline_keyboard' => [
             [[
                 'text' => bot_update_text($textbotlang, 'confirmYes', '✅ بله، برگرد'),
-                'callback_data' => 'botupdaterbgo:' . $name,
+                'callback_data' => 'botupdaterbgo:' . bot_update_backup_stamp($name),
                 'style' => 'danger',
             ]],
             [[
