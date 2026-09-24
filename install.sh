@@ -180,9 +180,9 @@ banner()  {
 #   _mi "1" "Install" "what it does" - name padded, description dimmed
 _mi() {
     if [ -n "${3-}" ]; then
-        printf "    ${C_KEY}%s${CR} ${C_BORDER}│${CR} ${C_TXT}%-13s${CR} ${C_DIM}%b${CR}\n" "$1" "$2" "$3"
+        printf "   ${C_KEY}%2s${CR} ${C_BORDER}│${CR} ${C_TXT}%-13s${CR} ${C_DIM}%b${CR}\n" "$1" "$2" "$3"
     else
-        printf "    ${C_KEY}%s${CR} ${C_BORDER}│${CR} ${C_TXT}%b${CR}\n" "$1" "$2"
+        printf "   ${C_KEY}%2s${CR} ${C_BORDER}│${CR} ${C_TXT}%b${CR}\n" "$1" "$2"
     fi
 }
 
@@ -1461,10 +1461,11 @@ function show_menu() {
     _mi "7" "Restore"   "import a .sql or .zip backup ${C_WARN}(beta)${CR}"
     _mi "8" "Help"      "commands and flags for scripts"
     _mi "9" "Database"  "password, login info, phpMyAdmin port"
+    _mi "10" "Transfer"  "move a bot to another server"
     _mi "0" "Exit"      ""
     _rule
     echo ""
-    printf  "  ${C_PROMPT}❯${CR} Choose ${C_DIM}[0-9]${CR}: "
+    printf  "  ${C_PROMPT}❯${CR} Choose ${C_DIM}[0-10]${CR}: "
     read -r option
     case $option in
         1) install_bot ;;
@@ -1476,6 +1477,7 @@ function show_menu() {
         7) import_bot ;;
         8) show_help_screen ;;
         9) database_menu ;;
+        10) transfer_bot ;;
         0) echo -e "\n${C_OK}Bye.${CR}"; exit 0 ;;
         *) echo -e "\n${C_BAD}Not an option. Try again.${CR}"; sleep 1; show_menu ;;
     esac
@@ -3814,8 +3816,9 @@ _bot_crons_remove() {
 # rollback snapshots - and leave MySQL, Apache itself, phpMyAdmin and every
 # other bot on this server untouched. Used only when more than one bot is
 # registered; a single-bot server keeps the whole-server removal below.
+# $4 = "yes" when the caller has already asked (Transfer does).
 remove_bot_scoped() {
-    local name="$1" dir="$2" domain="$3"
+    local name="$1" dir="$2" domain="$3" asked="${4-}"
     local cfg="$dir/config.php" dbname="" dbuser="" hosts=""
     [ "$domain" = "null" ] && domain=""
     if [ -f "$cfg" ]; then
@@ -3834,11 +3837,13 @@ remove_bot_scoped() {
     printf "    ${C_WARN}  scheduled jobs and rollback snapshots.${CR}\n"
     printf "    ${C_DIM}The other bot(s) on this server are not touched. The database is${CR}\n"
     printf "    ${C_DIM}saved to /root first.${CR}\n"
-    printf "  ${C_PROMPT}❯${CR} Remove %s? ${C_DIM}[y/N]${CR}: " "$name"
-    local choice; read -r choice
-    if [[ ! "$choice" =~ ^[Yy]$ ]]; then
-        printf "\n    ${C_DIM}Cancelled - nothing was changed.${CR}\n"
-        return 0
+    if [ "$asked" != "yes" ]; then
+        printf "  ${C_PROMPT}❯${CR} Remove %s? ${C_DIM}[y/N]${CR}: " "$name"
+        local choice; read -r choice
+        if [[ ! "$choice" =~ ^[Yy]$ ]]; then
+            printf "\n    ${C_DIM}Cancelled - nothing was changed.${CR}\n"
+            return 0
+        fi
     fi
     echo ""
 
@@ -4376,6 +4381,332 @@ EOF
     printf "    ${C_WARN}!${CR} ${C_WARN}Open the admin panel in the bot once: that is when it sets up its${CR}\n"
     printf "    ${C_WARN}  scheduled jobs (payment checks, notices).${CR}\n"
     printf "    ${C_DIM}Manage it with ${CR}${C_KEY}mirza${CR}${C_DIM} from now on.${CR}\n"
+    echo ""
+    printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "
+    read -r _
+    show_menu
+}
+
+# ── Transfer one bot to another server ────────────────────────
+# Moves a bot - its database, its folder (agents' bots included) and its SSL
+# certificate - to a clean server over SSH. The new server is set up by this
+# very installer, run there in the admin's own terminal so every step and
+# question is visible; then the database and files are laid over that fresh
+# install. The bot here is only ever read from until the admin says to
+# remove it, except for its scheduled jobs: once the domain points at the
+# new server they would reach IT, and run every job twice.
+TR_SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -o ServerAliveInterval=15 -o LogLevel=ERROR"
+C_FAINT_BAD=$'\033[2;31m'
+
+# _tr_ssh [-t] CMD... - run on the destination (TR_HOST/TR_PORT/TR_PASS)
+_tr_ssh() {
+    local tty=""
+    [ "$1" = "-t" ] && { tty="-t"; shift; }
+    if [ -n "$TR_PASS" ]; then
+        SSHPASS="$TR_PASS" sshpass -e ssh $tty $TR_SSH_OPTS -p "$TR_PORT" "root@$TR_HOST" "$@"
+    else
+        ssh $tty $TR_SSH_OPTS -o BatchMode=yes -p "$TR_PORT" "root@$TR_HOST" "$@"
+    fi
+}
+# _tr_scp LOCAL_FILE REMOTE_PATH
+_tr_scp() {
+    if [ -n "$TR_PASS" ]; then
+        SSHPASS="$TR_PASS" sshpass -e scp -q $TR_SSH_OPTS -P "$TR_PORT" "$1" "root@$TR_HOST:$2"
+    else
+        scp -q $TR_SSH_OPTS -o BatchMode=yes -P "$TR_PORT" "$1" "root@$TR_HOST:$2"
+    fi
+}
+
+_tr_back() {
+    [ -n "${1-}" ] && printf "\n    ${C_BAD}●${CR} ${C_BAD}%s${CR}\n" "$1"
+    [ -n "${2-}" ] && printf "    ${C_DIM}%s${CR}\n" "$2"
+    echo ""
+    printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "
+    read -r _
+    show_menu
+}
+
+# Runs on the destination after its installer has finished: the transferred
+# database replaces the fresh one, and the transferred folder is laid over
+# the fresh install - keeping that install's own config.php and vendor/.
+# Its settings arrive in the lines written above it.
+_tr_import_script() {
+    cat <<'EOF'
+cd /root/mirza_transfer || exit 9
+BOT=/var/www/html/mirzaprobotconfig
+ROOTPASS=$(grep '$pass' /root/confmirza/dbrootmirza.txt 2>/dev/null | cut -d"'" -f2)
+DB=$(grep '^\$dbname' "$BOT/config.php" | cut -d"'" -f2)
+[ -n "$ROOTPASS" ] && [ -n "$DB" ] || { echo "RESULT=NO_DB_ACCESS"; exit 2; }
+drop=$(mysql -u root -p"$ROOTPASS" -N -B "$DB" -e 'SHOW FULL TABLES' 2>/dev/null \
+    | while IFS=$'\t' read -r t ty; do
+        if [ "$ty" = "VIEW" ]; then echo "DROP VIEW IF EXISTS \`$t\`;"; else echo "DROP TABLE IF EXISTS \`$t\`;"; fi
+      done)
+if ! { echo 'SET FOREIGN_KEY_CHECKS=0;'; printf '%s\n' "$drop"; gunzip -c db.sql.gz | sed -E '/^(CREATE DATABASE |USE `)/d'; } \
+        | mysql -u root -p"$ROOTPASS" "$DB" 2>/root/mirza_transfer/import.err; then
+    echo "RESULT=IMPORT_FAILED"; tail -n 3 /root/mirza_transfer/import.err; exit 3
+fi
+tar -xzf files.tar.gz -C "$BOT" || { echo "RESULT=FILES_FAILED"; exit 4; }
+if [ "$SRC_DIR" != "$BOT" ]; then
+    for c in "$BOT"/vpnbot/*/config.php; do
+        [ -f "$c" ] && sed -i "s#${SRC_DIR}/#${BOT}/#g" "$c"
+    done
+fi
+chown -R www-data:www-data "$BOT"
+( cd "$BOT" && php table.php >/dev/null 2>&1 ) || echo "TABLE_WARN=1"
+chown -R www-data:www-data "$BOT"
+systemctl reload apache2 >/dev/null 2>&1
+echo "RESULT=OK"
+EOF
+}
+
+# Menu 10
+function transfer_bot() {
+    clear 2>/dev/null || true
+    banner
+    _sec "Transfer a bot to another server"
+    if ! pick_bot_instance "move to another server"; then
+        [ "$(bots_registry_count)" = "0" ] && sleep 2
+        show_menu; return 0
+    fi
+    local name="$PICKED_NAME" dir="$PICKED_DIR" domain="$PICKED_DOMAIN" cfg="$PICKED_DIR/config.php"
+    local dbhost dbname dbuser dbpass token admin botname hosts
+    [ "$domain" = "null" ] && domain=""
+    if [ ! -f "$cfg" ]; then _tr_back "config.php not found in $dir."; return 1; fi
+    dbhost=$(grep '^\$dbhost' "$cfg" | head -1 | cut -d"'" -f2); [ -z "$dbhost" ] && dbhost="localhost"
+    dbname=$(grep '^\$dbname' "$cfg" | head -1 | cut -d"'" -f2)
+    dbuser=$(grep '^\$usernamedb' "$cfg" | head -1 | cut -d"'" -f2)
+    dbpass=$(grep '^\$passworddb' "$cfg" | head -1 | cut -d"'" -f2)
+    token=$(grep '^\$APIKEY' "$cfg" | head -1 | cut -d"'" -f2)
+    admin=$(grep '^\$adminnumber' "$cfg" | head -1 | cut -d"'" -f2)
+    botname=$(grep '^\$usernamebot' "$cfg" | head -1 | cut -d"'" -f2)
+    hosts=$(grep '^\$domainhosts' "$cfg" | head -1 | cut -d"'" -f2)
+    [ -z "$domain" ] && domain=$(printf '%s' "$hosts" | cut -d'/' -f1)
+    if [ -z "$dbname" ] || [ -z "$token" ] || [ -z "$domain" ]; then
+        _tr_back "Could not read this bot's settings from $cfg."; return 1
+    fi
+    _kv "Bot" "${C_KEY}${name}${CR} ${C_DIM}· ${domain}${CR}"
+    echo ""
+
+    # 1) The destination, and a login that works
+    local TR_HOST TR_PORT TR_PASS=""
+    while :; do
+        printf "  ${C_PROMPT}❯${CR} New server's IP ${C_DIM}[0 = back]${CR}: "
+        read -r TR_HOST
+        [ -z "$TR_HOST" ] || [ "$TR_HOST" = "0" ] && { show_menu; return 0; }
+        [[ "$TR_HOST" =~ ^[A-Za-z0-9.:-]+$ ]] && break
+        printf "    ${C_FAINT_BAD}That does not look like an IP address.${CR}\n"
+    done
+    printf "  ${C_PROMPT}❯${CR} SSH port ${C_DIM}[22]${CR}: "
+    read -r TR_PORT
+    [ -z "$TR_PORT" ] && TR_PORT=22
+    if ! command -v sshpass >/dev/null 2>&1; then
+        run_step "Installing sshpass (for the password login)" "apt-get install -y sshpass" \
+            || { show_step_error; _tr_back "sshpass could not be installed."; return 1; }
+    fi
+    local err rc
+    while :; do
+        printf "  ${C_PROMPT}❯${CR} root password of %s ${C_DIM}[hidden · Enter alone = SSH key]${CR}: " "$TR_HOST"
+        read -rs TR_PASS; echo ""
+        err=$(_tr_ssh true 2>&1); rc=$?
+        if [ "$rc" -eq 0 ]; then
+            printf "    ${C_OK}●${CR} ${C_OK}Logged in to %s${CR}\n" "$TR_HOST"
+            break
+        fi
+        # sshpass says "wrong password" with exit code 5; plain ssh in words
+        if [ "$rc" -eq 5 ] || printf '%s' "$err" | grep -qiE 'permission denied|incorrect|authentication'; then
+            printf "    ${C_FAINT_BAD}Wrong password - try again.${CR}\n"
+            continue
+        fi
+        printf "    ${C_FAINT_BAD}Could not reach %s:%s - %s${CR}\n" "$TR_HOST" "$TR_PORT" "$(printf '%s' "$err" | tail -n 1)"
+        printf "  ${C_PROMPT}❯${CR} ${C_DIM}Enter = try again, 0 = back${CR}: "
+        local again; read -r again
+        [ "$again" = "0" ] && { show_menu; return 0; }
+    done
+
+    # 2) Only onto a clean Ubuntu/Debian server, with room for it. An install
+    #    left unfinished by an earlier try resumes; one that finished for THIS
+    #    domain (the data move failed last time) only gets the data again.
+    local info os has_mirza their_domain free need skip_install=0
+    info=$(_tr_ssh 'bash -s' <<'EOF'
+. /etc/os-release 2>/dev/null; echo "OS=$ID"
+if grep -qx "PHASE:COMPLETE" /root/confmirza/.mirza_install_state 2>/dev/null \
+    || grep -q '"dir"' /root/confmirza/bots.json 2>/dev/null; then
+    echo "MIRZA=yes"
+    echo "DOMAIN=$(grep '^\$domainhosts' /var/www/html/mirzaprobotconfig/config.php 2>/dev/null | cut -d"'" -f2)"
+    echo "BOTS=$(grep -o '"dir"' /root/confmirza/bots.json 2>/dev/null | wc -l)"
+else
+    echo "MIRZA=no"
+fi
+echo "FREE=$(df -Pm / | awk 'NR==2{print $4}')"
+EOF
+)
+    os=$(printf '%s\n' "$info" | sed -n 's/^OS=//p')
+    has_mirza=$(printf '%s\n' "$info" | sed -n 's/^MIRZA=//p')
+    their_domain=$(printf '%s\n' "$info" | sed -n 's/^DOMAIN=//p')
+    free=$(printf '%s\n' "$info" | sed -n 's/^FREE=//p')
+    need=$(( $(du -sm "$dir" 2>/dev/null | cut -f1) + 3000 ))
+    case "$os" in
+        ubuntu|debian) ;;
+        *) _tr_back "The new server must run Ubuntu or Debian (it runs: ${os:-unknown})."; return 1 ;;
+    esac
+    if [ "$has_mirza" = "yes" ]; then
+        if [ "$their_domain" = "$domain" ] && [ "$(printf '%s\n' "$info" | sed -n 's/^BOTS=//p')" -le 1 ] 2>/dev/null; then
+            skip_install=1
+            printf "    ${C_DIM}%s already has this bot's install from an earlier try - only the data moves again.${CR}\n" "$TR_HOST"
+        else
+            _tr_back "Mirza is already installed on $TR_HOST." "Transfer goes to a clean server - nothing was changed."
+            return 1
+        fi
+    fi
+    if [ -n "$free" ] && [ "$free" -lt "$need" ]; then
+        _tr_back "Not enough disk space on $TR_HOST (${free} MB free, about ${need} MB needed)."
+        return 1
+    fi
+
+    # 3) The domain has to point at the new server
+    echo ""
+    _sec "Point the domain at the new server"
+    printf "    Change the A record of ${C_KEY}%s${CR} to ${C_KEY}%s${CR}\n" "$domain" "$TR_HOST"
+    printf "    ${C_DIM}(at your domain's DNS; on Cloudflare leave it \"DNS only\"),${CR}\n"
+    printf "    ${C_DIM}then press Enter.${CR}\n"
+    local resolved k
+    while :; do
+        printf "  ${C_PROMPT}❯${CR} Press Enter when done ${C_DIM}[0 = back]${CR}: "
+        read -r k
+        [ "$k" = "0" ] && { show_menu; return 0; }
+        resolved=$(getent ahostsv4 "$domain" 2>/dev/null | awk '{print $1; exit}')
+        if [ "$resolved" = "$TR_HOST" ]; then
+            printf "    ${C_OK}●${CR} ${C_OK}%s now points at %s${CR}\n" "$domain" "$TR_HOST"
+            break
+        fi
+        printf "    ${C_FAINT_BAD}%s still points at %s - DNS can take a few minutes.${CR}\n" "$domain" "${resolved:-nothing}"
+        printf "  ${C_PROMPT}❯${CR} ${C_DIM}Enter = check again, c = continue anyway, 0 = back${CR}: "
+        read -r k
+        [ "$k" = "0" ] && { show_menu; return 0; }
+        [[ "$k" =~ ^[Cc]$ ]] && break
+    done
+
+    # 4) Keep a copy here?
+    echo ""
+    printf "  ${C_PROMPT}❯${CR} Save a copy of the database and bot files in /root? ${C_DIM}[Y/n]${CR}: "
+    local keep; read -r keep
+    local keep_copy=1; [[ "$keep" =~ ^[Nn]$ ]] && keep_copy=0
+    echo ""
+
+    # 5) Pack it: database, folder (its own config.php and vendor/ stay behind -
+    #    the new install makes its own), certificate
+    local work; work=$(mktemp -d /root/.mirza_transfer.XXXXXX)
+    run_step "Saving the database" \
+        "set -o pipefail; mysqldump -h '$dbhost' -u '$dbuser' -p'$dbpass' --no-tablespaces '$dbname' | gzip > '$work/db.sql.gz' && [ \$(gunzip -c '$work/db.sql.gz' | head -c 100 | wc -c) -gt 0 ]" \
+        || { show_step_error; rm -rf "$work"; _tr_back "Could not save the database." "Nothing was changed."; return 1; }
+    run_step "Packing the bot folder" \
+        "tar --anchored --exclude=./config.php --exclude=./vendor --exclude=./update_request --exclude=./update_request.running --exclude=./rollback_request --exclude=./update_progress.json --exclude=./update_status.json --exclude=./update_backups.json -czf '$work/files.tar.gz' -C '$dir' ." \
+        || { show_step_error; rm -rf "$work"; _tr_back "Could not pack the bot folder." "Nothing was changed."; return 1; }
+    local have_cert=0
+    if [ -f "/etc/letsencrypt/live/${domain}/fullchain.pem" ]; then
+        tar -czf "$work/cert.tar.gz" -C /etc/letsencrypt accounts "archive/${domain}" "live/${domain}" "renewal/${domain}.conf" 2>/dev/null \
+            && have_cert=1
+    fi
+    local stamp; stamp=$(date +%Y-%m-%d_%H-%M-%S)
+    if [ "$keep_copy" -eq 1 ]; then
+        cp "$work/db.sql.gz" "/root/mirza_transfer_${dbname}_${stamp}.sql.gz"
+        cp "$work/files.tar.gz" "/root/mirza_transfer_files_${dbname}_${stamp}.tar.gz"
+        printf "    ${C_OK}✔${CR} ${C_DIM}Copies kept in /root (mirza_transfer_*_%s)${CR}\n" "$stamp"
+    fi
+
+    # 6) Send it
+    local script_src="/root/install.sh"
+    [ -f "$script_src" ] || script_src=$(readlink -f "$0")
+    if ! _tr_ssh 'rm -rf /root/mirza_transfer && mkdir -p /root/mirza_transfer && chmod 700 /root/mirza_transfer'; then
+        rm -rf "$work"; _tr_back "Could not prepare $TR_HOST."; return 1
+    fi
+    { printf 'SRC_DIR=%q\n' "$dir"; _tr_import_script; } > "$work/import.sh"
+    local f sent=1
+    printf "    ${C_DIM}Sending to %s...${CR}\n" "$TR_HOST"
+    for f in db.sql.gz files.tar.gz import.sh; do
+        _tr_scp "$work/$f" /root/mirza_transfer/ || sent=0
+    done
+    [ "$have_cert" -eq 1 ] && { _tr_scp "$work/cert.tar.gz" /root/mirza_transfer/ || sent=0; }
+    _tr_scp "$script_src" /root/mirza_transfer/install.sh || sent=0
+    if [ "$sent" -ne 1 ]; then
+        rm -rf "$work"; _tr_back "Sending the files to $TR_HOST failed." "Nothing was changed here."; return 1
+    fi
+    printf "    ${C_OK}✔${CR} ${C_DIM}Database, bot folder%s sent${CR}\n" "$([ "$have_cert" -eq 1 ] && echo " and SSL certificate")"
+    # the certificate goes in before the install, which then uses it as it is
+    # (no new certificate needed), and both web ports are open
+    _tr_ssh 'bash -s' <<'EOF'
+if [ -f /root/mirza_transfer/cert.tar.gz ]; then mkdir -p /etc/letsencrypt && tar -xzf /root/mirza_transfer/cert.tar.gz -C /etc/letsencrypt; fi
+if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then ufw allow 80/tcp >/dev/null; ufw allow 443/tcp >/dev/null; fi
+EOF
+
+    # 7) Install on the new server - the real installer, in this terminal
+    if [ "$skip_install" -ne 1 ]; then
+        echo ""
+        _sec "Installing on ${TR_HOST}"
+        printf "    ${C_DIM}The installer now runs on the new server. Its answers are filled in;${CR}\n"
+        printf "    ${C_DIM}if it asks anything (bot name, phpMyAdmin port), answer as usual.${CR}\n"
+        echo ""
+        local icmd
+        icmd=$(printf 'bash /root/mirza_transfer/install.sh install --name %q --token %q --admin %q --domain %q --db-user %q --db-pass %q' \
+            "$botname" "$token" "$admin" "$domain" "$dbuser" "$dbpass")
+        _tr_ssh -t "$icmd"
+    fi
+    if ! _tr_ssh 'grep -qx "PHASE:COMPLETE" /root/confmirza/.mirza_install_state 2>/dev/null && [ -f /var/www/html/mirzaprobotconfig/config.php ]'; then
+        rm -rf "$work"
+        _tr_back "The install on $TR_HOST did not finish." \
+            "Nothing here was changed. Fix what it reported, then run Transfer again (it resumes)."
+        return 1
+    fi
+
+    # 8) The bot's own data over the fresh install
+    echo ""
+    local res
+    res=$(_tr_ssh 'bash /root/mirza_transfer/import.sh' 2>&1)
+    if ! printf '%s\n' "$res" | grep -qx "RESULT=OK"; then
+        rm -rf "$work"
+        printf '%s\n' "$res" | tail -n 4 | sed 's/^/      /'
+        _tr_back "Moving the data onto $TR_HOST failed." \
+            "The bot here is untouched and still has everything. The files are left in /root/mirza_transfer on $TR_HOST."
+        return 1
+    fi
+    printf "    ${C_OK}✔${CR} ${C_DIM}Database and bot folder in place on %s${CR}\n" "$TR_HOST"
+    printf '%s\n' "$res" | grep -q '^TABLE_WARN=1' \
+        && printf "    ${C_WARN}!${CR} ${C_WARN}table.php reported a problem there - run option 2 (Update) on it once.${CR}\n"
+    _tr_ssh 'rm -rf /root/mirza_transfer' >/dev/null 2>&1
+    rm -rf "$work"
+
+    # 9) Is it the live one now?
+    local code hook
+    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 --resolve "${domain}:443:${TR_HOST}" "https://${domain}/" 2>/dev/null)
+    hook=$(curl -s --max-time 10 "https://api.telegram.org/bot${token}/getWebhookInfo" 2>/dev/null)
+    # its jobs here would now reach the new server and run everything twice
+    _bot_crons_remove "$hosts" >/dev/null 2>&1
+
+    _sec "Transferred"
+    _kv "Bot" "${C_KEY}${name}${CR}"
+    _kv "Now on" "${C_OK}${TR_HOST}${CR} ${C_DIM}· https://${domain}${CR}"
+    if [ "$code" = "200" ] || [ "$code" = "301" ] || [ "$code" = "302" ]; then
+        _kv "Site" "$(_dot ok) ${C_OK}answers (HTTP ${code})${CR}"
+    else
+        _kv "Site" "$(_dot warn) ${C_WARN}HTTP ${code:-timeout}${CR} ${C_DIM}· check it once DNS has settled${CR}"
+    fi
+    if printf '%s' "$hook" | grep -q "\"url\":\"https://${domain}/index.php\""; then
+        _kv "Webhook" "$(_dot ok) ${C_OK}https://${domain}/index.php${CR}"
+    else
+        _kv "Webhook" "$(_dot warn) ${C_WARN}not confirmed${CR} ${C_DIM}· run option 2 (Update) on the new server${CR}"
+    fi
+    _kv "Here" "${C_DIM}scheduled jobs stopped; files and database left as they were${CR}"
+    echo ""
+
+    # 10) Keep it here or not - default: keep
+    printf "  ${C_PROMPT}❯${CR} Remove %s from THIS server now? ${C_DIM}[y/N]${CR}: " "$name"
+    local rm_here; read -r rm_here
+    if [[ "$rm_here" =~ ^[Yy]$ ]]; then
+        echo ""
+        remove_bot_scoped "$name" "$dir" "$domain" yes
+    else
+        printf "\n    ${C_DIM}Kept here. Remove it later with option 3 once the new server is fine.${CR}\n"
+    fi
     echo ""
     printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "
     read -r _
