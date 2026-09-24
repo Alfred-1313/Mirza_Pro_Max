@@ -180,7 +180,7 @@ banner()  {
 #   _mi "1" "Install" "what it does" - name padded, description dimmed
 _mi() {
     if [ -n "${3-}" ]; then
-        printf "    ${C_KEY}%s${CR} ${C_BORDER}│${CR} ${C_TXT}%-14s${CR}${C_DIM}%b${CR}\n" "$1" "$2" "$3"
+        printf "    ${C_KEY}%s${CR} ${C_BORDER}│${CR} ${C_TXT}%-13s${CR} ${C_DIM}%b${CR}\n" "$1" "$2" "$3"
     else
         printf "    ${C_KEY}%s${CR} ${C_BORDER}│${CR} ${C_TXT}%b${CR}\n" "$1" "$2"
     fi
@@ -1455,7 +1455,7 @@ function show_menu() {
     _mi "1" "Install"   "set up the bot on a clean server"
     _mi "2" "Update"    "newest code, keeps all your data"
     _mi "3" "Remove"    "delete the bot and its packages"
-    _mi "4" "Migrate to Pro Max" "bring an original Mirza install over ${C_WARN}(beta)${CR}"
+    _mi "4" "Migrate"   "move an original Mirza to Pro Max ${C_WARN}(beta)${CR}"
     _mi "5" "Renew SSL" "reissue the domain certificate"
     _mi "6" "Backup"    "database dump, sent to Telegram"
     _mi "7" "Restore"   "import a .sql or .zip backup ${C_WARN}(beta)${CR}"
