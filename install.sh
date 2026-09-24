@@ -3016,6 +3016,8 @@ function update_bot() {
     clear 2>/dev/null || true
     banner
     if ! pick_bot_instance "update"; then
+        # [0] in the bot list is "back", not "nothing installed"
+        [ "$(bots_registry_count)" != "0" ] && { show_menu; return 1; }
         _sec "Update"
         printf "    ${C_BAD}●${CR} ${C_BAD}Mirza is not installed here. Use option 1 to install it first.${CR}\n"
         sleep 2
@@ -3023,6 +3025,8 @@ function update_bot() {
         return 1
     fi
     BOT_DIR="$PICKED_DIR"
+    local BOT_LABEL="$PICKED_NAME"
+    [ -n "$PICKED_DOMAIN" ] && [ "$PICKED_DOMAIN" != "null" ] && BOT_LABEL="$PICKED_NAME · $PICKED_DOMAIN"
     if [ ! -d "$BOT_DIR" ]; then
         _sec "Update"
         printf "    ${C_BAD}●${CR} ${C_BAD}Mirza is not installed here. Use option 1 to install it first.${CR}\n"
@@ -3046,7 +3050,7 @@ function update_bot() {
     # with the same config.php variables, so it can be upgraded in place. It
     # simply has no "version" file of ours.
     local current flavour
-    current=$(get_installed_version)
+    current=$(get_installed_version "$BOT_DIR")
     if [ -n "$current" ]; then
         flavour="Mirza Pro Max ${current}"
     elif [ -f "$BOT_DIR/index.php" ] && [ -f "$BOT_DIR/table.php" ]; then
@@ -3058,6 +3062,7 @@ function update_bot() {
     fi
 
     _sec "Update"
+    _kv "Bot" "${C_KEY}${BOT_LABEL}${CR}"
     _kv "Installed" "${C_OK}${flavour}${CR}"
     _kv "Directory" "${C_DIM}${BOT_DIR}${CR}"
     echo ""
@@ -3078,6 +3083,7 @@ function update_bot() {
 
     # ── Confirm before touching anything ─────────────────────
     _sec "Ready to update"
+    _kv "Bot" "${C_KEY}${BOT_LABEL}${CR}"
     _kv "Installed" "${C_OK}${flavour}${CR}"
     _kv "Target" "${C_KEY}${TARGET_LABEL}${CR}"
     echo ""
@@ -3109,9 +3115,16 @@ function update_bot() {
     run_step "Backing up the current install" \
         "tar --warning=no-file-changed -czf '$ROLLBACK' -C '$(dirname "$BOT_DIR")' --exclude='*.bak*' --exclude='.git' --exclude='log.txt' --exclude='error_log' --exclude='update_request' --exclude='update_request.running' --exclude='rollback_request' --exclude='update_progress.json' --exclude='update_status.json' --exclude='update_backups.json' '$(basename "$BOT_DIR")'" \
         || { show_step_error; printf "  ${C_BAD}Could not create a rollback archive. Refusing to continue.${CR}\n"; sleep 3; show_menu; return 1; }
-    # keep the 10 most recent, so this never fills the disk - the bot lists
-    # exactly these for "بازگشت به نسخه قبلی", so the two numbers are one number
-    ls -1t "$BK_DIR"/pre-update_*.tar.gz 2>/dev/null | tail -n +11 | xargs -r rm -f
+    # keep this bot's 10 most recent, so this never fills the disk - the bot
+    # lists exactly these for "بازگشت به نسخه قبلی", so the two numbers are one
+    # number. The folder is shared: another bot's snapshots (told apart by the
+    # directory inside, as the bot's own list does) are never counted or deleted.
+    local _kept=0 _snap
+    for _snap in $(ls -1t "$BK_DIR"/pre-update_*.tar.gz 2>/dev/null); do
+        [ "$(tar -tzf "$_snap" 2>/dev/null | head -1 | cut -d/ -f1)" = "$(basename "$BOT_DIR")" ] || continue
+        _kept=$((_kept + 1))
+        [ "$_kept" -gt 10 ] && rm -f "$_snap"
+    done
 
     # ── 2. Fetch and validate the new code ───────────────────
     TEMP_DIR="/tmp/mirzaprobot_update"
@@ -3211,7 +3224,7 @@ function update_bot() {
 
     rm -rf "$TEMP_DIR"
 
-    local newver; newver=$(get_installed_version); [ -z "$newver" ] && newver="$TARGET_LABEL"
+    local newver; newver=$(get_installed_version "$BOT_DIR"); [ -z "$newver" ] && newver="$TARGET_LABEL"
 
     # ── 10. Tell the bot's admins it was updated ───────────────
     # Best effort on purpose: the update has already succeeded by this point,
@@ -3290,6 +3303,7 @@ NOTIFYEOF
     fi
     echo ""
     _sec "Done"
+    _kv "Bot"      "${C_KEY}${BOT_LABEL}${CR}"
     _kv "Was"      "${C_DIM}${flavour}${CR}"
     _kv "Now"      "${C_OK}${newver}${CR}"
     _kv "Rollback" "${C_DIM}${ROLLBACK}${CR}"
