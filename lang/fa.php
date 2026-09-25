@@ -1459,6 +1459,7 @@ return array (
 
 ⬅️ بعد از انتخاب، مرحلهٔ پرداخت باز می‌شود.',
       'backToMethodBtn' => '🔙 بازگشت به روش پرداخت',
+      'backToPrevMenuBtn' => '🔙 بازگشت به منوی قبلی',
       'customAmountBtn' => '✏️ مبلغ دلخواه',
       'customAmountPromptTitle' => '💵 مبلغ دلخواه
 

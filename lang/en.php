@@ -623,6 +623,246 @@ Use the button below to pay👇🏻',
 🔹 Each transaction is valid for one hour; do not send any amount after the expiration message.
 
 ✅ If you have any issues, you can contact support.',
+                        // the top-up flow's own texts - prices in Dollar, but
+                        // where the number is a toman rate it says Toman
+                        'chargeSuccess' => '✅ <b>Your wallet has been topped up successfully</b>
+
+💰 Amount paid: {amount} Dollar
+💳 Your current balance: {balance} Dollar
+
+Thank you for your payment 🙏
+{discount_block}',
+                        'chargeSuccessDiscount' => '🎁 Discount applied!
+An extra {bonus} Dollar was added to your wallet.
+
+💰 Current balance: {balance}',
+                        'groupMethodCaption' => '💳 <b>{group}</b>
+
+⬇️ Choose one of the payment methods below:',
+                        'groupBackBtn' => '🔙 Back to payment methods',
+                        'selectPaymentGrouped' => '⬇️ Choose a payment method:',
+                        'pkgPromptTitle' => '#️⃣ <b>Top-up amount</b>
+
+Choose one of the amounts below.
+
+<blockquote>✏️ Want a different amount? Tap <b>Custom amount</b> and send the number.</blockquote>
+
+⬅️ Once you choose, the payment step opens.',
+                        'backToMethodBtn' => '🔙 Back to payment method',
+                        'customAmountBtn' => '✏️ Custom amount',
+                        'customAmountPromptTitle' => '💵 Custom amount
+
+Send just the number, in {currency}, in the chat.
+
+<blockquote><b>Minimum: {min} {currency}</b>
+<b>Maximum: {max} {currency}</b></blockquote>
+
+For example: <b>{min}</b>
+
+If you made a mistake, you can go back with the buttons below.
+
+← Send the number without any extra letters or characters.',
+                        'customAmountPromptTitleOnline' => '💵 Custom amount
+
+Send just the number, in {currency}, in the chat.
+
+<blockquote><b>Minimum: {min} {currency}</b>
+<b>Maximum: {max} {currency}</b></blockquote>
+
+For example: <b>{min}</b>
+
+<blockquote>Online crypto gateways do not create invoices under <b>1</b> dollar.</blockquote>
+
+If you made a mistake, you can go back with the buttons below.
+
+← Send the number without any extra letters or characters.',
+                        'depositRangeOnline' => '❌ For this payment method the minimum deposit is 1 dollar, equal to {mainbalance} Toman, and the maximum is {maxbalance} Toman, equal to {maxusd} dollars',
+                        'topupMinUsdError' => '❌ Error
+    The minimum amount for payment via this gateway is 1 dollar, equal to {price} Toman.',
+                        'confirmContinueCaption' => '✅ The amount <b>%s</b> was chosen for <b>%s</b>.
+
+To continue, tap the button below.',
+                        'confirmContinueBtn' => '✅ Continue with %s',
+                        'topupPaidAlert' => '✅ Your payment was successful and your wallet has been charged.',
+                        'paidInvoiceBtn' => '✅ Paid',
+                        'reissueInvoiceBtn' => 'Create a new invoice',
+                        'topupInvoiceExpiredCaption' => '<b>Invoice expired</b>
+
+The payment time for this invoice is over.
+
+Do not use this link any more — your payment might not be recorded.
+
+To get a fresh payment link for the same amount (<b>{price} Dollar</b>), tap the button below.
+
+«Create a new invoice» shows a new link and a new invoice number.',
+                        'cardInvoiceExpiredCaption' => '<b>Invoice expired</b>
+
+The time to pay this invoice to the card number is over.
+
+Do not deposit to this number any more — it might not be approved.
+
+To get a fresh card-to-card invoice for the same amount (<b>{price} Dollar</b>), tap the button below.
+
+«Create a new invoice» shows a new invoice and a new number.',
+                        'plisioInvoiceExpiredCaption' => '<b>Invoice expired</b>
+
+The payment time for this crypto link is over.
+
+Do not use this link any more — your payment might not be recorded.
+
+To get a fresh payment link for the same amount (<b>{price} Dollar</b>), tap the button below.
+
+«Create a new invoice» shows a new link and a new invoice number.',
+                        'nowpaymentInvoiceCaption' => '
+<b>💲 To top up your wallet with cryptocurrency, tap the payment button at the end of this message</b>
+
+⚠️ Note: the payment time is {minutes} minutes; after {minutes} minutes the transaction will be canceled
+
+🧾 Invoice number: {order}
+💰 Invoice amount: {price} Toman
+📊 Dollar price: {usd} Toman as of now
+
+
+<blockquote>⚠️ After payment, if the transaction amount was deposited correctly, your wallet will be charged automatically within the next 15 minutes at most.</blockquote>
+
+
+Use the button below to pay 👇🏻',
+                        'starInvoiceCaption' => '✅ Your transaction was created
+
+🛒 Tracking code: <code>{order}</code>
+💲 Transaction amount: {stars} ⭐ (equivalent to {price} Toman)
+
+📌 Please convert the amount of {price} Toman to Telegram Stars and pay it.
+
+💢 Important points before payment: 👇
+🔹 This transaction is valid for {minutes} minutes; do not pay after it expires.
+
+✅ If you have a problem, contact support.',
+                        'frenzyexInvoiceCreated' => '✅ Payment invoice was created.
+
+🔢 Invoice number: {invoice}
+💰 Invoice amount: {price} Dollar
+
+🕐 <b>Payment deadline:</b> <b>{minutes} minutes</b>
+After this time the invoice is void and you need to create a new one.
+
+📌 After a successful payment, wait a few moments for the confirmation message; otherwise your account will not be charged.
+
+Use the button below to pay 👇🏻',
+                        'trxNetworkLabel' => 'TRON (Tron network)',
+                        'trxInvoiceCaption' => '<blockquote><b>⚡️ TRX payment</b></blockquote>
+
+🌐 <b>Network:</b> <b>{network}</b>
+📊 <b>Network amount:</b> <b>TRX</b> <code>{trx}</code>
+💰 <b>Toman equivalent:</b> <b>{price} Toman</b> <i>(Nobitex rate)</i>
+🔍 <b>About 1 TRX ≈ {rate} Toman</b>
+
+🕐 <b>Payment deadline:</b> <b>{minutes} minutes</b> (the TRX price changes all the time).
+
+<blockquote>📋 <b>Details to copy</b> — take the two values below with the «Copy» buttons, or tap them.</blockquote>
+
+<b>Destination (receiving wallet):</b>
+<code>{address}</code>
+
+<b>Amount to send (TRX):</b>
+<code>{trx}</code>
+
+<blockquote>⚠️ Send only on the <b>{network}</b> network; money sent on any other network cannot be returned.
+
+⚠️ Send <b>exactly</b> this amount, down to the last decimal digit. The bot recognizes your payment by this number; the Tron network has no comment field.
+
+If you sent a rounded amount or want it confirmed sooner, tap the <b>«Submit payment»</b> button.</blockquote>',
+                        'trxCopyAmountBtn' => 'Copy TRX amount',
+                        'trxCopyAddressBtn' => 'Copy address',
+                        'trxCheckBtn' => 'Submit payment',
+                        'trxAskHash' => '🔗 <b>Send the transaction hash (TxID)</b>
+
+It is 64 letters and digits. You can copy it from two places:
+
+📱 Your own wallet history — tap that transaction.
+🌐 The <a href="https://tronscan.org">tronscan.org</a> website — search the destination address and find your transaction.
+
+⚠️ The transaction amount must be <b>exactly</b> the number written on the invoice.',
+                        'trxHashInvalid' => '❌ <b>This hash was not accepted.</b>
+
+Either what you sent was not a hash, or the transaction does not match the invoice. Check that it is 64 letters and digits, the transaction succeeded, it went to this address, and its amount is <b>exactly</b> the invoice number.',
+                        'trxNotSeenYet' => '⏳ No deposit with this amount has been seen on the chain yet. If you just sent it, wait a little, or send the transaction hash.',
+                        'trxNoAddress' => '❌ The TRX wallet address has not been set by the admin yet. Please choose another method.',
+                        'usdtbepNetworkLabel' => 'BEP20 (BNB Smart Chain)',
+                        'usdtbepInvoiceCaption' => '<blockquote><b>💵 Pay with Tether</b></blockquote>
+
+🌐 <b>Network:</b> <b>{network}</b>
+📊 <b>Tether amount:</b> <b>USDT</b> <code>{usdt}</code>
+💰 <b>Toman equivalent:</b> <b>{price} Toman</b> <i>(Nobitex rate)</i>
+🔍 <b>About 1 USDT ≈ {rate} Toman</b>
+
+🕐 <b>Payment deadline:</b> <b>{minutes} minutes</b>
+
+<blockquote>📋 <b>Details to copy</b> — take the two values below with the «Copy» buttons, or tap them.</blockquote>
+
+<b>Destination (receiving wallet):</b>
+<code>{address}</code>
+
+<b>Amount to send (USDT):</b>
+<code>{usdt}</code>
+
+<blockquote>⚠️ Send only on the <b>{network}</b> network. Tether exists on several networks, and if you pick another one the money cannot be returned.
+
+⚠️ Send <b>exactly</b> this amount, down to the last decimal digit. The bot recognizes your payment by this number; this network has no comment field.
+
+If you sent a rounded amount or want it confirmed sooner, tap the <b>«Submit payment»</b> button.</blockquote>',
+                        'usdtbepCopyAmountBtn' => 'Copy USDT amount',
+                        'usdtbepCopyAddressBtn' => 'Copy address',
+                        'usdtbepCheckBtn' => 'Submit payment',
+                        'usdtbepAskHash' => '🔗 <b>Send the transaction hash (TxID)</b>
+
+It starts with <code>0x</code> and has 64 letters and digits. You can copy it from two places:
+
+📱 Your own wallet history — tap that transaction.
+🌐 The <a href="https://bscscan.com">bscscan.com</a> website — search the destination address and find your transaction.
+
+⚠️ The transaction amount must be <b>exactly</b> the number written on the invoice.',
+                        'usdtbepHashInvalid' => '❌ <b>This hash was not accepted.</b>
+
+Either what you sent was not a hash, or the transaction does not match the invoice. Check that it starts with <code>0x</code> and is 64 characters, the transaction succeeded, the Tether was sent on the BEP20 network, it went to this address, and its amount is <b>exactly</b> the invoice number.',
+                        'usdtbepNotSeenYet' => '⏳ No deposit with this amount has been seen on the network yet. If you just sent it, wait a little, or send the transaction hash.',
+                        'usdtbepNoAddress' => '❌ The Tether (BEP20) wallet address has not been set by the admin yet. Please choose another method.',
+                        'tonInvoiceCaption' => '<blockquote><b>💎 TON payment</b></blockquote>
+
+📊 <b>Network amount:</b> <b>TON</b> <code>{ton}</code>
+💰 <b>Toman equivalent:</b> <b>{price} Toman</b> <i>(Nobitex rate)</i>
+🔍 <b>About 1 TON ≈ {rate} Toman</b>
+
+🕐 <b>Payment deadline:</b> <b>{minutes} minutes</b> (the TON price changes all the time).
+
+<blockquote>📋 <b>Details to copy</b> — take the three values below with the «Copy» buttons, or tap them; the comment must be in the transaction <b>exactly</b> as written.</blockquote>
+
+<b>Destination (receiving wallet):</b>
+<code>{address}</code>
+
+<b>Amount to send (TON):</b>
+<code>{ton}</code>
+
+<b>Transaction comment (memo / tag):</b>
+<code>{memo}</code>
+
+<blockquote>🌐 The «Open TON wallet» button fills in the TON amount and the comment in <b>Tonkeeper</b> for you.
+
+⚠️ You can pay with other wallets too (Tonhub, MyTonWallet, Telegram Wallet, …); just tap the three values above to copy them.
+
+Be sure to enter the comment. Without it, your payment cannot be identified.</blockquote>',
+                        'tonOpenWalletBtn' => 'Open TON wallet',
+                        'tonCopyAddressBtn' => 'Copy address',
+                        'tonCopyAmountBtn' => 'Copy TON amount',
+                        'tonCopyMemoBtn' => 'Copy comment',
+                        'tonCheckBtn' => 'Submit payment',
+                        'tonBackMethodBtn' => 'Back to payment method',
+                        'tonBackBtn' => 'Back',
+                        'tonNotSeenYet' => '⏳ No deposit with this comment has been seen on the chain yet.
+
+If you just paid, wait a little; the bot keeps checking on its own and charges your wallet as soon as it arrives.',
+                        'tonNoAddress' => '❌ The TON wallet address has not been set by the admin yet. Please choose another method.',
+                        'backToPrevMenuBtn' => '🔙 Back to previous menu',
                 ],
                 'Discount' => [
                         'discountapplied' => 'Congratulations 🎉
@@ -1599,6 +1839,16 @@ Note: To select all panels, send the word <code>/all</code>',
                 'Discountsell' => [
                         'getCode' => 'Send a code for the discount code',
                         'getLimit' => '📌 How many users can use this discount code?',
+                ],
+                // the family names the customer sees on the payment screen
+                'GatewayLang' => [
+                        'groups' => [
+                                'online' => '🪙 Online crypto gateways',
+                                'offline' => '⏳ Offline crypto gateways',
+                                'rial' => '🏧 Rial gateways',
+                                'rialforex' => '💱 Rial-to-crypto gateways',
+                                'card' => '💳 Card to card',
+                        ],
                 ],
                 'Help' => [
                         'getAddDesc' => ' 🔗 The tutorial name was saved. Now send your description 
@@ -3855,6 +4105,11 @@ Connection link:
                 'agentRequestDesc' => '📌 Send your description to submit an agency request.',
                 'aqayePardakht' => '🔵 Aghaye Pardakht gateway',
                 'botOff' => '❌ The bot is off, please check back in a few minutes',
+                'cardRandomAmountNotice' => '⚠️ Dear user, deposit exactly <code>{price_rial}</code> Rials for this invoice; not a single rial more or less, so your receipt is checked without delay.',
+                'tonPayment' => '💎 Pay with TON',
+                'trxPayment' => '⚡ Pay with TRX',
+                'usdtbepPayment' => '💵 Pay with Tether (BEP20)',
+                'frenzyEx' => 'FrenzyEx rial crypto gateway',
                 'cart' => 'To increase your balance, deposit the amount of <code>{price}</code>  Dollar  to the account number below 👇🏻
         
         ==================== 

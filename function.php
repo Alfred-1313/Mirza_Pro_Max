@@ -1337,21 +1337,23 @@ function DirectPayment($order_id, $image = 'images.jpg')
         // customizable <blockquote> appended to the customizable base caption,
         // showing the user's up-to-date balance; a customizable تهیه اشتراک
         // button (genbtn alias 'bc') always rides along underneath.
+        // the payer's language: an admin approving a card receipt runs this
+        // too, and their own texts are not the customer's
+        $bc_lang = (is_array($Balance_id) && !empty($Balance_id['lang'])) ? $Balance_id['lang'] : 'fa';
         $bc_discountBlock = '';
         if ($topup_bonus > 0) {
-            $bc_discountText = strtr(bottext_resolve_key('users.Balance.chargeSuccessDiscount'), [
+            $bc_discountText = strtr(bottext_resolve_key('users.Balance.chargeSuccessDiscount', $bc_lang), [
                 '{bonus}' => money($topup_bonus),
                 '{balance}' => money($Balance_confrim),
             ]);
             $bc_discountBlock = "\n<blockquote>" . $bc_discountText . '</blockquote>';
         }
-        $bc_caption = strtr(bottext_resolve_key('users.Balance.chargeSuccess'), [
+        $bc_caption = strtr(bottext_resolve_key('users.Balance.chargeSuccess', $bc_lang), [
             '{amount}' => $Payment_report['price'],
             '{balance}' => money($Balance_confrim),
             '{discount_block}' => $bc_discountBlock,
         ]);
-        $bc_lang = (is_array($Balance_id) && !empty($Balance_id['lang'])) ? $Balance_id['lang'] : 'fa';
-        $bc_defs = genbtn_defs('bc', $textbotlang);
+        $bc_defs = genbtn_defs('bc', lang_tab_texts($bc_lang));
         $bc_ov = genbtn_override($bc_lang, 'users.Balance.chargeSuccess', 0);
         $bc_kb = !empty($bc_ov['hidden']) ? null : json_encode(['inline_keyboard' => [[genbtn_render($bc_defs[0], $bc_ov, $bc_defs[0]['callback_data'])]]]);
         sendmessage($Payment_report['id_user'], $bc_caption, $bc_kb, 'HTML');
@@ -6100,6 +6102,10 @@ if (!function_exists('topup_invoice_btnstyle_items')) {
     // show the same two, so they share one.
     function topup_invoice_btnstyle_items($key, $textbotlang, $lang = null)
     {
+        // the customer's button names - the tab's own, not the panel's
+        if ($lang !== null) {
+            $textbotlang = lang_tab_texts($lang);
+        }
         $b = $textbotlang['users']['Balance'];
         if ($key === 'card' && function_exists('card_invoice_btnstyle_items')) {
             // card-to-card has one copy button per card, so its list is built
@@ -6432,7 +6438,7 @@ if (!function_exists('topup_paid_notify')) {
             return;
         }
         $lang = (string) (select("user", "*", "id", $row['id_user'], "select")['lang'] ?? 'fa');
-        $t = languagechange(null, $lang);
+        $t = lang_tab_texts($lang);
         $btn = topup_styled_button(
             $t['users']['Balance']['paidInvoiceBtn'],
             topup_invoice_btnstyle_for($lang, $key, 'paid'),
@@ -6562,7 +6568,7 @@ if (!function_exists('topup_slot_defs')) {
             'custom' => ['label' => $b['customAmountBtn'], 'color' => 'primary', 'screen' => 'amount', 'pair' => 'back'],
             'back' => ['label' => $b['backToMethodBtn'], 'color' => 'danger', 'screen' => 'amount', 'pair' => 'custom'],
             'backcustom' => ['label' => $b['backToMethodBtn'], 'color' => 'danger', 'screen' => 'custom', 'pair' => 'backpkg'],
-            'backpkg' => ['label' => $b['backToPrevMenuBtn'] ?? '🔙 بازگشت به منوی قبلی', 'color' => 'danger', 'screen' => 'custom', 'pair' => 'backcustom'],
+            'backpkg' => ['label' => $b['backToPrevMenuBtn'], 'color' => 'danger', 'screen' => 'custom', 'pair' => 'backcustom'],
         ];
     }
 }

@@ -2225,8 +2225,8 @@ if (!function_exists('topup_packages_payload')) {
         // only - its colour/name/position are set in 🎨 → 💳 درگاه‌ها, and tapping
         // it here says so rather than opening a second, competing editor
         $kb['inline_keyboard'][] = [
-            topup_styled_button($textbotlang['users']['Balance']['customAmountBtn'], $tp_customStyle, "topupminmax:{$lang}:{$key}", 'primary'),
-            topup_styled_button($textbotlang['users']['Balance']['backToMethodBtn'], $tp_backStyle, "tpbackinfo:{$lang}:{$key}", 'danger'),
+            topup_styled_button(lang_tab_texts($lang)['users']['Balance']['customAmountBtn'], $tp_customStyle, "topupminmax:{$lang}:{$key}", 'primary'),
+            topup_styled_button(lang_tab_texts($lang)['users']['Balance']['backToMethodBtn'], $tp_backStyle, "tpbackinfo:{$lang}:{$key}", 'danger'),
         ];
         // This screen's OWN caption is edited here - it is the text shown on
         // this very step, so it belongs next to the packages it describes.
@@ -2259,7 +2259,7 @@ if (!function_exists('topup_packages_caption')) {
     {
         // exactly what a real user of this language/gateway would see - the
         // admin edits it right here (topupcap:) with an immediate live preview
-        return topup_caption_for($lang, $key, $textbotlang['users']['Balance']['pkgPromptTitle']);
+        return topup_caption_for($lang, $key, lang_tab_texts($lang)['users']['Balance']['pkgPromptTitle']);
     }
     // topup_packages_caption_with_preview() alone stays a pure passthrough of the package
     // caption (existing override/reset round-trip tests depend on that exact
@@ -2283,8 +2283,8 @@ if (!function_exists('topup_packages_caption')) {
         // with no way to act on it just made this screen longer. See
         // topup_card_caption_previews(), which renders them next to the buttons.
         if ($key === 'plisio') {
-            $out .= "\n\n" . $t['captionPreviewInvoiceLabel'] . "\n" . topup_packages_caption_preview_quote(plisio_invoice_caption_for($lang, $textbotlang['users']['Balance']['cryptoInstruction']));
-            $out .= "\n\n" . $t['captionPreviewExpiredLabel'] . "\n" . topup_packages_caption_preview_quote(plisio_invoice_expired_caption_for($lang, $textbotlang['users']['Balance']['plisioInvoiceExpiredCaption']));
+            $out .= "\n\n" . $t['captionPreviewInvoiceLabel'] . "\n" . topup_packages_caption_preview_quote(plisio_invoice_caption_for($lang, lang_tab_texts($lang)['users']['Balance']['cryptoInstruction']));
+            $out .= "\n\n" . $t['captionPreviewExpiredLabel'] . "\n" . topup_packages_caption_preview_quote(plisio_invoice_expired_caption_for($lang, lang_tab_texts($lang)['users']['Balance']['plisioInvoiceExpiredCaption']));
         }
         return $out;
     }
@@ -2298,11 +2298,12 @@ if (!function_exists('topup_card_caption_previews')) {
     function topup_card_caption_previews($lang, $textbotlang)
     {
         $t = $textbotlang['Admin']['TopupPkg'];
+        $ct = lang_tab_texts($lang);
         // the packages-screen caption is previewed on that screen, not here -
         // its edit button lives there too
-        $out = $t['captionPreviewCustomLabel'] . "\n" . topup_packages_caption_preview_quote(topup_custom_caption_for($lang, 'card', $textbotlang['users']['Balance']['customAmountPromptTitle']));
-        $out .= "\n\n" . $t['captionPreviewInvoiceLabel'] . "\n" . topup_packages_caption_preview_quote(card_invoice_caption_for($lang, $textbotlang['textbot']['cart']));
-        $out .= "\n\n" . $t['captionPreviewExpiredLabel'] . "\n" . topup_packages_caption_preview_quote(card_invoice_expired_caption_for($lang, $textbotlang['users']['Balance']['cardInvoiceExpiredCaption']));
+        $out = $t['captionPreviewCustomLabel'] . "\n" . topup_packages_caption_preview_quote(topup_custom_caption_for($lang, 'card', $ct['users']['Balance']['customAmountPromptTitle']));
+        $out .= "\n\n" . $t['captionPreviewInvoiceLabel'] . "\n" . topup_packages_caption_preview_quote(card_invoice_caption_for($lang, $ct['textbot']['cart']));
+        $out .= "\n\n" . $t['captionPreviewExpiredLabel'] . "\n" . topup_packages_caption_preview_quote(card_invoice_expired_caption_for($lang, $ct['users']['Balance']['cardInvoiceExpiredCaption']));
         return $out;
     }
 }
@@ -2349,8 +2350,8 @@ if (!function_exists('topup_help_grid_rows')) {
         }
         $tp_customStyle = topup_btnstyle_for($lang, $key, 'custom', true);
         $tp_backStyle = topup_btnstyle_for($lang, $key, 'back', true);
-        $customBtn = topup_styled_button($textbotlang['users']['Balance']['customAmountBtn'], $tp_customStyle, "{$cbPrefix}:{$lang}:{$key}:custom", 'primary');
-        $backBtn = topup_styled_button($textbotlang['users']['Balance']['backToMethodBtn'], $tp_backStyle, "{$cbPrefix}:{$lang}:{$key}:back", 'danger');
+        $customBtn = topup_styled_button(lang_tab_texts($lang)['users']['Balance']['customAmountBtn'], $tp_customStyle, "{$cbPrefix}:{$lang}:{$key}:custom", 'primary');
+        $backBtn = topup_styled_button(lang_tab_texts($lang)['users']['Balance']['backToMethodBtn'], $tp_backStyle, "{$cbPrefix}:{$lang}:{$key}:back", 'danger');
         if ($decorate !== null) {
             $customBtn = $decorate($customBtn, $tp_customStyle);
             $backBtn = $decorate($backBtn, $tp_backStyle);
@@ -2453,8 +2454,8 @@ if (!function_exists('topup_help_layout_payload')) {
         }
         $tp_customStyle = topup_btnstyle_for($lang, $key, 'custom', true);
         $tp_backStyle = topup_btnstyle_for($lang, $key, 'back', true);
-        $customBtn = topup_styled_button($textbotlang['users']['Balance']['customAmountBtn'], $tp_customStyle, '', 'primary');
-        $backBtn = topup_styled_button($textbotlang['users']['Balance']['backToMethodBtn'], $tp_backStyle, '', 'danger');
+        $customBtn = topup_styled_button(lang_tab_texts($lang)['users']['Balance']['customAmountBtn'], $tp_customStyle, '', 'primary');
+        $backBtn = topup_styled_button(lang_tab_texts($lang)['users']['Balance']['backToMethodBtn'], $tp_backStyle, '', 'danger');
         // مبلغ دلخواه/بازگشت are only ever swappable with EACH OTHER, never
         // with a real package - and a real package is only ever swappable
         // with another real package, never with these two
@@ -2998,6 +2999,10 @@ if (!function_exists('card_invoice_btnstyle_items')) {
     // $lang is optional so the pre-existing 3-item callers keep working.
     function card_invoice_btnstyle_items($textbotlang, $lang = null)
     {
+        // the customer's button names - the tab's own, not the panel's
+        if ($lang !== null) {
+            $textbotlang = lang_tab_texts($lang);
+        }
         $items = [];
         $cards = ($lang !== null && function_exists('gw_cards_for_lang')) ? gw_cards_for_lang($lang) : [];
         $total = count($cards);
@@ -3095,7 +3100,7 @@ if (!function_exists('topup_slot_payload')) {
         }
         $def = $defs[$slot];
         $pair = $def['pair'];
-        $label = topup_slot_label($lang, $key, $slot, $textbotlang);
+        $label = topup_slot_label($lang, $key, $slot, lang_tab_texts($lang));
         $color = topup_slot_color($lang, $key, $slot, $textbotlang);
         $style = topup_btnstyle_for($lang, $key, $slot);
         $custom = (trim((string) ($style['label'] ?? '')) !== '' || trim((string) ($style['color'] ?? '')) !== '');
@@ -3110,7 +3115,7 @@ if (!function_exists('topup_slot_payload')) {
 
         // the pair, drawn in the order the customer will actually see it
         $mk = function ($s) use ($lang, $key, $textbotlang) {
-            $b = ['text' => topup_slot_label($lang, $key, $s, $textbotlang), 'callback_data' => 'none'];
+            $b = ['text' => topup_slot_label($lang, $key, $s, lang_tab_texts($lang)), 'callback_data' => 'none'];
             $c = topup_slot_color($lang, $key, $s, $textbotlang);
             if ($c !== '') {
                 $b['style'] = $c;
@@ -3260,7 +3265,7 @@ if (!function_exists('topup_gwcap_kinds')) {
     }
     function topup_gwcap_for($kind, $lang, $key, $textbotlang)
     {
-        $d = topup_gwcap_default($kind, $key, $textbotlang);
+        $d = topup_gwcap_default($kind, $key, lang_tab_texts($lang));
         if ($kind === 'range') {
             return topup_range_caption_for($lang, $key, $d);
         }
@@ -3559,7 +3564,7 @@ if (!function_exists('topup_gw_edit_payload')) {
         // from the caption rows above, so it is obvious the rows below are
         // buttons rather than more texts.
         $slotBtn = function ($slot) use ($lang, $key, $textbotlang) {
-            $b = ['text' => topup_slot_label($lang, $key, $slot, $textbotlang), 'callback_data' => "tpsl:{$lang}:{$key}:{$slot}"];
+            $b = ['text' => topup_slot_label($lang, $key, $slot, lang_tab_texts($lang)), 'callback_data' => "tpsl:{$lang}:{$key}:{$slot}"];
             $c = topup_slot_color($lang, $key, $slot, $textbotlang);
             if ($c !== '') {
                 $b['style'] = $c;
@@ -3657,13 +3662,14 @@ if (!function_exists('topup_gw_caption_previews')) {
     function topup_gw_caption_previews($lang, $key, $textbotlang)
     {
         $t = $textbotlang['Admin']['TopupPkg'];
+        $ct = lang_tab_texts($lang)['users']['Balance'];
         $out = $t['captionPreviewLabel'] . "\n"
-            . topup_packages_caption_preview_quote(topup_caption_for($lang, $key, $textbotlang['users']['Balance']['pkgPromptTitle']));
+            . topup_packages_caption_preview_quote(topup_caption_for($lang, $key, $ct['pkgPromptTitle']));
         $out .= "\n\n" . $t['captionPreviewCustomLabel'] . "\n"
-            . topup_packages_caption_preview_quote(topup_custom_caption_for($lang, $key, $textbotlang['users']['Balance']['customAmountPromptTitle']));
+            . topup_packages_caption_preview_quote(topup_custom_caption_for($lang, $key, topup_custom_caption_default($key, lang_tab_texts($lang))));
         if (in_array('linkmsg', topup_gw_customizables($key), true)) {
             $out .= "\n\n" . $t['captionPreviewLinkMsgLabel'] . "\n"
-                . topup_packages_caption_preview_quote(topup_linkmsg_for($lang, $key, $textbotlang['users']['Balance']['linkpayments']));
+                . topup_packages_caption_preview_quote(topup_linkmsg_for($lang, $key, $ct['linkpayments']));
         }
         $has = topup_gw_customizables($key);
         if (in_array('range', $has, true)) {
@@ -5261,8 +5267,8 @@ if (!function_exists('topup_group_hub_payload')) {
         ]);
         $cap .= "\n\n" . $t['groupCaptionPreviewLabel'] . "\n"
             . topup_packages_caption_preview_quote(strtr(
-                topup_group_caption_for($lang, $textbotlang['users']['Balance']['groupMethodCaption']),
-                ['{group}' => gateway_group_label('online', $textbotlang)]
+                topup_group_caption_for($lang, lang_tab_texts($lang)['users']['Balance']['groupMethodCaption']),
+                ['{group}' => gateway_group_label('online', lang_tab_texts($lang))]
             ));
         return [$cap, json_encode(['inline_keyboard' => $rows])];
     }
@@ -12047,7 +12053,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     ]]);
     $tp_pkgLabel = ctype_digit($tp_m[3])
         ? topup_package_label(topup_packages_for($tp_m[1], $tp_m[2])[(int) $tp_m[3]] ?? ['amount' => '0'], $tp_m[1])
-        : topup_styled_button($tp_m[3] === 'custom' ? $textbotlang['users']['Balance']['customAmountBtn'] : $textbotlang['users']['Balance']['backToMethodBtn'], topup_btnstyle_for($tp_m[1], $tp_m[2], $tp_m[3]), '')['text'];
+        : topup_styled_button(lang_tab_texts($tp_m[1])['users']['Balance'][$tp_m[3] === 'custom' ? 'customAmountBtn' : 'backToMethodBtn'], topup_btnstyle_for($tp_m[1], $tp_m[2], $tp_m[3]), '')['text'];
     $tp_prompt = sendmessage($from_id, sprintf($textbotlang['Admin']['TopupPkg']['askEmojiForItemTopup'], $tp_pkgLabel), $tp_helpCancelKb, 'HTML');
     $tp_promptId = (int) ($tp_prompt['result']['message_id'] ?? 0);
     step("topuphelpemoi:{$tp_m[1]}:{$tp_m[2]}:{$tp_m[3]}:{$message_id}:{$tp_promptId}", $from_id);
@@ -12133,7 +12139,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     ]]);
     $tp_pkgLabel = ctype_digit($tp_m[3])
         ? topup_package_label(topup_packages_for($tp_m[1], $tp_m[2])[(int) $tp_m[3]] ?? ['amount' => '0'], $tp_m[1])
-        : topup_styled_button($tp_m[3] === 'custom' ? $textbotlang['users']['Balance']['customAmountBtn'] : $textbotlang['users']['Balance']['backToMethodBtn'], topup_btnstyle_for($tp_m[1], $tp_m[2], $tp_m[3]), '')['text'];
+        : topup_styled_button(lang_tab_texts($tp_m[1])['users']['Balance'][$tp_m[3] === 'custom' ? 'customAmountBtn' : 'backToMethodBtn'], topup_btnstyle_for($tp_m[1], $tp_m[2], $tp_m[3]), '')['text'];
     $tp_prompt = sendmessage($from_id, sprintf($textbotlang['Admin']['BtnStyle']['askRenameForItem'], $tp_pkgLabel), $tp_helpCancelKb, 'HTML');
     $tp_promptId = (int) ($tp_prompt['result']['message_id'] ?? 0);
     step("topuphelpreni:{$tp_m[1]}:{$tp_m[2]}:{$tp_m[3]}:{$message_id}:{$tp_promptId}", $from_id);
@@ -12819,7 +12825,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
         $Balance_confrim = intval($Balance_id['Balance']) + $result;
         update("user", "Balance", $Balance_confrim, "id", $Balance_id['id']);
         $pricecashback = number_format($pricecashback);
-        $text_report = sprintf($textbotlang['users']['Balance']['giftDepositAlt'], $result);
+        $text_report = sprintf(lang_tab_texts($Balance_id['lang'] ?? 'fa')['users']['Balance']['giftDepositAlt'], $result);
         sendmessage($Balance_id['id'], $text_report, null, 'HTML');
     }
     $Payment_report['price'] = number_format($Payment_report['price']);
@@ -12867,7 +12873,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
 } elseif ($user['step'] == "reject-dec") {
     $Payment_report = select("Payment_report", "*", "id_order", $user['Processing_value_one'], "select");
     update("Payment_report", "dec_not_confirmed", $text, "id_order", $user['Processing_value_one']);
-    $text_reject = sprintf($textbotlang['users']['Balance']['rejectedNotice'], $text, $user['Processing_value_one']);
+    $text_reject = sprintf(lang_tab_texts(bottext_receiver_lang($user['Processing_value']))['users']['Balance']['rejectedNotice'], $text, $user['Processing_value_one']);
     sendmessage($from_id, $textbotlang['Admin']['Payment']['rejected'], $keyboardadmin, 'HTML');
     sendmessage($user['Processing_value'], $text_reject, null, 'HTML');
     step('home', $from_id);
@@ -15387,7 +15393,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     $Balance_add_user = $Balance_user['Balance'] + $text;
     $balanceusers = number_format($text, 0);
     update("user", "Balance", $Balance_add_user, "id", $Payment_report['id_user']);
-    $textadd = sprintf($textbotlang['users']['Balance']['addedNotice3'], $balanceusers);
+    $textadd = sprintf(lang_tab_texts($Balance_user['lang'] ?? 'fa')['users']['Balance']['addedNotice3'], $balanceusers);
     sendmessage($Payment_report['id_user'], $textadd, null, 'HTML');
     $text_report = sprintf($textbotlang['Admin']['reportgroup']['balanceManualAdd'], $Payment_report['id_user'], $Balance_user['username'], $Payment_report['price'], $text);
     if (strlen($setting['Channel_Report']) > 0) {
