@@ -1467,6 +1467,8 @@ addFieldToTable("channels", "icon_emoji", null, "VARCHAR(100)");
 addFieldToTable("channels", "emoji_pos", null, "VARCHAR(10)");
 addFieldToTable("channels", "hidden", null, "VARCHAR(5)");
 addFieldToTable("setting", "channelButtonsOrder", null, "TEXT");
+// channel-button looks for every language tab but fa (fa keeps the columns above)
+addFieldToTable("setting", "channelButtonsLang", '{}', "TEXT");
 addFieldToTable("setting", "close_sticker", '{}', "TEXT");
 addFieldToTable("setting", "svc_node_usage", '{}', "TEXT");
 addFieldToTable("setting", "shop_feature_lang", '{}', "TEXT");

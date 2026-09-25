@@ -697,6 +697,11 @@ return array (
         'label' => '📯 پیام عضویت اجباری کانال',
         'key' => 'textbot.channel',
       ),
+      array (
+        // opened from inside 📯 پیام عضویت اجباری کانال (skipped on the home list)
+        'label' => '🚪 پیام خروج از کانال',
+        'key' => 'users.channel.left_channel',
+      ),
 
       'bt_0' => 
       array (

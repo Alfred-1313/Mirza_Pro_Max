@@ -9655,13 +9655,72 @@ if (!function_exists('split_leading_emoji')) {
         return [$emoji, $rest];
     }
 }
+if (!function_exists('channel_btn_lang_map')) {
+    // Channel buttons look different per language tab. fa keeps the columns
+    // on `channels` and setting.channelButtonsOrder it always had, so nothing
+    // set up before the tabs existed moves; every other tab keeps its own
+    // copy in setting.channelButtonsLang: {lang: {rows: {id: {field: value}},
+    // order: [ids]}}. The channel itself - its link and its name as added -
+    // stays one row for every language.
+    function channel_btn_fields()
+    {
+        return ['style', 'custom_text', 'emoji', 'icon_emoji', 'emoji_pos', 'hidden'];
+    }
+    function channel_btn_lang_map()
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $m = json_decode((string) ($setting['channelButtonsLang'] ?? ''), true);
+        return is_array($m) ? $m : [];
+    }
+    // the row as this tab shows it
+    function channel_row_for_lang(array $row, $lang)
+    {
+        if ($lang === 'fa') {
+            return $row;
+        }
+        $own = channel_btn_lang_map()[$lang]['rows'][(string) ($row['id'] ?? '')] ?? [];
+        foreach (channel_btn_fields() as $f) {
+            $row[$f] = $own[$f] ?? null;
+        }
+        return $row;
+    }
+    // null or '' clears the field back to its default
+    function channel_btn_set($lang, $id, $field, $value)
+    {
+        if (!in_array($field, channel_btn_fields(), true)) {
+            return;
+        }
+        if ($lang === 'fa') {
+            update("channels", $field, $value, "id", (int) $id);
+            return;
+        }
+        $m = channel_btn_lang_map();
+        if ($value === null || $value === '') {
+            unset($m[$lang]['rows'][(string) $id][$field]);
+        } else {
+            $m[$lang]['rows'][(string) $id][$field] = (string) $value;
+        }
+        update("setting", "channelButtonsLang", json_encode($m, JSON_UNESCAPED_UNICODE), null, null);
+    }
+    function channel_btn_order_set($lang, array $ids)
+    {
+        if ($lang === 'fa') {
+            update("setting", "channelButtonsOrder", json_encode($ids), null, null);
+            return;
+        }
+        $m = channel_btn_lang_map();
+        $m[$lang]['order'] = array_values(array_map('intval', $ids));
+        update("setting", "channelButtonsLang", json_encode($m, JSON_UNESCAPED_UNICODE), null, null);
+    }
+}
 if (!function_exists('channels_effective_order')) {
     // Applies the admin's custom channel-button order on top of the raw
     // `channels` rows: stored order first (skipping any id no longer
     // present), then any channel NOT yet in that list appended at the end in
     // natural id order - so a channel added after the order was last saved
     // is never silently dropped from the join-gate message.
-    function channels_effective_order()
+    // Each row comes back as $lang's tab shows it (channel_row_for_lang).
+    function channels_effective_order($lang = 'fa')
     {
         $rows = select("channels", "*", null, null, "fetchAll");
         if (!is_array($rows)) {
@@ -9669,10 +9728,14 @@ if (!function_exists('channels_effective_order')) {
         }
         $byId = [];
         foreach ($rows as $r) {
-            $byId[(int) $r['id']] = $r;
+            $byId[(int) $r['id']] = channel_row_for_lang($r, $lang);
         }
-        $setting = select("setting", "*", null, null, "select");
-        $order = json_decode((string) ($setting['channelButtonsOrder'] ?? ''), true);
+        if ($lang === 'fa') {
+            $setting = select("setting", "*", null, null, "select");
+            $order = json_decode((string) ($setting['channelButtonsOrder'] ?? ''), true);
+        } else {
+            $order = channel_btn_lang_map()[$lang]['order'] ?? null;
+        }
         $ordered = [];
         if (is_array($order)) {
             foreach ($order as $oid) {
@@ -9731,8 +9794,20 @@ if (!function_exists('channel_button_text')) {
     }
 }
 if (!function_exists('channel_buttons_any_customized')) {
-    function channel_buttons_any_customized()
+    function channel_buttons_any_customized($lang = 'fa')
     {
+        if ($lang !== 'fa') {
+            $own = channel_btn_lang_map()[$lang] ?? [];
+            if (!empty($own['order'])) {
+                return true;
+            }
+            foreach ((array) ($own['rows'] ?? []) as $fields) {
+                if (!empty(array_filter((array) $fields, fn($v) => (string) $v !== ''))) {
+                    return true;
+                }
+            }
+            return false;
+        }
         $rows = select("channels", "*", null, null, "fetchAll");
         if (is_array($rows)) {
             foreach ($rows as $r) {
@@ -9752,9 +9827,28 @@ if (!function_exists('channel_buttons_reset')) {
     // channels table + its order setting. Resetting clears the override
     // columns (NULL) rather than writing the default back over them, so a
     // channel added later never inherits a stale "default" value.
-    function channel_buttons_reset(array $parts)
+    function channel_buttons_reset(array $parts, $lang = 'fa')
     {
         global $pdo;
+        if ($lang !== 'fa') {
+            $map = ['color' => ['style'], 'emoji' => ['emoji', 'icon_emoji', 'emoji_pos'], 'rename' => ['custom_text'], 'visibility' => ['hidden']];
+            $m = channel_btn_lang_map();
+            foreach ($map as $part => $fs) {
+                if (!in_array($part, $parts, true)) {
+                    continue;
+                }
+                foreach (array_keys((array) ($m[$lang]['rows'] ?? [])) as $id) {
+                    foreach ($fs as $f) {
+                        unset($m[$lang]['rows'][$id][$f]);
+                    }
+                }
+            }
+            if (in_array('layout', $parts, true)) {
+                unset($m[$lang]['order']);
+            }
+            update("setting", "channelButtonsLang", json_encode($m, JSON_UNESCAPED_UNICODE), null, null);
+            return;
+        }
         $fields = [];
         if (in_array('color', $parts, true)) {
             $fields[] = 'style';
@@ -10211,6 +10305,9 @@ if (!function_exists('genbtn_alias_map')) {
             'ar' => 'keyboard.acceptRules',
             'mg' => 'keyboard.receiveMembershipGift',
             'sl' => 'keyboard.shareLink',
+            // own-key trick again - the one button under the "you left the
+            // channel" message
+            'lc' => 'users.channel.left_channel',
         ];
     }
 }
@@ -10382,6 +10479,11 @@ if (!function_exists('genbtn_defs')) {
         }
         if ($alias === 'mg') {
             return [0 => ['name' => '🟢 دکمه دریافت هدیه عضویت', 'text' => $textbotlang['keyboard']['receiveMembershipGift'], 'style' => 'success', 'callback_data' => 'none']];
+        }
+        if ($alias === 'lc') {
+            // a link button: the url is the channel the customer left, filled
+            // in where the message is sent
+            return [0 => ['name' => '📌 دکمه عضویت مجدد', 'text' => $textbotlang['keyboard']['rejoin'], 'style' => '', 'callback_data' => 'none']];
         }
         if ($alias === 'sl') {
             return [0 => ['name' => '🔗 دکمه اشتراک‌گذاری لینک', 'text' => $textbotlang['keyboard']['shareLink'], 'style' => '', 'callback_data' => 'none', 'note' => 'این دکمه لینکه و تلگرام برای دکمه‌ی لینک رنگ و ایموجی نمی‌پذیره - فقط متنش قابل تغییره.']];
@@ -10763,7 +10865,7 @@ if (!function_exists('genbtn_hub_payload')) {
 
     function genbtn_group_title($alias, $textbotlang)
     {
-        $titles = ['su' => '🔘 دکمه‌های نام‌گذاری سرویس', 'cf' => '🔘 دکمه‌های تأیید خرید', 'ns' => '🔘 دکمه‌ی نداشتن سرویس فعال', 'te' => '🔘 دکمه‌ی پیام اتمام اکانت تست', 'sc' => '🔘 دکمه‌ی بستن (سرویس‌های من)', 'bc' => '🔘 دکمه‌ی تهیه اشتراک (شارژ کیف پول)', 'rn' => '🔘 دکمه‌های فاکتور تمدید سرویس', 'cl' => '🔘 دکمه‌های تغییر لینک اتصال', 'td' => '🔘 دکمه‌های کد تخفیف شارژ', 'hb' => '🔘 دکمه‌ی بازگشت به دسته‌بندی آموزش', 'hv' => '🔘 دکمه‌ی بازگشت (زیر محتوای آموزش)', 'ab' => '📚 دکمه‌ی مشاهده آموزش (پیام بعد از خرید)', 'ut' => '📚 دکمه‌ی مشاهده آموزش (اکانت تست)'];
+        $titles = ['su' => '🔘 دکمه‌های نام‌گذاری سرویس', 'cf' => '🔘 دکمه‌های تأیید خرید', 'ns' => '🔘 دکمه‌ی نداشتن سرویس فعال', 'te' => '🔘 دکمه‌ی پیام اتمام اکانت تست', 'sc' => '🔘 دکمه‌ی بستن (سرویس‌های من)', 'bc' => '🔘 دکمه‌ی تهیه اشتراک (شارژ کیف پول)', 'rn' => '🔘 دکمه‌های فاکتور تمدید سرویس', 'cl' => '🔘 دکمه‌های تغییر لینک اتصال', 'td' => '🔘 دکمه‌های کد تخفیف شارژ', 'hb' => '🔘 دکمه‌ی بازگشت به دسته‌بندی آموزش', 'hv' => '🔘 دکمه‌ی بازگشت (زیر محتوای آموزش)', 'ab' => '📚 دکمه‌ی مشاهده آموزش (پیام بعد از خرید)', 'ut' => '📚 دکمه‌ی مشاهده آموزش (اکانت تست)', 'lc' => '📌 دکمه‌ی عضویت مجدد (پیام خروج از کانال)'];
         if (isset($titles[$alias])) {
             return $titles[$alias];
         }
@@ -10785,6 +10887,7 @@ if (!function_exists('genbtn_hub_payload')) {
             'td' => 'دکمه‌ی ۱ («کد تخفیف دارم») زیر لیست روش‌های پرداختِ 💰 افزایش موجودی میاد - ولی فقط وقتی که برای این زبان حداقل یک کد تخفیف شارژ ساخته باشی، وگرنه اصلاً نشون داده نمی‌شه. دکمه‌ی ۲ زیر همون صفحه‌ی وارد کردن کد میاد. اگر کاربر یه کد رو فعال کرده باشه، دکمه‌ی ۱ دیگه بهش نشون داده نمی‌شه (چون خود کپشن تخفیف فعال رو نوشته).',
             'ab' => 'این ۱ دکمه، زیر پیام «✅ سرویس با موفقیت ایجاد شد» (بعد از خرید) نشون داده می‌شه - برای همه‌ی نوع پنل‌ها، خرید چندتایی، پرداخت آنلاین و سفارشی که ادمین برای کاربر ثبت می‌کنه. پیش‌فرض مخفیه؛ برای نمایش، «👁 نمایش دادن این دکمه» رو بزن.',
             'ut' => 'این ۱ دکمه، زیر پیام «✅ سرویس با موفقیت ایجاد شد» بعد از گرفتن اکانت تست نشون داده می‌شه. پیش‌فرض مخفیه؛ برای نمایش، «👁 نمایش دادن این دکمه» رو بزن.',
+            'lc' => 'این ۱ دکمه، زیر پیام «از کانال خارج شدید» میاد و کاربر رو به همون کانالی که ازش خارج شده برمی‌گردونه.',
         ];
         if (isset($notes[$alias])) {
             return $notes[$alias];
@@ -10800,7 +10903,7 @@ if (!function_exists('genbtn_hub_payload')) {
             return bt_btnitem_back_cb($key, $lang);
         }
         // 'cf' points at textbot.preInvoice (the normal-purchase تأیید خرید)
-        $backKeyMap = ['su' => 'users.sell.selectUsernamePrompt', 'cf' => 'textbot.preInvoice', 'ns' => 'users.sell.service_not_available', 'te' => 'textbot.testExpired', 'sc' => 'users.sell.service_sell', 'bc' => 'users.Balance.chargeSuccess', 'rn' => 'users.extend.invoiceCreated', 'cl' => 'users.changeLink.warnchange', 'td' => 'users.Balance.topupDiscPrompt', 'hb' => 'users.help.listCaption', 'hv' => 'users.help.categoryCaption', 'ab' => 'textbot.afterPay', 'ut' => 'textbot.afterText'];
+        $backKeyMap = ['su' => 'users.sell.selectUsernamePrompt', 'cf' => 'textbot.preInvoice', 'ns' => 'users.sell.service_not_available', 'te' => 'textbot.testExpired', 'sc' => 'users.sell.service_sell', 'bc' => 'users.Balance.chargeSuccess', 'rn' => 'users.extend.invoiceCreated', 'cl' => 'users.changeLink.warnchange', 'td' => 'users.Balance.topupDiscPrompt', 'hb' => 'users.help.listCaption', 'hv' => 'users.help.categoryCaption', 'ab' => 'textbot.afterPay', 'ut' => 'textbot.afterText', 'lc' => 'users.channel.left_channel'];
         $backKey = ($origin === 'u') ? 'users.usertest.selectUsernamePrompt' : ($backKeyMap[$alias] ?? 'users.sell.selectUsernamePrompt');
         return "bt_edit|{$lang}|{$backKey}";
     }

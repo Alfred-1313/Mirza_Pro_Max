@@ -19,14 +19,32 @@ if ($is_bot)
 if (isset($update['chat_member'])) {
     $status = $update['chat_member']['new_chat_member']['status'];
     $from_id = $update['chat_member']['new_chat_member']['user']['id'];
-    $user = select("user", "id", $from_id);
-    $keyboard_channel_left = json_encode([
-        'inline_keyboard' => [
-            [
-                ['text' => $textbotlang['keyboard']['rejoin'], 'url' => "https://t.me/{$update['chat_member']['chat']['username']}"],
-            ],
-        ]
-    ]);
+    $user = select("user", "*", "id", $from_id, "select");
+    // $textbotlang above was resolved before this update had a user (botapi.php
+    // takes $from_id from messages and callbacks only), so it was always
+    // Persian. Now that the user is known: their own language.
+    $textbotlang = ui_texts();
+    $lc_lang = is_array($user) ? ($user['lang'] ?? 'fa') : 'fa';
+    // a public channel by its @username, as before; a private one has none,
+    // so it goes to the join link the admin gave that channel
+    $lc_chat = $update['chat_member']['chat'];
+    $lc_url = !empty($lc_chat['username']) ? "https://t.me/{$lc_chat['username']}" : '';
+    if ($lc_url === '') {
+        foreach ((array) select("channels", "*", null, null, "fetchAll") as $lc_row) {
+            if (is_array($lc_row) && (string) ($lc_row['link'] ?? '') === (string) ($lc_chat['id'] ?? '') && !empty($lc_row['linkjoin'])) {
+                $lc_url = $lc_row['linkjoin'];
+                break;
+            }
+        }
+    }
+    $keyboard_channel_left = null;
+    if ($lc_url !== '') {
+        $lc_defs = genbtn_defs('lc', $textbotlang);
+        $lc_btn = genbtn_render($lc_defs[0], genbtn_override($lc_lang, 'users.channel.left_channel', 0), 'none');
+        unset($lc_btn['callback_data']);
+        $lc_btn['url'] = $lc_url;
+        $keyboard_channel_left = json_encode(['inline_keyboard' => [[$lc_btn]]]);
+    }
     if (in_array($status, ['left', 'kicked', 'restricted'])) {
         sendmessage($from_id, $textbotlang['users']['channel']['left_channel'], $keyboard_channel_left, 'html');
         return;
@@ -350,7 +368,7 @@ if ($user['joinchannel'] != "active") {
             $keyboardchannel = [
                 'inline_keyboard' => [],
             ];
-            foreach (channels_effective_order() as $channelremark) {
+            foreach (channels_effective_order($user['lang'] ?? 'fa') as $channelremark) {
                 if ($channelremark['remark'] == null)
                     continue;
                 if ($channelremark['linkjoin'] == null)
@@ -420,7 +438,7 @@ if ($user['joinchannel'] != "active") {
             $keyboardchannel = [
                 'inline_keyboard' => [],
             ];
-            foreach (channels_effective_order() as $channelremark) {
+            foreach (channels_effective_order($user['lang'] ?? 'fa') as $channelremark) {
                 if ($channelremark['remark'] == null)
                     continue;
                 if ($channelremark['linkjoin'] == null)

@@ -2381,7 +2381,9 @@ function keyboard_list_text($lang, $groupFilter = null)
         'bottext.btnCloseTest', 'textbot.selectLocationTest', 'textbot.afterText', 'textbot.afterPay', 'textbot.preInvoice', 'textbot.getConfigHintBuy', 'textbot.getConfigHintTest', 'users.status.infoFull', 'users.Balance.sendReceipt', 'users.Balance.chargeSuccess', 'users.Balance.chargeSuccessDiscount',
         // owned by 🌐 تنظیمات تغییر زبان کاربر, which edits them in place - a
         // second row here would make their back button ambiguous
-        'bottext.langPickerCaption', 'bottext.langBlockedMsg'];
+        'bottext.langPickerCaption', 'bottext.langBlockedMsg',
+        // opened from inside 📯 پیام عضویت اجباری کانال, whose back it uses
+        'users.channel.left_channel'];
     $bt_can_react_keys = ['users.text_start', 'textbot.faqDesc', 'textbot.tariffListDesc', 'textbot.rules', 'users.unknownMsg'];
     $bt_list_setting = select("setting", "*", null, null, "select");
     $bt_list_edit = json_decode((string) ($bt_list_setting['text_edit'] ?? ''), true);
@@ -2416,6 +2418,13 @@ function keyboard_list_text($lang, $groupFilter = null)
         // same reason as the usertest row above
         'users.status.getConfigHintBuy' => function ($lang, $be, $setting) {
             return !empty($be[$lang]['configDisplayBuy']);
+        },
+        // 📯 also owns its channel buttons (a store of their own) and the
+        // "you left the channel" message opened from inside it
+        'textbot.channel' => function ($lang, $be, $setting) {
+            $te = json_decode((string) ($setting['text_edit'] ?? ''), true);
+            return channel_buttons_any_customized($lang) || !empty($be[$lang]['users.channel.left_channel'])
+                || (is_array($te) && bottext_dotted_isset($te[$lang] ?? null, 'users.channel.left_channel'));
         },
     ];
     $bt_decorate = function ($key, $label) use ($lang, $bt_list_edit, $bt_list_st, $bt_list_re, $bt_can_react_keys, $bt_list_be, $bt_list_setting, $bt_extra_stores) {

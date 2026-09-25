@@ -818,7 +818,7 @@ You can now use the bot ✔️',
                 'channel' => [
                         'confirmed' => 'Your membership has been successfully confirmed. Thank you ❤️',
                         'confirmjoin' => '✅ Check membership',
-                        'left_channel' => '❌ You have left our channel and will not be informed of news and updates. It is better to rejoin the channel',
+                        'left_channel' => '❌ You have left our channel, so you will miss our news and updates. Please join the channel again.',
                         'notconfirmed' => '❌ You have not joined the channel yet.️',
                 ],
                 'customSellVolume' => [
@@ -4291,7 +4291,7 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'refundBtn' => '💎 Refund button',
                 'registerDiscountCode' => '🎁 Apply discount code',
                 'rejectDelete' => '❌Reject deletion',
-                'rejoin' => '📌 Re-membership',
+                'rejoin' => '📌 Join again',
                 'removeFromAffiliate' => '🔄 Remove from referrals',
                 'removeFromHiddenList' => '❌  Remove user from hidden list',
                 'removeUserFromList' => '❌ Remove user from list',
