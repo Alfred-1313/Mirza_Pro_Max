@@ -5885,7 +5885,7 @@ if (preg_match('/^cfgdeliv\|p\|([a-z]{2})\|([^|]+)\|([bu])$/', $datain, $cd_m) &
     return;
 }
 if (preg_match('/^cfgdeliv\|set\|([a-z]{2})\|([^|]+)\|(purchase|usertest)\|(1|2)\|([bu])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
-    config_delivery_set_mode($cd_m[3], $cd_m[2], $cd_m[4]);
+    config_delivery_set_mode($cd_m[3], $cd_m[2], $cd_m[4], $cd_m[1]);
     list($cd_text, $cd_kb) = config_delivery_panel_payload($cd_m[1], $cd_m[2], $cd_m[5]);
     Editmessagetext($from_id, $message_id, $cd_text, $cd_kb, 'HTML');
     return;
@@ -5904,7 +5904,7 @@ if (preg_match('/^admperm\|(open|test|buy)\|([a-z]{2})$/', $datain, $ap_m) && $a
 if (preg_match('/^cfgdeliv\|qr\|([a-z]{2})\|([^|]+)\|(purchase|usertest)\|([bu])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
     // mode 2 sends the config page only - there is no message for a QR to ride
     // on, so it cannot be switched on there (only off, if an old setting has it)
-    if (config_delivery_mode($cd_m[3], $cd_m[2]) === '2' && !config_delivery_qr_on($cd_m[3], $cd_m[2])) {
+    if (config_delivery_mode($cd_m[3], $cd_m[2], $cd_m[1]) === '2' && !config_delivery_qr_on($cd_m[3], $cd_m[2], $cd_m[1])) {
         telegram('answerCallbackQuery', [
             'callback_query_id' => $callback_query_id,
             'text' => "❌ در حالت ۲ ارسال QR کد ممکن نیست.\n\nحالت ۲ فقط صفحه‌ی کانفیگ رو می‌فرسته. برای QR، اول «حالت ۱» رو انتخاب کن.",
@@ -5913,13 +5913,13 @@ if (preg_match('/^cfgdeliv\|qr\|([a-z]{2})\|([^|]+)\|(purchase|usertest)\|([bu])
         ]);
         return;
     }
-    config_delivery_set_qr($cd_m[3], $cd_m[2], !config_delivery_qr_on($cd_m[3], $cd_m[2]));
+    config_delivery_set_qr($cd_m[3], $cd_m[2], !config_delivery_qr_on($cd_m[3], $cd_m[2], $cd_m[1]), $cd_m[1]);
     list($cd_text, $cd_kb) = config_delivery_panel_payload($cd_m[1], $cd_m[2], $cd_m[4]);
     Editmessagetext($from_id, $message_id, $cd_text, $cd_kb, 'HTML');
     return;
 }
 if (preg_match('/^cfgdeliv\|rst\|([a-z]{2})\|([^|]+)\|(purchase|usertest)\|([bu])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
-    config_delivery_panel_reset($cd_m[2], $cd_m[3]);
+    config_delivery_panel_reset($cd_m[2], $cd_m[3], $cd_m[1]);
     list($cd_text, $cd_kb) = config_delivery_panel_payload($cd_m[1], $cd_m[2], $cd_m[4]);
     // names the mode the reset actually restores - config_delivery_default_mode()
     // returns '1', so this line claiming "حالت ۲" has been telling admins their
@@ -5928,7 +5928,8 @@ if (preg_match('/^cfgdeliv\|rst\|([a-z]{2})\|([^|]+)\|(purchase|usertest)\|([bu]
     return;
 }
 if (preg_match('/^cfgdeliv\|cfgcol\|([a-z]{2})\|([^|]+)\|([bu])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
-    list($cd_text, $cd_kb) = config_col_order_payload($textbotlang, $cd_m[1], null, "cfgdeliv|p|{$cd_m[1]}|{$cd_m[2]}|{$cd_m[3]}", null);
+    // the flow this screen belongs to: test account ('u') or purchase
+    list($cd_text, $cd_kb) = config_col_order_payload($textbotlang, $cd_m[1], null, "cfgdeliv|p|{$cd_m[1]}|{$cd_m[2]}|{$cd_m[3]}", null, $cd_m[3] === 'u' ? 'usertest' : 'buy');
     Editmessagetext($from_id, $message_id, $cd_text, $cd_kb, 'HTML');
     return;
 }if (preg_match('/^statusbtn\|list\|([a-z]{2})$/', $datain, $sb_m) && $adminrulecheck['rule'] == "administrator") {

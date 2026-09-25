@@ -1445,6 +1445,15 @@ Message text:
                         'errorcreat' => '❌ An error occurred while creating the subscription. Please contact support to resolve the issue.',
                         'limitwarning' => '⚠️ Your test subscription creation limit has been reached.',
                         'unavailable' => '📌 The test service is not available at the moment.',
+                        'noPanel' => '⛔️ The test account is temporarily unavailable.',
+                        'selectUsernamePrompt' => '🎁 Test account time: {testtime} hours
+💾 Test account volume: {testvolume} MB
+
+Would you like to choose the service name yourself, or use the default one?
+
+If you have a name in mind, just type it in this chat (English letters and numbers only).
+
+To use the default name, press the green button; to cancel and go back to the menu, press the red one.',
                 ],
                 'wheelLuck' => [
                         'alreadyParticipated' => '❌ You already participated today. Try your luck again tomorrow',
@@ -4994,6 +5003,8 @@ Payment tracking code : %s',
                 'topupDiscMinPkgPercent' => '🎁 Since you top up {min} or more, you get a {bonus} gift — that is {value}% more!',
                 'topupDiscMinPkgFixed' => '🎁 Since you top up {min} or more, you get a {bonus} gift!',
                 'topupDiscMinSuffix' => '({min} and up)',
+                // the config page's line when its own caption is left empty
+                'getConfigHint' => '📌 To get the config, tap the «Get config» button',
                 // units formatBytes() writes after a size, and the service
                 // warning defaults (🔋 پیام‌های هشدار و اتمام سرویس)
                 'unitByte' => 'B',

@@ -8854,109 +8854,132 @@ if (!function_exists('config_delivery_default_mode')) {
     }
 }
 if (!function_exists('config_delivery_map')) {
-    // shape: {"purchase": {"<code_panel>": "1"|"2"}, "usertest": {...}}
-    // Only NON-default values are stored, so an untouched install keeps this
-    // column NULL and every panel simply answers with the default.
+    // Per language tab: {"v":2, "<lang>": {"purchase": {"<code_panel>": "2"},
+    // "usertest": {...}, "qroff": {"<kind>": {"<code_panel>": true}}}}.
+    // Only NON-default values are stored. A setting saved before the tabs has
+    // the same shape without the language level; it answers for every
+    // language until a tab changes something, and is then copied into each
+    // tab, so nothing a customer gets changes on its own.
     function config_delivery_map()
     {
         $setting = select("setting", "*", null, null, "select");
         $m = json_decode((string) ($setting['configDeliveryMode'] ?? ''), true);
         return is_array($m) ? $m : [];
     }
-}
-if (!function_exists('config_delivery_map_save')) {
-    function config_delivery_map_save(array $map)
+    // what $lang's tab has set; a language with no tab of its own follows Persian
+    function config_delivery_view($lang)
     {
-        update("setting", "configDeliveryMode", empty($map) ? null : json_encode($map, JSON_UNESCAPED_UNICODE), null, null);
+        $map = config_delivery_map();
+        if ((int) ($map['v'] ?? 0) !== 2) {
+            return $map;
+        }
+        $v = in_array($lang, panel_langs(), true) ? ($map[$lang] ?? []) : ($map[$lang] ?? ($map['fa'] ?? []));
+        return is_array($v) ? $v : [];
+    }
+}
+if (!function_exists('config_delivery_view_save')) {
+    // $view: $lang's own settings after a change
+    function config_delivery_view_save($lang, array $view)
+    {
+        $map = config_delivery_map();
+        if ((int) ($map['v'] ?? 0) !== 2) {
+            $legacy = $map;
+            $map = ['v' => 2];
+            foreach (panel_langs() as $l) {
+                if (!empty($legacy)) {
+                    $map[$l] = $legacy;
+                }
+            }
+        }
+        foreach (['purchase', 'usertest'] as $k) {
+            if (isset($view[$k]) && empty($view[$k])) {
+                unset($view[$k]);
+            }
+            if (isset($view['qroff'][$k]) && empty($view['qroff'][$k])) {
+                unset($view['qroff'][$k]);
+            }
+        }
+        if (isset($view['qroff']) && empty($view['qroff'])) {
+            unset($view['qroff']);
+        }
+        if (empty($view)) {
+            unset($map[$lang]);
+        } else {
+            $map[$lang] = $view;
+        }
+        update("setting", "configDeliveryMode", json_encode($map, JSON_UNESCAPED_UNICODE), null, null);
     }
 }
 if (!function_exists('config_delivery_mode')) {
-    function config_delivery_mode($kind, $codePanel)
+    function config_delivery_mode($kind, $codePanel, $lang = 'fa')
     {
-        $map = config_delivery_map();
-        $v = ($codePanel === null) ? null : ($map[$kind][$codePanel] ?? null);
+        $view = config_delivery_view($lang);
+        $v = ($codePanel === null) ? null : ($view[$kind][$codePanel] ?? null);
         return in_array($v, ['1', '2'], true) ? $v : config_delivery_default_mode();
     }
 }
 if (!function_exists('config_delivery_set_mode')) {
-    function config_delivery_set_mode($kind, $codePanel, $mode)
+    function config_delivery_set_mode($kind, $codePanel, $mode, $lang = 'fa')
     {
         if (!in_array($mode, ['1', '2'], true)) {
             return;
         }
-        $map = config_delivery_map();
+        $view = config_delivery_view($lang);
         if ($mode === config_delivery_default_mode()) {
             // storing only deviations keeps "has the admin touched this?"
             // answerable without a separate flag
-            unset($map[$kind][$codePanel]);
-            if (empty($map[$kind])) {
-                unset($map[$kind]);
-            }
+            unset($view[$kind][$codePanel]);
         } else {
-            $map[$kind][$codePanel] = $mode;
+            $view[$kind][$codePanel] = $mode;
             // mode 2 sends no QR, so its switch goes off with it rather than
             // sitting there saying "on" for a photo that never goes out
-            $map['qroff'][$kind][$codePanel] = true;
+            $view['qroff'][$kind][$codePanel] = true;
         }
-        config_delivery_map_save($map);
+        config_delivery_view_save($lang, $view);
     }
 }
 if (!function_exists('config_delivery_qr_on')) {
     // 📷 QR with the delivered service - on unless the admin switched it off
     // for this panel and kind. Like the modes, only the deviation is stored.
-    function config_delivery_qr_on($kind, $codePanel)
+    function config_delivery_qr_on($kind, $codePanel, $lang = 'fa')
     {
-        $map = config_delivery_map();
-        return $codePanel === null || empty($map['qroff'][$kind][$codePanel]);
+        $view = config_delivery_view($lang);
+        return $codePanel === null || empty($view['qroff'][$kind][$codePanel]);
     }
-    function config_delivery_set_qr($kind, $codePanel, $on)
+    function config_delivery_set_qr($kind, $codePanel, $on, $lang = 'fa')
     {
-        $map = config_delivery_map();
+        $view = config_delivery_view($lang);
         if ($on) {
-            unset($map['qroff'][$kind][$codePanel]);
-            if (isset($map['qroff'][$kind]) && empty($map['qroff'][$kind])) {
-                unset($map['qroff'][$kind]);
-            }
-            if (isset($map['qroff']) && empty($map['qroff'])) {
-                unset($map['qroff']);
-            }
+            unset($view['qroff'][$kind][$codePanel]);
         } else {
-            $map['qroff'][$kind][$codePanel] = true;
+            $view['qroff'][$kind][$codePanel] = true;
         }
-        config_delivery_map_save($map);
+        config_delivery_view_save($lang, $view);
     }
 }
 if (!function_exists('config_delivery_panel_reset')) {
     // $kind = null resets BOTH kinds for this panel (kept for completeness);
     // a specific kind resets ONLY that one - used by the kind-scoped screens
-    // so resetting purchase never silently also resets usertest, or vice versa
-    function config_delivery_panel_reset($codePanel, $kind = null)
+    // so resetting purchase never silently also resets usertest, or vice versa.
+    // Only $lang's tab.
+    function config_delivery_panel_reset($codePanel, $kind = null, $lang = 'fa')
     {
-        $map = config_delivery_map();
+        $view = config_delivery_view($lang);
         $kinds = ($kind === null) ? ['purchase', 'usertest'] : [$kind];
         foreach ($kinds as $k) {
-            unset($map[$k][$codePanel], $map['qroff'][$k][$codePanel]);
-            if (isset($map[$k]) && empty($map[$k])) {
-                unset($map[$k]);
-            }
-            if (isset($map['qroff'][$k]) && empty($map['qroff'][$k])) {
-                unset($map['qroff'][$k]);
-            }
+            unset($view[$k][$codePanel], $view['qroff'][$k][$codePanel]);
         }
-        if (isset($map['qroff']) && empty($map['qroff'])) {
-            unset($map['qroff']);
-        }
-        config_delivery_map_save($map);
+        config_delivery_view_save($lang, $view);
     }
 }
 if (!function_exists('config_delivery_touched')) {
-    function config_delivery_touched($kind = null)
+    function config_delivery_touched($kind = null, $lang = 'fa')
     {
-        $map = config_delivery_map();
+        $view = config_delivery_view($lang);
         if ($kind !== null) {
-            return !empty($map[$kind]);
+            return !empty($view[$kind]);
         }
-        return !empty($map['purchase']) || !empty($map['usertest']);
+        return !empty($view['purchase']) || !empty($view['usertest']);
     }
 }
 if (!function_exists('config_delivery_mode_fa')) {
@@ -8985,17 +9008,15 @@ if (!function_exists('config_delivery_panels_payload')) {
         if (!is_array($panels)) {
             $panels = [];
         }
-        $info = "📌 <b>نحوه‌ی نمایش کانفیگ (هنگام {$kindLabel})</b>\n➖➖➖➖➖➖➖➖➖➖\n";
+        $info = "📌 <b>نحوه‌ی نمایش کانفیگ (هنگام {$kindLabel})</b>" . mainmenu_tab_note($lang) . "\n➖➖➖➖➖➖➖➖➖➖\n";
         $info .= "تعیین می‌کنه وقتی کاربر " . ($kind === 'usertest' ? 'اکانت تست می‌گیره' : 'سرویس می‌خره') . "، بعد از تحویل چی ببینه.\n";
-        $info .= "برای هر پنل جداست.\n";
+        $info .= "برای هر پنل و هر زبان جداست - کاربر، تنظیم زبان خودش رو می‌گیره.\n";
         $info .= "➖➖➖➖➖➖➖➖➖➖\n";
         $info .= empty($panels) ? "⚠️ هنوز هیچ پنلی اضافه نشده." : "👇 اول پنل رو انتخاب کن:";
         $kb = ['inline_keyboard' => []];
-        $map = config_delivery_map();
         foreach ($panels as $p) {
             $code = $p['code_panel'];
-            $m = config_delivery_mode($kind, $code);
-            $touched = isset($map[$kind][$code]);
+            $m = config_delivery_mode($kind, $code, $lang);
             $label = "🖥 {$p['name_panel']}  •  حالت " . config_delivery_mode_fa($m);
             $kb['inline_keyboard'][] = [['text' => $label, 'callback_data' => "cfgdeliv|p|{$lang}|{$code}|{$origin}", 'style' => 'primary']];
         }
@@ -9011,8 +9032,8 @@ if (!function_exists('config_delivery_panel_payload')) {
         $kindLabel = ($kind === 'usertest') ? 'اکانت تست' : 'خرید';
         $panel = select("marzban_panel", "*", "code_panel", $codePanel, "select");
         $name = is_array($panel) ? ($panel['name_panel'] ?? $codePanel) : $codePanel;
-        $cur = config_delivery_mode($kind, $codePanel);
-        $info = "🖥 <b>پنل: " . htmlspecialchars((string) $name, ENT_QUOTES) . "</b>\n";
+        $cur = config_delivery_mode($kind, $codePanel, $lang);
+        $info = "🖥 <b>پنل: " . htmlspecialchars((string) $name, ENT_QUOTES) . "</b>" . mainmenu_tab_note($lang) . "\n";
         $info .= "📌 نحوه‌ی نمایش کانفیگ (هنگام {$kindLabel})\n➖➖➖➖➖➖➖➖➖➖\n";
         $info .= "بعد از اینکه سرویس تحویل داده شد، کاربر چی ببینه؟\n\n";
         $info .= "🔹 <b>حالت ۱ — فقط پیام کامل</b>\n";
@@ -9032,7 +9053,7 @@ if (!function_exists('config_delivery_panel_payload')) {
             $info .= "تا روشنش نکنی، حالت ۲ کار نمی‌کنه - به‌جای صفحه‌ی کانفیگ همون پیام کامل (حالت ۱) فرستاده می‌شه.\n";
             $info .= "مسیر: مدیریت پنل‌ها ← همین پنل ← ⚙️ وضعیت قابلیت‌های پنل ← «ارسال کانفیگ».";
         }
-        $qrOn = config_delivery_qr_on($kind, $codePanel);
+        $qrOn = config_delivery_qr_on($kind, $codePanel, $lang);
         if ($cur === '2') {
             $info .= "\n\n📷 <b>QR کد:</b> ❌ در حالت ۲ فرستاده نمی‌شه.";
         } else {
@@ -9060,7 +9081,7 @@ if (!function_exists('config_delivery_panel_payload')) {
             $kb['inline_keyboard'][] = [['text' => '📝 پیام کامل (حالت ۱)', 'callback_data' => "cfgdeliv|msg|{$lang}|{$codePanel}|{$origin}|at", 'style' => 'primary']];
             $kb['inline_keyboard'][] = [['text' => '📝 کپشن صفحه‌ی کانفیگ (حالت ۲)', 'callback_data' => "cfgdeliv|msg|{$lang}|{$codePanel}|{$origin}|ct", 'style' => 'primary']];
         }
-        $kb['inline_keyboard'][] = [['text' => '🎨 دکمه‌ها و ترتیب کانفیگ‌ها (مشترک بین خرید و تست)', 'callback_data' => "cfgdeliv|cfgcol|{$lang}|{$codePanel}|{$origin}", 'style' => 'primary']];
+        $kb['inline_keyboard'][] = [['text' => '🎨 دکمه‌ها و ترتیب کانفیگ‌ها (' . $kindLabel . ')', 'callback_data' => "cfgdeliv|cfgcol|{$lang}|{$codePanel}|{$origin}", 'style' => 'primary']];
         $kb['inline_keyboard'][] = [['text' => '🔁 ریست حالت این پنل به پیش‌فرض', 'callback_data' => "cfgdeliv|rst|{$lang}|{$codePanel}|{$kind}|{$origin}", 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به لیست پنل‌ها', 'callback_data' => "cfgdeliv|list|{$lang}|{$origin}", 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
@@ -16335,7 +16356,8 @@ function sendMessageService($panel_info, $config, $sub_link, $username_service, 
     // it is resolved after $user_id for that reason - the menu is per language
     // now, so the sender's own copy would be the wrong one to ask
     $sms_row = select("user", "lang", "id", $user_id, "select");
-    if (!mainmenu_btn_active($sms_row['lang'] ?? 'fa', "text_help"))
+    $sms_lang = $sms_row['lang'] ?? 'fa';
+    if (!mainmenu_btn_active($sms_lang, "text_help"))
         $reply_markup = null;
     $configCount = is_array($config) ? count($config) : 0;
     // Mode 2 is the config page INSTEAD of the full message, not as well as it
@@ -16344,7 +16366,7 @@ function sendMessageService($panel_info, $config, $sub_link, $username_service, 
     // page to show, so the customer gets the full message (mode 1) instead of
     // nothing. No QR either way in mode 2.
     if ($panel_info['config'] == "onconfig" && $configCount > 0
-        && config_delivery_mode($kind, $panel_info['code_panel'] ?? null) === "2") {
+        && config_delivery_mode($kind, $panel_info['code_panel'] ?? null, $sms_lang) === "2") {
         $cd_hintKey = ($kind === 'usertest') ? 'textbot.getConfigHintTest' : 'textbot.getConfigHintBuy';
         $cd_hintText = bottext_resolve_key($cd_hintKey);
         // sendMessageService's own $kind is 'purchase'|'usertest' - keyboard_config()'s
@@ -16399,7 +16421,7 @@ function sendMessageService($panel_info, $config, $sub_link, $username_service, 
             $out_put_qrcode = (string) $config[0];
         }
         $captionSent = false;
-        if ($out_put_qrcode !== '' && config_delivery_qr_on($kind, $panel_info['code_panel'] ?? null)) {
+        if ($out_put_qrcode !== '' && config_delivery_qr_on($kind, $panel_info['code_panel'] ?? null, $sms_lang)) {
             $urlimage = "$user_id$invoice_id.png";
             try {
                 $qrCode = createqrcode($out_put_qrcode);
