@@ -12309,10 +12309,14 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
         return;
     }
     savedata("save", "bulk_location", $text);
-    if ($setting['statuscategorygenral'] == "oncategorys") {
-        sendmessage($from_id, $textbotlang['Admin']['category']['askName'], KeyboardCategoryadmin(), 'HTML');
-        step('bulkadd_category', $from_id);
-        return;
+    // same rule as the single add-product flow
+    if (!empty(category_feature_langs())) {
+        if (intval(select("category", "*", null, null, "count")) > 0) {
+            sendmessage($from_id, $textbotlang['Admin']['Product']['askCategory'], KeyboardCategoryadmin(), 'HTML');
+            step('bulkadd_category', $from_id);
+            return;
+        }
+        sendmessage($from_id, $textbotlang['Admin']['Product']['categoryNoneNote'], null, 'HTML');
     }
     savedata("save", "bulk_category", null);
     $bp_panel = select("marzban_panel", "*", "name_panel", $text, "select");
@@ -12499,10 +12503,16 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
         return;
     }
     savedata("save", "Location", $text);
-    if ($setting['statuscategorygenral'] == "oncategorys") {
-        sendmessage($from_id, $textbotlang['Admin']['category']['askName'], KeyboardCategoryadmin(), 'HTML');
-        step("getcategory", $from_id);
-        return;
+    // categories on (in any language - the switch is per language) and at
+    // least one to choose: the product goes into one. On with none yet: say
+    // so, since in category mode a product without one is never shown.
+    if (!empty(category_feature_langs())) {
+        if (intval(select("category", "*", null, null, "count")) > 0) {
+            sendmessage($from_id, $textbotlang['Admin']['Product']['askCategory'], KeyboardCategoryadmin(), 'HTML');
+            step("getcategory", $from_id);
+            return;
+        }
+        sendmessage($from_id, $textbotlang['Admin']['Product']['categoryNoneNote'], null, 'HTML');
     }
     $panel = select("marzban_panel", "*", "name_panel", $text, "select");
     if ($panel['type'] == "Manualsale") {
@@ -12958,6 +12968,17 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     sendmessage($from_id, $textbotlang['Admin']['Product']['askNewName'] . $textbotlang['Admin']['Product']['premiumEmojiHint'], $backadmin, 'HTML');
     step('change_name', $from_id);
 } elseif ($datain == "prodedit_category" && $adminrulecheck['rule'] == "administrator") {
+    // off everywhere, or nothing to pick from: say why and where, and stay put
+    $pc_block = category_pick_blocker($textbotlang);
+    if ($pc_block !== null) {
+        telegram('answerCallbackQuery', [
+            'callback_query_id' => $callback_query_id,
+            'text' => $pc_block,
+            'show_alert' => true,
+            'cache_time' => 1,
+        ]);
+        return;
+    }
     sendmessage($from_id, $textbotlang['Admin']['Product']['selectNewCategory'], KeyboardCategoryadmin(), 'HTML');
     step('change_categroy', $from_id);
 } elseif ($datain == "prodedit_usertype" && $adminrulecheck['rule'] == "administrator") {
@@ -13082,6 +13103,11 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     sendmessage($from_id, $textbotlang['Admin']['Product']['noteUpdated'] . ($__pcaption !== null ? "\n\n" . $__pcaption : ""), product_edit_hub_payload($textbotlang), 'HTML');
     step('home', $from_id);
 } elseif ($text == $textbotlang['keyboard']['category'] && $adminrulecheck['rule'] == "administrator") {
+    $pc_block = category_pick_blocker($textbotlang);
+    if ($pc_block !== null) {
+        sendmessage($from_id, $pc_block, null, 'HTML');
+        return;
+    }
     sendmessage($from_id, $textbotlang['Admin']['Product']['selectNewCategory'], KeyboardCategoryadmin(), 'HTML');
     step('change_categroy', $from_id);
 } elseif ($user['step'] == "change_categroy") {

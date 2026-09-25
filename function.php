@@ -1530,6 +1530,39 @@ if (!function_exists('card_invoice_caption_get')) {
         return is_array($data) ? $data : [];
     }
 }
+if (!function_exists('category_feature_langs')) {
+    // The shop languages whose 🛒 وضعیت قابلیت های فروشگاه has 🗂 دسته بندی on.
+    // It is a per-language switch now (shop_feature_value); the old shop-wide
+    // statuscategorygenral column only answers for a language that never set
+    // its own, so reading that column alone asked for a category while it was
+    // off, or not while it was on.
+    function category_feature_langs()
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $on = [];
+        foreach (panel_langs() as $l) {
+            if (shop_feature_value('categroygenral', $l, $setting['statuscategorygenral'] ?? '') === 'oncategorys') {
+                $on[] = $l;
+            }
+        }
+        return $on;
+    }
+    // Why a product cannot be given a category right now - categories are off
+    // in every language, or none exist yet - as the text to show; null when it
+    // can. The path in the text is built from the menu's own button labels.
+    function category_pick_blocker($textbotlang)
+    {
+        $t = $textbotlang['Admin']['Product'];
+        $k = $textbotlang['keyboard'];
+        if (empty(category_feature_langs())) {
+            return strtr($t['categoryOffAlert'], ['{shop}' => $k['shopSettings'], '{status}' => $k['shopFeatureStatus'], '{category}' => $k['categoryBug']]);
+        }
+        if (intval(select("category", "*", null, null, "count")) === 0) {
+            return strtr($t['categoryNoneAlert'], ['{shop}' => $k['shopSettings'], '{manage}' => $k['manageCategory'], '{add}' => $k['addCategory']]);
+        }
+        return null;
+    }
+}
 if (!function_exists('shop_feature_lang_map')) {
     // 🛒 وضعیت قابلیت‌های فروشگاه, per language. Each of its 11 toggles used to
     // be one shop-wide flag (a `setting` column or a `shopSetting` row); this is
