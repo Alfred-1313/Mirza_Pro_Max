@@ -223,20 +223,6 @@ return array (
         'label' => '⏰ پیام اتمام اکانت تست',
         'key' => 'textbot.testExpired',
       ),
-      // the two service warnings the notification cron sends - opened from
-      // 🔋 پیام‌های هشدار و اتمام سرویس (skipped on the home list). String
-      // keys: an unkeyed entry here would take the next number and be
-      // overwritten by the explicit one that follows.
-      'notice_lowvolume' =>
-      array (
-        'label' => '🪫 پیام هشدار حجم کم',
-        'key' => 'textbot.lowVolumeNotice',
-      ),
-      'notice_lowtime' =>
-      array (
-        'label' => '⌛ پیام هشدار زمان کم',
-        'key' => 'textbot.lowTimeNotice',
-      ),
       17 => 
       array (
         'label' => '❓ متن سؤالات متداول',
@@ -3145,8 +3131,6 @@ trojan://xyz',
       'btnSettings' => '🕚 تنظیمات کرون جاب',
       'cannotDeleteUnlimited' => '❌ به دلیل نامحدود بودن حجم و زمان امکان حذف سرویس وجود ندارد. ',
       'askOnHoldDays' => 'در این بخش باید تغیین کنید که اگر کاربر بعد از چند روز به کانفیگ خود وصل نشد و در وضعیت on_hold بود به کاربر پیام دهد',
-      'askVolumeAlert' => '📌 در این بخش می توانید تنظیم کنید که اگر حجم کاربر به x رسید پیام اخطار ارسال شود. حجم را براساس گیگ ارسال نمایید.',
-      'askNotifyDays' => '📌 در این بخش می توانید تعیین کنید چند روز مانده است به پایان اشتراک به کاربر اطلاع داده شود. زمان برحسب روز است',
       'userNotifyEnabled' => '✅ اطلاعیه های کرون برای کاربر فعال گردید.',
       'userNotifyDisabled' => '✅ اطلاعیه های کرون برای کاربر غیرفعال گردید.',
       'timeSaved' => '✅ زمان با موفقیت ثبت گردید.',
@@ -7194,10 +7178,6 @@ nowpayments.io
 سرویس تست شما با نام کاربری {username} به پایان رسیده است
 امیدواریم تجربه‌ی خوبی از آسودگی و سرعت سرویستون داشته باشین. در صورتی که از سرویس‌ تست خودتون راضی بودین، میتونید سرویس اختصاصی خودتون رو تهیه کنید و از داشتن اینترنت آزاد با نهایت کیفیت لذت ببرید😉🔥
 🛍 برای تهیه سرویس با کیفیت می توانید از دکمه زیر استفاده نمایید',
-    'lowVolumeNotice' => 'با سلام خدمت شما کاربر گرامی 👋
-🚨 از حجم سرویس {username} تنها {remainingvolume} باقی مانده است. لطفاً در صورت تمایل برای خرید حجم اضافه و یا تمدید سرویستون از طریق بخش «{myservices}» اقدام بفرمایین',
-    'lowTimeNotice' => 'با سلام خدمت شما کاربر گرامی 👋
-📌 از مهلت زمانی استفاده از سرویس {username} فقط {timeleft} باقی مانده است. لطفاً در صورت تمایل برای تمدید این سرویس، از طریق بخش «{myservices}» اقدام بفرمایین. با تشکر از همراهی شما',
     'userTest' => '🔑 اکانت تست',
     'wgDashboard' => '✅ سرویس با موفقیت ایجاد شد
 
@@ -7345,8 +7325,6 @@ nowpayments.io
     'cronFirstConnection' => '🕚 کرون اولین اتصال',
     'cronMessageStatus' => '🕚 وضعیت ارسال پیام های کرون',
     'cronTest' => '🔓کرون تست',
-    'cronTime' => '🕚 کرون زمان',
-    'cronVolume' => '🔋 کرون حجم',
     'cryptoOfflinePayment' => '💵ارزی آفلاین',
     'currentMonth' => '☀️ ماه فعلی ',
     'customServiceGroupF' => '♻️ سرویس دلخواه گروه f',
@@ -7666,7 +7644,6 @@ nowpayments.io
     'testDeleteTime' => '🗑 زمان حذف اکانت تست',
     'testServiceTime' => '⏳ زمان سرویس تست',
     'time' => 'زمان',
-    'timeAlert' => '⚙️ زمان هشدار',
     'timeDuration' => '⏳ زمان',
     'today' => '⛅️ امروز',
     'totalStats' => '⏱️ آمار کل',
@@ -7696,7 +7673,6 @@ nowpayments.io
     'viewTutorial' => '📚 مشاهده آموزش استفاده ',
     'volume' => 'حجم',
     'volume2' => '🔋 حجم',
-    'volumeAlert' => '⚙️ حجم هشدار',
     'volumeResetType' => 'نوع ریست حجم',
     'walletAddress' => 'آدرس ولت',
     'wheelOfLuck' => '🎲 گردونه شانس',
@@ -9293,6 +9269,13 @@ nowpayments.io
     'topupDiscMinPkgPercent' => '🎁 چون از {min} به بالا شارژ می‌کنی، {bonus} هم هدیه می‌گیری — یعنی {value}٪ بیشتر!',
     'topupDiscMinPkgFixed' => '🎁 چون از {min} به بالا شارژ می‌کنی، {bonus} هدیه می‌گیری!',
     'topupDiscMinSuffix' => '(از {min} به بالا)',
+    // 🪫 حجم کم (گیگ) - the fixed low-volume warning's wording, now its tiers' default
+    'volumeLowGbDefaultText' => 'با سلام خدمت شما کاربر گرامی 👋
+🚨 از حجم سرویس {username} تنها {remainingvolume} باقی مانده است. لطفاً در صورت تمایل برای خرید حجم اضافه و یا تمدید سرویستون از طریق بخش «{myservices}» اقدام بفرمایین',
+    // the fixed low-time warning's own wording, given to the ⏳ tier that
+    // replaced it (notice_migrate_legacy)
+    'timeWarnLegacyText' => 'با سلام خدمت شما کاربر گرامی 👋
+📌 از مهلت زمانی استفاده از سرویس {username} فقط {timeleft} باقی مانده است. لطفاً در صورت تمایل برای تمدید این سرویس، از طریق بخش «{myservices}» اقدام بفرمایین. با تشکر از همراهی شما',
     'volumeEndDefaultText' => 'مشتری گرامی {username}
 حجم بسته VPN شما {packagedays} روزه {packagevolume} گیگابایتی شما به پایان رسید .
 این بسته فاقد تمدید خودکار میباشد برای تمدید و استفاده مجدد میتوانید بسته خود را با دکمه پایین تمدید کنید 🫶',

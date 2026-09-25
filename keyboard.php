@@ -2380,8 +2380,6 @@ function keyboard_list_text($lang, $groupFilter = null)
         // owned by 🌐 تنظیمات تغییر زبان کاربر, which edits them in place - a
         // second row here would make their back button ambiguous
         'bottext.langPickerCaption', 'bottext.langBlockedMsg',
-        // opened from inside 🔋 پیام‌های هشدار و اتمام سرویس, whose back they use
-        'textbot.lowVolumeNotice', 'textbot.lowTimeNotice',
         // opened from inside 📯 پیام عضویت اجباری کانال, whose back it uses
         'users.channel.left_channel'];
     $bt_can_react_keys = ['users.text_start', 'textbot.faqDesc', 'textbot.tariffListDesc', 'textbot.rules', 'users.unknownMsg'];

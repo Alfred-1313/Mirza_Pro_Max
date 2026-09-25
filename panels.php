@@ -2414,11 +2414,14 @@ class ManagePanel
                 'msg' => 'data not found'
             );
         }
-        $notif_value = json_decode($invoice['notifctions'], true);
-        $notifctions = json_encode(array(
-            'volume' => false,
-            'time' => $notif_value['time'],
-        ));
+        // more volume: the volume warnings may come again; what was already
+        // sent about time stays sent (keeping only 'time' used to wipe the
+        // day tiers' marks too, so they went out a second time)
+        $notif_value = json_decode((string) $invoice['notifctions'], true);
+        $notif_value = is_array($notif_value) ? $notif_value : [];
+        unset($notif_value['volumePctSent'], $notif_value['volGbSent'], $notif_value['volEndSent']);
+        $notif_value['volume'] = false;
+        $notifctions = json_encode($notif_value);
         update("invoice", "notifctions", $notifctions, 'id_invoice', $invoice['id_invoice']);
         $user_info = $this->DataUser($panel['name_panel'], $username_account);
         if ($user_info['status'] == "Unsuccessful") {
@@ -2547,11 +2550,13 @@ class ManagePanel
                 'msg' => 'data not found'
             );
         }
-        $notif_value = json_decode($invoice['notifctions'], true);
-        $notifctions = json_encode(array(
-            'volume' => $notif_value['volume'],
-            'time' => false,
-        ));
+        // more time: the time warnings may come again; what was already sent
+        // about volume stays sent
+        $notif_value = json_decode((string) $invoice['notifctions'], true);
+        $notif_value = is_array($notif_value) ? $notif_value : [];
+        unset($notif_value['timeTierSent'], $notif_value['timeEndSent']);
+        $notif_value['time'] = false;
+        $notifctions = json_encode($notif_value);
         update("invoice", "notifctions", $notifctions, 'id_invoice', $invoice['id_invoice']);
         $user_info = $this->DataUser($panel['name_panel'], $username_account);
         if ($user_info['status'] == "Unsuccessful") {

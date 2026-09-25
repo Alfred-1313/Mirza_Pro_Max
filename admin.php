@@ -498,23 +498,6 @@ if (!function_exists('bottext_item_menu_payload')) {
         if ($bt_key === 'textbot.channel') {
             $bt_extra_note = "\nℹ️ این پیام وقتی نشون داده می‌شه که «عضویت اجباری کانال» فعال باشه (از ✏️ مدیریت ربات ← 📯 تنظیمات کانال) و کاربر هنوز عضو نشده باشه.\n💡 دکمه‌های زیرش (یکی به ازای هر کانال) رنگ/ایموجی/چیدمان/نام و نمایششون از دکمه‌ی پایین همین صفحه قابل تنظیمه - هر زبان جدا.\n🚪 پیامی که بعد از خروج کاربر از کانال میاد هم از پایین همین صفحه قابل ویرایشه.\n";
         }
-        if (in_array($bt_key, ['textbot.lowVolumeNotice', 'textbot.lowTimeNotice'], true)) {
-            $bt_nset = select("setting", "*", null, null, "select");
-            $bt_ncron = json_decode((string) ($bt_nset['cron_status'] ?? ''), true);
-            $bt_isVol = ($bt_key === 'textbot.lowVolumeNotice');
-            $bt_extra_note = "\nℹ️ این پیام وقتی برای کاربر می‌ره که "
-                . ($bt_isVol ? "کمتر از <b>" . intval($bt_nset['volumewarn'] ?? 0) . " گیگ</b> از حجم سرویسش مونده باشه" : "کمتر از <b>" . intval($bt_nset['daywarn'] ?? 0) . " روز</b> از زمان سرویسش مونده باشه")
-                . " - برای هر سرویس یک بار، به زبان خود کاربر.\n";
-            $bt_extra_note .= "⚙️ این عدد، و روشن/خاموش کلی کرونش، از ⚙️ وضعیت قابلیت ها ← "
-                . ($bt_isVol ? "«⚙️ حجم هشدار» و «🔋 کرون حجم»" : "«⚙️ زمان هشدار» و «🕚 کرون زمان»") . " عوض می‌شه.\n";
-            if (!$bt_isVol) {
-                $bt_extra_note .= "💡 زمان باقی‌مونده با روز و ساعت نوشته می‌شه (مثلاً «۲ روز و ۵ ساعت»)، نه فقط روز.\n";
-            }
-            $bt_extra_note .= "🔄 دکمه‌ی تمدید سرویس زیرش از پایین همین صفحه قابل تنظیمه.\n";
-            if (empty($bt_ncron[$bt_isVol ? 'volume' : 'day'])) {
-                $bt_extra_note .= "⚠️ <b>کرون " . ($bt_isVol ? 'حجم' : 'زمان') . " الان خاموشه</b> - تا روشنش نکنی این پیام برای هیچ‌کس نمی‌ره.\n";
-            }
-        }
         if ($bt_key === 'textbot.testExpired') {
             $bt_extra_note = "\nℹ️ این پیام وقتی برای کاربر می‌ره که اکانت تستش تموم بشه یا پاک بشه - به زبان خود کاربر.\n💡 دکمه‌ی زیرش از پایین همین صفحه قابل تنظیمه.\n";
         }
@@ -634,7 +617,7 @@ if (!function_exists('bottext_item_menu_payload')) {
         // separate configDisplayBuy/configColOrderBuy pair, so it gets its own
         // forward link straight from the myservices list (keyboard.php) instead
         // of the generic $bt_btn_label/$bt_btn_custom status line below.
-        $bt_has_buttons = in_array($bt_key, ['users.usertest.selectUsernamePrompt', 'users.Balance.insufficientBalanceSimple', 'users.sell.selectUsernamePrompt', 'users.sell.preInvoice', 'users.sell.preInvoice2', 'textbot.preInvoice', 'users.sell.service_not_available', 'textbot.testExpired', 'users.sell.service_sell', 'users.status.infoFull', 'users.Balance.chargeSuccess', 'textbot.channel', 'users.channel.left_channel', 'users.extend.invoiceCreated', 'users.changeLink.warnchange', 'textbot.afterPay', 'textbot.afterText', 'textbot.lowVolumeNotice', 'textbot.lowTimeNotice'], true);
+        $bt_has_buttons = in_array($bt_key, ['users.usertest.selectUsernamePrompt', 'users.Balance.insufficientBalanceSimple', 'users.sell.selectUsernamePrompt', 'users.sell.preInvoice', 'users.sell.preInvoice2', 'textbot.preInvoice', 'users.sell.service_not_available', 'textbot.testExpired', 'users.sell.service_sell', 'users.status.infoFull', 'users.Balance.chargeSuccess', 'textbot.channel', 'users.channel.left_channel', 'users.extend.invoiceCreated', 'users.changeLink.warnchange', 'textbot.afterPay', 'textbot.afterText'], true);
         $info = "📝 <b>{$bt_label}</b>\n➖➖➖➖➖➖➖➖➖➖\n{$bt_extra_note}";
         $info .= "✏️ متن: " . ($bt_custom ? "سفارشی ✅" : "پیش‌فرض") . "\n";
         if (!$bt_nosticker) {
@@ -664,8 +647,6 @@ if (!function_exists('bottext_item_menu_payload')) {
                 $bt_btn_label = '📯 دکمه‌های کانال';
             } elseif ($bt_key === 'users.channel.left_channel') {
                 $bt_btn_label = '📌 دکمه عضویت مجدد';
-            } elseif (in_array($bt_key, ['textbot.lowVolumeNotice', 'textbot.lowTimeNotice'], true)) {
-                $bt_btn_label = '🔄 دکمه تمدید سرویس';
             } elseif ($bt_key === 'users.extend.invoiceCreated') {
                 $bt_btn_label = '🔘 دکمه‌های تأیید تمدید/بازگشت';
             } elseif ($bt_key === 'users.changeLink.warnchange') {
@@ -779,8 +760,6 @@ if (!function_exists('bottext_item_menu_payload')) {
             $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه تهیه اشتراک', 'callback_data' => "gbs|hub|{$bt_lang}|ns", 'style' => 'primary']];
         } elseif ($bt_key === 'textbot.testExpired') {
             $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه خرید سرویس', 'callback_data' => "gbs|hub|{$bt_lang}|te", 'style' => 'primary']];
-        } elseif (in_array($bt_key, ['textbot.lowVolumeNotice', 'textbot.lowTimeNotice'], true)) {
-            $kb['inline_keyboard'][] = [['text' => '🔄 ویرایش دکمه تمدید سرویس', 'callback_data' => "gbs|hub|{$bt_lang}|" . ($bt_key === 'textbot.lowVolumeNotice' ? 'lv' : 'lt'), 'style' => 'primary']];
         } elseif ($bt_key === 'users.sell.service_sell') {
             $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه بستن', 'callback_data' => "gbs|hub|{$bt_lang}|sc", 'style' => 'primary']];
         } elseif ($bt_key === 'users.status.infoFull') {
@@ -847,7 +826,7 @@ if (!function_exists('bottext_item_menu_payload')) {
         } elseif ($bt_key === 'textbot.afterText' || $bt_key === 'users.usertest.noPanel' || $bt_key === 'textbot.selectLocationTest') {
             $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "bt_edit|{$bt_lang}|users.usertest.selectUsernamePrompt", 'style' => 'danger']];
         } elseif (in_array($bt_key, notice_section_keys(), true)) {
-            // all three live in 🔋 پیام‌های هشدار و اتمام سرویس
+            // it lives in 🔋 پیام‌های هشدار و اتمام سرویس
             $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "volpct|hub|{$bt_lang}", 'style' => 'danger']];
         }
         $kb['inline_keyboard'][] = [['text' => '🔙 برگشت به لیست', 'callback_data' => "btact|back|{$bt_lang}", 'style' => 'danger']];
@@ -4731,7 +4710,7 @@ if (!function_exists('shop_feature_status_caption')) {
     }
 }
 if (!function_exists('feature_status_global_payload')) {
-    // ⚙️ وضعیت قابلیت ها - the 13 rows here have no sensible per-customer
+    // ⚙️ وضعیت قابلیت ها - the rows here have no sensible per-customer
     // language (whole-bot kill switch, admin-only notices, cron/maintenance
     // gates) so they stay exactly as they've always behaved: one shared
     // setting for the whole bot. This single function replaces what used to
@@ -4767,14 +4746,6 @@ if (!function_exists('feature_status_global_payload')) {
             true => $textbotlang['Admin']['Status']['statuson'],
             false => $textbotlang['Admin']['Status']['statusoff'],
         ][$status_cron['test']];
-        $crondaystatustext = [
-            true => $textbotlang['Admin']['Status']['statuson'],
-            false => $textbotlang['Admin']['Status']['statusoff'],
-        ][$status_cron['day']];
-        $cronvolumestatustext = [
-            true => $textbotlang['Admin']['Status']['statuson'],
-            false => $textbotlang['Admin']['Status']['statusoff'],
-        ][$status_cron['volume']];
         $cronremovestatustext = [
             true => $textbotlang['Admin']['Status']['statuson'],
             false => $textbotlang['Admin']['Status']['statusoff'],
@@ -4830,19 +4801,9 @@ if (!function_exists('feature_status_global_payload')) {
                     ['text' => $textbotlang['keyboard']['panelUptime'], 'callback_data' => "none"],
                 ],
                 [
-                    ['text' => $textbotlang['keyboard']['timeAlert'], 'callback_data' => "settimecornday"],
-                    ['text' => $crondaystatustext, 'callback_data' => "editstsuts-cronday-{$status_cron['day']}"],
-                    ['text' => $textbotlang['keyboard']['cronTime'], 'callback_data' => "none"],
-                ],
-                [
                     ['text' => $textbotlang['keyboard']['firstConnectTime'], 'callback_data' => "setting_on_holdcron"],
                     ['text' => $cronon_holdtext, 'callback_data' => "editstsuts-on_hold-{$status_cron['on_hold']}"],
                     ['text' => $textbotlang['keyboard']['cronFirstConnection'], 'callback_data' => "none"],
-                ],
-                [
-                    ['text' => $textbotlang['keyboard']['volumeAlert'], 'callback_data' => "settimecornvolume"],
-                    ['text' => $cronvolumestatustext, 'callback_data' => "editstsuts-cronvolume-{$status_cron['volume']}"],
-                    ['text' => $textbotlang['keyboard']['cronVolume'], 'callback_data' => "none"],
                 ],
                 [
                     ['text' => $textbotlang['keyboard']['deleteTime'], 'callback_data' => "settimecornremove"],
@@ -6954,22 +6915,6 @@ if (preg_match('/^btact\|text\|([a-z]{2})\|(.+)$/', $datain, $btm) && $adminrule
             . "• لینک ساده کانفیگ: <code>{links2}</code>\n"
             . "• آدرس اشتراک (بعضی انواع پنل): <code>{password}</code>",
         'textbot.testExpired' => "• نام کاربری سرویس: <code>{username}</code>",
-        'textbot.lowVolumeNotice' => "• نام کاربری سرویس: <code>{username}</code>\n"
-            . "• حجم باقی‌مانده (با واحد): <code>{remainingvolume}</code>\n"
-            . "• درصد مصرف‌شده: <code>{usedpercent}</code>\n"
-            . "• زمان باقی‌مانده با روز و ساعت (۲ روز و ۵ ساعت): <code>{timeleft}</code>\n"
-            . "• تاریخ و ساعت اتمام: <code>{expiredate}</code> <code>{expiretime}</code>\n"
-            . "• اسم بخش «سرویس‌های من»: <code>{myservices}</code>\n"
-            . "• نام کاربری تلگرام: <code>{tg_username}</code>\n"
-            . "• آیدی عددی: <code>{userid}</code>",
-        'textbot.lowTimeNotice' => "• نام کاربری سرویس: <code>{username}</code>\n"
-            . "• زمان باقی‌مانده با روز و ساعت (۲ روز و ۵ ساعت): <code>{timeleft}</code>\n"
-            . "• فقط روزهای باقی‌مانده (عدد): <code>{remainingtime}</code>\n"
-            . "• تاریخ و ساعت اتمام: <code>{expiredate}</code> <code>{expiretime}</code>\n"
-            . "• حجم باقی‌مانده (با واحد): <code>{remainingvolume}</code>\n"
-            . "• اسم بخش «سرویس‌های من»: <code>{myservices}</code>\n"
-            . "• نام کاربری تلگرام: <code>{tg_username}</code>\n"
-            . "• آیدی عددی: <code>{userid}</code>",
         'users.usertest.selectUsernamePrompt' => "• مدت زمان اکانت تست: <code>{testtime}</code>\n"
             . "• حجم اکانت تست: <code>{testvolume}</code>",
         'users.status.getConfigHint' => "• مدت زمان این سرویس: <code>{testtime}</code>\n"
@@ -7575,7 +7520,7 @@ if (preg_match('/^volpct\|hub\|([a-z]{2})$/', $datain, $vp_m) && $adminrulecheck
     Editmessagetext($from_id, $message_id, $vp_text, $vp_kb, 'HTML');
     return;
 }
-if (preg_match('/^volpct\|sec\|([a-z]{2})\|(vol|time|timeend|volend)$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^volpct\|sec\|([a-z]{2})\|(vol|volgb|time|timeend|volend)$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
     $vp_lang = $vp_m[1];
     $vp_kind = $vp_m[2];
     $vp_meta = volumepct_kind_meta($vp_kind);
@@ -7590,7 +7535,7 @@ if (preg_match('/^volpct\|sec\|([a-z]{2})\|(vol|time|timeend|volend)$/', $datain
     Editmessagetext($from_id, $message_id, $vp_text, $vp_kb, 'HTML');
     return;
 }
-if (preg_match('/^volpct\|add\|([a-z]{2})\|(vol|time)$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^volpct\|add\|([a-z]{2})\|(vol|volgb|time)$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
     $vp_meta = volumepct_kind_meta($vp_m[2]);
     savedata("clear", "bt_msgid", $message_id);
     step("volpctnew-{$vp_m[1]}-{$vp_m[2]}", $from_id);
@@ -7675,7 +7620,7 @@ if (preg_match('/^volpct\|sticker\|([a-z]{2})\|(\d+)$/', $datain, $vp_m) && $adm
     return;
 }
 if (preg_match('/^volpct\|style\|([a-z]{2})\|(\d+)\|(primary|success|danger)$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
-    volumepct_tier_set_style((int) $vp_m[2], $vp_m[3], null, null, null, null, null, $vp_m[1]);
+    volumepct_tier_set_style((int) $vp_m[2], $vp_m[3]);
     list($vp_text, $vp_kb) = volumepct_tier_detail_payload((int) $vp_m[2], $vp_m[1], $textbotlang);
     Editmessagetext($from_id, $message_id, $vp_text, $vp_kb, 'HTML');
     return;
@@ -7692,22 +7637,22 @@ if (preg_match('/^volpct\|emoji\|([a-z]{2})\|(\d+)$/', $datain, $vp_m) && $admin
     return;
 }
 if (preg_match('/^volpct\|simple\|([a-z]{2})\|(\d+)$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
-    $vp_cur = !empty(volumepct_tier_look(volumepct_tier_get((int) $vp_m[2]), $vp_m[1])['simple']);
-    volumepct_tier_set_style((int) $vp_m[2], null, null, null, null, !$vp_cur, null, $vp_m[1]);
+    $vp_cur = !empty(volumepct_tier_get((int) $vp_m[2])['simple']);
+    volumepct_tier_set_style((int) $vp_m[2], null, null, null, null, !$vp_cur);
     list($vp_text, $vp_kb) = volumepct_tier_detail_payload((int) $vp_m[2], $vp_m[1], $textbotlang);
     Editmessagetext($from_id, $message_id, $vp_text, $vp_kb, 'HTML');
     return;
 }
 if (preg_match('/^volpct\|hide\|([a-z]{2})\|(\d+)$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
     // the notice itself still goes out - only its button is dropped
-    $vp_cur = !empty(volumepct_tier_look(volumepct_tier_get((int) $vp_m[2]), $vp_m[1])['hidden']);
-    volumepct_tier_set_style((int) $vp_m[2], null, null, null, null, null, !$vp_cur, $vp_m[1]);
+    $vp_cur = !empty(volumepct_tier_get((int) $vp_m[2])['hidden']);
+    volumepct_tier_set_style((int) $vp_m[2], null, null, null, null, null, !$vp_cur);
     list($vp_text, $vp_kb) = volumepct_tier_detail_payload((int) $vp_m[2], $vp_m[1], $textbotlang);
     Editmessagetext($from_id, $message_id, $vp_text, $vp_kb, 'HTML');
     return;
 }
 if (preg_match('/^volpct\|pos\|([a-z]{2})\|(\d+)\|(left|right)$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
-    volumepct_tier_set_style((int) $vp_m[2], null, null, null, $vp_m[3], null, null, $vp_m[1]);
+    volumepct_tier_set_style((int) $vp_m[2], null, null, null, $vp_m[3], null);
     list($vp_text, $vp_kb) = volumepct_tier_detail_payload((int) $vp_m[2], $vp_m[1], $textbotlang);
     Editmessagetext($from_id, $message_id, $vp_text, $vp_kb, 'HTML');
     return;
@@ -7715,7 +7660,7 @@ if (preg_match('/^volpct\|pos\|([a-z]{2})\|(\d+)\|(left|right)$/', $datain, $vp_
 if (preg_match('/^volpct\|del\|([a-z]{2})\|(\d+)$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
     $vp_kind = volumepct_tier_kind(volumepct_tier_get((int) $vp_m[2]));
     volumepct_tier_remove((int) $vp_m[2]);
-    if (in_array($vp_kind, ['vol', 'time'], true)) {
+    if (in_array($vp_kind, ['vol', 'volgb', 'time'], true)) {
         list($vp_text, $vp_kb) = volumepct_section_payload($vp_kind, $vp_m[1], $textbotlang);
     } else {
         list($vp_text, $vp_kb) = volumepct_hub_payload($vp_m[1], $textbotlang);
@@ -7729,7 +7674,7 @@ if (preg_match('/^volpct\|rst\|([a-z]{2})\|(\d+)$/', $datain, $vp_m) && $adminru
     Editmessagetext($from_id, $message_id, "🔁 کپشن و دکمه این آستانه به پیش‌فرض برگشتن.\n\n" . $vp_text, $vp_kb, 'HTML');
     return;
 }
-if (preg_match('/^volpct\|sw\|([a-z]{2})\|(vol|time|timeend|volend)$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^volpct\|sw\|([a-z]{2})\|(vol|volgb|time|timeend|volend)$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
     $vp_lang = in_array($vp_m[1], panel_langs(), true) ? $vp_m[1] : 'fa';
     $vp_kind = $vp_m[2];
     bt_item_set_enabled("volpct.{$vp_kind}", $vp_lang, !bt_item_enabled("volpct.{$vp_kind}", $vp_lang));
@@ -7748,17 +7693,17 @@ if (preg_match('/^volpct\|rstq\|([a-z]{2})$/', $datain, $vp_m) && $adminrulechec
         [['text' => '❌ نه، برگرد', 'callback_data' => "volpct|hub|{$vp_lang}", 'style' => 'primary']],
     ]]);
     Editmessagetext($from_id, $message_id, "🔁 <b>ریست همه‌ی پیام‌های هشدار و اتمام سرویس</b>" . mainmenu_tab_note($vp_lang)
-        . "\n\nمتن، استیکر، دکمه و روشن/خاموشِ همه‌ی پیام‌های این بخش (فقط برای همین زبان) به حالت پیش‌فرض برمی‌گرده.\nآستانه‌هایی که ساختی (درصدها و روزها) سر جاشون می‌مونن.\n\nمطمئنی؟", $vp_kb, 'HTML');
+        . "\n\nکپشن، استیکر، متن دکمه و روشن/خاموشِ همه‌ی پیام‌های این بخش، فقط برای همین زبان، به حالت پیش‌فرض برمی‌گرده.\nچیزهایی که بین زبان‌ها مشترکن - آستانه‌ها و رنگ/ایموجی دکمه‌ها - سر جاشون می‌مونن.\n\nمطمئنی؟", $vp_kb, 'HTML');
     return;
 }
 if (preg_match('/^volpct\|rstok\|([a-z]{2})$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
     $vp_lang = in_array($vp_m[1], panel_langs(), true) ? $vp_m[1] : 'fa';
     notice_section_reset($vp_lang);
     list($vp_text, $vp_kb) = volumepct_hub_payload($vp_lang, $textbotlang);
-    Editmessagetext($from_id, $message_id, "🔁 همه‌ی پیام‌های این بخش به پیش‌فرض برگشتن.\n\n" . $vp_text, $vp_kb, 'HTML');
+    Editmessagetext($from_id, $message_id, "🔁 همه‌ی پیام‌های این بخش برای این زبان به پیش‌فرض برگشتن.\n\n" . $vp_text, $vp_kb, 'HTML');
     return;
 }
-if (preg_match('/^volpct\|rstall\|([a-z]{2})\|(vol|time)$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^volpct\|rstall\|([a-z]{2})\|(vol|volgb|time)$/', $datain, $vp_m) && $adminrulecheck['rule'] == "administrator") {
     volumepct_tiers_reset_all_style($vp_m[1], $vp_m[2]);
     list($vp_text, $vp_kb) = volumepct_section_payload($vp_m[2], $vp_m[1], $textbotlang);
     Editmessagetext($from_id, $message_id, "🔁 کپشن و دکمه‌ی همه‌ی آستانه‌های این بخش به پیش‌فرض برگشتن.\n\n" . $vp_text, $vp_kb, 'HTML');
@@ -8329,7 +8274,7 @@ if (preg_match('/^tpdfld-(val|limit|user|exp|min)-([a-z]{2})-([a-z0-9_@]+)-(\d+)
     }
     return;
 }
-if (preg_match('/^volpctnew-([a-z]{2})-(vol|time)$/', (string) $user['step'], $vp_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^volpctnew-([a-z]{2})-(vol|volgb|time)$/', (string) $user['step'], $vp_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
     $vp_lang = $vp_m[1];
     $vp_kind = $vp_m[2];
     $vp_meta = volumepct_kind_meta($vp_kind);
@@ -8443,7 +8388,7 @@ if (preg_match('/^volpctemo-([a-z]{2})-(\d+)$/', (string) $user['step'], $vp_m) 
         }
     }
     if ($vp_icon_id !== '') {
-        volumepct_tier_set_style($vp_index, null, null, $vp_icon_id, null, null, null, $vp_lang);
+        volumepct_tier_set_style($vp_index, null, null, $vp_icon_id, null, null);
         $vp_msg = "✅ ایموجی پریمیوم ذخیره شد! 💎";
     } else {
         preg_match('/^\X/u', trim((string) $text), $vp_em);
@@ -8452,7 +8397,7 @@ if (preg_match('/^volpctemo-([a-z]{2})-(\d+)$/', (string) $user['step'], $vp_m) 
             sendmessage($from_id, "⚠️ لطفاً فقط یه ایموجی بفرست 😅", $backadmin, 'HTML');
             return;
         }
-        volumepct_tier_set_style($vp_index, null, $vp_emoji, null, null, null, null, $vp_lang);
+        volumepct_tier_set_style($vp_index, null, $vp_emoji, null, null, null);
         $vp_msg = "✅ ایموجی {$vp_emoji} ذخیره شد!";
     }
     step('home', $from_id);
@@ -10399,22 +10344,6 @@ elseif ($datain == "systemsms") {
             $valueneww = true;
         }
         $status_cron['test'] = $valueneww;
-        update("setting", "cron_status", json_encode($status_cron));
-    } elseif ($type == "cronday") {
-        if ($value == true) {
-            $valueneww = false;
-        } else {
-            $valueneww = true;
-        }
-        $status_cron['day'] = $valueneww;
-        update("setting", "cron_status", json_encode($status_cron));
-    } elseif ($type == "cronvolume") {
-        if ($value == true) {
-            $valueneww = false;
-        } else {
-            $valueneww = true;
-        }
-        $status_cron['volume'] = $valueneww;
         update("setting", "cron_status", json_encode($status_cron));
     } elseif ($type == "notifremove") {
         if ($value == true) {
@@ -16707,17 +16636,6 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     $time = time();
     $logss = "optimize_{$countunpiadorder}_{$countdisableorder}_{$countremoveadminorder}_{$countdisableordtester}_$time";
     file_put_contents('log.txt', "\n" . $logss, FILE_APPEND);
-} elseif ($datain == "settimecornvolume") {
-    sendmessage($from_id, $textbotlang['Admin']['cronjob']['askVolumeAlert'], $backadmin, 'HTML');
-    step("getvolumewarn", $from_id);
-} elseif ($user['step'] == "getvolumewarn") {
-    if (!ctype_digit($text)) {
-        sendmessage($from_id, $textbotlang['Admin']['invalidValue'], null, 'html');
-        return;
-    }
-    update("setting", "volumewarn", $text);
-    sendmessage($from_id, $textbotlang['Admin']['changesSaved2'], $setting_panel, 'HTML');
-    step("home", $from_id);
 } elseif ($text == $textbotlang['keyboard']['manualCreateConfig']) {
     savedata("clear", "idpanel", $user['Processing_value']);
     sendmessage($from_id, $textbotlang['Admin']['addorder']['manualIntro'], $backadmin, 'HTML');
@@ -19737,18 +19655,7 @@ if (isset($update["inline_query"])) {
     update("botsaz", "setting", json_encode($botinfo), "id_user", $userdate['id_user']);
     sendmessage($from_id, $textbotlang['Admin']['price']['saved'], $keyboardadmin, 'HTML');
 }
-if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
-    sendmessage($from_id, $textbotlang['Admin']['cronjob']['askNotifyDays'] . $setting['daywarn'] . $textbotlang['Admin']['unit']['day'], $backadmin, 'HTML');
-    step("getdaywarn", $from_id);
-} elseif ($user['step'] == "getdaywarn") {
-    if (!ctype_digit($text)) {
-        sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
-        return;
-    }
-    sendmessage($from_id, $textbotlang['Admin']['cronjob']['changedData'], $keyboardadmin, 'HTML');
-    step("home", $from_id);
-    update("setting", "daywarn", $text);
-} elseif ($datain == "linkappsetting") {
+if ($datain == "linkappsetting") {
     sendmessage($from_id, $textbotlang['Admin']['selectOption5'], $keyboardlinkapp, 'HTML');
 } elseif ($text == $textbotlang['keyboard']['addApp']) {
     sendmessage($from_id, $textbotlang['Admin']['apps']['askName'], $backadmin, 'HTML');

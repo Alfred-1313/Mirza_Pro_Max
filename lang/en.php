@@ -2070,8 +2070,6 @@ Current time: ',
                         'btnSettings' => '🕚 Cron job settings',
                         'cannotDeleteUnlimited' => '❌ The service cannot be deleted because its volume and time are unlimited. ',
                         'askOnHoldDays' => 'In this section you must set, if the user has not connected to their config after a certain number of days and is in on_hold status, to send the user a message',
-                        'askVolumeAlert' => '📌 In this section you can set that if the user\'s volume reaches x, a warning message is sent. Send the volume in GB.',
-                        'askNotifyDays' => '📌 In this section you can set how many days before the subscription ends the user is notified. The time is in days',
                         'userNotifyEnabled' => '✅ Cron notifications were enabled for the user.',
                         'userNotifyDisabled' => '✅ Cron notifications were disabled for the user.',
                         'timeSaved' => '✅ The time was registered successfully.',
@@ -3967,10 +3965,6 @@ Service information:
 Your test service with username {username} has ended
 We hope you had a good experience with the ease and speed of your service. If you were satisfied with your test service, you can get your own dedicated service and enjoy free internet with the highest quality😉🔥
 🛍 To get a quality service, you can use the button below',
-                'lowVolumeNotice' => 'Hello, dear user 👋
-🚨 Your service {username} has only {remainingvolume} left. To buy extra volume or renew it, please go to «{myservices}».',
-                'lowTimeNotice' => 'Hello, dear user 👋
-📌 Your service {username} has only {timeleft} left. To renew it, please go to «{myservices}». Thank you for staying with us.',
                 'userTest' => '🔑 Test account',
                 'wgDashboard' => '✅ Service was created successfully
 
@@ -4112,8 +4106,6 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'cronFirstConnection' => '🕚 First connection cron',
                 'cronMessageStatus' => '🕚 Cron message sending status',
                 'cronTest' => '🔓Test cron',
-                'cronTime' => '🕚 Time cron',
-                'cronVolume' => '🔋 Volume cron',
                 'cryptoOfflinePayment' => '💵Offline currency',
                 'currentMonth' => '☀️ Current month ',
                 'customServiceGroupF' => '♻️ Custom service group f',
@@ -4383,7 +4375,6 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'testAccountVolume' => '💾 Test account volume',
                 'testServiceTime' => '⏳ Test service time',
                 'time' => 'Time',
-                'timeAlert' => '⚙️ Warning time',
                 'timeDuration' => '⏳ Time',
                 'today' => '⛅️ Today',
                 'totalStats' => '⏱️ Total statistics',
@@ -4413,7 +4404,6 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'viewTutorial' => '📚 View usage tutorial ',
                 'volume' => 'Volume',
                 'volume2' => '🔋 Volume',
-                'volumeAlert' => '⚙️ Warning volume',
                 'volumeResetType' => 'Volume reset type',
                 'walletAddress' => 'Wallet address',
                 'wheelOfLuck' => '🎲 Wheel of fortune',
@@ -5019,6 +5009,10 @@ You can use your plan until {expiretime} on {expiredate}, that is {timeleft} fro
 If you would like to keep using your service, use the button below 🫶',
                 'volumeTimeEndDefaultText' => 'Dear customer {username}
 The plan you bought on {purchasedate} has ended. If you would like to keep using your service, use the button below 🫶',
+                'volumeLowGbDefaultText' => 'Hello, dear user 👋
+🚨 Your service {username} has only {remainingvolume} left. To buy extra volume or renew it, please go to «{myservices}».',
+                'timeWarnLegacyText' => 'Hello, dear user 👋
+📌 Your service {username} has only {timeleft} left. To renew it, please go to «{myservices}». Thank you for staying with us.',
                 'volumeEndDefaultText' => 'Dear customer {username}
 The volume of your {packagevolume} GB, {packagedays}-day VPN plan has run out.
 This plan does not renew automatically - to renew it and keep using it, use the button below 🫶',

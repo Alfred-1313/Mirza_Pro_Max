@@ -22,6 +22,8 @@ class ServiceMonitor
         $this->pdo = $pdo;
         $this->Panel = new ManagePanel();
         $this->reportCron = select("topicid", "idreport", "report", "reportcron", "select")['idreport'];
+        // the old fixed low-volume / low-time warnings become 🔋 tiers - once
+        notice_migrate_legacy();
         $this->setting = select("setting", "*");
         $this->status_cron = json_decode($this->setting['cron_status'], true);
         $this->textBotLang = languagechange(dirname(__DIR__));
@@ -41,21 +43,10 @@ class ServiceMonitor
                     continue;
             }
             update("invoice", "time_cron", time(), "id_invoice", $invoice['id_invoice']);
-            $check_send = json_decode($invoice['notifctions'], true);
             $data = $this->processInvoice($invoice);
             if (!is_array($data))
                 continue;
-            $result = false;
-            if (!$check_send['volume']) {
-                if ($this->status_cron['volume'])
-                    $result = $this->checkVolumeThreshold($data['invoice'], $data['user'], $data['userData'], $invoice['username']);
-            }
-            if ($result)
-                $data['invoice'] = select("invoice", "*", "id_invoice", $invoice['id_invoice']);
-            if (!$check_send['time']) {
-                if ($this->status_cron['day'])
-                    $this->checkTimeExpiration($data['invoice'], $data['user'], $data['userData'], $invoice['username']);
-            }
+            // every low-volume / low-time / ended warning - 🔋's tiers
             $this->checkCustomNotices($data['invoice'], $data['user'], $data['userData'], $invoice['username']);
             if ($this->status_cron['remove'])
                 $this->shouldRemoveService($data['invoice'], $data['user'], $data['userData'], $invoice['username']);
@@ -104,34 +95,6 @@ class ServiceMonitor
         ];
     }
 
-    private function checkVolumeThreshold($invoice, $user, $userData, $username)
-    {
-        $remainingVolume = $userData['data_limit'] - $userData['used_traffic'];
-        $volumeWarningThreshold = $this->setting['volumewarn'] * pow(1024, 3);
-        $isVolumeWarning = $remainingVolume <= $volumeWarningThreshold && $remainingVolume > 0 && in_array($userData['status'], ['active', 'Unknown']);
-
-        if ($isVolumeWarning) {
-            // the customer gets it in their own language, worded as that tab of
-            // 🔋 پیام‌های هشدار و اتمام سرویس set it - and not at all while it is
-            // switched off there. The report below stays Persian: it is the
-            // panel's.
-            $lang = $user['lang'] ?? 'fa';
-            if (bt_item_enabled('textbot.lowVolumeNotice', $lang)) {
-                $t = lang_tab_texts($lang);
-                $message = strtr($t['textbot']['lowVolumeNotice'], notice_placeholders($invoice, $user, $userData, null, $t, $lang));
-                bottext_extras_key_hint('textbot.lowVolumeNotice');
-                $this->send_notifactions($invoice, $user, $message, notice_renew_kb('lv', $lang, $t, $invoice['id_invoice']), $invoice['bottype']);
-            }
-            $formattedVolume = notice_format_bytes($remainingVolume, $this->textBotLang);
-            $reportMessage = $this->textBotLang['hardcoded']['notifVolumeCronTitle'] .
-                sprintf($this->textBotLang['hardcoded']['notifServiceUsername'], $username) .
-                sprintf($this->textBotLang['hardcoded']['notifServiceStatus'], $userData['status']) .
-                sprintf($this->textBotLang['hardcoded']['notifRemainingVolume'], $formattedVolume);
-            $this->sendReportNotification($reportMessage);
-            $this->updateInvoiceStatus("volume", $invoice);
-            return true;
-        }
-    }
     private function shouldRemoveService($invoice, $user, $userData, $username)
     {
         if (!in_array($userData['status'], ['limited', 'expired']))
@@ -217,10 +180,10 @@ class ServiceMonitor
         );
         $this->Panel->Modifyuser($invoice['username'], $panel_info['code_panel'], $configs);
     }
-    // admin-defined "at X% used, send this custom message/sticker/button" tiers
-    // (see volumepct_tier_* in function.php) - fully independent of the fixed
-    // GB-based checkVolumeThreshold() above, on by default doing nothing when
-    // no tiers are configured. Tracks the highest tier already notified per
+    // admin-defined "at X% used / X GB left / X days left, send this custom
+    // message/sticker/button" tiers (see volumepct_tier_* in function.php) -
+    // every service warning there is, doing nothing when no tiers are
+    // configured. Tracks the highest tier already notified per
     // invoice in notifctions.volumePctSent so re-crossing a lower tier (or the
     // same one again) never re-sends; a usage jump that skips straight past
     // several tiers between cron runs only sends the single highest one reached.
@@ -248,6 +211,9 @@ class ServiceMonitor
         if ($this->noticeVolumeTier($invoice, $user, $userData, $notif, $usedPercent)) {
             return;
         }
+        if ($this->noticeVolumeGbTier($invoice, $user, $userData, $notif, $usedPercent)) {
+            return;
+        }
         $this->noticeTimeTier($invoice, $user, $userData, $notif, $usedPercent);
     }
 
@@ -261,6 +227,7 @@ class ServiceMonitor
         // handled, so turning it back on later does not send a backlog
         if (!bt_item_enabled('volpct.' . volumepct_tier_kind(volumepct_tier_get($tierIndex)), $lang)) {
             update("invoice", "notifctions", json_encode($notif), "id_invoice", $invoice['id_invoice']);
+            $this->reportCustomNotice($tierIndex, $invoice, $userData);
             return;
         }
         // the customer's own language - its defaults and its button label
@@ -273,6 +240,27 @@ class ServiceMonitor
         }
         sendmessage($invoice['id_user'], $caption, $keyboard, 'HTML', $invoice['bottype']);
         update("invoice", "notifctions", json_encode($notif), "id_invoice", $invoice['id_invoice']);
+        $this->reportCustomNotice($tierIndex, $invoice, $userData);
+    }
+
+    // The report channel's note, as the old fixed volume/time warnings sent
+    // it - now for every GB and day tier. In the panel's language.
+    private function reportCustomNotice($tierIndex, $invoice, $userData)
+    {
+        $kind = volumepct_tier_kind(volumepct_tier_get($tierIndex));
+        $h = $this->textBotLang['hardcoded'];
+        if ($kind === 'volgb') {
+            $left = max(0, ($userData['data_limit'] ?? 0) - ($userData['used_traffic'] ?? 0));
+            $this->sendReportNotification($h['notifVolumeCronTitle']
+                . sprintf($h['notifServiceUsername'], $invoice['username'])
+                . sprintf($h['notifServiceStatus'], $userData['status'])
+                . sprintf($h['notifRemainingVolume'], notice_format_bytes($left, $this->textBotLang)));
+        } elseif ($kind === 'time') {
+            $this->sendReportNotification($h['notifTimeCronTitle']
+                . sprintf($h['notifServiceUsername2'], $invoice['username'])
+                . sprintf($h['notifServiceStatus2'], $userData['status'])
+                . sprintf($h['notifRemainingDays'], notice_time_left_text(($userData['expire'] ?? 0) - time(), $this->textBotLang)));
+        }
     }
 
     // volume fully consumed - fires once ever per invoice
@@ -349,6 +337,49 @@ class ServiceMonitor
         return true;
     }
 
+    // "X GB left" tiers - like the days below, crossed on the way DOWN: the
+    // LOWEST threshold reached that is below whatever was last sent
+    private function noticeVolumeGbTier($invoice, $user, $userData, $notif, $usedPercent)
+    {
+        if (!in_array($userData['status'], ['active', 'Unknown'], true)) {
+            return false;
+        }
+        if (empty($userData['data_limit']) || $userData['data_limit'] <= 0) {
+            return false;
+        }
+        $gbLeft = ($userData['data_limit'] - $userData['used_traffic']) / pow(1024, 3);
+        // nothing left is 🔚 پایان حجم's, not a warning
+        if ($gbLeft <= 0) {
+            return false;
+        }
+        $lastSent = isset($notif['volGbSent']) ? intval($notif['volGbSent']) : PHP_INT_MAX;
+        // warned by the old fixed "حجم هشدار" (now a tier here): not again at
+        // or above what it warned at
+        if (!isset($notif['volGbSent']) && !empty($notif['volume'])) {
+            $lastSent = intval($this->setting['volumewarn'] ?? 0);
+        }
+        $bestGb = null;
+        $bestIndex = null;
+        foreach (volumepct_tiers_for_kind('volgb') as $i => $tier) {
+            $gb = intval($tier['pct'] ?? -1);
+            if ($gb <= 0) {
+                continue;
+            }
+            if ($gbLeft <= $gb && $gb < $lastSent) {
+                if ($bestGb === null || $gb < $bestGb) {
+                    $bestGb = $gb;
+                    $bestIndex = $i;
+                }
+            }
+        }
+        if ($bestIndex === null) {
+            return false;
+        }
+        $notif['volGbSent'] = $bestGb;
+        $this->sendCustomNotice($bestIndex, $invoice, $user, $userData, $notif, $usedPercent);
+        return true;
+    }
+
     // "X days left" tiers - mirror image of the volume logic: thresholds are
     // crossed on the way DOWN, so it picks the LOWEST (most urgent) threshold
     // crossed that is below whatever was last sent
@@ -365,6 +396,11 @@ class ServiceMonitor
             return false;
         }
         $lastSent = isset($notif['timeTierSent']) ? intval($notif['timeTierSent']) : PHP_INT_MAX;
+        // warned by the old fixed "زمان هشدار" (now a tier here): not again at
+        // or above what it warned at
+        if (!isset($notif['timeTierSent']) && !empty($notif['time'])) {
+            $lastSent = intval($this->setting['daywarn'] ?? 0);
+        }
         $bestDays = null;
         $bestIndex = null;
         foreach (volumepct_tiers_for_kind('time') as $i => $tier) {
@@ -385,37 +421,6 @@ class ServiceMonitor
         $notif['timeTierSent'] = $bestDays;
         $this->sendCustomNotice($bestIndex, $invoice, $user, $userData, $notif, $usedPercent);
         return true;
-    }
-
-    private function checkTimeExpiration($invoice, $user, $userData, $username)
-    {
-        $validStatuses = ['expired', 'on_hold', 'limited'];
-        if (in_array($userData['status'], $validStatuses))
-            return;
-        $timeRemaining = $userData['expire'] - time();
-        $warningThreshold = intval($this->setting['daywarn']) * self::SECONDS_PER_DAY;
-
-        $isTimeWarning = $timeRemaining <= $warningThreshold && $timeRemaining > 0;
-
-        if ($isTimeWarning) {
-            // same as the volume warning: the customer's language and tab, and
-            // days AND hours ({timeleft}) - whole days alone read "0 روز" on
-            // the last day
-            $lang = $user['lang'] ?? 'fa';
-            if (bt_item_enabled('textbot.lowTimeNotice', $lang)) {
-                $t = lang_tab_texts($lang);
-                $message = strtr($t['textbot']['lowTimeNotice'], notice_placeholders($invoice, $user, $userData, null, $t, $lang));
-                bottext_extras_key_hint('textbot.lowTimeNotice');
-                $this->send_notifactions($invoice, $user, $message, notice_renew_kb('lt', $lang, $t, $invoice['id_invoice']), $invoice['bottype']);
-            }
-            $reportMessage = $this->textBotLang['hardcoded']['notifTimeCronTitle'] .
-                sprintf($this->textBotLang['hardcoded']['notifServiceUsername2'], $invoice['username']) .
-                sprintf($this->textBotLang['hardcoded']['notifServiceStatus2'], $userData['status']) .
-                sprintf($this->textBotLang['hardcoded']['notifRemainingDays'], notice_time_left_text($timeRemaining, $this->textBotLang));
-            $this->sendReportNotification($reportMessage);
-            $this->updateInvoiceStatus("time", $invoice);
-            return true;
-        }
     }
 
     // $keyboard: the JSON to send under the message, or false/null for none
