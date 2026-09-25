@@ -1722,6 +1722,7 @@ https://t.me/%s?start=%s',
     'extend' => 
     array (
       'confirm' => 'تایید تمدید',
+      'backFromPaymentBtn' => '🔙 بازگشت به منوی قبلی',
       'insufficientBalanceAlert' => '📝 موجودی شما برای تمدید این سرویس کافی نیست.
 💰 روی «افزایش موجودی» بزنید تا وارد صفحه‌ی پرداخت بشید.',
       'discount' => '🎁 ثبت کد تخفیف',

@@ -2159,9 +2159,7 @@ function keyboard_config($config_split, $id_invoice, $back_active = true, $kind 
 {
     global $textbotlang, $user;
     $cc_lang = $user['lang'] ?? 'fa';
-    $cc_setting = select("setting", "*", null, null, "select");
-    $cc_colOrderField = ($kind === 'buy') ? 'configColOrderBuy' : 'configColOrder';
-    $cc_nameFirst = (($cc_setting[$cc_colOrderField] ?? '') === 'name_first');
+    $cc_nameFirst = config_col_name_first($cc_lang, $kind);
     $cc_get = configdisplay_element_current($cc_lang, 0, $textbotlang, $kind);
     $cc_hConfig = configdisplay_element_current($cc_lang, 1, $textbotlang, $kind);
     $cc_hName = configdisplay_element_current($cc_lang, 2, $textbotlang, $kind);
@@ -2401,10 +2399,8 @@ function keyboard_list_text($lang, $groupFilter = null)
     // that does NOT follow that shape needs an entry here, or the item can be fully
     // configured and still render as untouched - the exact complaint this fixes.
     $bt_extra_stores = [
-        // 🔑 تنظیم اکانت تست also owns the config-column display settings
-        // Only this language's own setting. configColOrder is a single bot-wide
-        // value (function.php says so itself), so counting it here turned this
-        // row green in EVERY language the moment one of them was configured.
+        // 🔑 تنظیم اکانت تست also owns the config-column display settings -
+        // this language's own, the column order included (config_col_name_first)
         'users.usertest.selectUsernamePrompt' => function ($lang, $be, $setting) {
             return !empty($be[$lang]['configDisplay']);
         },

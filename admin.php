@@ -5898,8 +5898,7 @@ if (preg_match('/^cfgcolelrstbuy-([0123])-([a-z]{2})$/', $datain, $cc_m) && $adm
     return;
 }
 if (preg_match('/^cfgcolbtbuy-(getfirst|namefirst)-([a-z]{2})$/', $datain, $cc_m) && $adminrulecheck['rule'] == "administrator") {
-    $cc_value = ($cc_m[1] === 'namefirst') ? 'name_first' : 'config_first';
-    update("setting", "configColOrderBuy", $cc_value, null, null);
+    config_col_set_order($cc_m[2], $cc_m[1] === 'namefirst', 'buy');
     list($cc_info, $cc_kb) = config_col_order_payload($textbotlang, $cc_m[2], 'users.status.getConfigHintBuy', null, 'users.status.getConfigHintBuy', 'buy');
     Editmessagetext($from_id, $message_id, $cc_info, $cc_kb, 'HTML');
     return;
@@ -6099,8 +6098,7 @@ if (preg_match('/^bt_sep\|(\w+)$/', $datain, $bt_sep_m) && $adminrulecheck['rule
 // screen lived here. That screen is gone, and nothing else ever produced its
 // callback.
 if (preg_match('/^cfgcolbt-(getfirst|namefirst)-([a-z]{2})$/', $datain, $cc_m) && $adminrulecheck['rule'] == "administrator") {
-    $cc_value = ($cc_m[1] === 'namefirst') ? 'name_first' : 'config_first';
-    update("setting", "configColOrder", $cc_value, null, null);
+    config_col_set_order($cc_m[2], $cc_m[1] === 'namefirst', 'usertest');
     list($cc_info, $cc_kb) = config_col_order_payload($textbotlang, $cc_m[2], 'users.usertest.selectUsernamePrompt');
     Editmessagetext($from_id, $message_id, $cc_info, $cc_kb, 'HTML');
     return;

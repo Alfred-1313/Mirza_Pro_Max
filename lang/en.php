@@ -836,6 +836,7 @@ You can now use the bot ✔️',
                 ],
                 'extend' => [
                         'confirm' => 'Confirm renewal',
+                        'backFromPaymentBtn' => '🔙 Back to previous menu',
                         'insufficientBalanceAlert' => '📝 Your balance is not enough to renew this service.
 💰 Tap «💰 Increase balance» to go to the payment page.',
                         'discount' => '🎁 Apply discount code',

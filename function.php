@@ -8803,7 +8803,7 @@ if (!function_exists('config_delivery_cfgcol_touched')) {
     {
         $setting = select("setting", "*", null, null, "select");
         $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
-        return !empty($be[$lang]['configDisplay']) || (string) ($setting['configColOrder'] ?? '') !== '';
+        return !empty($be[$lang]['configDisplay']) || ($lang === 'fa' && (string) ($setting['configColOrder'] ?? '') !== '');
     }
 }
 if (!function_exists('config_delivery_default_mode')) {
@@ -9044,8 +9044,9 @@ if (!function_exists('config_delivery_panel_payload')) {
     // "reset to default" left per-button labels/colours (and the usertest item's
     // config-column settings) exactly where they were.
     //
-    // Everything here is scoped to $lang. configColOrder is the one genuinely
-    // global setting, so it is cleared only when its owning item is reset.
+    // Everything here is scoped to $lang - the config-column order too, which
+    // lives in the tab's configDisplay(Buy) blob; only the old bot-wide copy of
+    // it counts as Persian's (config_col_name_first).
     // $parts limits WHICH stores get cleared: 'text' = the message text,
     // 'media' = its sticker/reaction, 'buttons' = its custom buttons (and the
     // config-column settings the usertest item owns). Defaults to all three,
@@ -9114,10 +9115,12 @@ if (!function_exists('config_delivery_panel_payload')) {
         if ($doMedia && !empty($layout) && isset($layout['keyboard'])) {
             update("setting", "keyboardmain", json_encode($layout, JSON_UNESCAPED_UNICODE), null, null);
         }
-        if ($clearColOrder) {
+        // the order itself went with the tab's blob above; the old bot-wide
+        // value only ever counted for Persian
+        if ($clearColOrder && $lang === 'fa') {
             update("setting", "configColOrder", null, null, null);
         }
-        if ($clearColOrderBuy) {
+        if ($clearColOrderBuy && $lang === 'fa') {
             update("setting", "configColOrderBuy", null, null, null);
         }
     }
@@ -9460,7 +9463,7 @@ if (!function_exists('bt_reset_counts')) {
         if (is_array($be) && !empty($be[$lang]['configDisplay'])) {
             $c['msg_buttons']++;
         }
-        if ((string) ($setting['configColOrder'] ?? '') !== '') {
+        if ($lang === 'fa' && (string) ($setting['configColOrder'] ?? '') !== '') {
             $c['msg_buttons']++;
         }
         foreach (volumepct_tiers_map() as $tier) {
@@ -10416,20 +10419,20 @@ if (!function_exists('genbtn_defs')) {
         if ($alias === 'rn') {
             return [
                 0 => ['name' => '🔵 دکمه تایید تمدید', 'text' => $textbotlang['users']['extend']['confirm'], 'style' => 'primary', 'callback_data' => 'none'],
-                1 => ['name' => '🔴 دکمه بازگشت به منوی قبل', 'text' => '🔙 بازگشت به منوی قبل', 'style' => 'danger', 'callback_data' => 'none'],
+                1 => ['name' => '🔴 دکمه بازگشت به منوی قبل', 'text' => $textbotlang['users']['status']['backToPreviousMenuBtn'] ?? '🔙 بازگشت به منوی قبل', 'style' => 'danger', 'callback_data' => 'none'],
                 // shown only on the payment-method screen reached by tapping
                 // افزایش موجودی from the invoice (appended below the live
                 // gateway list, not part of extend_invoice_kb's own 2-button
                 // layout) - kept as idx 2 of the SAME alias since it is still
                 // the renewal invoice's own flow, own-key trick still applies.
                 // Tapping it re-renders the exact same invoice (rn_reshow_).
-                2 => ['name' => '🔴 دکمه بازگشت (از صفحه‌ی پرداخت)', 'text' => '🔙 بازگشت به منوی قبلی', 'style' => 'danger', 'callback_data' => 'none'],
+                2 => ['name' => '🔴 دکمه بازگشت (از صفحه‌ی پرداخت)', 'text' => $textbotlang['users']['extend']['backFromPaymentBtn'] ?? '🔙 بازگشت به منوی قبلی', 'style' => 'danger', 'callback_data' => 'none'],
             ];
         }
         if ($alias === 'cl') {
             return [
                 0 => ['name' => '🔵 دکمه تایید تغییر لینک', 'text' => $textbotlang['users']['changeLink']['confirm'], 'style' => 'primary', 'callback_data' => 'none'],
-                1 => ['name' => '🔴 دکمه بازگشت به منوی قبل', 'text' => '🔙 بازگشت به منوی قبل', 'style' => 'danger', 'callback_data' => 'none'],
+                1 => ['name' => '🔴 دکمه بازگشت به منوی قبل', 'text' => $textbotlang['users']['status']['backToPreviousMenuBtn'] ?? '🔙 بازگشت به منوی قبل', 'style' => 'danger', 'callback_data' => 'none'],
             ];
         }
         // the seven bt_btnitem_keys() buttons - 'callback_data' is 'none' like
@@ -14442,9 +14445,7 @@ if (!function_exists('config_col_order_payload')) {
     function config_col_order_payload($textbotlang, $originLang = null, $originKey = null, $backCallback = null, $captionKey = 'users.status.getConfigHint', $kind = 'usertest')
     {
         $lang = $originLang ?? 'fa';
-        $setting = select("setting", "*", null, null, "select");
-        $colOrderField = ($kind === 'buy') ? 'configColOrderBuy' : 'configColOrder';
-        $nameFirst = (($setting[$colOrderField] ?? '') === 'name_first');
+        $nameFirst = config_col_name_first($lang, $kind);
         $get = configdisplay_element_current($lang, 0, $textbotlang, $kind);
         $hConfig = configdisplay_element_current($lang, 1, $textbotlang, $kind);
         $hName = configdisplay_element_current($lang, 2, $textbotlang, $kind);
@@ -14484,7 +14485,7 @@ if (!function_exists('config_col_order_payload')) {
             $cbNameFirst = ($originLang !== null) ? "cfgcolbt-namefirst-{$originLang}" : 'configcolorder-name_first';
         }
         $hubTitle = ($kind === 'buy') ? '🗂 تنظیم نمایش و کپشن کانفیگ (خرید سرویس)' : '🗂 تنظیم نمایش و کپشن کانفیگ';
-        $info = "🗂 <b>{$hubTitle}</b>\n➖➖➖➖➖➖➖➖➖➖\n";
+        $info = "🗂 <b>{$hubTitle}</b>" . ($originLang !== null ? mainmenu_tab_note($lang) : '') . "\n➖➖➖➖➖➖➖➖➖➖\n";
         if ($kind === 'buy') {
             $info .= "این بخش، نمایشِ صفحه‌ی کانفیگِ سرویس‌های خریداری‌شده رو کنترل می‌کنه (جدا از اکانت تست): ترتیب ستون‌ها، و متن/رنگ هرکدوم از دکمه‌ها.\n";
         } else {
@@ -14541,6 +14542,39 @@ if (!function_exists('configdisplay_element_store_key')) {
     function configdisplay_element_store_key($kind)
     {
         return $kind === 'buy' ? 'configDisplayBuy' : 'configDisplay';
+    }
+}
+if (!function_exists('config_col_name_first')) {
+    // Which column comes first on a service's config list. Per language tab,
+    // kept in that tab's own configDisplay(Buy) blob under '__order' - the
+    // element overrides there are keyed 0-3, so the two never meet (the status
+    // buttons keep their order the same way). The old bot-wide
+    // configColOrder(Buy) column counts as Persian's, the tab it was set up
+    // on, until Persian saves an order of its own.
+    function config_col_name_first($lang, $kind = 'usertest')
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
+        $own = is_array($be) ? ($be[$lang][configdisplay_element_store_key($kind)]['__order'] ?? null) : null;
+        if ($own !== null) {
+            return $own === 'name_first';
+        }
+        $legacy = (string) ($setting[$kind === 'buy' ? 'configColOrderBuy' : 'configColOrder'] ?? '');
+        return $lang === 'fa' && $legacy === 'name_first';
+    }
+    function config_col_set_order($lang, $nameFirst, $kind = 'usertest')
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
+        if (!is_array($be)) {
+            $be = [];
+        }
+        $be[$lang][configdisplay_element_store_key($kind)]['__order'] = $nameFirst ? 'name_first' : 'config_first';
+        update("setting", "button_edit", json_encode($be, JSON_UNESCAPED_UNICODE), null, null);
+        if ($lang === 'fa') {
+            // Persian has its own now - the bot-wide value was Persian's
+            update("setting", $kind === 'buy' ? 'configColOrderBuy' : 'configColOrder', null, null, null);
+        }
     }
 }
 if (!function_exists('configdisplay_element_override')) {
