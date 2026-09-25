@@ -311,6 +311,16 @@ return array (
         'group' => 'buyflow',
         'section' => 'balance',
       ),
+      // the reply to a service name that is not accepted - right under the
+      // question it answers. String key: an unkeyed entry here would take the
+      // next number and be overwritten by the explicit 28 that follows.
+      'sell_invalidusername' =>
+      array (
+        'label' => '❌ پیام «نام کاربری نامعتبر است»',
+        'key' => 'users.invalidusername',
+        'group' => 'buyflow',
+        'section' => 'balance',
+      ),
       28 => 
       array (
         'label' => '✏️ کپشن تأیید خرید (خرید عادی)',
