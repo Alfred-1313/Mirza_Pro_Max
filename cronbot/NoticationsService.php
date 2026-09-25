@@ -12,7 +12,6 @@ class ServiceMonitor
     private $pdo;
     private $setting;
     private $reportCron;
-    private $text_Purchased_services;
     private $status_cron;
     const SECONDS_PER_DAY = 86400;
     private $textBotLang;
@@ -28,7 +27,6 @@ class ServiceMonitor
         $this->textBotLang = languagechange(dirname(__DIR__));
         // formatBytes() reads the global - without it the volume notice lost its unit ("1.5 " not "1.5 گیگابایت")
         $GLOBALS['textbotlang'] = $this->textBotLang;
-        $this->text_Purchased_services = $this->textBotLang['textbot']['purchasedServices'] ?? '';
     }
 
     public function RunNotifactions()
@@ -113,15 +111,22 @@ class ServiceMonitor
         $isVolumeWarning = $remainingVolume <= $volumeWarningThreshold && $remainingVolume > 0 && in_array($userData['status'], ['active', 'Unknown']);
 
         if ($isVolumeWarning) {
-            $formattedVolume = formatBytes($remainingVolume);
-            $message = $this->textBotLang['hardcoded']['notifGreeting'] .
-                sprintf($this->textBotLang['hardcoded']['notifVolumeRemaining'], $username, $formattedVolume) .
-                sprintf($this->textBotLang['hardcoded']['notifVolumeActionHint'], $this->text_Purchased_services);
+            // the customer gets it in their own language, worded as that tab of
+            // 🔋 پیام‌های هشدار و اتمام سرویس set it - and not at all while it is
+            // switched off there. The report below stays Persian: it is the
+            // panel's.
+            $lang = $user['lang'] ?? 'fa';
+            if (bt_item_enabled('textbot.lowVolumeNotice', $lang)) {
+                $t = lang_tab_texts($lang);
+                $message = strtr($t['textbot']['lowVolumeNotice'], notice_placeholders($invoice, $user, $userData, null, $t, $lang));
+                bottext_extras_key_hint('textbot.lowVolumeNotice');
+                $this->send_notifactions($invoice, $user, $message, notice_renew_kb('lv', $lang, $t, $invoice['id_invoice']), $invoice['bottype']);
+            }
+            $formattedVolume = notice_format_bytes($remainingVolume, $this->textBotLang);
             $reportMessage = $this->textBotLang['hardcoded']['notifVolumeCronTitle'] .
                 sprintf($this->textBotLang['hardcoded']['notifServiceUsername'], $username) .
                 sprintf($this->textBotLang['hardcoded']['notifServiceStatus'], $userData['status']) .
                 sprintf($this->textBotLang['hardcoded']['notifRemainingVolume'], $formattedVolume);
-            $this->send_notifactions($invoice, $user, $message, true, $invoice['bottype']);
             $this->sendReportNotification($reportMessage);
             $this->updateInvoiceStatus("volume", $invoice);
             return true;
@@ -252,8 +257,16 @@ class ServiceMonitor
     private function sendCustomNotice($tierIndex, $invoice, $user, $userData, array $notif, $usedPercent)
     {
         $lang = $user['lang'] ?? 'fa';
-        $caption = volumepct_tier_caption($tierIndex, $lang, $this->textBotLang, $invoice, $user, $userData, (string) round($usedPercent));
-        $keyboard = volumepct_tier_kb($tierIndex, $lang, $this->textBotLang, $invoice['id_invoice']);
+        // switched off on this customer's tab: the moment still counts as
+        // handled, so turning it back on later does not send a backlog
+        if (!bt_item_enabled('volpct.' . volumepct_tier_kind(volumepct_tier_get($tierIndex)), $lang)) {
+            update("invoice", "notifctions", json_encode($notif), "id_invoice", $invoice['id_invoice']);
+            return;
+        }
+        // the customer's own language - its defaults and its button label
+        $t = lang_tab_texts($lang);
+        $caption = volumepct_tier_caption($tierIndex, $lang, $t, $invoice, $user, $userData, (string) round($usedPercent));
+        $keyboard = volumepct_tier_kb($tierIndex, $lang, $t, $invoice['id_invoice']);
         $sticker = volumepct_tier_sticker($tierIndex, $lang);
         if ($sticker !== '') {
             telegram('sendSticker', ['chat_id' => $invoice['id_user'], 'sticker' => $sticker], $invoice['bottype']);
@@ -380,45 +393,37 @@ class ServiceMonitor
         if (in_array($userData['status'], $validStatuses))
             return;
         $timeRemaining = $userData['expire'] - time();
-        $daysRemaining = intval($timeRemaining / self::SECONDS_PER_DAY);
         $warningThreshold = intval($this->setting['daywarn']) * self::SECONDS_PER_DAY;
 
         $isTimeWarning = $timeRemaining <= $warningThreshold && $timeRemaining > 0;
 
         if ($isTimeWarning) {
-            $message = $this->textBotLang['hardcoded']['notifGreeting2'] .
-                sprintf($this->textBotLang['hardcoded']['notifTimeRemaining'], $username, $daysRemaining) .
-                sprintf($this->textBotLang['hardcoded']['notifTimeActionHint'], $this->text_Purchased_services) .
-                $this->textBotLang['hardcoded']['notifThanks'];
+            // same as the volume warning: the customer's language and tab, and
+            // days AND hours ({timeleft}) - whole days alone read "0 روز" on
+            // the last day
+            $lang = $user['lang'] ?? 'fa';
+            if (bt_item_enabled('textbot.lowTimeNotice', $lang)) {
+                $t = lang_tab_texts($lang);
+                $message = strtr($t['textbot']['lowTimeNotice'], notice_placeholders($invoice, $user, $userData, null, $t, $lang));
+                bottext_extras_key_hint('textbot.lowTimeNotice');
+                $this->send_notifactions($invoice, $user, $message, notice_renew_kb('lt', $lang, $t, $invoice['id_invoice']), $invoice['bottype']);
+            }
             $reportMessage = $this->textBotLang['hardcoded']['notifTimeCronTitle'] .
                 sprintf($this->textBotLang['hardcoded']['notifServiceUsername2'], $invoice['username']) .
                 sprintf($this->textBotLang['hardcoded']['notifServiceStatus2'], $userData['status']) .
-                sprintf($this->textBotLang['hardcoded']['notifRemainingDays'], $daysRemaining);
-            $this->send_notifactions($invoice, $user, $message, true, $invoice['bottype']);
+                sprintf($this->textBotLang['hardcoded']['notifRemainingDays'], notice_time_left_text($timeRemaining, $this->textBotLang));
             $this->sendReportNotification($reportMessage);
             $this->updateInvoiceStatus("time", $invoice);
             return true;
         }
     }
 
-    private function send_notifactions($invoice, $status_cron_user, $message, $keyboard_active, $bot_token)
+    // $keyboard: the JSON to send under the message, or false/null for none
+    private function send_notifactions($invoice, $status_cron_user, $message, $keyboard, $bot_token)
     {
         if (intval($status_cron_user) == 0)
             return;
-        $keyboard = $this->createExtendServiceKeyboard($invoice['id_invoice']);
-        $keyboard = $keyboard_active ? $keyboard : null;
-        sendmessage($invoice['id_user'], $message, $keyboard, 'HTML', $bot_token);
-    }
-
-    public function createExtendServiceKeyboard($invoiceId)
-    {
-        return json_encode([
-            'inline_keyboard' => [
-                [
-                    ['text' => $this->textBotLang['keyboard']['renewService'], 'callback_data' => 'extend_' . $invoiceId],
-                ],
-            ]
-        ]);
+        sendmessage($invoice['id_user'], $message, $keyboard ?: null, 'HTML', $bot_token);
     }
 
     private function sendReportNotification($reportMessage)

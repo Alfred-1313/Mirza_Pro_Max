@@ -266,6 +266,10 @@ Current language: <b>{lang}</b>',
                         'dayOne' => 'day',
                         'dayMany' => 'days',
                         'hourOne' => 'hour',
+                        'hourMany' => 'hours',
+                        'minuteOne' => 'minute',
+                        'minuteMany' => 'minutes',
+                        'andJoin' => ' and ',
                         'byte' => 'Byte',
                         'gb' => 'GB',
                         'gigabyte' => 'gigabytes',
@@ -3962,6 +3966,10 @@ Service information:
 Your test service with username {username} has ended
 We hope you had a good experience with the ease and speed of your service. If you were satisfied with your test service, you can get your own dedicated service and enjoy free internet with the highest quality😉🔥
 🛍 To get a quality service, you can use the button below',
+                'lowVolumeNotice' => 'Hello, dear user 👋
+🚨 Your service {username} has only {remainingvolume} left. To buy extra volume or renew it, please go to «{myservices}».',
+                'lowTimeNotice' => 'Hello, dear user 👋
+📌 Your service {username} has only {timeleft} left. To renew it, please go to «{myservices}». Thank you for staying with us.',
                 'userTest' => '🔑 Test account',
                 'wgDashboard' => '✅ Service was created successfully
 
@@ -4298,7 +4306,7 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'renameNode' => '🗂 Rename node',
                 'renew' => 'Renew',
                 'renewCurrentPlan' => '♻️ Renew current plan',
-                'renewService' => '💊 Renew service',
+                'renewService' => '🔄 Renew service',
                 'renewalCashback' => '🎁 Renewal cashback',
                 'renewalMethod' => '🔋 Service renewal method',
                 'renewalStatus' => '🔋 Renewal status',
@@ -4995,5 +5003,23 @@ Payment tracking code : %s',
                 'topupDiscMinPkgPercent' => '🎁 Since you top up {min} or more, you get a {bonus} gift — that is {value}% more!',
                 'topupDiscMinPkgFixed' => '🎁 Since you top up {min} or more, you get a {bonus} gift!',
                 'topupDiscMinSuffix' => '({min} and up)',
+                // units formatBytes() writes after a size, and the service
+                // warning defaults (🔋 پیام‌های هشدار و اتمام سرویس)
+                'unitByte' => 'B',
+                'unitKilobyte' => 'KB',
+                'unitMegabyte' => 'MB',
+                'unitGigabyteFn' => 'GB',
+                'unitTerabyte' => 'TB',
+                'volumePctDefaultText' => 'Dear customer {username}
+You have used {usedpercent}% of your {packagevolume} GB, {packagedays}-day VPN plan.
+If you would like to keep using your service, use the button below 🫶',
+                'volumeTimeDefaultText' => 'Dear customer {username}
+You can use your plan until {expiretime} on {expiredate}, that is {timeleft} from now.
+If you would like to keep using your service, use the button below 🫶',
+                'volumeTimeEndDefaultText' => 'Dear customer {username}
+The plan you bought on {purchasedate} has ended. If you would like to keep using your service, use the button below 🫶',
+                'volumeEndDefaultText' => 'Dear customer {username}
+The volume of your {packagevolume} GB, {packagedays}-day VPN plan has run out.
+This plan does not renew automatically - to renew it and keep using it, use the button below 🫶',
         ],
 ];

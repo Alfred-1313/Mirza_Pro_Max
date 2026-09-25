@@ -223,6 +223,20 @@ return array (
         'label' => '⏰ پیام اتمام اکانت تست',
         'key' => 'textbot.testExpired',
       ),
+      // the two service warnings the notification cron sends - opened from
+      // 🔋 پیام‌های هشدار و اتمام سرویس (skipped on the home list). String
+      // keys: an unkeyed entry here would take the next number and be
+      // overwritten by the explicit one that follows.
+      'notice_lowvolume' =>
+      array (
+        'label' => '🪫 پیام هشدار حجم کم',
+        'key' => 'textbot.lowVolumeNotice',
+      ),
+      'notice_lowtime' =>
+      array (
+        'label' => '⌛ پیام هشدار زمان کم',
+        'key' => 'textbot.lowTimeNotice',
+      ),
       17 => 
       array (
         'label' => '❓ متن سؤالات متداول',
@@ -870,6 +884,10 @@ return array (
       'dayOne' => 'روز',
       'dayMany' => 'روز',
       'hourOne' => 'ساعت',
+      'hourMany' => 'ساعت',
+      'minuteOne' => 'دقیقه',
+      'minuteMany' => 'دقیقه',
+      'andJoin' => ' و ',
       'byte' => 'بایت',
       'gb' => 'گیگ',
       'gigabyte' => 'گیگابایت',
@@ -7175,6 +7193,10 @@ nowpayments.io
 سرویس تست شما با نام کاربری {username} به پایان رسیده است
 امیدواریم تجربه‌ی خوبی از آسودگی و سرعت سرویستون داشته باشین. در صورتی که از سرویس‌ تست خودتون راضی بودین، میتونید سرویس اختصاصی خودتون رو تهیه کنید و از داشتن اینترنت آزاد با نهایت کیفیت لذت ببرید😉🔥
 🛍 برای تهیه سرویس با کیفیت می توانید از دکمه زیر استفاده نمایید',
+    'lowVolumeNotice' => 'با سلام خدمت شما کاربر گرامی 👋
+🚨 از حجم سرویس {username} تنها {remainingvolume} باقی مانده است. لطفاً در صورت تمایل برای خرید حجم اضافه و یا تمدید سرویستون از طریق بخش «{myservices}» اقدام بفرمایین',
+    'lowTimeNotice' => 'با سلام خدمت شما کاربر گرامی 👋
+📌 از مهلت زمانی استفاده از سرویس {username} فقط {timeleft} باقی مانده است. لطفاً در صورت تمایل برای تمدید این سرویس، از طریق بخش «{myservices}» اقدام بفرمایین. با تشکر از همراهی شما',
     'userTest' => '🔑 اکانت تست',
     'wgDashboard' => '✅ سرویس با موفقیت ایجاد شد
 
@@ -7564,7 +7586,7 @@ nowpayments.io
     'renameNode' => '🗂 تغییر نام نود',
     'renew' => 'تمدید',
     'renewCurrentPlan' => '♻️ تمدید پلن فعلی',
-    'renewService' => '💊 تمدید سرویس',
+    'renewService' => '🔄 تمدید سرویس',
     'renewalCashback' => '🎁 کش بک تمدید',
     'renewalMethod' => '🔋 روش تمدید سرویس',
     'renewalStatus' => '🔋 وضعیت تمدید',
@@ -9220,11 +9242,7 @@ nowpayments.io
 وضعیت سرویس : %s
 تعداد روز باقی مانده ‌:‌%s
 حجم باقی مانده : %s',
-    'notifGreeting' => 'با سلام خدمت شما کاربر گرامی 👋
-',
-    'notifGreeting2' => 'با سلام خدمت شما کاربر گرامی 👋
-',
-    'notifRemainingDays' => 'تعداد روز باقی مانده ‌:‌%s',
+    'notifRemainingDays' => 'زمان باقی مانده : %s',
     'notifRemainingVolume' => 'حجم باقی مانده : %s',
     'notifServiceDeleted' => '📌 کاربر گرامی بدلیل عدم تمدید، سرویس %s از لیست سرویس های شما حذف گردید
 
@@ -9240,18 +9258,14 @@ nowpayments.io
 ',
     'notifServiceUsername2' => 'نام کاربری سرویس :‌ <code>%s</code>
 ',
-    'notifThanks' => 'با تشکر از همراهی شما',
-    'notifTimeActionHint' => 'لطفاً در صورت تمایل برای تمدید این سرویس، از طریق بخش «%s» اقدام بفرمایین. ',
     'notifTimeCronTitle' => '📌 اطلاعیه کرون زمان
 
 ',
-    'notifTimeRemaining' => '📌 از مهلت زمانی استفاده از سرویس %s فقط %s روز باقی مانده است. ',
-    'notifVolumeActionHint' => 'لطفاً در صورت تمایل برای خرید حجم اضافه و یا تمدید سرویستون از طریق بخش «%s» اقدام بفرمایین',
     'volumePctDefaultText' => 'مشتری گرامی {username}
 حجم بسته VPN شما {packagedays} روزه {packagevolume} گیگابایتی {usedpercent} درصد استفاده شده است .
 چنان چه تمایل به مصرف سرویس خود دارید از دکمه زیر استفاده کنید 🫶',
     'volumeTimeDefaultText' => 'مشتری گرامی {username}
-شما تا ساعت {expiretime} تاریخ {expiredate} معادل {remainingtime} روز {remaininghours} ساعت میتوانید از بسته خود استفاده کنید
+شما تا ساعت {expiretime} تاریخ {expiredate} معادل {timeleft} میتوانید از بسته خود استفاده کنید
 چنان چه تمایل به مصرف سرویس خود دارید از دکمه زیر استفاده کنید 🫶',
     'volumeTimeEndDefaultText' => 'مشتری گرامی {username}
 مدت زمان بسته شما که در تاریخ {purchasedate} خریداری کرده بودید به اتمام رسید ، چنان چه تمایل به مصرف سرویس خود دارید از دکمه زیر استفاده کنید 🫶',
@@ -9280,7 +9294,6 @@ nowpayments.io
 تعداد روز باقی مانده :%s 
  حجم باقی مانده : %s
 آخرین اتصال کاربر : %s',
-    'notifVolumeRemaining' => '🚨 از حجم سرویس %s تنها %s باقی مانده است. ',
     'offlineLabel' => 'آفلاین',
     'onHoldReminderNotice' => 'سلام! 🌐
 

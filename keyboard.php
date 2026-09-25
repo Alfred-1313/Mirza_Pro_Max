@@ -2382,6 +2382,8 @@ function keyboard_list_text($lang, $groupFilter = null)
         // owned by 🌐 تنظیمات تغییر زبان کاربر, which edits them in place - a
         // second row here would make their back button ambiguous
         'bottext.langPickerCaption', 'bottext.langBlockedMsg',
+        // opened from inside 🔋 پیام‌های هشدار و اتمام سرویس, whose back they use
+        'textbot.lowVolumeNotice', 'textbot.lowTimeNotice',
         // opened from inside 📯 پیام عضویت اجباری کانال, whose back it uses
         'users.channel.left_channel'];
     $bt_can_react_keys = ['users.text_start', 'textbot.faqDesc', 'textbot.tariffListDesc', 'textbot.rules', 'users.unknownMsg'];
@@ -2792,8 +2794,10 @@ function keyboard_list_text($lang, $groupFilter = null)
     // "is anything customized?", NOT "does a threshold exist?" - a bare threshold
     // is structure, and its own reset button never removes one, so keying the
     // green off the array being non-empty made the row impossible to clear.
-    $bt_volpct_btn = ['text' => '🔋 هشدار مصرف بسته', 'callback_data' => "volpct|hub|$lang", 'style' => 'primary'];
-    if (function_exists('volumepct_has_custom') && volumepct_has_custom($lang)) {
+    $bt_volpct_btn = ['text' => '🔋 پیام‌های هشدار و اتمام سرویس', 'callback_data' => "volpct|hub|$lang", 'style' => 'primary'];
+    // the section also holds the two cron warnings and the test-account
+    // ending, and an on/off per message - any of them counts
+    if (function_exists('notice_section_customized') && notice_section_customized($lang)) {
         $bt_volpct_btn['style'] = 'success';
     }
     $keyboard_text['inline_keyboard'][] = [$bt_volpct_btn];
