@@ -311,6 +311,26 @@ function self_update_script() {
 }
 self_update_script "$@"
 
+# Tools the bot needs from the server, not only the installer: its 🗄 backups
+# are zipped with zip. Checked whenever an admin runs this script - install,
+# the menu, a transfer (both ends) - and installed only when missing; never
+# from the once-a-minute watcher.
+MIRZA_PREREQS="zip"
+function ensure_prerequisites() {
+    for _a in "$@"; do
+        case "$_a" in -h|--help|--version|selfupdate-watch) return 0 ;; esac
+    done
+    local missing="" t
+    for t in $MIRZA_PREREQS; do
+        command -v "$t" >/dev/null 2>&1 || missing="$missing $t"
+    done
+    [ -z "$missing" ] && return 0
+    echo -e "\e[33mInstalling prerequisites:${missing}...\033[0m"
+    DEBIAN_FRONTEND=noninteractive apt-get install -y $missing >/dev/null 2>&1 \
+        || echo -e "\e[91mCould not install${missing} - the bot's backups need it: apt install -y${missing}\033[0m"
+}
+ensure_prerequisites "$@"
+
 # ── Repo / paths ─────────────────────────────────────────────
 BOT_DIR_DEFAULT="/var/www/html/mirzaprobotconfig"
 CONFIG_FILE_DEFAULT="$BOT_DIR_DEFAULT/config.php"
@@ -3193,8 +3213,6 @@ function update_bot() {
     esac
 
     print_header "Updating Mirza"
-    # an install from before the installer added zip - the bot's backups need it
-    _ensure_zip_tool
 
     # ── 1. Safety net: a restorable snapshot BEFORE anything moves ──
     local BK_DIR="/root/mirza-backups"
@@ -3617,26 +3635,8 @@ _selfupdate_publish_backups() {
     chmod 664 "${dir}/${MIRZA_BACKUPS_LIST}" 2>/dev/null
 }
 
-# The bot's own backups (🗄 بکاپ) are zipped with the zip tool, which this
-# script never used to install - so a server it set up, or a transfer's
-# destination, sent every folder backup back as ❌. Quiet and never fatal;
-# an attempt is remembered for a day, so the watcher (which calls this every
-# minute) never keeps running apt against a broken mirror.
-_ensure_zip_tool() {
-    command -v zip >/dev/null 2>&1 && return 0
-    local mark="/root/confmirza/.zip_install_tried"
-    if [ -f "$mark" ] && [ $(( $(date +%s) - $(stat -c %Y "$mark" 2>/dev/null || echo 0) )) -lt 86400 ]; then
-        return 1
-    fi
-    mkdir -p "$(dirname "$mark")" 2>/dev/null
-    touch "$mark" 2>/dev/null
-    DEBIAN_FRONTEND=noninteractive apt-get install -y zip >/dev/null 2>&1
-    command -v zip >/dev/null 2>&1
-}
-
 selfupdate_watch() {
     bots_registry_ensure
-    _ensure_zip_tool
     local dirs; dirs=$(jq -r '.[].dir' "$BOTS_REGISTRY" 2>/dev/null)
     [ -z "$dirs" ] && return 0
     local dir req claimed age rc rbreq want arc top newest rbpid rbpct newbk
