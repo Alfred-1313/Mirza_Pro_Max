@@ -14395,14 +14395,14 @@ if (!function_exists('volumepct_hub_payload')) {
         $info .= "➖➖➖➖➖➖➖➖➖➖\n👇 پیامی که می‌خوای تنظیم کنی رو انتخاب کن:";
         $kb = ['inline_keyboard' => []];
         $kb['inline_keyboard'][] = [['text' => bt_section_meta('notice_vol')['label'], 'callback_data' => 'bt_sep|notice_vol']];
-        $kb['inline_keyboard'][] = [['text' => $off('volpct.vol') . '📊 مصرف حجم (درصدی)' . $count('vol'), 'callback_data' => "volpct|sec|{$lang}|vol"]];
-        $kb['inline_keyboard'][] = [['text' => $off('volpct.volgb') . '🪫 حجم کم (گیگ)' . $count('volgb'), 'callback_data' => "volpct|sec|{$lang}|volgb"]];
-        $kb['inline_keyboard'][] = [['text' => $off('volpct.volend') . '🔚 پایان حجم', 'callback_data' => "volpct|sec|{$lang}|volend"]];
+        $kb['inline_keyboard'][] = [['text' => $off('volpct.vol') . '📊 مصرف حجم (درصدی)' . $count('vol'), 'callback_data' => "volpct|sec|{$lang}|vol", 'style' => 'primary']];
+        $kb['inline_keyboard'][] = [['text' => $off('volpct.volgb') . '🪫 حجم کم (گیگ)' . $count('volgb'), 'callback_data' => "volpct|sec|{$lang}|volgb", 'style' => 'primary']];
+        $kb['inline_keyboard'][] = [['text' => $off('volpct.volend') . '🔚 پایان حجم', 'callback_data' => "volpct|sec|{$lang}|volend", 'style' => 'primary']];
         $kb['inline_keyboard'][] = [['text' => bt_section_meta('notice_time')['label'], 'callback_data' => 'bt_sep|notice_time']];
-        $kb['inline_keyboard'][] = [['text' => $off('volpct.time') . '⏳ زمان باقی‌مانده' . $count('time'), 'callback_data' => "volpct|sec|{$lang}|time"]];
-        $kb['inline_keyboard'][] = [['text' => $off('volpct.timeend') . '⛔ پایان زمان', 'callback_data' => "volpct|sec|{$lang}|timeend"]];
+        $kb['inline_keyboard'][] = [['text' => $off('volpct.time') . '⏳ زمان باقی‌مانده' . $count('time'), 'callback_data' => "volpct|sec|{$lang}|time", 'style' => 'primary']];
+        $kb['inline_keyboard'][] = [['text' => $off('volpct.timeend') . '⛔ پایان زمان', 'callback_data' => "volpct|sec|{$lang}|timeend", 'style' => 'primary']];
         $kb['inline_keyboard'][] = [['text' => bt_section_meta('notice_test')['label'], 'callback_data' => 'bt_sep|notice_test']];
-        $kb['inline_keyboard'][] = [['text' => $off('textbot.testExpired') . '⏰ پیام اتمام اکانت تست', 'callback_data' => "bt_edit|{$lang}|textbot.testExpired"]];
+        $kb['inline_keyboard'][] = [['text' => $off('textbot.testExpired') . '⏰ پیام اتمام اکانت تست', 'callback_data' => "bt_edit|{$lang}|textbot.testExpired", 'style' => 'primary']];
         $kb['inline_keyboard'][] = [['text' => '🔁 ریست همه‌ی پیام‌های این زبان', 'callback_data' => "volpct|rstq|{$lang}", 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به لیست', 'callback_data' => "btact|back|{$lang}", 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'] ?? '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
@@ -14446,7 +14446,7 @@ if (!function_exists('volumepct_section_payload')) {
             $style = (isset($look['style']) && in_array($look['style'], ['primary', 'success', 'danger'], true)) ? $look['style'] : ($custom ? 'success' : 'primary');
             $kb['inline_keyboard'][] = [['text' => $label, 'callback_data' => "volpct|open|{$lang}|{$i}", 'style' => $style]];
         }
-        $kb['inline_keyboard'][] = [['text' => '➕ افزودن آستانه جدید', 'callback_data' => "volpct|add|{$lang}|{$kind}"]];
+        $kb['inline_keyboard'][] = [['text' => '➕ افزودن آستانه جدید', 'callback_data' => "volpct|add|{$lang}|{$kind}", 'style' => 'primary']];
         if (!empty($tiers)) {
             $kb['inline_keyboard'][] = [['text' => '🔁 ریست کپشن و دکمه‌های این بخش', 'callback_data' => "volpct|rstall|{$lang}|{$kind}", 'style' => 'danger']];
         }
@@ -14509,21 +14509,21 @@ if (!function_exists('volumepct_tier_detail_payload')) {
         }
         $kb['inline_keyboard'][] = [$previewBtn];
         if (!$meta['single']) {
-            $kb['inline_keyboard'][] = [['text' => sprintf($meta['thresholdBtn'], $pct), 'callback_data' => "volpct|pct|{$lang}|{$index}"]];
+            $kb['inline_keyboard'][] = [['text' => sprintf($meta['thresholdBtn'], $pct), 'callback_data' => "volpct|pct|{$lang}|{$index}", 'style' => 'primary']];
         }
-        $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش کپشن', 'callback_data' => "volpct|text|{$lang}|{$index}"]];
-        $kb['inline_keyboard'][] = [['text' => '🖼 استیکر', 'callback_data' => "volpct|sticker|{$lang}|{$index}"]];
-        $kb['inline_keyboard'][] = [['text' => '✏️ متن دکمه', 'callback_data' => "volpct|btntext|{$lang}|{$index}"]];
+        $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش کپشن', 'callback_data' => "volpct|text|{$lang}|{$index}", 'style' => 'primary']];
+        $kb['inline_keyboard'][] = [['text' => '🖼 استیکر', 'callback_data' => "volpct|sticker|{$lang}|{$index}", 'style' => 'primary']];
+        $kb['inline_keyboard'][] = [['text' => '✏️ متن دکمه', 'callback_data' => "volpct|btntext|{$lang}|{$index}", 'style' => 'primary']];
         $kb['inline_keyboard'][] = [
             ['text' => ($curStyle === 'primary' ? '✅ ' : '') . '🔵 آبی', 'callback_data' => "volpct|style|{$lang}|{$index}|primary", 'style' => 'primary'],
             ['text' => ($curStyle === 'success' ? '✅ ' : '') . '🟢 سبز', 'callback_data' => "volpct|style|{$lang}|{$index}|success", 'style' => 'success'],
             ['text' => ($curStyle === 'danger' ? '✅ ' : '') . '🔴 قرمز', 'callback_data' => "volpct|style|{$lang}|{$index}|danger", 'style' => 'danger'],
         ];
-        $kb['inline_keyboard'][] = [['text' => ($hasEmoji ? '✅ ' : '') . '💎 ایموجی دکمه', 'callback_data' => "volpct|emoji|{$lang}|{$index}"]];
-        $kb['inline_keyboard'][] = [['text' => ($curSimple ? '✅ ' : '') . '🎭 حالت ساده (بدون ایموجی)', 'callback_data' => "volpct|simple|{$lang}|{$index}"]];
+        $kb['inline_keyboard'][] = [['text' => ($hasEmoji ? '✅ ' : '') . '💎 ایموجی دکمه', 'callback_data' => "volpct|emoji|{$lang}|{$index}", 'style' => 'primary']];
+        $kb['inline_keyboard'][] = [['text' => ($curSimple ? '✅ ' : '') . '🎭 حالت ساده (بدون ایموجی)', 'callback_data' => "volpct|simple|{$lang}|{$index}", 'style' => 'primary']];
         $kb['inline_keyboard'][] = [
-            ['text' => ($curPos === 'right' ? '✅ ' : '') . '➡️ راست', 'callback_data' => "volpct|pos|{$lang}|{$index}|right"],
-            ['text' => ($curPos === 'left' ? '✅ ' : '') . '⬅️ چپ', 'callback_data' => "volpct|pos|{$lang}|{$index}|left"],
+            ['text' => ($curPos === 'right' ? '✅ ' : '') . '➡️ راست', 'callback_data' => "volpct|pos|{$lang}|{$index}|right", 'style' => 'primary'],
+            ['text' => ($curPos === 'left' ? '✅ ' : '') . '⬅️ چپ', 'callback_data' => "volpct|pos|{$lang}|{$index}|left", 'style' => 'primary'],
         ];
         $kb['inline_keyboard'][] = [[
             'text' => $isHidden ? '👁 نمایش دادن دکمه' : '🚫 مخفی کردن دکمه',
