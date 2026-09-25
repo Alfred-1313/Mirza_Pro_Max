@@ -3983,7 +3983,12 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     }
     step('home', $from_id);
     return;
-} elseif (($text == $textbotlang['textbot']['sell'] || $datain == "buy" || $datain == "buyback" || $datain == "buyfresh" || $text == "/buy" || $text == "buy" || $verify_resume === 'verifybuy') && $statusnote) {
+// The service name is asked for only when there is something to buy. With no
+// product for this customer it led straight into «⭕️ محصولی یافت نشد» - after
+// the name was typed, and with the name question's back keyboard still up.
+// Skipping it hands the tap to the branch below, which says only that.
+} elseif (($text == $textbotlang['textbot']['sell'] || $datain == "buy" || $datain == "buyback" || $datain == "buyfresh" || $text == "/buy" || $text == "buy" || $verify_resume === 'verifybuy') && $statusnote
+    && products_available_count($user['lang'] ?? 'fa', $user['agent']) > 0) {
     if (feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone" && $user['step'] != "get_number" && $user['number'] == "none") {
         sendmessage($from_id, $textbotlang['users']['number']['confirming'], $request_contact, 'HTML');
         update("user", "Processing_value", "verifybuy", "id", $from_id);
