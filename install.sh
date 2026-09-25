@@ -2343,8 +2343,8 @@ function install_bot() {
             fi
         fi
 
-        run_step "Installing base tools (git, curl, wget, unzip, jq)" \
-            "apt-get install -y software-properties-common git unzip curl wget jq" \
+        run_step "Installing base tools (git, curl, wget, zip, unzip, jq)" \
+            "apt-get install -y software-properties-common git zip unzip curl wget jq" \
             || { show_step_error; install_pause "Installing base tools"; }
 
         PHP_VER="$(resolve_php_ver)"; [ -z "$PHP_VER" ] && PHP_VER="8.2"
@@ -3193,6 +3193,8 @@ function update_bot() {
     esac
 
     print_header "Updating Mirza"
+    # an install from before the installer added zip - the bot's backups need it
+    _ensure_zip_tool
 
     # ── 1. Safety net: a restorable snapshot BEFORE anything moves ──
     local BK_DIR="/root/mirza-backups"
@@ -3615,8 +3617,26 @@ _selfupdate_publish_backups() {
     chmod 664 "${dir}/${MIRZA_BACKUPS_LIST}" 2>/dev/null
 }
 
+# The bot's own backups (🗄 بکاپ) are zipped with the zip tool, which this
+# script never used to install - so a server it set up, or a transfer's
+# destination, sent every folder backup back as ❌. Quiet and never fatal;
+# an attempt is remembered for a day, so the watcher (which calls this every
+# minute) never keeps running apt against a broken mirror.
+_ensure_zip_tool() {
+    command -v zip >/dev/null 2>&1 && return 0
+    local mark="/root/confmirza/.zip_install_tried"
+    if [ -f "$mark" ] && [ $(( $(date +%s) - $(stat -c %Y "$mark" 2>/dev/null || echo 0) )) -lt 86400 ]; then
+        return 1
+    fi
+    mkdir -p "$(dirname "$mark")" 2>/dev/null
+    touch "$mark" 2>/dev/null
+    DEBIAN_FRONTEND=noninteractive apt-get install -y zip >/dev/null 2>&1
+    command -v zip >/dev/null 2>&1
+}
+
 selfupdate_watch() {
     bots_registry_ensure
+    _ensure_zip_tool
     local dirs; dirs=$(jq -r '.[].dir' "$BOTS_REGISTRY" 2>/dev/null)
     [ -z "$dirs" ] && return 0
     local dir req claimed age rc rbreq want arc top newest rbpid rbpct newbk

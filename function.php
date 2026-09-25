@@ -14674,6 +14674,96 @@ if (!function_exists('backup_settings_hub_payload')) {
         return [$caption, json_encode($kb)];
     }
 }
+if (!function_exists('backup_zip_create')) {
+    // Zips $entries (paths relative to $baseDir) into $zipPath. Returns '' once
+    // the zip is there, otherwise why it is not:
+    //   'password' - a password is set but there is no zip tool to apply it.
+    //                Nothing is written, so an unprotected copy never goes out.
+    //   'nozip'    - neither the zip tool nor PHP's zip extension is there
+    //   'failed'   - the tool ran and still produced nothing
+    // The zip tool comes first: its password is the kind the install script's
+    // Restore can open. Without it - a server set up before the installer
+    // added it, or a transfer's destination - PHP's own zip extension still
+    // makes the unprotected ones.
+    function backup_zip_create($zipPath, $baseDir, array $entries, $password = '', array $exclude = [])
+    {
+        if (is_file($zipPath)) {
+            unlink($zipPath);
+        }
+        $baseDir = rtrim($baseDir, '/');
+        if (trim((string) shell_exec('command -v zip 2>/dev/null')) !== '') {
+            $cmd = 'cd ' . escapeshellarg($baseDir === '' ? '/' : $baseDir) . ' && zip -r -q'
+                . ($password !== '' ? ' -P ' . escapeshellarg($password) : '')
+                . ' ' . escapeshellarg($zipPath) . ' ' . implode(' ', array_map('escapeshellarg', $entries));
+            foreach ($exclude as $x) {
+                $cmd .= ' -x ' . escapeshellarg($x);
+            }
+            shell_exec($cmd . ' 2>&1');
+            return is_file($zipPath) ? '' : 'failed';
+        }
+        if ($password !== '') {
+            return 'password';
+        }
+        if (!class_exists('ZipArchive')) {
+            return 'nozip';
+        }
+        $zip = new ZipArchive();
+        if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+            return 'failed';
+        }
+        // the same names the zip tool stores: relative to $baseDir, no "./",
+        // and its -x patterns, where * also crosses "/"
+        $skip = function ($rel) use ($exclude) {
+            foreach ($exclude as $x) {
+                if (fnmatch($x, $rel)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        foreach ($entries as $entry) {
+            $abs = ($entry === '.' || $entry === '') ? $baseDir : $baseDir . '/' . $entry;
+            if (is_file($abs)) {
+                $rel = ltrim(substr($abs, strlen($baseDir)), '/');
+                if (!$skip($rel)) {
+                    $zip->addFile($abs, $rel);
+                }
+                continue;
+            }
+            if (!is_dir($abs)) {
+                continue;
+            }
+            $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($abs, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::SELF_FIRST);
+            foreach ($it as $f) {
+                $rel = ltrim(substr($f->getPathname(), strlen($baseDir)), '/');
+                // a folder is stored as "name/", which is what "name/*" matches
+                if ($skip($rel) || ($f->isDir() && $skip($rel . '/')) || $f->getPathname() === $zipPath) {
+                    continue;
+                }
+                if ($f->isDir()) {
+                    $zip->addEmptyDir($rel);
+                } elseif ($f->isFile() && $f->isReadable()) {
+                    $zip->addFile($f->getPathname(), $rel);
+                }
+            }
+        }
+        $zip->close();
+        return is_file($zipPath) ? '' : 'failed';
+    }
+    // what the report channel is told instead of the file; $what names the
+    // backup (backupWhatDb / backupWhatBot)
+    function backup_zip_error_text($reason, $what, $textbotlang)
+    {
+        $h = $textbotlang['hardcoded'] ?? [];
+        if ($reason === 'password') {
+            return strtr($h['backupPasswordNeedsZip'] ?? '', ['{what}' => $what]);
+        }
+        if ($reason === 'nozip') {
+            return strtr($h['backupZipToolMissing'] ?? '', ['{what}' => $what]);
+        }
+        return $textbotlang['keyboard']['backupError'];
+    }
+}
 if (!function_exists('backup_run_now')) {
     // manual, on-demand counterpart to cronbot/backupbot.php - triggered by
     // the /backup admin command. Respects each backup type's own on/off
@@ -14716,19 +14806,25 @@ if (!function_exists('backup_run_now')) {
                 ]);
             } else {
                 $dbBackupPassword = $forceNoPassword ? '' : ($setting['backup_db_password'] ?? '');
-                if ($dbBackupPassword !== '') {
-                    shell_exec("zip -j -P " . escapeshellarg($dbBackupPassword) . " " . escapeshellarg($zipFileName) . " " . escapeshellarg($backupFileName));
+                $zipWhy = backup_zip_create($zipFileName, $backupDir, [basename($backupFileName)], $dbBackupPassword);
+                // with a password set, the bare dump is never the fallback - it
+                // is exactly what the password is there to keep from going out
+                if ($zipWhy === '' || $dbBackupPassword === '') {
+                    telegram('sendDocument', [
+                        'chat_id' => $setting['Channel_Report'],
+                        'message_thread_id' => $reportbackup,
+                        'document' => new CURLFile($zipWhy === '' ? $zipFileName : $backupFileName),
+                        'caption' => $textbotlang['hardcoded']['backupDatabaseCaption'],
+                    ]);
+                    $sentAny = true;
                 } else {
-                    shell_exec("zip -j " . escapeshellarg($zipFileName) . " " . escapeshellarg($backupFileName));
+                    telegram('sendmessage', [
+                        'chat_id' => $setting['Channel_Report'],
+                        'message_thread_id' => $reportbackup,
+                        'text' => backup_zip_error_text($zipWhy, $textbotlang['hardcoded']['backupWhatDb'], $textbotlang),
+                        'parse_mode' => 'HTML',
+                    ]);
                 }
-                $fileToSend = is_file($zipFileName) ? $zipFileName : $backupFileName;
-                telegram('sendDocument', [
-                    'chat_id' => $setting['Channel_Report'],
-                    'message_thread_id' => $reportbackup,
-                    'document' => new CURLFile($fileToSend),
-                    'caption' => $textbotlang['hardcoded']['backupDatabaseCaption'],
-                ]);
-                $sentAny = true;
                 if (is_file($zipFileName)) {
                     unlink($zipFileName);
                 }
@@ -14742,14 +14838,8 @@ if (!function_exists('backup_run_now')) {
             $botFolderZipName = $backupDir . '/botfolder_manual_' . $stamp . '.zip';
             $botRootDir = __DIR__;
             $botBackupPassword = $forceNoPassword ? '' : ($setting['backup_bot_password'] ?? '');
-            $zipExcludes = "-x '.git/*' -x '*.bak_*'";
-            if ($botBackupPassword !== '') {
-                $botZipCommand = "cd " . escapeshellarg($botRootDir) . " && zip -r -P " . escapeshellarg($botBackupPassword) . " " . escapeshellarg($botFolderZipName) . " . " . $zipExcludes;
-            } else {
-                $botZipCommand = "cd " . escapeshellarg($botRootDir) . " && zip -r " . escapeshellarg($botFolderZipName) . " . " . $zipExcludes;
-            }
-            shell_exec($botZipCommand);
-            if (is_file($botFolderZipName)) {
+            $zipWhy = backup_zip_create($botFolderZipName, $botRootDir, ['.'], $botBackupPassword, ['.git/*', '*.bak_*']);
+            if ($zipWhy === '') {
                 telegram('sendDocument', [
                     'chat_id' => $setting['Channel_Report'],
                     'message_thread_id' => $reportbackup,
@@ -14762,7 +14852,8 @@ if (!function_exists('backup_run_now')) {
                 telegram('sendmessage', [
                     'chat_id' => $setting['Channel_Report'],
                     'message_thread_id' => $reportbackup,
-                    'text' => $textbotlang['keyboard']['backupError'],
+                    'text' => backup_zip_error_text($zipWhy, $textbotlang['hardcoded']['backupWhatBot'], $textbotlang),
+                    'parse_mode' => 'HTML',
                 ]);
             }
         }
