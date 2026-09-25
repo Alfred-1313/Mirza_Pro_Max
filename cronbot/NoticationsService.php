@@ -104,12 +104,12 @@ class ServiceMonitor
         $removalThreshold = intval("-" . $this->setting['removedayc']);
         $result = $daysRemaining <= $removalThreshold;
         $statusText = $statusMap = [
-            'active' => $this->textBotLang['users']['stateus']['active'],
-            'limited' => $this->textBotLang['users']['stateus']['limited'],
-            'disabled' => $this->textBotLang['users']['stateus']['disabled'],
-            'expired' => $this->textBotLang['users']['stateus']['expired'],
-            'on_hold' => $this->textBotLang['users']['stateus']['on_hold'],
-            'Unknown' => $this->textBotLang['users']['stateus']['Unknown']
+            'active' => $this->textBotLang['users']['status']['active'],
+            'limited' => $this->textBotLang['users']['status']['limited'],
+            'disabled' => $this->textBotLang['users']['status']['disabled'],
+            'expired' => $this->textBotLang['users']['status']['expired'],
+            'on_hold' => $this->textBotLang['users']['status']['on_hold'],
+            'Unknown' => $this->textBotLang['users']['status']['unknown']
         ][$userData['status']];
         $remainingVolume = formatBytes($userData['data_limit'] - $userData['used_traffic']);
         if ($result) {
@@ -147,12 +147,12 @@ class ServiceMonitor
         $removalThreshold = intval($this->setting['cronvolumere']);
         $result = $timelastconect >= $removalThreshold;
         $statusText = [
-            'active' => $this->textBotLang['users']['stateus']['active'],
-            'limited' => $this->textBotLang['users']['stateus']['limited'],
-            'disabled' => $this->textBotLang['users']['stateus']['disabled'],
-            'expired' => $this->textBotLang['users']['stateus']['expired'],
-            'on_hold' => $this->textBotLang['users']['stateus']['on_hold'],
-            'Unknown' => $this->textBotLang['users']['stateus']['Unknown']
+            'active' => $this->textBotLang['users']['status']['active'],
+            'limited' => $this->textBotLang['users']['status']['limited'],
+            'disabled' => $this->textBotLang['users']['status']['disabled'],
+            'expired' => $this->textBotLang['users']['status']['expired'],
+            'on_hold' => $this->textBotLang['users']['status']['on_hold'],
+            'Unknown' => $this->textBotLang['users']['status']['unknown']
         ][$userData['status']];
         $remainingVolume = formatBytes($userData['data_limit'] - $userData['used_traffic']);
         if ($result) {
@@ -249,16 +249,18 @@ class ServiceMonitor
     {
         $kind = volumepct_tier_kind(volumepct_tier_get($tierIndex));
         $h = $this->textBotLang['hardcoded'];
+        $raw = (string) ($userData['status'] ?? '');
+        $status = $this->textBotLang['users']['status'][$raw === 'Unknown' ? 'unknown' : $raw] ?? $raw;
         if ($kind === 'volgb') {
             $left = max(0, ($userData['data_limit'] ?? 0) - ($userData['used_traffic'] ?? 0));
             $this->sendReportNotification($h['notifVolumeCronTitle']
                 . sprintf($h['notifServiceUsername'], $invoice['username'])
-                . sprintf($h['notifServiceStatus'], $userData['status'])
+                . sprintf($h['notifServiceStatus'], $status)
                 . sprintf($h['notifRemainingVolume'], notice_format_bytes($left, $this->textBotLang)));
         } elseif ($kind === 'time') {
             $this->sendReportNotification($h['notifTimeCronTitle']
                 . sprintf($h['notifServiceUsername2'], $invoice['username'])
-                . sprintf($h['notifServiceStatus2'], $userData['status'])
+                . sprintf($h['notifServiceStatus2'], $status)
                 . sprintf($h['notifRemainingDays'], notice_time_left_text(($userData['expire'] ?? 0) - time(), $this->textBotLang)));
         }
     }

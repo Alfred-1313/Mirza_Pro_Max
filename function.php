@@ -14012,7 +14012,7 @@ if (!function_exists('volumepct_tier_default_text')) {
         if (!empty($textbotlang['hardcoded'][$key])) {
             return $textbotlang['hardcoded'][$key];
         }
-        return "مشتری گرامی {username}\nحجم بسته VPN شما {packagedays} روزه {packagevolume} گیگابایتی {usedpercent} درصد استفاده شده است .\nچنان چه تمایل به مصرف سرویس خود دارید از دکمه زیر استفاده کنید 🫶";
+        return "مشتری گرامی 👋\n{usedpercent} درصد از حجم سرویس {username} (بسته‌ی {packagedays} روزه‌ی {packagevolume} گیگابایتی) استفاده شده است.\nچنان چه تمایل به ادامه‌ی استفاده از سرویس خود دارید، از دکمه‌ی زیر استفاده کنید 🫶";
     }
 }
 if (!function_exists('notice_time_left_text')) {
@@ -14068,9 +14068,10 @@ if (!function_exists('notice_placeholders')) {
                 : 0;
         }
         $secsLeft = !empty($userData['expire']) ? max(0, $userData['expire'] - time()) : 0;
-        // Persian readers get the Jalali calendar, everyone else the Gregorian one
+        // Persian readers get the Jalali calendar, everyone else the Gregorian
+        // one - in Latin digits on both, like every other number in the text
         $date = function ($fmt, $ts) use ($lang) {
-            return $lang === 'fa' ? jdate($fmt, $ts) : date($fmt, $ts);
+            return $lang === 'fa' ? jdate($fmt, $ts, '', 'Asia/Tehran', 'en') : date($fmt, $ts);
         };
         $userPlaceholders = function_exists('bottext_user_placeholders')
             ? bottext_user_placeholders($user, $invoice['id_user'] ?? 0)

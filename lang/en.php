@@ -3961,8 +3961,8 @@ Service information:
                 'support' => '☎️ Support',
                 'tariffList' => '💵 Subscription rates',
                 'tariffListDesc' => 'Not set',
-                'testExpired' => 'Hello, dear user 
-Your test service with username {username} has ended
+                'testExpired' => 'Hello, dear user 👋
+Your test service with username {username} has ended.
 We hope you had a good experience with the ease and speed of your service. If you were satisfied with your test service, you can get your own dedicated service and enjoy free internet with the highest quality😉🔥
 🛍 To get a quality service, you can use the button below',
                 'userTest' => '🔑 Test account',
@@ -5001,20 +5001,21 @@ Payment tracking code : %s',
                 'unitMegabyte' => 'MB',
                 'unitGigabyteFn' => 'GB',
                 'unitTerabyte' => 'TB',
-                'volumePctDefaultText' => 'Dear customer {username}
-You have used {usedpercent}% of your {packagevolume} GB, {packagedays}-day VPN plan.
+                'volumePctDefaultText' => 'Dear customer 👋
+You have used {usedpercent}% of your service {username} ({packagevolume} GB, {packagedays}-day plan).
 If you would like to keep using your service, use the button below 🫶',
-                'volumeTimeDefaultText' => 'Dear customer {username}
-You can use your plan until {expiretime} on {expiredate}, that is {timeleft} from now.
+                'volumeTimeDefaultText' => 'Dear customer 👋
+You can use your service {username} until {expiretime} on {expiredate}, that is {timeleft} from now.
 If you would like to keep using your service, use the button below 🫶',
-                'volumeTimeEndDefaultText' => 'Dear customer {username}
-The plan you bought on {purchasedate} has ended. If you would like to keep using your service, use the button below 🫶',
+                'volumeTimeEndDefaultText' => 'Dear customer 👋
+Your service {username}, bought on {purchasedate}, has ended.
+If you would like to keep using your service, use the button below 🫶',
                 'volumeLowGbDefaultText' => 'Hello, dear user 👋
 🚨 Your service {username} has only {remainingvolume} left. To buy extra volume or renew it, please go to «{myservices}».',
                 'timeWarnLegacyText' => 'Hello, dear user 👋
 📌 Your service {username} has only {timeleft} left. To renew it, please go to «{myservices}». Thank you for staying with us.',
-                'volumeEndDefaultText' => 'Dear customer {username}
-The volume of your {packagevolume} GB, {packagedays}-day VPN plan has run out.
+                'volumeEndDefaultText' => 'Dear customer 👋
+The volume of your service {username} ({packagevolume} GB, {packagedays}-day plan) has run out.
 This plan does not renew automatically - to renew it and keep using it, use the button below 🫶',
         ],
 ];
