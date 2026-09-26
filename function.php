@@ -9471,11 +9471,128 @@ if (!function_exists('bt_reset_sections')) {
             'msg_media' => ['bit' => 2, 'label' => '🖼 استیکر و ری‌اکشن پیام‌ها', 'sep' => ''],
             'msg_buttons' => ['bit' => 4, 'label' => '🔘 دکمه‌های داخل پیام‌ها', 'sep' => ''],
             'warnings' => ['bit' => 8, 'label' => '🔋 هشدارهای مصرف بسته', 'sep' => ''],
+            'shop_look' => ['bit' => 256, 'label' => '🛒 ظاهر دکمه‌های پنل، دسته‌بندی و محصول', 'sep' => '⬇️ ظاهر دکمه‌ها و کپشن‌های بخش‌ها'],
+            'help_look' => ['bit' => 512, 'label' => '📚 ظاهر دکمه‌های آموزش', 'sep' => ''],
+            'chn_look' => ['bit' => 1024, 'label' => '📯 ظاهر دکمه‌های کانال', 'sep' => ''],
+            'gw_look' => ['bit' => 2048, 'label' => '💳 ظاهر دکمه‌های درگاه‌ها', 'sep' => ''],
+            'topup_text' => ['bit' => 4096, 'label' => '💰 کپشن‌های افزایش موجودی و فاکتورها', 'sep' => ''],
+            'topup_look' => ['bit' => 8192, 'label' => '🎛 ظاهر دکمه‌های افزایش موجودی و فاکتورها', 'sep' => ''],
             'mm_sticker' => ['bit' => 16, 'label' => '✨ استیکر دکمه‌های منو', 'sep' => '⬇️ دکمه‌های منوی اصلی (پایین صفحه‌ی کاربر)'],
             'mm_color' => ['bit' => 32, 'label' => '🎨 رنگ دکمه‌های منو', 'sep' => ''],
             'mm_emoji' => ['bit' => 64, 'label' => '😀 ایموجی دکمه‌های منو', 'sep' => ''],
             'mm_visibility' => ['bit' => 128, 'label' => '👁 نام و مخفی‌بودن دکمه‌ها', 'sep' => ''],
         ];
+    }
+}
+if (!function_exists('bt_reset_all_mask')) {
+    // every row of the picker at once - what 🔁 opens with
+    function bt_reset_all_mask()
+    {
+        $m = 0;
+        foreach (bt_reset_sections() as $s) {
+            $m |= $s['bit'];
+        }
+        return $m;
+    }
+    // The stores behind the six section rows. All of them hold one copy per
+    // language at their top level ([lang] => ...), so a tab's reset is
+    // exactly "drop [lang]" and no other tab is touched.
+    // Not here on purpose: which gateways/methods are on, the packages and
+    // their limits, grouping on/off, TON's memo - behaviour, not looks.
+    function bt_reset_topup_caption_columns()
+    {
+        return ['topup_captions', 'topup_custom_captions', 'topup_range_captions', 'topup_linkmsgs',
+            'topup_notnumber_captions', 'topup_invoice_captions', 'topup_invoice_expired_captions',
+            'topup_minusd_captions', 'topup_notseen_captions', 'topup_noaddress_captions',
+            'topup_askhash_captions', 'topup_hashbad_captions', 'topup_paid_alerts', 'topup_group_captions',
+            'card_invoice_caption', 'card_invoice_expired_caption',
+            'plisio_invoice_caption', 'plisio_invoice_expired_caption'];
+    }
+    function bt_reset_topup_look_columns()
+    {
+        return ['topup_btnstyle', 'topup_invoice_btnstyle', 'card_invoice_btnstyle', 'plisio_invoice_btnstyle'];
+    }
+    // help_layout kinds per row. 'langpick' is absent: the language picker's
+    // look is stored under Persian but belongs to every tab.
+    function bt_reset_layout_kinds($row)
+    {
+        return [
+            'shop_look' => ['panel', 'category', 'product'],
+            'help_look' => ['categories', 'tutorials'],
+            'gw_look' => ['gateway'],
+        ][$row] ?? [];
+    }
+    // how many things one help_layout section has changed
+    function bt_reset_layout_count($sec)
+    {
+        if (!is_array($sec)) {
+            return 0;
+        }
+        $n = 0;
+        foreach (['emoji', 'emojiIcon', 'color', 'rename', 'hidden', 'width'] as $f) {
+            $n += is_array($sec[$f] ?? null) ? count(array_filter($sec[$f], fn($v) => $v !== '' && $v !== null && $v !== false)) : 0;
+        }
+        return $n + (!empty($sec['order']) ? 1 : 0) + (!empty($sec['emojiSimple']) ? 1 : 0);
+    }
+    // non-empty values under one language's copy
+    function bt_reset_count_leaves($v)
+    {
+        if (is_array($v)) {
+            $n = 0;
+            foreach ($v as $x) {
+                $n += bt_reset_count_leaves($x);
+            }
+            return $n;
+        }
+        return ($v === null || $v === '' || $v === false) ? 0 : 1;
+    }
+    function bt_reset_lang_columns_count($lang, array $cols)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $n = 0;
+        foreach ($cols as $col) {
+            $m = json_decode((string) ($setting[$col] ?? ''), true);
+            if (is_array($m) && isset($m[$lang])) {
+                $n += bt_reset_count_leaves($m[$lang]);
+            }
+        }
+        return $n;
+    }
+    function bt_reset_lang_columns($lang, array $cols)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        foreach ($cols as $col) {
+            $m = json_decode((string) ($setting[$col] ?? ''), true);
+            if (!is_array($m) || !array_key_exists($lang, $m)) {
+                continue;
+            }
+            unset($m[$lang]);
+            update("setting", $col, empty($m) ? '{}' : json_encode($m, JSON_UNESCAPED_UNICODE), null, null);
+        }
+    }
+    // 📯: channels with a look of their own on this tab, plus their order
+    function bt_reset_channel_count($lang)
+    {
+        $n = 0;
+        if ($lang !== 'fa') {
+            $own = channel_btn_lang_map()[$lang] ?? [];
+            foreach ((array) ($own['rows'] ?? []) as $fields) {
+                if (!empty(array_filter((array) $fields, fn($v) => (string) $v !== ''))) {
+                    $n++;
+                }
+            }
+            return $n + (!empty($own['order']) ? 1 : 0);
+        }
+        $rows = select("channels", "*", null, null, "fetchAll");
+        foreach ((is_array($rows) ? $rows : []) as $r) {
+            if (($r['style'] ?? '') !== '' || ($r['custom_text'] ?? '') !== '' || ($r['emoji'] ?? '') !== ''
+                || ($r['icon_emoji'] ?? '') !== '' || !empty($r['hidden'])) {
+                $n++;
+            }
+        }
+        $setting = select("setting", "*", null, null, "select");
+        $order = json_decode((string) ($setting['channelButtonsOrder'] ?? ''), true);
+        return $n + (!empty($order) ? 1 : 0);
     }
 }
 if (!function_exists('bt_reset_counts')) {
@@ -9485,7 +9602,19 @@ if (!function_exists('bt_reset_counts')) {
     function bt_reset_counts($lang, $textbotlang)
     {
         $c = ['msg_text' => 0, 'msg_media' => 0, 'msg_buttons' => 0, 'warnings' => 0,
+              'shop_look' => 0, 'help_look' => 0, 'chn_look' => 0, 'gw_look' => 0, 'topup_text' => 0, 'topup_look' => 0,
               'mm_sticker' => 0, 'mm_color' => 0, 'mm_emoji' => 0, 'mm_visibility' => 0];
+        $hl = help_layout_get();
+        foreach (['shop_look', 'help_look', 'gw_look'] as $row) {
+            foreach (bt_reset_layout_kinds($row) as $kind) {
+                $c[$row] += bt_reset_layout_count($hl[$lang][$kind] ?? null);
+            }
+        }
+        // the payment families' buttons are gateway buttons too
+        $c['gw_look'] += bt_reset_lang_columns_count($lang, ['topup_group_btnstyle']);
+        $c['chn_look'] = bt_reset_channel_count($lang);
+        $c['topup_text'] = bt_reset_lang_columns_count($lang, bt_reset_topup_caption_columns());
+        $c['topup_look'] = bt_reset_lang_columns_count($lang, bt_reset_topup_look_columns());
         $setting = select("setting", "*", null, null, "select");
         $te = json_decode((string) ($setting['text_edit'] ?? ''), true);
         $layout = json_decode((string) ($setting['keyboardmain'] ?? ''), true);
@@ -9589,7 +9718,7 @@ if (!function_exists('bt_reset_picker_payload')) {
         $kb = ['inline_keyboard' => []];
         foreach ($sections as $name => $s) {
             if ($s['sep'] !== '') {
-                $kb['inline_keyboard'][] = [['text' => $s['sep'], 'callback_data' => 'bt_rstsep']];
+                $kb['inline_keyboard'][] = [['text' => $s['sep'], 'callback_data' => "bt_rstsep|{$name}"]];
             }
             $on = ($mask & $s['bit']) ? true : false;
             $n = $counts[$name];
@@ -9634,6 +9763,31 @@ if (!function_exists('bt_reset_apply_mask')) {
             // the tab's own wording, label and sticker - the warnings' button
             // looks are every tab's, so they stay
             volumepct_tiers_reset_all_style($lang, null, false);
+        }
+        $hlRows = array_filter(['shop_look', 'help_look', 'gw_look'], fn($row) => ($mask & $sections[$row]['bit']) !== 0);
+        if (!empty($hlRows)) {
+            $hl = help_layout_get();
+            foreach ($hlRows as $row) {
+                foreach (bt_reset_layout_kinds($row) as $kind) {
+                    unset($hl[$lang][$kind]);
+                }
+            }
+            if (isset($hl[$lang]) && empty($hl[$lang])) {
+                unset($hl[$lang]);
+            }
+            help_layout_save($hl);
+        }
+        if ($mask & $sections['gw_look']['bit']) {
+            bt_reset_lang_columns($lang, ['topup_group_btnstyle']);
+        }
+        if ($mask & $sections['chn_look']['bit']) {
+            channel_buttons_reset(['color', 'emoji', 'rename', 'visibility', 'layout'], $lang);
+        }
+        if ($mask & $sections['topup_text']['bit']) {
+            bt_reset_lang_columns($lang, bt_reset_topup_caption_columns());
+        }
+        if ($mask & $sections['topup_look']['bit']) {
+            bt_reset_lang_columns($lang, bt_reset_topup_look_columns());
         }
         $mmParts = [];
         if ($mask & $sections['mm_sticker']['bit']) {

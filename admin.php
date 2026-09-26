@@ -22135,30 +22135,32 @@ if ($datain == "linkappsetting") {
     // no longer wipes on the spot - opens the picker so the admin sees exactly
     // what is about to go and can narrow it down. Everything starts selected,
     // so the old "tap once, reset everything" path is still just two taps.
-    list($bt_rp_text, $bt_rp_kb) = bt_reset_picker_payload($bt_lang, 255, $textbotlang);
+    list($bt_rp_text, $bt_rp_kb) = bt_reset_picker_payload($bt_lang, bt_reset_all_mask(), $textbotlang);
     Editmessagetext($from_id, $message_id, $bt_rp_text, $bt_rp_kb, 'HTML');
-} elseif (preg_match('/^bt_rsttog\|([a-z]{2})\|(\d{1,3})\|(\d{1,3})$/', $datain, $dataget) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^bt_rsttog\|([a-z]{2})\|(\d{1,5})\|(\d{1,5})$/', $datain, $dataget) && $adminrulecheck['rule'] == "administrator") {
     $bt_lang = in_array($dataget[1], panel_langs(), true) ? $dataget[1] : 'fa';
-    $bt_mask = ((int) $dataget[2]) & 255;
-    $bt_bit = ((int) $dataget[3]) & 255;
+    $bt_mask = ((int) $dataget[2]) & bt_reset_all_mask();
+    $bt_bit = ((int) $dataget[3]) & bt_reset_all_mask();
     $bt_mask = ($bt_mask & $bt_bit) ? ($bt_mask & ~$bt_bit) : ($bt_mask | $bt_bit);
     list($bt_rp_text, $bt_rp_kb) = bt_reset_picker_payload($bt_lang, $bt_mask, $textbotlang);
     Editmessagetext($from_id, $message_id, $bt_rp_text, $bt_rp_kb, 'HTML');
 } elseif (preg_match('/^bt_rstsel\|([a-z]{2})\|(all|none)$/', $datain, $dataget) && $adminrulecheck['rule'] == "administrator") {
     $bt_lang = in_array($dataget[1], panel_langs(), true) ? $dataget[1] : 'fa';
-    $bt_mask = ($dataget[2] === 'all') ? 255 : 0;
+    $bt_mask = ($dataget[2] === 'all') ? bt_reset_all_mask() : 0;
     list($bt_rp_text, $bt_rp_kb) = bt_reset_picker_payload($bt_lang, $bt_mask, $textbotlang);
     Editmessagetext($from_id, $message_id, $bt_rp_text, $bt_rp_kb, 'HTML');
-} elseif ($datain == "bt_rstsep" && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^bt_rstsep(?:\|(\w+))?$/', $datain, $dataget) && $adminrulecheck['rule'] == "administrator") {
     telegram('answerCallbackQuery', [
         'callback_query_id' => $callback_query_id,
-        'text' => 'این‌ها تنظیمات ظاهری دکمه‌های ثابت پایین صفحه‌ی کاربرن - نه متن پیام‌ها.',
+        'text' => (($dataget[1] ?? '') === 'shop_look')
+            ? 'این‌ها ظاهر دکمه‌ها و کپشن‌های داخل بخش‌هان (پنل، آموزش، کانال، درگاه و افزایش موجودی) - فقط برای همین تب.'
+            : 'این‌ها تنظیمات ظاهری دکمه‌های ثابت پایین صفحه‌ی کاربرن - نه متن پیام‌ها.',
         'show_alert' => true,
     ]);
     return;
-} elseif (preg_match('/^bt_rstgo\|([a-z]{2})\|(\d{1,3})$/', $datain, $dataget) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^bt_rstgo\|([a-z]{2})\|(\d{1,5})$/', $datain, $dataget) && $adminrulecheck['rule'] == "administrator") {
     $bt_lang = in_array($dataget[1], panel_langs(), true) ? $dataget[1] : 'fa';
-    $bt_mask = ((int) $dataget[2]) & 255;
+    $bt_mask = ((int) $dataget[2]) & bt_reset_all_mask();
     if ($bt_mask === 0) {
         telegram('answerCallbackQuery', [
             'callback_query_id' => $callback_query_id,
