@@ -1703,6 +1703,33 @@ if (!function_exists('app_rows_for_lang')) {
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 }
+if (!function_exists('app_row_langs')) {
+    // the languages one app-download row is shown in: a row with no language
+    // of its own (from before the tabs) is every tab's
+    function app_row_langs($row)
+    {
+        $l = trim((string) ($row['lang'] ?? ''));
+        if ($l === '' || $l === 'all') {
+            return panel_langs();
+        }
+        return array_values(array_filter(array_map('trim', explode(',', $l)), 'strlen'));
+    }
+}
+if (!function_exists('feature_aff_banner')) {
+    // 🎁 the referral banner of one language: [caption, photo]. Persian falls
+    // back to the banner set before the tabs; another language does not - that
+    // banner is Persian, and an English customer is not shown Persian. Until
+    // its own tab sets one, that language simply has no banner.
+    function feature_aff_banner($lang, $affRow)
+    {
+        $affRow = is_array($affRow) ? $affRow : [];
+        $isFa = ($lang === 'fa');
+        return [
+            (string) feature_setting_value('aff_banner_text', $lang, $isFa ? (string) ($affRow['description'] ?? '') : ''),
+            (string) feature_setting_value('aff_banner_media', $lang, $isFa ? (string) ($affRow['id_media'] ?? '') : 'none'),
+        ];
+    }
+}
 if (!function_exists('panel_langs')) {
     // The languages this bot actually speaks.
     //

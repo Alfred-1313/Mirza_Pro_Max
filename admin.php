@@ -5054,8 +5054,8 @@ if (!function_exists('feature_section_effective')) {
             'aff_commission' => feature_setting_value('aff_commission', $lang, (string) $aff['status_commission']),
             'aff_startgift' => feature_setting_value('aff_startgift', $lang, (string) $aff['Discount']),
             'aff_firstbuy' => feature_setting_value('aff_firstbuy', $lang, (string) $aff['porsant_one_buy']),
-            'aff_banner_text' => feature_setting_value('aff_banner_text', $lang, (string) $aff['description']),
-            'aff_banner_media' => feature_setting_value('aff_banner_media', $lang, (string) $aff['id_media']),
+            'aff_banner_text' => feature_aff_banner($lang, $aff)[0],
+            'aff_banner_media' => feature_aff_banner($lang, $aff)[1],
             'wheel_price' => feature_setting_value('wheel_price', $lang, (string) $setting['wheelـluck_price']),
             'loc_limit_all' => feature_setting_value('loc_limit_all', $lang, (string) ($limit['all'] ?? 0)),
             'loc_limit_free' => feature_setting_value('loc_limit_free', $lang, (string) ($limit['free'] ?? 0)),
@@ -5137,7 +5137,7 @@ if (!function_exists('feature_section_caption')) {
                 '{lang}' => $langName,
                 '{percent}' => (string) $v['aff_percent'],
                 '{gift}' => money($v['aff_giftamount'], $cur),
-            ]);
+            ]) . "\n🏞 بنر: " . (strlen((string) $v['aff_banner_media']) >= 5 ? '✅ تنظیم شده' : '❌ برای این زبان تنظیم نشده');
         }
         return strtr($s['locTitle'], [
             '{lang}' => $langName,
@@ -10606,7 +10606,20 @@ elseif ($datain == "systemsms") {
             return;
         }
         $fs_appid = (int) ($fs_data['fls_appid'] ?? 0);
-        update("app", "link", $text, "id", $fs_appid);
+        // a row other tabs show too gets a copy of its own for this tab; the
+        // original keeps its link for the rest
+        $fs_app = select("app", "*", "id", $fs_appid, "select");
+        $fs_rest = is_array($fs_app) ? array_values(array_diff(app_row_langs($fs_app), [$fs_lang])) : [];
+        if (is_array($fs_app) && !empty($fs_rest)) {
+            update("app", "lang", implode(',', $fs_rest), "id", $fs_appid);
+            $fs_stmt = $pdo->prepare("INSERT INTO app (name, link, lang) VALUES (:name, :link, :lang)");
+            $fs_stmt->bindValue(':name', (string) $fs_app['name']);
+            $fs_stmt->bindValue(':link', (string) $text);
+            $fs_stmt->bindValue(':lang', $fs_lang);
+            $fs_stmt->execute();
+        } else {
+            update("app", "link", $text, "id", $fs_appid);
+        }
     } elseif ($fs_key === 'phone_prefix') {
         // one or more country dial codes, e.g. "98" or "1,44"; a lone 0 clears
         // the restriction so the language accepts every country again
@@ -10661,9 +10674,16 @@ elseif ($datain == "systemsms") {
     sendmessage($from_id, feature_section_caption($textbotlang, $fs_lang, 'linkapp'), feature_section_payload($textbotlang, $fs_lang, 'linkapp'), 'HTML');
 } elseif (preg_match('/^flsappd:([a-z]{2}):(\d+)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
     $fs_lang = $fs_m[1];
-    $fs_stmt = $pdo->prepare("DELETE FROM app WHERE id = :id");
-    $fs_stmt->bindValue(':id', (int) $fs_m[2], PDO::PARAM_INT);
-    $fs_stmt->execute();
+    // gone from this tab only: a row other tabs show too stays theirs
+    $fs_app = select("app", "*", "id", (int) $fs_m[2], "select");
+    $fs_rest = is_array($fs_app) ? array_values(array_diff(app_row_langs($fs_app), [$fs_lang])) : [];
+    if (!empty($fs_rest)) {
+        update("app", "lang", implode(',', $fs_rest), "id", (int) $fs_m[2]);
+    } else {
+        $fs_stmt = $pdo->prepare("DELETE FROM app WHERE id = :id");
+        $fs_stmt->bindValue(':id', (int) $fs_m[2], PDO::PARAM_INT);
+        $fs_stmt->execute();
+    }
     Editmessagetext($from_id, $message_id, feature_section_caption($textbotlang, $fs_lang, 'linkapp'), feature_section_payload($textbotlang, $fs_lang, 'linkapp'));
 } elseif (preg_match('/^flsappe:([a-z]{2}):(\d+)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
     $fs_lang = $fs_m[1];

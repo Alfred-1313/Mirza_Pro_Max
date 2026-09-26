@@ -97,10 +97,17 @@ if (!in_array($from_id, $users_ids) && $setting['statusnewuser'] == "onnewuser")
 }
 $date = time();
 if ($from_id != 0) {
-    if ($setting['verifystart'] != "onverify") {
-        $valueverify = 1;
-    } else {
-        $valueverify = 0;
+    // A new user has no language yet, so this cannot ask theirs. If ANY
+    // language requires verification they start unverified; the gate below
+    // still only stops them when their own language has it on. Reading the
+    // shared value alone let a language that turned it on in 🌐 وضعیت
+    // قابلیت‌ها (هر زبان) never verify anyone new.
+    $valueverify = 1;
+    foreach (panel_langs() as $vs_lang) {
+        if (feature_value('verifystart', $vs_lang, $setting['verifystart']) == "onverify") {
+            $valueverify = 0;
+            break;
+        }
     }
     $randomString = bin2hex(random_bytes(6));
     $stmt = $pdo->prepare("INSERT IGNORE INTO user (id , step,limit_usertest,User_Status,number,Balance,pagenumber,username,agent,message_count,last_message_time,affiliates,affiliatescount,cardpayment,number_username,namecustom,register,verify,codeInvitation,pricediscount,maxbuyagent,joinchannel,score,status_cron) VALUES (:from_id, 'none',:limit_usertest_all,'Active','none','0','1',:username,'f','0','0','0','0',:showcard,'100','none',:date,:verifycode,:codeInvitation,'0','0','0','0','1')");
@@ -6222,8 +6229,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     // banner, percentages and gift amounts are all per-language now (🌐 وضعیت
     // قابلیت‌ها (هر زبان) -> ⚙️ تنظیمات), falling back to the shared value
     $aff_lang = $user['lang'] ?? 'fa';
-    $aff_banner_text = feature_setting_value('aff_banner_text', $aff_lang, $affiliates['description']);
-    $aff_banner_media = feature_setting_value('aff_banner_media', $aff_lang, $affiliates['id_media']);
+    list($aff_banner_text, $aff_banner_media) = feature_aff_banner($aff_lang, $affiliates);
     $textaffiliates = "{$aff_banner_text}\n\n🔗 https://t.me/$usernamebot?start=$from_id";
     if (strlen($aff_banner_media) >= 5) {
         telegram('sendphoto', [
