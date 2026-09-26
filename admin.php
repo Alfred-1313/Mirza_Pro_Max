@@ -708,6 +708,20 @@ if (!function_exists('bottext_item_menu_payload')) {
         }
         $info .= "➖➖➖➖➖➖➖➖➖➖\n👇 بخشی که می‌خوای تنظیم کنی رو انتخاب کن:";
         $kb = ['inline_keyboard' => []];
+        // A row that opens ONE button is that button, as this tab's customer
+        // gets it - its current emoji and name, green once customized. Rows
+        // that open a set of buttons keep describing the set.
+        $bt_live_row = function ($live, $fallback, $cb, $custom) {
+            $b = ['text' => $live !== null ? $live[0] : $fallback, 'callback_data' => $cb, 'style' => $custom ? 'success' : 'primary'];
+            if ($live !== null && $live[1] !== '') {
+                $b['icon_custom_emoji_id'] = $live[1];
+            }
+            return $b;
+        };
+        $bt_balance_live = function () use ($bt_lang) {
+            $b = balancebtn_button($bt_lang, lang_tab_texts($bt_lang));
+            return [$b['text'], (string) ($b['icon_custom_emoji_id'] ?? '')];
+        };
         // Items that carry an on/off switch get it first, above the rows it
         // gates. What each switch actually turns off differs, so the label says
         // it (bt_item_switch_label).
@@ -746,7 +760,7 @@ if (!function_exists('bottext_item_menu_payload')) {
             // prompt - its caption, then its close button. This is the only way
             // in to either - neither has a row on the home list.
             $kb['inline_keyboard'][] = [['text' => '🎯 پیام انتخاب پنل (اکانت تست)', 'callback_data' => "bt_edit|{$bt_lang}|textbot.selectLocationTest", 'style' => 'primary']];
-            $kb['inline_keyboard'][] = [['text' => '❌ دکمه بستن لیست پنل‌ها', 'callback_data' => "bt_edit|{$bt_lang}|bottext.btnCloseTest", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [$bt_live_row(genbtn_row_label('bottext.btnCloseTest', $bt_lang), '❌ دکمه بستن لیست پنل‌ها', "bt_edit|{$bt_lang}|bottext.btnCloseTest", is_array($bt_be) && !empty($bt_be[$bt_lang]['bottext.btnCloseTest']))];
             // it sent the customer here from the home list before, where it read
             // as a child of whatever section was last on screen; its own back
             // button already pointed at this screen
@@ -754,36 +768,36 @@ if (!function_exists('bottext_item_menu_payload')) {
             $kb['inline_keyboard'][] = [['text' => '📦 پیام بعد از دریافت اکانت تست', 'callback_data' => "bt_edit|{$bt_lang}|textbot.afterText", 'style' => 'primary']];
             $kb['inline_keyboard'][] = [['text' => '📌 نحوه‌ی نمایش کانفیگ', 'callback_data' => "cfgdeliv|list|{$bt_lang}|u", 'style' => 'primary']];
         } elseif ($bt_key === 'users.Balance.insufficientBalanceSimple') {
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه افزایش موجودی', 'callback_data' => "btact|bbtn|{$bt_lang}", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [$bt_live_row($bt_balance_live(), '🔘 ویرایش دکمه افزایش موجودی', "btact|bbtn|{$bt_lang}", $bt_btn_custom)];
         } elseif ($bt_key === 'users.sell.selectUsernamePrompt') {
             $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های انصراف/پیش‌فرض', 'callback_data' => "gbs|hub|{$bt_lang}|su", 'style' => 'primary']];
         } elseif (in_array($bt_key, ['users.sell.preInvoice', 'users.sell.preInvoice2', 'textbot.preInvoice'], true)) {
             $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های تأیید خرید', 'callback_data' => "gbs|hub|{$bt_lang}|cf", 'style' => 'primary']];
         } elseif ($bt_key === 'users.sell.service_not_available') {
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه تهیه اشتراک', 'callback_data' => "gbs|hub|{$bt_lang}|ns", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [$bt_live_row(genbtn_row_label($bt_key, $bt_lang), '🔘 ویرایش دکمه تهیه اشتراک', "gbs|hub|{$bt_lang}|ns", $bt_btn_custom)];
         } elseif ($bt_key === 'textbot.testExpired') {
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه خرید سرویس', 'callback_data' => "gbs|hub|{$bt_lang}|te", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [$bt_live_row(genbtn_row_label($bt_key, $bt_lang), '🔘 ویرایش دکمه خرید سرویس', "gbs|hub|{$bt_lang}|te", $bt_btn_custom)];
         } elseif ($bt_key === 'users.sell.service_sell') {
             $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه بستن', 'callback_data' => "gbs|hub|{$bt_lang}|sc", 'style' => 'primary']];
         } elseif ($bt_key === 'users.status.infoFull') {
             $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های صفحه‌ی وضعیت', 'callback_data' => "statusbtn|list|{$bt_lang}", 'style' => 'primary']];
         } elseif ($bt_key === 'users.Balance.chargeSuccess') {
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه تهیه اشتراک', 'callback_data' => "gbs|hub|{$bt_lang}|bc", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [$bt_live_row(genbtn_row_label($bt_key, $bt_lang), '🔘 ویرایش دکمه تهیه اشتراک', "gbs|hub|{$bt_lang}|bc", $bt_btn_custom)];
             $kb['inline_keyboard'][] = [['text' => '🎁 ویرایش متن بلوک تخفیف', 'callback_data' => "bt_edit|{$bt_lang}|users.Balance.chargeSuccessDiscount", 'style' => 'primary']];
         } elseif ($bt_key === 'textbot.channel') {
             $kb['inline_keyboard'][] = [['text' => '📯 ویرایش دکمه‌های کانال‌ها', 'callback_data' => "chnbtn_hub:{$bt_lang}", 'style' => 'primary']];
             $kb['inline_keyboard'][] = [['text' => '🚪 پیام و دکمه‌ی خروج از کانال', 'callback_data' => "bt_edit|{$bt_lang}|users.channel.left_channel", 'style' => 'primary']];
         } elseif ($bt_key === 'users.channel.left_channel') {
-            $kb['inline_keyboard'][] = [['text' => '📌 ویرایش دکمه عضویت مجدد', 'callback_data' => "gbs|hub|{$bt_lang}|lc", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [$bt_live_row(genbtn_row_label($bt_key, $bt_lang), '📌 ویرایش دکمه عضویت مجدد', "gbs|hub|{$bt_lang}|lc", $bt_btn_custom)];
         } elseif ($bt_key === 'users.extend.invoiceCreated') {
             $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های تأیید تمدید/بازگشت', 'callback_data' => "gbs|hub|{$bt_lang}|rn", 'style' => 'primary']];
-            $kb['inline_keyboard'][] = [['text' => '💰 ویرایش دکمه‌ی افزایش موجودی', 'callback_data' => "bt_edit|{$bt_lang}|users.Balance.insufficientBalanceSimple", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [$bt_live_row($bt_balance_live(), '💰 ویرایش دکمه‌ی افزایش موجودی', "bt_edit|{$bt_lang}|users.Balance.insufficientBalanceSimple", is_array($bt_be) && !empty($bt_be[$bt_lang]['users.Balance.insufficientBalanceSimple']))];
         } elseif ($bt_key === 'users.changeLink.warnchange') {
             $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های تغییر لینک', 'callback_data' => "gbs|hub|{$bt_lang}|cl", 'style' => 'primary']];
         } elseif ($bt_key === 'textbot.afterPay') {
-            $kb['inline_keyboard'][] = [['text' => '📚 ویرایش دکمه مشاهده آموزش', 'callback_data' => "gbs|hub|{$bt_lang}|ab", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [$bt_live_row(genbtn_row_label($bt_key, $bt_lang), '📚 ویرایش دکمه مشاهده آموزش', "gbs|hub|{$bt_lang}|ab", $bt_btn_custom)];
         } elseif ($bt_key === 'textbot.afterText') {
-            $kb['inline_keyboard'][] = [['text' => '📚 ویرایش دکمه مشاهده آموزش', 'callback_data' => "gbs|hub|{$bt_lang}|ut", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [$bt_live_row(genbtn_row_label($bt_key, $bt_lang), '📚 ویرایش دکمه مشاهده آموزش', "gbs|hub|{$bt_lang}|ut", $bt_btn_custom)];
         } elseif ($bt_key === 'users.help.listCaption') {
             // the one button under the tutorial list ('hb' alias, own-key trick)
             $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه بازگشت به دسته‌بندی', 'callback_data' => "gbs|hub|{$bt_lang}|hb", 'style' => 'primary']];
@@ -3742,7 +3756,11 @@ if (!function_exists('topup_gw_list_payload')) {
     {
         $rows = [];
         $shown = [];
-        foreach (gateway_registry($textbotlang) as $key => $label) {
+        // each row is the gateway as this tab's customer sees it: the tab's
+        // own name, with the name and emoji set in 🎨 ظاهر نمایش درگاه ها
+        $gwTexts = lang_tab_texts($lang);
+        $gwSection = help_layout_section($lang, 'gateway');
+        foreach (gateway_registry($gwTexts) as $key => $label) {
             if (!gateway_applicable_for_lang($key, $lang)) {
                 continue;
             }
@@ -3754,18 +3772,22 @@ if (!function_exists('topup_gw_list_payload')) {
                     continue;
                 }
                 $shown[$group] = true;
-                $rows[] = [[
-                    'text' => gateway_group_label($group, $textbotlang),
-                    'callback_data' => "topupgwgrp:{$lang}:{$group}",
-                    'style' => 'primary',
-                ]];
+                $gwBtn = topup_group_button($lang, $group, $gwTexts);
+                $gwBtn['callback_data'] = "topupgwgrp:{$lang}:{$group}";
+                $gwBtn['style'] = 'primary';
+                $rows[] = [$gwBtn];
                 continue;
             }
-            $rows[] = [[
-                'text' => $label,
+            $gwEmo = help_layout_emoji_prefix($key, $gwSection);
+            $gwBtn = [
+                'text' => $gwEmo['prefix'] . ($gwSection['rename'][$key] ?? $label),
                 'callback_data' => "topupgw:{$lang}:{$key}",
                 'style' => 'primary',
-            ]];
+            ];
+            if ($gwEmo['icon'] !== '') {
+                $gwBtn['icon_custom_emoji_id'] = $gwEmo['icon'];
+            }
+            $rows[] = [$gwBtn];
         }
         $rows[] = [['text' => $textbotlang['Admin']['GatewayLang']['backBtn'], 'callback_data' => "bt_group|{$lang}|topup", 'style' => 'danger']];
         $rows[] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']];
@@ -3836,7 +3858,7 @@ if (!function_exists('card_invoice_btnlayout_payload')) {
             $style = card_invoice_btnstyle_for($lang, $which);
             $label = trim((string) ($style['label'] ?? '')) !== ''
                 ? $style['label']
-                : card_invoice_copy_label($i + 1, $total, $textbotlang);
+                : card_invoice_copy_label($i + 1, $total, lang_tab_texts($lang));
             $btn = ['text' => $label];
             $color = card_invoice_btnstyle_color($lang, $which);
             if ($color !== '') {
@@ -5278,7 +5300,7 @@ if (!function_exists('topup_group_hub_payload')) {
         $rows = [];
         foreach (array_keys(gateway_groups()) as $group) {
             $style = topup_group_btnstyle_for($lang, $group);
-            $btn = topup_styled_button(gateway_group_label($group, $textbotlang), $style, "gwgrpcolpick:{$lang}:{$group}", 'primary');
+            $btn = topup_styled_button(gateway_group_label($group, lang_tab_texts($lang)), $style, "gwgrpcolpick:{$lang}:{$group}", 'primary');
             $color = (string) ($style['color'] ?? '');
             $btn['text'] .= ' ' . ($styleEmoji[$color !== '' ? $color : 'primary'] ?? '⚪');
             $rows[] = [$btn];
@@ -5291,7 +5313,7 @@ if (!function_exists('topup_group_hub_payload')) {
         $rows = [];
         foreach (array_keys(gateway_groups()) as $group) {
             $style = topup_group_btnstyle_for($lang, $group);
-            $btn = topup_styled_button(gateway_group_label($group, $textbotlang), $style, "gwgrprenpick:{$lang}:{$group}", 'primary');
+            $btn = topup_styled_button(gateway_group_label($group, lang_tab_texts($lang)), $style, "gwgrprenpick:{$lang}:{$group}", 'primary');
             if (trim((string) ($style['label'] ?? '')) !== '') {
                 $btn['text'] .= ' ✏️';
             }
@@ -7208,7 +7230,7 @@ if (preg_match('/^gbs\|(hub|lay|layp|layc|lays|layw|layr|col|colp|emo|emop|emos|
     $gs_origin = !empty($gs_m[5]) ? 'u' : '';
     $gs_sfx = ($gs_origin === 'u') ? '|u' : '';
     $gs_key = genbtn_alias_to_key($gs_alias);
-    $gs_defs = ($gs_key !== null) ? genbtn_defs($gs_alias, $textbotlang) : [];
+    $gs_defs = ($gs_key !== null) ? genbtn_defs($gs_alias, lang_tab_texts($gs_lang)) : [];
     if (empty($gs_defs)) {
         return;
     }
@@ -7383,7 +7405,7 @@ if (preg_match('/^gbtn\|[a-z]+\|([a-z]{2})\|([a-z]{2})(\|.*)?$/', $datain, $gb_m
     Editmessagetext($from_id, $message_id, $gb_text, $gb_kb, 'HTML');
     return;
 }
-if (preg_match('/^gbtntxt-([a-z]{2})-(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv|ab|ut|sp|ar|mg|sl)-([0-9])(?:-(u))?$/', (string) $user['step'], $gb_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtntxt-([a-z]{2})-(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv|ab|ut|sp|ar|mg|sl|lc)-([0-9])(?:-(u))?$/', (string) $user['step'], $gb_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     $gb_newtext = trim((string) $text);
     if ($gb_newtext !== '0' && ($gb_newtext === '' || mb_strlen($gb_newtext) > 64)) {
@@ -7404,7 +7426,7 @@ if (preg_match('/^gbtntxt-([a-z]{2})-(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|
     }
     return;
 }
-if (preg_match('/^gbtnemo-([a-z]{2})-(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv|ab|ut|ar|mg)-([0-9])(?:-(u))?$/', (string) $user['step'], $gb_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^gbtnemo-([a-z]{2})-(su|cf|ns|te|sc|bc|rn|cl|rc|rp|bu|tp|ac|ts|he|td|hb|hv|ab|ut|ar|mg|lc)-([0-9])(?:-(u))?$/', (string) $user['step'], $gb_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
     $gb_key = genbtn_alias_to_key($gb_m[2]);
     $gb_idx = (int) $gb_m[3];
     $gb_icon_id = '';
@@ -21771,7 +21793,7 @@ if ($datain == "linkappsetting") {
     if (!isset(gateway_groups()[$gg_m[2]])) {
         return;
     }
-    $gg_label = topup_styled_button(gateway_group_label($gg_m[2], $textbotlang), topup_group_btnstyle_for($gg_m[1], $gg_m[2]), '')['text'];
+    $gg_label = topup_styled_button(gateway_group_label($gg_m[2], lang_tab_texts($gg_m[1])), topup_group_btnstyle_for($gg_m[1], $gg_m[2]), '')['text'];
     $gg_cancelKb = json_encode(['inline_keyboard' => [
         [['text' => $textbotlang['Admin']['TopupPkg']['closePromptBtn'], 'callback_data' => "gwgrprencancel:{$gg_m[1]}:{$gg_m[2]}:{$message_id}", 'style' => 'danger']],
     ]]);

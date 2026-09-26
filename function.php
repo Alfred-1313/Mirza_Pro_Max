@@ -8591,7 +8591,7 @@ if (!function_exists('statusbtn_cat_payload')) {
         $defs = statusbtn_defs($textbotlang);
         $kb = ['inline_keyboard' => []];
         foreach ($defs as $key => $d) {
-            $rendered = statusbtn_render($lang, $key, $textbotlang);
+            $rendered = statusbtn_render($lang, $key, lang_tab_texts($lang));
             $hiddenMark = statusbtn_is_hidden($lang, $key) ? '🚫 ' : '';
             if ($cat === 'color') {
                 $kb['inline_keyboard'][] = [['text' => $hiddenMark . $rendered['text'], 'callback_data' => "statusbtn|colorcyc|{$lang}|{$key}", 'style' => $rendered['style']]];
@@ -8763,7 +8763,7 @@ if (!function_exists('statusbtn_layout_payload')) {
         ));
         $kb = ['inline_keyboard' => []];
         foreach ($orderedKeys as $idx => $key) {
-            $rendered = statusbtn_render($lang, $key, $textbotlang);
+            $rendered = statusbtn_render($lang, $key, lang_tab_texts($lang));
             $label = (statusbtn_is_hidden($lang, $key) ? '🚫 ' : '') . $rendered['text'];
             $isSel = ($selectedIdx !== null && (int) $selectedIdx === $idx);
             if ($isSel) {
@@ -8791,12 +8791,12 @@ if (!function_exists('statusbtn_detail_payload')) {
             return statusbtn_list_payload($lang, $textbotlang);
         }
         $d = $defs[$key];
-        $cur = statusbtn_current($lang, $key, $textbotlang);
+        $cur = statusbtn_current($lang, $key, lang_tab_texts($lang));
         $ov = statusbtn_override($lang, $key);
         $curPos = (isset($ov['pos']) && $ov['pos'] === 'left') ? 'left' : 'right';
         $curSimple = !empty($ov['simple']);
         $hasEmoji = !empty($ov['emoji']) || !empty($ov['emojiIcon']);
-        $previewBtn = statusbtn_render($lang, $key, $textbotlang);
+        $previewBtn = statusbtn_render($lang, $key, lang_tab_texts($lang));
         $previewBtn['callback_data'] = 'none';
         $info = "🔘 <b>ویرایش {$d['name']}</b>\n➖➖➖➖➖➖➖➖➖➖\n";
         if ($key === 'changestatus') {
@@ -11461,7 +11461,8 @@ if (!function_exists('usertest_selectUsername_kb')) {
 if (!function_exists('usertest_prompt_buttons_payload')) {
     function usertest_prompt_buttons_payload($lang, $textbotlang)
     {
-        $defs = usertest_prompt_button_defs($textbotlang);
+        // the tab's own button names, not the panel's Persian
+        $defs = usertest_prompt_button_defs(lang_tab_texts($lang));
         $info = "🔘 <b>دکمه‌های اکانت تست</b>\n➖➖➖➖➖➖➖➖➖➖\n";
         $info .= "این ۲ دکمه، زیر کپشن اکانت تست به کاربر نشون داده می‌شن.\n";
         $info .= "➖➖➖➖➖➖➖➖➖➖\n👁 پیش‌نمایش زنده - دقیقاً همینی که کاربر می‌بینه؛ روی هرکدوم بزن تا متن یا رنگش رو تغییر بدی 👇";
@@ -11481,7 +11482,7 @@ if (!function_exists('usertest_prompt_buttons_payload')) {
 if (!function_exists('usertest_prompt_button_detail_payload')) {
     function usertest_prompt_button_detail_payload($lang, $idx, $textbotlang)
     {
-        $defs = usertest_prompt_button_defs($textbotlang);
+        $defs = usertest_prompt_button_defs(lang_tab_texts($lang));
         $d = $defs[$idx] ?? $defs[0];
         $ov = usertest_prompt_button_override($lang, $idx);
         $curText = (isset($ov['text']) && $ov['text'] !== '') ? $ov['text'] : $d['text'];
@@ -11578,7 +11579,7 @@ if (!function_exists('balancebtn_kb')) {
 if (!function_exists('balancebtn_payload')) {
     function balancebtn_payload($lang, $textbotlang)
     {
-        $d = balancebtn_defs($textbotlang)[0];
+        $d = balancebtn_defs(lang_tab_texts($lang))[0];
         $ov = balancebtn_override($lang);
         $curText = (isset($ov['text']) && $ov['text'] !== '') ? $ov['text'] : $d['text'];
         $curStyle = (isset($ov['style']) && in_array($ov['style'], ['primary', 'success', 'danger'], true)) ? $ov['style'] : $d['style'];
