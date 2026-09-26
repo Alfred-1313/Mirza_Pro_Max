@@ -434,7 +434,7 @@ if ($user['joinchannel'] != "active") {
                     $Balance_add_user = $useraffiliates['Balance'] + $aff_giftamount;
                     update("user", "Balance", $Balance_add_user, "id", $affiliatesid);
                     $addbalancediscount = money($aff_giftamount, currency_for_user($useraffiliates));
-                    sendmessage($affiliatesid, strtr($textbotlang['users']['affiliates']['balanceGift'], ['{addbalancediscount}' => $addbalancediscount, '{from_id}' => $from_id]), null, 'html');
+                    sendmessage($affiliatesid, strtr(payer_texts($affiliatesid)['users']['affiliates']['balanceGift'], ['{addbalancediscount}' => $addbalancediscount, '{from_id}' => $from_id]), null, 'html');
                 }
                 sendmessage($from_id, strtr($textbotlang['users']['text_start'], bottext_user_placeholders($user, $from_id)), $keyboard, 'html');
                 $addcountaffiliates = intval($useraffiliates['affiliatescount']) + 1;
@@ -4730,15 +4730,15 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
                 $user_Balance = select("user", "*", "id", $user['affiliates'], "select");
                 $Balance_prim = $user_Balance['Balance'] + $result;
                 if (intval($setting['scorestatus']) == 1 and !in_array($user['affiliates'], $admin_ids)) {
-                    sendmessage($user['affiliates'], $textbotlang['users']['affiliates']['pointsEarned2Alt'], null, 'html');
+                    sendmessage($user['affiliates'], payer_texts($user['affiliates'])['users']['affiliates']['pointsEarned2Alt'], null, 'html');
                     $scorenew = $user_Balance['score'] + 2;
                     update("user", "score", $scorenew, "id", $user['affiliates']);
                 }
                 update("user", "Balance", $Balance_prim, "id", $user['affiliates']);
                 $result = money($result, currency_for_user($user_Balance));
                 $dateacc = date('Y/m/d H:i:s');
-                $textadd = sprintf($textbotlang['users']['affiliates']['commissionPaid'], $result);
-                $textreportport = sprintf($textbotlang['Admin']['reportgroup']['commissionPaid'], $result, $user['affiliates'], $from_id, $dateacc);
+                $textadd = sprintf(payer_texts($user['affiliates'])['users']['affiliates']['commissionPaid'], $result);
+                $textreportport = sprintf(panel_texts()['Admin']['reportgroup']['commissionPaid'], $result, $user['affiliates'], $from_id, $dateacc);
                 if (strlen($setting['Channel_Report']) > 0) {
                     telegram('sendmessage', [
                         'chat_id' => $setting['Channel_Report'],
@@ -4755,15 +4755,15 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
             $user_Balance = select("user", "*", "id", $user['affiliates'], "select");
             $Balance_prim = $user_Balance['Balance'] + $result;
             if (intval($setting['scorestatus']) == 1 and !in_array($user['affiliates'], $admin_ids)) {
-                sendmessage($user['affiliates'], $textbotlang['users']['affiliates']['pointsEarned2Alt'], null, 'html');
+                sendmessage($user['affiliates'], payer_texts($user['affiliates'])['users']['affiliates']['pointsEarned2Alt'], null, 'html');
                 $scorenew = $user_Balance['score'] + 2;
                 update("user", "score", $scorenew, "id", $user['affiliates']);
             }
             update("user", "Balance", $Balance_prim, "id", $user['affiliates']);
             $result = money($result, currency_for_user($user_Balance));
             $dateacc = date('Y/m/d H:i:s');
-            $textadd = sprintf($textbotlang['users']['affiliates']['commissionPaid2'], $result);
-            $textreportport = sprintf($textbotlang['Admin']['reportgroup']['commissionPaid2'], $result, $user['affiliates'], $from_id, $dateacc);
+            $textadd = sprintf(payer_texts($user['affiliates'])['users']['affiliates']['commissionPaid'], $result);
+            $textreportport = sprintf(panel_texts()['Admin']['reportgroup']['commissionPaid2'], $result, $user['affiliates'], $from_id, $dateacc);
             if (strlen($setting['Channel_Report']) > 0) {
                 telegram('sendmessage', [
                     'chat_id' => $setting['Channel_Report'],
@@ -6637,7 +6637,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     if (!is_array($diceResponse) || empty($diceResponse['ok']) || !isset($diceResponse['result']['dice']['value'])) {
         $errorContext = is_array($diceResponse) ? json_encode($diceResponse) : (is_string($diceResponse) ? $diceResponse : 'empty response');
         error_log('Failed to receive dice value for wheel_luck: ' . $errorContext);
-        sendmessage($from_id, $textbotlang['users']['wheelLuck']['error'] ?? $textbotlang['users']['wheelLuck']['resultError'], null, 'HTML');
+        sendmessage($from_id, $textbotlang['users']['wheelLuck']['resultError'], null, 'HTML');
         return;
     }
     $diceValue = (int) $diceResponse['result']['dice']['value'];
@@ -6674,7 +6674,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
             telegram('sendmessage', [
                 'chat_id' => $setting['Channel_Report'],
                 'message_thread_id' => $otherreport,
-                'text' => sprintf($textbotlang['users']['wheelLuck']['wheelWinner'], $username, $from_id),
+                'text' => sprintf(panel_texts()['users']['wheelLuck']['wheelWinner'], $username, $from_id),
                 'parse_mode' => "HTML"
             ]);
         }

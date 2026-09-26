@@ -957,47 +957,30 @@ function DirectPayment($order_id, $image = 'images.jpg')
         $stmt->bindParam(':name_product', $textbotlang['Admin']['adminphp']['db_test_service_name']);
         $stmt->execute();
         $countinvoice = $stmt->rowCount();
-        if ($affiliatescommission['status_commission'] == "oncommission" && ($Balance_id['affiliates'] != null && intval($Balance_id['affiliates']) != 0)) {
-            if ($marzbanporsant_one_buy['porsant_one_buy'] == "on_buy_porsant") {
-                if ($countinvoice <= 1) {
-                    $result = ($Payment_report['price'] * $setting['affiliatespercentage']) / 100;
-                    $user_Balance = select("user", "*", "id", $Balance_id['affiliates'], "select");
-                    if (intval($setting['scorestatus']) == 1 and !in_array($Balance_id['affiliates'], $admin_ids)) {
-                        sendmessage($Balance_id['affiliates'], $textbotlang['extracted']['index_php']['earned2Points'], null, 'html');
-                        $scorenew = $user_Balance['score'] + 2;
-                        update("user", "score", $scorenew, "id", $Balance_id['affiliates']);
-                    }
-                    $Balance_prim = $user_Balance['Balance'] + $result;
-                    $dateacc = date('Y/m/d H:i:s');
-                    update("user", "Balance", $Balance_prim, "id", $Balance_id['affiliates']);
-                    $result = number_format($result);
-                    $textadd = sprintf($textbotlang['hardcoded']['affiliateCommissionPaidUserFn'], $result);
-                    $textreportport = sprintf($textbotlang['hardcoded']['affiliateCommissionPaidLogFn'], $result, $Balance_id['affiliates'], $Balance_id['id'], $dateacc);
-                    if (strlen($setting['Channel_Report']) > 0) {
-                        telegram('sendmessage', [
-                            'chat_id' => $setting['Channel_Report'],
-                            'message_thread_id' => $porsantreport,
-                            'text' => $textreportport,
-                            'parse_mode' => "HTML"
-                        ]);
-                    }
-                    sendmessage($Balance_id['affiliates'], $textadd, null, 'HTML');
-                }
-            } else {
-
-                $result = ($Payment_report['price'] * $setting['affiliatespercentage']) / 100;
-                $user_Balance = select("user", "*", "id", $Balance_id['affiliates'], "select");
-                if (intval($setting['scorestatus']) == 1 and !in_array($Balance_id['affiliates'], $admin_ids)) {
-                    sendmessage($Balance_id['affiliates'], $textbotlang['extracted']['index_php']['earned2Points'], null, 'html');
+        // The commission goes to the referrer, so it follows the referrer's own
+        // language: its on/off, first-purchase-only and percent settings, and
+        // its texts - the rules a purchase paid from the wallet (index.php)
+        // already used. This one read the old shared values and sent a text
+        // 🎨 could not edit, in whatever language the request ran in.
+        $dp_refId = ($Balance_id['affiliates'] != null && intval($Balance_id['affiliates']) != 0) ? $Balance_id['affiliates'] : null;
+        $dp_refLang = $dp_refId !== null ? (select("user", "*", "id", $dp_refId, "select")['lang'] ?? 'fa') : 'fa';
+        if ($dp_refId !== null && feature_setting_value('aff_commission', $dp_refLang, $affiliatescommission['status_commission']) == "oncommission") {
+            $dp_firstOnly = feature_setting_value('aff_firstbuy', $dp_refLang, $marzbanporsant_one_buy['porsant_one_buy']) == "on_buy_porsant";
+            if (!$dp_firstOnly || $countinvoice <= 1) {
+                $dp_refTexts = payer_texts($dp_refId);
+                $result = ($Payment_report['price'] * feature_setting_value('aff_percent', $dp_refLang, $setting['affiliatespercentage'])) / 100;
+                $user_Balance = select("user", "*", "id", $dp_refId, "select");
+                if (intval($setting['scorestatus']) == 1 and !in_array($dp_refId, $admin_ids)) {
+                    sendmessage($dp_refId, $dp_refTexts['users']['affiliates']['pointsEarned2Alt'], null, 'html');
                     $scorenew = $user_Balance['score'] + 2;
-                    update("user", "score", $scorenew, "id", $Balance_id['affiliates']);
+                    update("user", "score", $scorenew, "id", $dp_refId);
                 }
                 $Balance_prim = $user_Balance['Balance'] + $result;
                 $dateacc = date('Y/m/d H:i:s');
-                update("user", "Balance", $Balance_prim, "id", $Balance_id['affiliates']);
-                $result = number_format($result);
-                $textadd = sprintf($textbotlang['hardcoded']['affiliateCommissionPaidUserFn2'], $result);
-                $textreportport = sprintf($textbotlang['hardcoded']['affiliateCommissionPaidLogFn2'], $result, $Balance_id['affiliates'], $Balance_id['id'], $dateacc);
+                update("user", "Balance", $Balance_prim, "id", $dp_refId);
+                $result = money($result, currency_for_user($user_Balance));
+                $textadd = sprintf($dp_refTexts['users']['affiliates']['commissionPaid'], $result);
+                $textreportport = sprintf(panel_texts()['hardcoded'][$dp_firstOnly ? 'affiliateCommissionPaidLogFn' : 'affiliateCommissionPaidLogFn2'], $result, $dp_refId, $Balance_id['id'], $dateacc);
                 if (strlen($setting['Channel_Report']) > 0) {
                     telegram('sendmessage', [
                         'chat_id' => $setting['Channel_Report'],
@@ -1006,7 +989,7 @@ function DirectPayment($order_id, $image = 'images.jpg')
                         'parse_mode' => "HTML"
                     ]);
                 }
-                sendmessage($Balance_id['affiliates'], $textadd, null, 'HTML');
+                sendmessage($dp_refId, $textadd, null, 'HTML');
             }
         }
         if (username_method_is($marzban_list_get['MethodUsername'], 'keyboard.customTextSequential') || username_method_is($marzban_list_get['MethodUsername'], 'keyboard.usernameSequential') || username_method_is($marzban_list_get['MethodUsername'], 'keyboard.numericIdSequential') || username_method_is($marzban_list_get['MethodUsername'], 'keyboard.agentCustomTextSequential')) {
@@ -1047,7 +1030,7 @@ function DirectPayment($order_id, $image = 'images.jpg')
             ]);
         }
         if (intval($setting['scorestatus']) == 1 and !in_array($Balance_id['id'], $admin_ids)) {
-            sendmessage($Balance_id['id'], $textbotlang['extracted']['index_php']['earned1Point'], null, 'html');
+            sendmessage($Balance_id['id'], payer_texts($Balance_id['id'])['users']['affiliates']['pointsEarned1Alt'], null, 'html');
             $scorenew = $Balance_id['score'] + 1;
             update("user", "score", $scorenew, "id", $Balance_id['id']);
         }
@@ -1143,7 +1126,7 @@ function DirectPayment($order_id, $image = 'images.jpg')
         $textextend = sprintf($textbotlang['hardcoded']['renewServiceSuccessFn'], $usernamepanel, $prodcut['name_product'], $priceproductformat);
         sendmessage($Balance_id['id'], $textextend, $keyboardextendfnished, 'HTML');
         if (intval($setting['scorestatus']) == 1 and !in_array($Balance_id['id'], $admin_ids)) {
-            sendmessage($Balance_id['id'], $textbotlang['extracted']['index_php']['earned2Points'], null, 'html');
+            sendmessage($Balance_id['id'], payer_texts($Balance_id['id'])['users']['affiliates']['pointsEarned2Alt'], null, 'html');
             $scorenew = $Balance_id['score'] + 2;
             update("user", "score", $scorenew, "id", $Balance_id['id']);
         }
@@ -1215,7 +1198,7 @@ function DirectPayment($order_id, $image = 'images.jpg')
         ]);
         $volumesformat = number_format($Payment_report['price'], 0);
         if (intval($setting['scorestatus']) == 1 and !in_array($Balance_id['id'], $admin_ids)) {
-            sendmessage($Balance_id['id'], $textbotlang['extracted']['index_php']['earned1Point'], null, 'html');
+            sendmessage($Balance_id['id'], payer_texts($Balance_id['id'])['users']['affiliates']['pointsEarned1Alt'], null, 'html');
             $scorenew = $Balance_id['score'] + 1;
             update("user", "score", $scorenew, "id", $Balance_id['id']);
         }
@@ -1290,7 +1273,7 @@ function DirectPayment($order_id, $image = 'images.jpg')
         ]);
         $volumesformat = number_format($Payment_report['price']);
         if (intval($setting['scorestatus']) == 1 and !in_array($Balance_id['id'], $admin_ids)) {
-            sendmessage($Balance_id['id'], $textbotlang['extracted']['index_php']['earned1Point'], null, 'html');
+            sendmessage($Balance_id['id'], payer_texts($Balance_id['id'])['users']['affiliates']['pointsEarned1Alt'], null, 'html');
             $scorenew = $Balance_id['score'] + 1;
             update("user", "score", $scorenew, "id", $Balance_id['id']);
         }
@@ -11198,10 +11181,11 @@ if (!function_exists('genbtn_hub_payload')) {
 
     // Button-only items whose screen quotes the button's current name, so an
     // admin can see what it actually says in the tab they are on before
-    // touching it. The 🛒 buy-flow back/close buttons; extend here.
+    // touching it: every standalone button of bt_btnitem_keys() - the 🛒
+    // back/close buttons, the other sections' close buttons and the 🎯 ones.
     function genbtn_preview_aliases()
     {
-        return ['rc', 'rp', 'bu'];
+        return ['rc', 'rp', 'bu', 'tp', 'ac', 'ts', 'he', 'sp', 'ar', 'mg', 'sl'];
     }
     // The button exactly as this language's customer receives it - built by
     // genbtn_render(), the same function that builds the real one, so rename,
