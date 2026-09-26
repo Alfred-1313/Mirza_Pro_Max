@@ -9094,7 +9094,7 @@ if (!function_exists('config_delivery_panel_payload')) {
     // 'media' = its sticker/reaction, 'buttons' = its custom buttons (and the
     // config-column settings the usertest item owns). Defaults to all three,
     // so the per-item and per-group resets that call this are unchanged.
-    function bottext_reset_keys(array $keys, $lang, array $parts = ['text', 'media', 'buttons'])
+    function bottext_reset_keys(array $keys, $lang, array $parts = ['text', 'media', 'buttons'], $keepShared = false)
     {
         $doText = in_array('text', $parts, true);
         $doMedia = in_array('media', $parts, true);
@@ -9128,7 +9128,7 @@ if (!function_exists('config_delivery_panel_payload')) {
                 bt_media_unset($layout['text_reactions'], $key, $lang);
             }
             if ($doButtons) {
-                $be = genbtn_clear_entry($be, $lang, $key);
+                $be = genbtn_clear_entry($be, $lang, $key, null, $keepShared);
                 if ($key === 'users.usertest.selectUsernamePrompt') {
                     // this item also owns the config-column display settings
                     unset($be[$lang]['configDisplay']);
@@ -9496,7 +9496,7 @@ if (!function_exists('bt_reset_counts')) {
             if (is_array($te) && isset($te[$lang]) && bottext_dotted_isset($te[$lang], $k)) {
                 $c['msg_text']++;
             }
-            if (bt_media_lookup($st, $k, $lang) !== '' || bt_media_lookup($re, $k, $lang) !== '') {
+            if (bt_media_lookup_own($st, $k, $lang) !== '' || bt_media_lookup_own($re, $k, $lang) !== '') {
                 $c['msg_media']++;
             }
             if (is_array($be) && !empty($be[$lang][$k])) {
@@ -9573,7 +9573,8 @@ if (!function_exists('bt_reset_picker_payload')) {
                 $selectedCount += $counts[$name];
             }
         }
-        $info = "🔁 <b>ریست به پیش‌فرض</b>\n➖➖➖➖➖➖➖➖➖➖\n";
+        $info = "🔁 <b>ریست به پیش‌فرض</b>" . mainmenu_tab_note($lang) . "\n➖➖➖➖➖➖➖➖➖➖\n";
+        $info .= "📌 فقط تنظیمات همین تب ریست می‌شه. تنظیمات مشترک بین همه‌ی زبان‌ها (ظاهر دکمه‌های 🔋، ظاهر دکمه‌ی پیام اتمام اکانت تست، 🌐 تغییر زبان و 🛡 دسترسی ادمین) دست نمی‌خورن.\n\n";
         if ($total === 0) {
             $info .= "✨ هیچ تنظیم سفارشی‌ای پیدا نشد - همه‌چیز همین الان روی حالت پیش‌فرضه.\n";
         } else {
@@ -9627,10 +9628,12 @@ if (!function_exists('bt_reset_apply_mask')) {
             $parts[] = 'buttons';
         }
         if (!empty($parts)) {
-            bottext_reset_keys(bottext_all_item_keys($textbotlang), $lang, $parts);
+            bottext_reset_keys(bottext_all_item_keys($textbotlang), $lang, $parts, true);
         }
         if ($mask & $sections['warnings']['bit']) {
-            volumepct_tiers_reset_all_style($lang, null);
+            // the tab's own wording, label and sticker - the warnings' button
+            // looks are every tab's, so they stay
+            volumepct_tiers_reset_all_style($lang, null, false);
         }
         $mmParts = [];
         if ($mask & $sections['mm_sticker']['bit']) {
@@ -10574,8 +10577,9 @@ if (!function_exists('genbtn_override')) {
         return ['style', 'emoji', 'emojiIcon', 'pos', 'simple', 'hidden'];
     }
     // $be with $key's buttons reset on $lang's tab: its own text, and - for a
-    // shared-look key - the look every tab shares
-    function genbtn_clear_entry(array $be, $lang, $key, $idx = null)
+    // shared-look key - the look every tab shares, unless $keepSharedLook
+    // (🔁 ریست همه resets one tab, and that look is no tab's own)
+    function genbtn_clear_entry(array $be, $lang, $key, $idx = null, $keepSharedLook = false)
     {
         if (!in_array($key, genbtn_shared_look_keys(), true)) {
             if ($idx === null) {
@@ -10589,7 +10593,7 @@ if (!function_exists('genbtn_override')) {
                     unset($be[$lang][$key][$i]['text']);
                 }
             }
-            foreach (array_keys((array) ($be['fa'][$key] ?? [])) as $i) {
+            foreach ($keepSharedLook ? [] : array_keys((array) ($be['fa'][$key] ?? [])) as $i) {
                 if (is_array($be['fa'][$key][$i]) && ($idx === null || (int) $i === (int) $idx)) {
                     foreach (genbtn_look_fields() as $f) {
                         unset($be['fa'][$key][$i][$f]);
@@ -15218,7 +15222,8 @@ if (!function_exists('admin_perm_payload')) {
         $testFree = (string) ($setting['admin_test_unlimited'] ?? '1') !== '0';
         $buyFree = (string) ($setting['admin_buy_free'] ?? '0') === '1';
         $info = "🛡 <b>دسترسی ادمین</b>\n➖➖➖➖➖➖➖➖➖➖\n";
-        $info .= "این تنظیمات فقط روی حساب ادمین‌ها اثر داره، نه کاربرها.\n\n";
+        $info .= "این تنظیمات فقط روی حساب ادمین‌ها اثر داره، نه کاربرها.\n";
+        $info .= "📌 بین همه‌ی زبان‌ها مشترکه - از هر تبی باز بشه همین یکیه.\n\n";
         $info .= "🔑 <b>اکانت تست بدون محدودیت:</b> " . ($testFree ? "روشن ✅" : "خاموش ❌") . "\n";
         $info .= ($testFree ? "ادمین هر چندتا بخواد اکانت تست می‌گیره." : "ادمین هم مثل کاربرها محدودیت تعداد اکانت تست داره.") . "\n\n";
         $info .= "🛍 <b>خرید رایگان:</b> " . ($buyFree ? "روشن ✅" : "خاموش ❌") . "\n";
@@ -16158,12 +16163,22 @@ if (!function_exists('bt_media_set')) {
 if (!function_exists('bt_media_unset')) {
     function bt_media_unset(&$map, $key, $lang)
     {
-        if (isset($map[$key]) && is_array($map[$key])) {
-            unset($map[$key][$lang]);
-            if (empty($map[$key])) {
-                unset($map[$key]);
-            }
-        } else {
+        // one set before stickers were per language belongs to every tab: it
+        // stays theirs, and this tab alone goes without
+        if (isset($map[$key]) && !is_array($map[$key])) {
+            $map[$key] = ['_default' => $map[$key]];
+        }
+        if (!isset($map[$key]) || !is_array($map[$key])) {
+            return;
+        }
+        if (isset($map[$key]['_default'])) {
+            // "none here" has to be said out loud, or this tab would simply
+            // inherit the shared one again
+            $map[$key][$lang] = '';
+            return;
+        }
+        unset($map[$key][$lang]);
+        if (empty($map[$key])) {
             unset($map[$key]);
         }
     }
