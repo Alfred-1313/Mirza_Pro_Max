@@ -7747,6 +7747,18 @@ if (!function_exists('user_lang_where')) {
         return (float) $st->fetchColumn();
     }
 }
+if (!function_exists('um_bcast_wrap')) {
+    // a broadcast as a customer gets it: the admin's text in that language's
+    // 🎨 wrapping ({message}); a wrapping that lost {message} gets the text
+    // under it rather than dropping it
+    function um_bcast_wrap(array $texts, $message)
+    {
+        $tpl = (string) ($texts['users']['broadcast']['message'] ?? '{message}');
+        return strpos($tpl, '{message}') !== false
+            ? str_replace('{message}', (string) $message, $tpl)
+            : trim($tpl) . "\n\n" . $message;
+    }
+}
 if (!function_exists('money_normalize')) {
     // Accepts Persian/Arabic digits and both decimal separators, returns a bare
     // canonical numeric string, or null when the input is not a valid amount.

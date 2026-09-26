@@ -54,10 +54,7 @@ $keyboardaddbalance = $bm_btn('b6');
 // its own and goes as it is
 $bm_hint = !empty($info['hint']) ? $info['hint'] : 'users.broadcast.message';
 if (empty($info['hint']) && ($info['type'] == "sendmessage" or $info['type'] == "xdaynotmessage")) {
-    $bm_tpl = (string) ($bm_tx['users']['broadcast']['message'] ?? '{message}');
-    $info['message'] = strpos($bm_tpl, '{message}') !== false
-        ? str_replace('{message}', (string) $info['message'], $bm_tpl)
-        : trim($bm_tpl) . "\n\n" . $info['message'];
+    $info['message'] = um_bcast_wrap($bm_tx, $info['message']);
 }
 // a forwarded message cannot be wrapped, but its sticker can go before it
 $bm_fwdSticker = '';

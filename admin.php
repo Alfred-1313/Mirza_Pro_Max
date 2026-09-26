@@ -269,6 +269,64 @@ if (!function_exists('um_tab')) {
         }
         return [$w, $p];
     }
+    // what 🎨 has for one of this section's messages on a tab
+    function um_item_sticker($key, $lang)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $layout = json_decode((string) ($setting['keyboardmain'] ?? ''), true);
+        $map = (is_array($layout) && is_array($layout['text_stickers'] ?? null)) ? $layout['text_stickers'] : [];
+        return function_exists('bt_effective_sticker') ? (string) bt_effective_sticker($map, $key, $lang) : '';
+    }
+    function um_item_custom_text($key, $lang)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $te = json_decode((string) ($setting['text_edit'] ?? ''), true);
+        return is_array($te) && bottext_dotted_isset($te[$lang] ?? null, $key);
+    }
+    // 👁 a message exactly as a customer of $lang gets it: 🎨's text, its
+    // button as 🎨 has it (tapping it here only says it is a preview), and a
+    // word on what else 🎨 sends with it
+    function um_preview_payload($lang, $key, $text, $alias, $textbotlang)
+    {
+        $t = $textbotlang['Admin']['UserMgmt'];
+        $notes = [um_item_custom_text($key, $lang) ? $t['previewCustomText'] : $t['previewDefaultText']];
+        $notes[] = um_item_sticker($key, $lang) !== '' ? $t['previewSticker'] : $t['previewNoSticker'];
+        $kb = null;
+        if ($alias !== null) {
+            $bkey = genbtn_alias_to_key($alias);
+            $btn = genbtn_render(genbtn_defs($alias, lang_tab_texts($lang))[0], genbtn_override($lang, $bkey, 0), 'umprev');
+            $kb = json_encode(['inline_keyboard' => [[$btn]]]);
+            if (in_array($alias, genbtn_tap_sticker_aliases(), true) && genbtn_tap_sticker($lang, $bkey) !== '') {
+                $notes[] = $t['previewTapSticker'];
+            }
+        }
+        $cap = strtr($t['previewHead'], ['{lang}' => um_lang_name($lang, $textbotlang)])
+            . "\n➖➖➖➖➖➖➖➖➖➖\n" . $text
+            . "\n➖➖➖➖➖➖➖➖➖➖\n" . implode("\n", $notes);
+        return [$cap, $kb];
+    }
+    // "📨 what the user (English) got:" and the text itself, under a report
+    function um_sent_quote($userRow, $sent, $textbotlang)
+    {
+        $l = in_array($userRow['lang'] ?? '', panel_langs(), true) ? $userRow['lang'] : 'fa';
+        return "\n\n" . strtr($textbotlang['Admin']['UserMgmt']['sentHead'], ['{lang}' => um_lang_name($l, $textbotlang)]) . "\n<blockquote>" . $sent . '</blockquote>';
+    }
+    // what 🎨 has for a tab's broadcasts, in a few words
+    function um_bcast_settings($lang, $textbotlang)
+    {
+        $t = $textbotlang['Admin']['UserMgmt'];
+        $n = 0;
+        foreach (['b1', 'b2', 'b3', 'b4', 'b5', 'b6'] as $al) {
+            if (!empty(genbtn_override($lang, genbtn_alias_to_key($al), 0))) {
+                $n++;
+            }
+        }
+        return strtr($t['bcSettings'], [
+            '{tpl}' => um_item_custom_text('users.broadcast.message', $lang) ? $t['setCustom'] : $t['setDefault'],
+            '{sticker}' => um_item_sticker('users.broadcast.message', $lang) !== '' ? $t['setSticker'] : $t['setNoSticker'],
+            '{buttons}' => $n > 0 ? strtr($t['setButtons'], ['{n}' => $n]) : $t['setDefault'],
+        ]);
+    }
     // "send the amount in dollars (0.5 works too)" - the question for an amount
     // in $currency, with the tab and, for one user, what they have now
     function um_amount_ask($tpl, $lang, $currency, $balanceText, $textbotlang)
@@ -9726,7 +9784,7 @@ elseif ($datain == "systemsms") {
             ],
         ]
     ]);
-    Editmessagetext($from_id, $message_id, strtr($textbotlang['Admin']['UserMgmt']['msgCaption'], ['{lang}' => um_lang_name(um_tab($user), $textbotlang)]), $listbtn, 'HTML');
+    Editmessagetext($from_id, $message_id, strtr($textbotlang['Admin']['UserMgmt']['msgCaption'], ['{lang}' => um_lang_name(um_tab($user), $textbotlang), '{settings}' => um_bcast_settings(um_tab($user), $textbotlang)]), $listbtn, 'HTML');
 } elseif (preg_match('/^typeservice-(\w+)/', $datain, $dataget)) {
     $type = $dataget[1];
     savedata("clear", "typeservice", $type);
@@ -9996,6 +10054,13 @@ elseif ($datain == "systemsms") {
             ],
         ]
     ]);
+    // 👁 the message as this tab's customers will get it, before it goes
+    if ($userdata['typeservice'] != "forwardmessage") {
+        $pv_lang = in_array($userdata['lang'] ?? '', panel_langs(), true) ? $userdata['lang'] : um_tab($user);
+        $pv_alias = ['buy' => 'b1', 'start' => 'b2', 'usertestbtn' => 'b3', 'helpbtn' => 'b4', 'affiliatesbtn' => 'b5', 'addbalance' => 'b6'][$userdata['btntypemessage'] ?? 'none'] ?? null;
+        list($pv_cap, $pv_kb) = um_preview_payload($pv_lang, 'users.broadcast.message', um_bcast_wrap(lang_tab_texts($pv_lang), $text), $pv_alias, $textbotlang);
+        sendmessage($from_id, $pv_cap, $pv_kb, 'HTML');
+    }
     sendmessage($from_id, $textconfirm, $startaction, 'HTML');
     sendmessage($from_id, $textbotlang['Admin']['messageBulk']['confirmStart'], $keyboardadmin, 'HTML');
     step("home", $from_id);
@@ -10075,6 +10140,12 @@ elseif ($datain == "systemsms") {
         savedata("save", "text", $text);
         savedata("save", "type", "text");
     }
+    // 👁 as that user will get it (the reply button shows only if allowed)
+    $pv_to = json_decode((string) $user['Processing_value'], true)['iduser'] ?? '';
+    $pv_row = select("user", "*", "id", $pv_to, "select");
+    $pv_lang = in_array($pv_row['lang'] ?? '', panel_langs(), true) ? $pv_row['lang'] : 'fa';
+    list($pv_cap, $pv_kb) = um_preview_payload($pv_lang, 'users.support.messageFromAdminAlt', sprintf(lang_tab_texts($pv_lang)['users']['support']['messageFromAdminAlt'], $photo ? $caption : $text), 'ma', $textbotlang);
+    sendmessage($from_id, $pv_cap, $pv_kb, 'HTML');
     $textb = $textbotlang['Admin']['messageBulk']['askAllowReply'];
     sendmessage($from_id, $textb, $backadmin, 'HTML');
     step('sendmessagetid', $from_id);
@@ -13566,6 +13637,11 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
 } elseif (preg_match('/typecustomer_(\w+)/', $datain, $dataget)) {
     $typecustomer = $dataget[1];
     savedata("save", "typecustomer", $typecustomer);
+    // 👁 the gift message, as this tab's customers would get it
+    $pv_data = json_decode((string) $user['Processing_value'], true) ?: [];
+    $pv_lang = in_array($pv_data['lang'] ?? '', panel_langs(), true) ? $pv_data['lang'] : um_tab($user);
+    list($pv_cap, $pv_kb) = um_preview_payload($pv_lang, 'users.Balance.giftFromManagement', sprintf(lang_tab_texts($pv_lang)['users']['Balance']['giftFromManagement'], money($pv_data['price'] ?? 0, currency_for_lang($pv_lang), false)), 'b2', $textbotlang);
+    sendmessage($from_id, $pv_cap, $pv_kb, 'HTML');
     sendmessage($from_id, $textbotlang['Admin']['Balance']['askNotify'], $backadmin, 'HTML');
     step("getmeesagestatus", $from_id);
 } elseif ($user['step'] == "getmeesagestatus") {
@@ -13641,12 +13717,14 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
         sendmessage($from_id, $textbotlang['Admin']['UserMgmt']['maxAmount'], $backadmin, 'HTML');
         return;
     }
-    sendmessage($from_id, $textbotlang['Admin']['Balance']['negativeBalanceUser'], $keyboardadmin, 'HTML');
-    // from the wallet the user is on, told in their own words and currency
+    // from the wallet the user is on, told in their own words and currency -
+    // and the admin sees that very text
+    $nb_sent = sprintf(payer_texts($user['Processing_value'])['users']['Balance']['deductedNotice'], money($nb_amount, $nb_cur, false));
+    sendmessage($from_id, $textbotlang['Admin']['Balance']['negativeBalanceUser'] . um_sent_quote($Balance_usersa, $nb_sent, $textbotlang), $keyboardadmin, 'HTML');
     $Balance_user_afters = money(wallet_credit($user['Processing_value'], -(float) $nb_amount, $nb_cur), $nb_cur);
     $text = money($nb_amount, $nb_cur);
     bottext_extras_key_hint('users.Balance.deductedNotice');
-    sendmessage($user['Processing_value'], sprintf(payer_texts($user['Processing_value'])['users']['Balance']['deductedNotice'], money($nb_amount, $nb_cur, false)), null, 'HTML');
+    sendmessage($user['Processing_value'], $nb_sent, null, 'HTML');
     step('home', $from_id);
     if (strlen($setting['Channel_Report']) > 0) {
         $textaddbalance = sprintf($textbotlang['Admin']['reportgroup']['balanceDecreased'], $username, $from_id, $user['Processing_value'], $text, $Balance_user_afters);
@@ -14499,6 +14577,8 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     } else {
         sendmessage($from_id, um_hub_caption($um_lang, $textbotlang), um_hub_payload($um_lang, $textbotlang, $adminrulecheck['rule'] == "administrator"), 'HTML');
     }
+} elseif ($datain == "umprev") {
+    telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $textbotlang['Admin']['UserMgmt']['previewAlert'], 'show_alert' => false]);
 } elseif (preg_match('/^uml:([a-z_0-9]+):(\d+)$/', $datain, $um_m)) {
     [$um_cap, $um_kb] = um_list_payload($um_m[1], um_tab($user), (int) $um_m[2], $textbotlang);
     Editmessagetext($from_id, $message_id, $um_cap, $um_kb, 'HTML');
@@ -14604,10 +14684,12 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice,currency) VALUES (?,?,?,?,?,?,?,?)");
     $stmt->execute([$ab_id, bin2hex(random_bytes(5)), date('Y/m/d H:i:s'), $ab_amount, "paid", "add balance by admin", null, $ab_cur]);
     $ab_after = wallet_credit($ab_id, (float) $ab_amount, $ab_cur);
-    sendmessage($from_id, $textbotlang['Admin']['manageUser']['addBalanced'], $keyboardadmin, 'html');
-    // told in their own language, the amount in their own currency
+    // told in their own language, the amount in their own currency - and the
+    // admin sees that very text
+    $ab_sent = sprintf(payer_texts($ab_id)['users']['Balance']['addedNotice'], money($ab_amount, $ab_cur, false));
+    sendmessage($from_id, $textbotlang['Admin']['manageUser']['addBalanced'] . um_sent_quote($ab_row, $ab_sent, $textbotlang), $keyboardadmin, 'html');
     bottext_extras_key_hint('users.Balance.addedNotice');
-    sendmessage($ab_id, sprintf(payer_texts($ab_id)['users']['Balance']['addedNotice'], money($ab_amount, $ab_cur, false)), null, 'HTML');
+    sendmessage($ab_id, $ab_sent, null, 'HTML');
     step('home', $from_id);
     if (strlen($setting['Channel_Report']) > 0) {
         telegram('sendmessage', [
@@ -14652,10 +14734,12 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice,currency) VALUES (?,?,?,?,?,?,?,?)");
     $stmt->execute([$ab_id, bin2hex(random_bytes(5)), date('Y/m/d H:i:s'), $ab_amount, "paid", "low balance by admin", null, $ab_cur]);
     $ab_after = wallet_credit($ab_id, -(float) $ab_amount, $ab_cur);
-    sendmessage($from_id, $textbotlang['Admin']['manageUser']['lowBalanced'], $keyboardadmin, 'html');
-    // told in their own language, the amount in their own currency
+    // told in their own language, the amount in their own currency - and the
+    // admin sees that very text
+    $ab_sent = sprintf(payer_texts($ab_id)['users']['Balance']['deductedNotice2'], money($ab_amount, $ab_cur, false));
+    sendmessage($from_id, $textbotlang['Admin']['manageUser']['lowBalanced'] . um_sent_quote($ab_row, $ab_sent, $textbotlang), $keyboardadmin, 'html');
     bottext_extras_key_hint('users.Balance.deductedNotice2');
-    sendmessage($ab_id, sprintf(payer_texts($ab_id)['users']['Balance']['deductedNotice2'], money($ab_amount, $ab_cur, false)), null, 'HTML');
+    sendmessage($ab_id, $ab_sent, null, 'HTML');
     step('home', $from_id);
     if (strlen($setting['Channel_Report']) > 0) {
         telegram('sendmessage', [
