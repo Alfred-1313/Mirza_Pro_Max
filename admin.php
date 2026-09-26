@@ -21,6 +21,18 @@ $domainhostsEscaped = htmlspecialchars($domainhosts, ENT_QUOTES | ENT_SUBSTITUTE
 
 $miniAppInstructionText = sprintf($textbotlang['Admin']['webpanel']['miniAppHelp'], $domainhostsEscaped);
 
+// 🎨's editors ask for a name, an emoji or a sticker in a message of the
+// admin's own. The ask - and its "send it again" reply - comes with this inline
+// cancel, not $backadmin: a reply keyboard replaces the admin's own bottom
+// keyboard and stayed there after the answer was saved, until one of its two
+// buttons was tapped to get the real one back.
+$btpromptcancel = json_encode(['inline_keyboard' => [[['text' => '❌ انصراف', 'callback_data' => 'btpromptcancel', 'style' => 'danger']]]]);
+if ($datain === 'btpromptcancel' && $adminrulecheck['rule'] == "administrator") {
+    step('home', $from_id);
+    deletemessage($from_id, $message_id);
+    return;
+}
+
 //----------------[  main-menu button settings: glass hub screens  ]----------------
 // top hub + the color/emoji sub-hubs, converted from the old reply-keyboard
 // chain to inline so every screen in this tree carries its own back/close
@@ -6237,7 +6249,7 @@ if (preg_match('/^closestickerwait2:([a-z]{2}):([a-z]{2})$/', (string) $user['st
     $cs_key = close_sticker_alias_to_key($cs_m[2]);
     $cs_fileid = $update['message']['sticker']['file_id'] ?? '';
     if ($cs_key === null || $cs_fileid === '') {
-        sendmessage($from_id, "⚠️ لطفاً یه استیکر بفرست (هر نوع استیکری قابل قبوله) 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ لطفاً یه استیکر بفرست (هر نوع استیکری قابل قبوله) 😅", $btpromptcancel, 'HTML');
         return;
     }
     close_sticker_save($cs_key, ['file_id' => $cs_fileid]);
@@ -6256,7 +6268,7 @@ if (preg_match('/^closestickertime2:([a-z]{2}):([a-z]{2})$/', (string) $user['st
     $cs_key = close_sticker_alias_to_key($cs_m[2]);
     $cs_text = trim((string) $text);
     if ($cs_key === null || !ctype_digit($cs_text) || (int) $cs_text < 1 || (int) $cs_text > 10) {
-        sendmessage($from_id, "⚠️ یه عدد بین ۱ تا ۱۰ بفرست 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ یه عدد بین ۱ تا ۱۰ بفرست 😅", $btpromptcancel, 'HTML');
         return;
     }
     close_sticker_save($cs_key, ['duration' => (int) $cs_text]);
@@ -6293,7 +6305,7 @@ if (preg_match('/^btnemoji-([a-z]{2})-(\d+)-(\d+)$/', $datain, $es_match) && $ad
     // the tab travels in the step too - the emoji arrives in a later message,
     // by which time the callback that started this is long gone
     step("setemoji-{$es_match[1]}-{$es_match[2]}-{$es_match[3]}", $from_id);
-    sendmessage($from_id, "😀 ایموجی برای <b>{$es_name}</b> رو بفرست ✍️" . mainmenu_tab_note($es_match[1]) . "\n\n🔹 ایموجی معمولی → کنار متن دکمه (چپ/راست بودنش رو با دکمه‌های ⬅️➡️ پایین لیست تعیین می‌کنی)\n💎 ایموجی پریمیوم → آیکون کنار متن\n\n(برای حذف ایموجی، عدد 0 رو بفرست)", $backadmin, 'HTML');
+    sendmessage($from_id, "😀 ایموجی برای <b>{$es_name}</b> رو بفرست ✍️" . mainmenu_tab_note($es_match[1]) . "\n\n🔹 ایموجی معمولی → کنار متن دکمه (چپ/راست بودنش رو با دکمه‌های ⬅️➡️ پایین لیست تعیین می‌کنی)\n💎 ایموجی پریمیوم → آیکون کنار متن\n\n(برای حذف ایموجی، عدد 0 رو بفرست)", $btpromptcancel, 'HTML');
     return;
 }
 if (preg_match('/^emojiposall-([a-z]{2})-(left|right)$/', $datain, $es_match) && $adminrulecheck['rule'] == "administrator") {
@@ -6373,7 +6385,7 @@ if (preg_match('/^setemoji-([a-z]{2})-(\d+)-(\d+)(?:-(left|right))?$/', $user['s
             preg_match('/^\X/u', trim((string) $text), $es_em);
             $es_emoji = $es_em[0] ?? '';
             if ($es_emoji === '' || preg_match('/^[0-9a-zA-Z]$/', $es_emoji)) {
-                sendmessage($from_id, "⚠️ لطفاً فقط یه ایموجی بفرست 😅", $backadmin, 'HTML');
+                sendmessage($from_id, "⚠️ لطفاً فقط یه ایموجی بفرست 😅", $btpromptcancel, 'HTML');
                 return;
             }
             $es_layout['keyboard'][$es_r][$es_c]['emoji'] = $es_emoji;
@@ -6392,7 +6404,7 @@ if (preg_match('/^setemoji-([a-z]{2})-(\d+)-(\d+)(?:-(left|right))?$/', $user['s
 if (preg_match('/^btnsticker-([a-z]{2})-(\d+)-(\d+)$/', $datain, $es_match) && $adminrulecheck['rule'] == "administrator") {
     $es_name = menu_button_name($es_match[2], $es_match[3], $textbotlang, $es_match[1]);
     step("setsticker-{$es_match[1]}-{$es_match[2]}-{$es_match[3]}", $from_id);
-    sendmessage($from_id, "✨ استیکر پریمیوم برای <b>{$es_name}</b> رو بفرست 🎁" . mainmenu_tab_note($es_match[1]) . "\n\n(برای حذف استیکر فعلی، عدد 0 رو بفرست)", $backadmin, 'HTML');
+    sendmessage($from_id, "✨ استیکر پریمیوم برای <b>{$es_name}</b> رو بفرست 🎁" . mainmenu_tab_note($es_match[1]) . "\n\n(برای حذف استیکر فعلی، عدد 0 رو بفرست)", $btpromptcancel, 'HTML');
     return;
 }
 if (preg_match('/^setsticker-([a-z]{2})-(\d+)-(\d+)$/', $user['step'], $es_match) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
@@ -6423,7 +6435,7 @@ if (preg_match('/^setsticker-([a-z]{2})-(\d+)-(\d+)$/', $user['step'], $es_match
             mainmenu_layout_save($es_lang, $es_layout);
             $es_msg = "✅ استیکر ذخیره شد! حالا کاربر که این دکمه رو بزنه، اول این استیکر براش ارسال می‌شه ✨";
         } else {
-            sendmessage($from_id, "⚠️ لطفاً یه استیکر بفرست (ترجیحاً استیکر پریمیوم) 😅", $backadmin, 'HTML');
+            sendmessage($from_id, "⚠️ لطفاً یه استیکر بفرست (ترجیحاً استیکر پریمیوم) 😅", $btpromptcancel, 'HTML');
             return;
         }
     } else {
@@ -6596,7 +6608,7 @@ if (preg_match('/^renamehide-([a-z]{2})-(\d+)-(\d+)$/', $datain, $rn_m) && $admi
 if (preg_match('/^renametext-([a-z]{2})-(\d+)-(\d+)$/', $datain, $rn_m) && $adminrulecheck['rule'] == "administrator") {
     $rn_name = menu_button_name($rn_m[2], $rn_m[3], $textbotlang, $rn_m[1]);
     step("renamebtn-{$rn_m[1]}-{$rn_m[2]}-{$rn_m[3]}", $from_id);
-    sendmessage($from_id, "✏️ نام جدید برای <b>{$rn_name}</b> رو بفرست ✍️" . mainmenu_tab_note($rn_m[1]) . "\n\n(برای برگشت به نام اصلی، عدد 0 رو بفرست)", $backadmin, 'HTML');
+    sendmessage($from_id, "✏️ نام جدید برای <b>{$rn_name}</b> رو بفرست ✍️" . mainmenu_tab_note($rn_m[1]) . "\n\n(برای برگشت به نام اصلی، عدد 0 رو بفرست)", $btpromptcancel, 'HTML');
     return;
 }
 if (preg_match('/^renamebtn-([a-z]{2})-(\d+)-(\d+)$/', $user['step'], $rn_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
@@ -6614,7 +6626,7 @@ if (preg_match('/^renamebtn-([a-z]{2})-(\d+)-(\d+)$/', $user['step'], $rn_m) && 
             mainmenu_layout_save($rn_lang, $rn_layout);
             $rn_msg = "✅ نام دکمه تغییر کرد!";
         } else {
-            sendmessage($from_id, "⚠️ لطفاً نام جدید رو به صورت متن بفرست 😅", $backadmin, 'HTML');
+            sendmessage($from_id, "⚠️ لطفاً نام جدید رو به صورت متن بفرست 😅", $btpromptcancel, 'HTML');
             return;
         }
     } else {
@@ -6723,7 +6735,7 @@ if (preg_match('/^chnemoji-(?:([a-z]{2})-)?(\d+)$/', $datain, $ce_m) && $adminru
     $ce_row = select("channels", "*", "id", $ce_id, "select");
     $ce_name = is_array($ce_row) ? channel_button_name(channel_row_for_lang($ce_row, $ce_lang)) : '';
     step("setchnemoji-{$ce_lang}-{$ce_id}", $from_id);
-    sendmessage($from_id, "😀 ایموجی برای <b>{$ce_name}</b> رو بفرست ✍️" . mainmenu_tab_note($ce_lang) . "\n\n🔹 ایموجی معمولی → کنار متن دکمه (چپ/راستش با دکمه‌ی کوچیک کنارش تو لیست تنظیم می‌شه)\n💎 ایموجی پریمیوم → آیکون کنار متن\n\n(برای حذف ایموجی، عدد 0 رو بفرست)", $backadmin, 'HTML');
+    sendmessage($from_id, "😀 ایموجی برای <b>{$ce_name}</b> رو بفرست ✍️" . mainmenu_tab_note($ce_lang) . "\n\n🔹 ایموجی معمولی → کنار متن دکمه (چپ/راستش با دکمه‌ی کوچیک کنارش تو لیست تنظیم می‌شه)\n💎 ایموجی پریمیوم → آیکون کنار متن\n\n(برای حذف ایموجی، عدد 0 رو بفرست)", $btpromptcancel, 'HTML');
     return;
 }
 if (preg_match('/^setchnemoji-(?:([a-z]{2})-)?(\d+)$/', (string) $user['step'], $ce_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
@@ -6751,7 +6763,7 @@ if (preg_match('/^setchnemoji-(?:([a-z]{2})-)?(\d+)$/', (string) $user['step'], 
         preg_match('/^\X/u', trim((string) $text), $ce_em);
         $ce_emoji = $ce_em[0] ?? '';
         if ($ce_emoji === '' || preg_match('/^[0-9a-zA-Z]$/', $ce_emoji)) {
-            sendmessage($from_id, "⚠️ لطفاً فقط یه ایموجی بفرست 😅", $backadmin, 'HTML');
+            sendmessage($from_id, "⚠️ لطفاً فقط یه ایموجی بفرست 😅", $btpromptcancel, 'HTML');
             return;
         }
         channel_btn_set($ce_lang, $ce_id, "emoji", $ce_emoji);
@@ -6825,7 +6837,7 @@ if (preg_match('/^chnrentext-(?:([a-z]{2})-)?(\d+)$/', $datain, $rt_m) && $admin
     $rt_row = select("channels", "*", "id", $rt_id, "select");
     $rt_name = is_array($rt_row) ? channel_button_name(channel_row_for_lang($rt_row, $rt_lang)) : '';
     step("setchnrename-{$rt_lang}-{$rt_id}", $from_id);
-    sendmessage($from_id, "✏️ نام جدید برای <b>{$rt_name}</b> رو بفرست ✍️" . mainmenu_tab_note($rt_lang) . "\n\n(برای برگشت به نام اصلی، عدد 0 رو بفرست)", $backadmin, 'HTML');
+    sendmessage($from_id, "✏️ نام جدید برای <b>{$rt_name}</b> رو بفرست ✍️" . mainmenu_tab_note($rt_lang) . "\n\n(برای برگشت به نام اصلی، عدد 0 رو بفرست)", $btpromptcancel, 'HTML');
     return;
 }
 if (preg_match('/^setchnrename-(?:([a-z]{2})-)?(\d+)$/', (string) $user['step'], $rt_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
@@ -6838,7 +6850,7 @@ if (preg_match('/^setchnrename-(?:([a-z]{2})-)?(\d+)$/', (string) $user['step'],
         channel_btn_set($rt_lang, $rt_id, "custom_text", trim((string) $text));
         $rt_msg = "✅ نام دکمه تغییر کرد!";
     } else {
-        sendmessage($from_id, "⚠️ لطفاً نام جدید رو به صورت متن بفرست 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ لطفاً نام جدید رو به صورت متن بفرست 😅", $btpromptcancel, 'HTML');
         return;
     }
     step('chnbtn_rename_list', $from_id);
@@ -7490,7 +7502,7 @@ if (preg_match('/^btbbtntext-([a-z]{2})$/', (string) $user['step'], $btm) && $da
     $bb_lang = $btm[1];
     $bb_newtext = trim((string) $text);
     if ($bb_newtext === '') {
-        sendmessage($from_id, "⚠️ لطفاً یه متن بفرست 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ لطفاً یه متن بفرست 😅", $btpromptcancel, 'HTML');
         return;
     }
     $bb_setting = select("setting", "*", null, null, "select");
@@ -7537,7 +7549,7 @@ if (preg_match('/^setbbtnemoji-([a-z]{2})$/', (string) $user['step'], $btm) && $
         preg_match('/^\X/u', trim((string) $text), $bb_em);
         $bb_emoji = $bb_em[0] ?? '';
         if ($bb_emoji === '' || preg_match('/^[0-9a-zA-Z]$/', $bb_emoji)) {
-            sendmessage($from_id, "⚠️ لطفاً فقط یه ایموجی بفرست 😅", $backadmin, 'HTML');
+            sendmessage($from_id, "⚠️ لطفاً فقط یه ایموجی بفرست 😅", $btpromptcancel, 'HTML');
             return;
         }
         $bb_be[$bb_lang]['users.Balance.insufficientBalanceSimple'][0]['emoji'] = $bb_emoji;
@@ -7836,7 +7848,7 @@ if (preg_match('/^btsticker-([a-z]{2})-(.+)$/', (string) $user['step'], $btm) &&
     $bt_key = $btm[2];
     $bt_fileid = $update['message']['sticker']['file_id'] ?? '';
     if ($bt_fileid === '') {
-        sendmessage($from_id, "⚠️ لطفاً یه استیکر بفرست (هر نوع استیکری قابل قبوله) 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ لطفاً یه استیکر بفرست (هر نوع استیکری قابل قبوله) 😅", $btpromptcancel, 'HTML');
         return;
     }
     $bt_setting = select("setting", "*", null, null, "select");
@@ -7878,7 +7890,7 @@ if (preg_match('/^btreaction-([a-z]{2})-(.+)$/', (string) $user['step'], $btm) &
     preg_match('/^\X/u', trim((string) $text), $bt_em);
     $bt_emoji = $bt_em[0] ?? '';
     if ($bt_emoji === '' || preg_match('/^[0-9a-zA-Z]$/', $bt_emoji)) {
-        sendmessage($from_id, "⚠️ لطفاً فقط یه ایموجی بفرست 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ لطفاً فقط یه ایموجی بفرست 😅", $btpromptcancel, 'HTML');
         return;
     }
     $bt_setting = select("setting", "*", null, null, "select");
@@ -7908,7 +7920,7 @@ if (preg_match('/^btbtntext-([a-z]{2})-([01])$/', (string) $user['step'], $btm) 
     $ub_idx = (int) $btm[2];
     $ub_newtext = trim((string) $text);
     if ($ub_newtext === '') {
-        sendmessage($from_id, "⚠️ لطفاً یه متن بفرست 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ لطفاً یه متن بفرست 😅", $btpromptcancel, 'HTML');
         return;
     }
     $ub_setting = select("setting", "*", null, null, "select");
@@ -7936,7 +7948,7 @@ if (preg_match('/^statusbtntxt-([a-z]{2})-(.+)$/', (string) $user['step'], $sb_m
     $sb_key = $sb_m[2];
     $sb_newtext = trim((string) $text);
     if ($sb_newtext === '' || mb_strlen($sb_newtext) > 64) {
-        sendmessage($from_id, "⚠️ متن باید بین ۱ تا ۶۴ حرف باشه 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ متن باید بین ۱ تا ۶۴ حرف باشه 😅", $btpromptcancel, 'HTML');
         return;
     }
     statusbtn_set_field($sb_lang, $sb_key, 'text', $sb_newtext);
@@ -7971,7 +7983,7 @@ if (preg_match('/^statusbtnemo-([a-z]{2})-(.+)$/', (string) $user['step'], $sb_m
         preg_match('/^\X/u', trim((string) $text), $sb_em);
         $sb_emoji = $sb_em[0] ?? '';
         if ($sb_emoji === '' || preg_match('/^[0-9a-zA-Z]$/', $sb_emoji)) {
-            sendmessage($from_id, "⚠️ لطفاً فقط یه ایموجی بفرست 😅", $backadmin, 'HTML');
+            sendmessage($from_id, "⚠️ لطفاً فقط یه ایموجی بفرست 😅", $btpromptcancel, 'HTML');
             return;
         }
         statusbtn_set_field($sb_lang, $sb_key, 'emoji', $sb_emoji);
@@ -7986,11 +7998,11 @@ if (preg_match('/^statusbtnemo-([a-z]{2})-(.+)$/', (string) $user['step'], $sb_m
 if (preg_match('/^tpdaddc-([a-z]{2})-([a-z0-9_@]+)$/', (string) $user['step'], $td_m) && $datain == '' && $adminrulecheck['rule'] == "administrator" && !topup_disc_is_nav_text($text, $textbotlang)) {
     $td_code = trim((string) $text);
     if (!preg_match('/^[A-Za-z0-9_-]{2,32}$/', $td_code)) {
-        sendmessage($from_id, "⚠️ فقط حروف انگلیسی، عدد، خط تیره و آندرلاین — بین ۲ تا ۳۲ کاراکتر 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ فقط حروف انگلیسی، عدد، خط تیره و آندرلاین — بین ۲ تا ۳۲ کاراکتر 😅", $btpromptcancel, 'HTML');
         return;
     }
     if (topup_disc_find_code($td_code) !== null) {
-        sendmessage($from_id, "⚠️ این کد از قبل وجود داره، یه کد دیگه بفرست 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ این کد از قبل وجود داره، یه کد دیگه بفرست 😅", $btpromptcancel, 'HTML');
         return;
     }
     $td_idx = topup_disc_code_add($td_m[1], $td_m[2], $td_code);
@@ -8014,15 +8026,15 @@ if (preg_match('/^dsbulkv-([a-z]{2})-(percent|fixed)$/', (string) $user['step'],
     $ds_val = $ds_parts[0] ?? '';
     $ds_days = trim($ds_parts[1] ?? '');
     if (!is_numeric($ds_val) || floatval($ds_val) <= 0) {
-        sendmessage($from_id, "⚠️ لطفاً یه عدد بزرگ‌تر از صفر بفرست 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ لطفاً یه عدد بزرگ‌تر از صفر بفرست 😅", $btpromptcancel, 'HTML');
         return;
     }
     if ($ds_mode === 'percent' && floatval($ds_val) > 100) {
-        sendmessage($from_id, "⚠️ درصد نمی‌تونه بیشتر از ۱۰۰ باشه 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ درصد نمی‌تونه بیشتر از ۱۰۰ باشه 😅", $btpromptcancel, 'HTML');
         return;
     }
     if ($ds_days !== '' && !ctype_digit($ds_days)) {
-        sendmessage($from_id, "⚠️ تعداد روز باید یه عدد باشه 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ تعداد روز باید یه عدد باشه 😅", $btpromptcancel, 'HTML');
         return;
     }
     $ds_n = topup_disc_bulk_apply($ds_lang, $ds_mode, floatval($ds_val), intval($ds_days), $textbotlang);
@@ -8042,7 +8054,7 @@ if (preg_match('/^dsbulkv-([a-z]{2})-(percent|fixed)$/', (string) $user['step'],
 if (preg_match('/^tpslname-([a-z]{2})-([a-z0-9]+)-([a-z]+)$/', (string) $user['step'], $sl_m) && $datain == '' && $adminrulecheck['rule'] == "administrator" && !topup_disc_is_nav_text($text, $textbotlang)) {
     $sl_new = trim((string) $text);
     if ($sl_new === '' || !isset(topup_slot_defs($textbotlang)[$sl_m[3]])) {
-        sendmessage($from_id, "⚠️ لطفاً یه متن بفرست 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ لطفاً یه متن بفرست 😅", $btpromptcancel, 'HTML');
         return;
     }
     // "0" clears it, the same convention every other rename tool here uses
@@ -8067,7 +8079,7 @@ if (preg_match('/^tpslname-([a-z]{2})-([a-z0-9]+)-([a-z]+)$/', (string) $user['s
 if (preg_match('/^tpbpname-([a-z]{2})-([a-z0-9_]+)$/', (string) $user['step'], $bp_m) && $datain == '' && $adminrulecheck['rule'] == "administrator" && !topup_disc_is_nav_text($text, $textbotlang)) {
     $bp_new = trim((string) $text);
     if ($bp_new === '') {
-        sendmessage($from_id, "⚠️ لطفاً یه متن بفرست 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ لطفاً یه متن بفرست 😅", $btpromptcancel, 'HTML');
         return;
     }
     $bp_style = topup_btnstyle_for($bp_m[1], $bp_m[2], 'backpkg');
@@ -8088,7 +8100,7 @@ if (preg_match('/^tpbpname-([a-z]{2})-([a-z0-9_]+)$/', (string) $user['step'], $
 if (preg_match('/^tpdnhours-([a-z]{2})-([a-z0-9_@]+)$/', (string) $user['step'], $td_m) && $datain == '' && $adminrulecheck['rule'] == "administrator" && !topup_disc_is_nav_text($text, $textbotlang)) {
     $td_raw = trim((string) $text);
     if (!ctype_digit($td_raw) || intval($td_raw) < 1) {
-        sendmessage($from_id, "⚠️ لطفاً یه عدد بزرگ‌تر از صفر بفرست 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ لطفاً یه عدد بزرگ‌تر از صفر بفرست 😅", $btpromptcancel, 'HTML');
         return;
     }
     topup_disc_notify_set(['everyHours' => intval($td_raw)]);
@@ -8107,7 +8119,7 @@ if (preg_match('/^tpdnhours-([a-z]{2})-([a-z0-9_@]+)$/', (string) $user['step'],
 if (preg_match('/^tpdautoexpv-([a-z]{2})-([a-z0-9_]+)$/', (string) $user['step'], $td_m) && $datain == '' && $adminrulecheck['rule'] == "administrator" && !topup_disc_is_nav_text($text, $textbotlang)) {
     $td_raw = trim((string) $text);
     if (!ctype_digit($td_raw)) {
-        sendmessage($from_id, "⚠️ لطفاً فقط یه عدد بفرست 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ لطفاً فقط یه عدد بفرست 😅", $btpromptcancel, 'HTML');
         return;
     }
     $td_days = intval($td_raw);
@@ -8129,12 +8141,12 @@ if (preg_match('/^tpdautoexpv-([a-z]{2})-([a-z0-9_]+)$/', (string) $user['step']
 if (preg_match('/^tpdautovalv-([a-z]{2})-([a-z0-9_]+)$/', (string) $user['step'], $td_m) && $datain == '' && $adminrulecheck['rule'] == "administrator" && !topup_disc_is_nav_text($text, $textbotlang)) {
     $td_raw = trim((string) $text);
     if (!is_numeric($td_raw) || floatval($td_raw) < 0) {
-        sendmessage($from_id, "⚠️ لطفاً فقط یه عدد بفرست 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ لطفاً فقط یه عدد بفرست 😅", $btpromptcancel, 'HTML');
         return;
     }
     $td_a = topup_disc_auto_for($td_m[1], $td_m[2]);
     if (($td_a['mode'] ?? 'percent') === 'percent' && floatval($td_raw) > 100) {
-        sendmessage($from_id, "⚠️ درصد نمی‌تونه بیشتر از ۱۰۰ باشه 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ درصد نمی‌تونه بیشتر از ۱۰۰ باشه 😅", $btpromptcancel, 'HTML');
         return;
     }
     $td_a['value'] = floatval($td_raw);
@@ -8160,7 +8172,7 @@ if (preg_match('/^tpdautovalv-([a-z]{2})-([a-z0-9_]+)$/', (string) $user['step']
 if (preg_match('/^tpdautolimitv-([a-z]{2})-([a-z0-9_]+)$/', (string) $user['step'], $td_m) && $datain == '' && $adminrulecheck['rule'] == "administrator" && !topup_disc_is_nav_text($text, $textbotlang)) {
     $td_raw = trim((string) $text);
     if (!ctype_digit($td_raw)) {
-        sendmessage($from_id, "⚠️ لطفاً فقط یه عدد بفرست 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ لطفاً فقط یه عدد بفرست 😅", $btpromptcancel, 'HTML');
         return;
     }
     $td_a = topup_disc_auto_for($td_m[1], $td_m[2]);
@@ -8183,7 +8195,7 @@ if (preg_match('/^tpdautolimitv-([a-z]{2})-([a-z0-9_]+)$/', (string) $user['step
 if (preg_match('/^tpdautominv-([a-z]{2})-([a-z0-9_]+)$/', (string) $user['step'], $td_m) && $datain == '' && $adminrulecheck['rule'] == "administrator" && !topup_disc_is_nav_text($text, $textbotlang)) {
     $td_raw = money_normalize((string) $text);
     if ($td_raw === null) {
-        sendmessage($from_id, "⚠️ لطفاً فقط یه عدد بفرست 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ لطفاً فقط یه عدد بفرست 😅", $btpromptcancel, 'HTML');
         return;
     }
     $td_a = topup_disc_auto_for($td_m[1], $td_m[2]);
@@ -8212,22 +8224,22 @@ if (preg_match('/^dsgrp(val|exp|limit|min)v-([a-z]{2})-([a-z0-9_]+)$/', (string)
     if ($td_what === 'min') {
         $td_raw = money_normalize($td_raw);
         if ($td_raw === null) {
-            sendmessage($from_id, "⚠️ لطفاً فقط یه عدد بفرست 😅", $backadmin, 'HTML');
+            sendmessage($from_id, "⚠️ لطفاً فقط یه عدد بفرست 😅", $btpromptcancel, 'HTML');
             return;
         }
     } elseif ($td_what === 'val') {
         if (!is_numeric($td_raw) || floatval($td_raw) < 0) {
-            sendmessage($from_id, "⚠️ لطفاً فقط یه عدد بفرست 😅", $backadmin, 'HTML');
+            sendmessage($from_id, "⚠️ لطفاً فقط یه عدد بفرست 😅", $btpromptcancel, 'HTML');
             return;
         }
     } elseif (!ctype_digit($td_raw)) {
-        sendmessage($from_id, "⚠️ لطفاً فقط یه عدد بفرست 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ لطفاً فقط یه عدد بفرست 😅", $btpromptcancel, 'HTML');
         return;
     }
     $td_g = topup_disc_group_for($td_lang, $td_group);
     if ($td_what === 'val') {
         if (($td_g['mode'] ?? 'percent') === 'percent' && floatval($td_raw) > 100) {
-            sendmessage($from_id, "⚠️ درصد نمی‌تونه بیشتر از ۱۰۰ باشه 😅", $backadmin, 'HTML');
+            sendmessage($from_id, "⚠️ درصد نمی‌تونه بیشتر از ۱۰۰ باشه 😅", $btpromptcancel, 'HTML');
             return;
         }
         $td_g['value'] = floatval($td_raw);
@@ -8275,13 +8287,13 @@ if (preg_match('/^tpdfld-(val|limit|user|exp|min)-([a-z]{2})-([a-z0-9_@]+)-(\d+)
         $td_raw = money_normalize($td_raw) ?? $td_raw;
     }
     if (!is_numeric($td_raw) || floatval($td_raw) < 0) {
-        sendmessage($from_id, "⚠️ لطفاً فقط یه عدد بفرست 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ لطفاً فقط یه عدد بفرست 😅", $btpromptcancel, 'HTML');
         return;
     }
     $td_c = topup_disc_code_get($td_lang, $td_key, $td_idx);
     if ($td_what === 'val') {
         if (($td_c['mode'] ?? 'percent') === 'percent' && floatval($td_raw) > 100) {
-            sendmessage($from_id, "⚠️ درصد نمی‌تونه بیشتر از ۱۰۰ باشه 😅", $backadmin, 'HTML');
+            sendmessage($from_id, "⚠️ درصد نمی‌تونه بیشتر از ۱۰۰ باشه 😅", $btpromptcancel, 'HTML');
             return;
         }
         topup_disc_code_update($td_lang, $td_key, $td_idx, floatval($td_raw) > 0
@@ -8316,7 +8328,7 @@ if (preg_match('/^volpctnew-([a-z]{2})-(vol|volgb|time)$/', (string) $user['step
     $vp_meta = volumepct_kind_meta($vp_kind);
     $vp_raw = trim((string) $text);
     if (!ctype_digit($vp_raw) || intval($vp_raw) < 0 || intval($vp_raw) > $vp_meta['max']) {
-        sendmessage($from_id, "⚠️ لطفاً یه عدد بین ۰ تا {$vp_meta['max']} بفرست 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ لطفاً یه عدد بین ۰ تا {$vp_meta['max']} بفرست 😅", $btpromptcancel, 'HTML');
         return;
     }
     $vp_index = volumepct_tier_add(intval($vp_raw), $vp_kind);
@@ -8332,7 +8344,7 @@ if (preg_match('/^volpcttxt-pct-([a-z]{2})-(\d+)$/', (string) $user['step'], $vp
     $vp_meta = volumepct_kind_meta(volumepct_tier_kind(volumepct_tier_get($vp_index)));
     $vp_raw = trim((string) $text);
     if (!ctype_digit($vp_raw) || intval($vp_raw) < 0 || intval($vp_raw) > $vp_meta['max']) {
-        sendmessage($from_id, "⚠️ لطفاً یه عدد بین ۰ تا {$vp_meta['max']} بفرست 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ لطفاً یه عدد بین ۰ تا {$vp_meta['max']} بفرست 😅", $btpromptcancel, 'HTML');
         return;
     }
     volumepct_tier_set_pct($vp_index, intval($vp_raw));
@@ -8353,7 +8365,7 @@ if (preg_match('/^volpcttxt-cap-([a-z]{2})-(\d+)$/', (string) $user['step'], $vp
     $vp_index = (int) $vp_m[2];
     $vp_newtext = trim((string) $text);
     if ($vp_newtext === '') {
-        sendmessage($from_id, "⚠️ لطفاً یه متن بفرست 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ لطفاً یه متن بفرست 😅", $btpromptcancel, 'HTML');
         return;
     }
     volumepct_tier_set_text($vp_index, $vp_lang, $vp_newtext);
@@ -8374,7 +8386,7 @@ if (preg_match('/^volpcttxt-btn-([a-z]{2})-(\d+)$/', (string) $user['step'], $vp
     $vp_index = (int) $vp_m[2];
     $vp_newtext = trim((string) $text);
     if ($vp_newtext === '') {
-        sendmessage($from_id, "⚠️ لطفاً یه متن بفرست 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ لطفاً یه متن بفرست 😅", $btpromptcancel, 'HTML');
         return;
     }
     volumepct_tier_set_btnlabel($vp_index, $vp_lang, $vp_newtext);
@@ -8395,7 +8407,7 @@ if (preg_match('/^volpctstk-([a-z]{2})-(\d+)$/', (string) $user['step'], $vp_m) 
     $vp_index = (int) $vp_m[2];
     $vp_fileid = $update['message']['sticker']['file_id'] ?? '';
     if ($vp_fileid === '') {
-        sendmessage($from_id, "⚠️ لطفاً یه استیکر بفرست (هر نوع استیکری قابل قبوله) 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ لطفاً یه استیکر بفرست (هر نوع استیکری قابل قبوله) 😅", $btpromptcancel, 'HTML');
         return;
     }
     volumepct_tier_set_sticker($vp_index, $vp_lang, $vp_fileid);
@@ -8430,7 +8442,7 @@ if (preg_match('/^volpctemo-([a-z]{2})-(\d+)$/', (string) $user['step'], $vp_m) 
         preg_match('/^\X/u', trim((string) $text), $vp_em);
         $vp_emoji = $vp_em[0] ?? '';
         if ($vp_emoji === '' || preg_match('/^[0-9a-zA-Z]$/', $vp_emoji)) {
-            sendmessage($from_id, "⚠️ لطفاً فقط یه ایموجی بفرست 😅", $backadmin, 'HTML');
+            sendmessage($from_id, "⚠️ لطفاً فقط یه ایموجی بفرست 😅", $btpromptcancel, 'HTML');
             return;
         }
         volumepct_tier_set_style($vp_index, null, $vp_emoji, null, null, null);
@@ -8447,7 +8459,7 @@ if (preg_match('/^cfgcoltxt-([a-z]{2})-([0123])$/', (string) $user['step'], $cc_
     $cc_idx = (int) $cc_m[2];
     $cc_newtext = trim((string) $text);
     if ($cc_newtext === '') {
-        sendmessage($from_id, "⚠️ لطفاً یه متن بفرست 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ لطفاً یه متن بفرست 😅", $btpromptcancel, 'HTML');
         return;
     }
     configdisplay_element_set_text($cc_lang, $cc_idx, $cc_newtext);
@@ -8468,7 +8480,7 @@ if (preg_match('/^cfgcoltxtbuy-([a-z]{2})-([0123])$/', (string) $user['step'], $
     $cc_idx = (int) $cc_m[2];
     $cc_newtext = trim((string) $text);
     if ($cc_newtext === '') {
-        sendmessage($from_id, "⚠️ لطفاً یه متن بفرست 😅", $backadmin, 'HTML');
+        sendmessage($from_id, "⚠️ لطفاً یه متن بفرست 😅", $btpromptcancel, 'HTML');
         return;
     }
     configdisplay_element_set_text($cc_lang, $cc_idx, $cc_newtext, 'buy');
@@ -9984,19 +9996,19 @@ elseif ($datain == "systemsms") {
     sendmessage($from_id, $help_pick_caption, $help_pick_kb, 'HTML');
 } elseif ($user['step'] == "add_category_help") {
     if ($text === '' || $text === null) {
-        sendmessage($from_id, $textbotlang['Admin']['Help']['invalidContent'], $backadmin, 'HTML');
+        sendmessage($from_id, $textbotlang['Admin']['Help']['invalidContent'], $btpromptcancel, 'HTML');
         return;
     }
     if (mb_strlen($text) >= 150) {
-        sendmessage($from_id, $textbotlang['Admin']['Help']['nameTooLong'], $backadmin, 'HTML');
+        sendmessage($from_id, $textbotlang['Admin']['Help']['nameTooLong'], $btpromptcancel, 'HTML');
         return;
     }
     update("user", "Processing_value_four", $text, "id", $from_id);
-    sendmessage($from_id, $textbotlang['Admin']['Help']['getAddName'], $backadmin, 'HTML');
+    sendmessage($from_id, $textbotlang['Admin']['Help']['getAddName'], $btpromptcancel, 'HTML');
     step('add_name_help', $from_id);
 } elseif ($user['step'] == "add_name_help") {
     if ($text === '' || $text === null) {
-        sendmessage($from_id, $textbotlang['Admin']['Help']['invalidContent'], $backadmin, 'HTML');
+        sendmessage($from_id, $textbotlang['Admin']['Help']['invalidContent'], $btpromptcancel, 'HTML');
         return;
     }
     if (strlen($text) >= 150) {
@@ -10035,11 +10047,11 @@ elseif ($datain == "systemsms") {
     clearSelectCache('help');
     update("user", "Processing_value", (string) $help_new_id, "id", $from_id);
     update("user", "Processing_value_four", "0", "id", $from_id);
-    sendmessage($from_id, $textbotlang['Admin']['Help']['getAddDesc'], $backadmin, 'HTML');
+    sendmessage($from_id, $textbotlang['Admin']['Help']['getAddDesc'], $btpromptcancel, 'HTML');
     step('add_dec', $from_id);
 } elseif ($user['step'] == "getcatgoryhelp") {
     update("help", "category", $text, "name_os", $user['Processing_value']);
-    sendmessage($from_id, $textbotlang['Admin']['Help']['getAddDesc'], $backadmin, 'HTML');
+    sendmessage($from_id, $textbotlang['Admin']['Help']['getAddDesc'], $btpromptcancel, 'HTML');
     step('add_dec', $from_id);
 } elseif ($user['step'] == "add_dec") {
     // Processing_value holds the new row's id (see add_name_help)
@@ -21422,7 +21434,7 @@ if ($datain == "linkappsetting") {
     if ($help_target === 'add') {
         update("user", "Processing_value_four", $help_chosen, "id", $from_id);
         deletemessage($from_id, $message_id);
-        sendmessage($from_id, $textbotlang['Admin']['Help']['getAddName'], $backadmin, 'HTML');
+        sendmessage($from_id, $textbotlang['Admin']['Help']['getAddName'], $btpromptcancel, 'HTML');
         step('add_name_help', $from_id);
     } else {
         update("help", "category", $help_chosen, "id", $help_target);
@@ -21456,14 +21468,14 @@ if ($datain == "linkappsetting") {
     Editmessagetext($from_id, $message_id, "🗑 دسته‌ی «" . htmlspecialchars($help_del, ENT_QUOTES, 'UTF-8') . "» حذف شد.\n\n" . $help_caption, $help_kb, 'HTML');
 } elseif (preg_match('/^help_newcat:(fa|en|ru|zh|tk):(add|list|\d+)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
     update("user", "Processing_value", $help_m[1] . '|' . $help_m[2], "id", $from_id);
-    sendmessage($from_id, "🗂 اسم دسته‌بندی جدید رو بفرست:", $backadmin, 'HTML');
+    sendmessage($from_id, "🗂 اسم دسته‌بندی جدید رو بفرست:", $btpromptcancel, 'HTML');
     step('help_new_cat', $from_id);
 } elseif ($user['step'] == "help_new_cat" && $adminrulecheck['rule'] == "administrator") {
     $help_np = explode('|', (string) $user['Processing_value'], 2);
     $help_lang = $help_np[0] ?: 'fa';
     $help_target = $help_np[1] ?? 'list';
     if ($text === '' || $text === null || mb_strlen($text) >= 150) {
-        sendmessage($from_id, $textbotlang['Admin']['Help']['nameTooLong'], $backadmin, 'HTML');
+        sendmessage($from_id, $textbotlang['Admin']['Help']['nameTooLong'], $btpromptcancel, 'HTML');
         return;
     }
     help_category_store_add($text);
@@ -21676,7 +21688,7 @@ if ($datain == "linkappsetting") {
     if ($help_key !== null) {
         $help_item_name = $help_items[$help_key] ?? (string) $help_key;
         update("user", "Processing_value", "{$help_kind}:{$help_lang}:{$help_idx}", "id", $from_id);
-        sendmessage($from_id, sprintf($textbotlang['Admin']['Help']['askEmojiForItem'], $help_item_name), $backadmin, 'HTML');
+        sendmessage($from_id, sprintf($textbotlang['Admin']['Help']['askEmojiForItem'], $help_item_name), $btpromptcancel, 'HTML');
         step('help_emo_input', $from_id);
     }
 } elseif (preg_match('/^help_emo_reset:(categories|tutorials|panel|product|category|gateway|langpick):(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
@@ -21710,7 +21722,7 @@ if ($datain == "linkappsetting") {
     if ($help_key !== null) {
         $help_item_name = $help_items[$help_key] ?? (string) $help_key;
         update("user", "Processing_value", "{$help_kind}:{$help_lang}:{$help_idx}", "id", $from_id);
-        sendmessage($from_id, sprintf($textbotlang['Admin']['BtnStyle']['askRenameForItem'], $help_item_name), $backadmin, 'HTML');
+        sendmessage($from_id, sprintf($textbotlang['Admin']['BtnStyle']['askRenameForItem'], $help_item_name), $btpromptcancel, 'HTML');
         step('help_ren_input', $from_id);
     }
 } elseif (preg_match('/^help_ren_reset:(categories|tutorials|panel|product|category|gateway|langpick):(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
@@ -21906,7 +21918,7 @@ if ($datain == "linkappsetting") {
     Editmessagetext($from_id, $message_id, $help_pick_caption, $help_pick_kb, 'HTML');
 } elseif (preg_match('/^help_name:(\d+):(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
     update("user", "Processing_value", $help_m[1] . ':' . $help_m[2], "id", $from_id);
-    sendmessage($from_id, $textbotlang['Admin']['Help']['askOnlyName'], $backadmin, 'HTML');
+    sendmessage($from_id, $textbotlang['Admin']['Help']['askOnlyName'], $btpromptcancel, 'HTML');
     step('help_edit_name', $from_id);
 } elseif ($user['step'] == "help_edit_name") {
     $help_parts = explode(':', (string) $user['Processing_value']);
@@ -21915,11 +21927,11 @@ if ($datain == "linkappsetting") {
         return;
     }
     if ($text === '' || $text === null) {
-        sendmessage($from_id, $textbotlang['Admin']['Help']['invalidContent'], $backadmin, 'HTML');
+        sendmessage($from_id, $textbotlang['Admin']['Help']['invalidContent'], $btpromptcancel, 'HTML');
         return;
     }
     if (mb_strlen($text) >= 150) {
-        sendmessage($from_id, $textbotlang['Admin']['Help']['nameTooLong'], $backadmin, 'HTML');
+        sendmessage($from_id, $textbotlang['Admin']['Help']['nameTooLong'], $btpromptcancel, 'HTML');
         return;
     }
     help_set_lang_field($help_parts[0], $help_parts[1], ['name' => $text]);
@@ -21938,11 +21950,11 @@ if ($datain == "linkappsetting") {
         return;
     }
     if ($text === '' || $text === null) {
-        sendmessage($from_id, $textbotlang['Admin']['Help']['invalidContent'], $backadmin, 'HTML');
+        sendmessage($from_id, $textbotlang['Admin']['Help']['invalidContent'], $btpromptcancel, 'HTML');
         return;
     }
     if (mb_strlen($text) >= 150) {
-        sendmessage($from_id, $textbotlang['Admin']['Help']['nameTooLong'], $backadmin, 'HTML');
+        sendmessage($from_id, $textbotlang['Admin']['Help']['nameTooLong'], $btpromptcancel, 'HTML');
         return;
     }
     help_set_lang_field($help_parts[0], $help_parts[1], ['category' => $text]);
@@ -21951,7 +21963,7 @@ if ($datain == "linkappsetting") {
     step('home', $from_id);
 } elseif (preg_match('/^help_edit:(\d+):(fa|en|ru|zh|tk)$/', $datain, $help_m) && $adminrulecheck['rule'] == "administrator") {
     update("user", "Processing_value", $help_m[1] . ':' . $help_m[2], "id", $from_id);
-    sendmessage($from_id, $textbotlang['Admin']['Help']['askOnlyContent'], $backadmin, 'HTML');
+    sendmessage($from_id, $textbotlang['Admin']['Help']['askOnlyContent'], $btpromptcancel, 'HTML');
     step('help_edit_content', $from_id);
 } elseif ($user['step'] == "help_edit_content") {
     $help_parts = explode(':', (string) $user['Processing_value']);
@@ -21987,7 +21999,7 @@ if ($datain == "linkappsetting") {
         $help_desc = $text;
         $help_entities = $update['message']['entities'] ?? null;
     } else {
-        sendmessage($from_id, $textbotlang['Admin']['Help']['invalidContent'], $backadmin, 'HTML');
+        sendmessage($from_id, $textbotlang['Admin']['Help']['invalidContent'], $btpromptcancel, 'HTML');
         return;
     }
     // description/media/entities are written together on purpose: entity
@@ -22037,7 +22049,7 @@ if ($datain == "linkappsetting") {
             preg_match('/^\X/u', trim((string) $text), $help_em);
             $help_emoji = $help_em[0] ?? '';
             if ($help_emoji === '' || preg_match('/^[0-9a-zA-Z]$/', $help_emoji)) {
-                sendmessage($from_id, "⚠️ لطفاً یه ایموجی (معمولی یا پریمیوم) بفرست 😅", $backadmin, 'HTML');
+                sendmessage($from_id, "⚠️ لطفاً یه ایموجی (معمولی یا پریمیوم) بفرست 😅", $btpromptcancel, 'HTML');
                 return;
             }
             $help_section['emoji'][$help_key] = $help_emoji;
@@ -22070,11 +22082,11 @@ if ($datain == "linkappsetting") {
     } else {
         $help_newname = trim((string) $text);
         if ($help_newname === '') {
-            sendmessage($from_id, $textbotlang['Admin']['Help']['invalidContent'], $backadmin, 'HTML');
+            sendmessage($from_id, $textbotlang['Admin']['Help']['invalidContent'], $btpromptcancel, 'HTML');
             return;
         }
         if (mb_strlen($help_newname) > 150) {
-            sendmessage($from_id, $textbotlang['Admin']['Help']['nameTooLong'], $backadmin, 'HTML');
+            sendmessage($from_id, $textbotlang['Admin']['Help']['nameTooLong'], $btpromptcancel, 'HTML');
             return;
         }
         $help_section['rename'][$help_key] = $help_newname;
@@ -22259,7 +22271,7 @@ if ($datain == "linkappsetting") {
     }
     $bt_new = trim($bt_new);
     if ($bt_new === '') {
-        sendmessage($from_id, $textbotlang['bottext']['msg_empty'], $backadmin, 'HTML');
+        sendmessage($from_id, $textbotlang['bottext']['msg_empty'], $btpromptcancel, 'HTML');
         return;
     }
     $bt_map = (isset($setting['text_edit']) && $setting['text_edit']) ? json_decode($setting['text_edit'], true) : [];
