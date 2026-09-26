@@ -86,8 +86,8 @@ foreach ($amounts as $rialAmount) {
         $balanceRow = select("user", "*", "id", $row['id_user'], "select");
         if ($priceCashback != "0") {
             $cashbackAmount = ($row['price'] * $priceCashback) / 100;
-            $newBalance = intval($balanceRow['Balance']) + $cashbackAmount;
-            update("user", "Balance", $newBalance, "id", $balanceRow['id']);
+            // into the wallet the payment was made in
+            wallet_credit($balanceRow['id'], $cashbackAmount, payment_currency($row));
             $cashbackReport = sprintf($textbotlang['hardcoded']['giftDepositNotice'], $cashbackAmount);
             sendmessage($balanceRow['id'], $cashbackReport, null, 'HTML');
         }

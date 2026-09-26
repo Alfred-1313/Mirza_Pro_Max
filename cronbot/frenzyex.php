@@ -79,8 +79,8 @@ foreach ($rows as $row) {
     $reportUser = select("user", "*", "id", $row['id_user'], "select");
     if ($pricecashback != "0") {
         $result = ($row['price'] * $pricecashback) / 100;
-        $Balance_confrim = intval($reportUser['Balance']) + $result;
-        update("user", "Balance", $Balance_confrim, "id", $reportUser['id']);
+        // into the wallet the payment was made in
+        wallet_credit($reportUser['id'], $result, payment_currency($row));
         $text_report = sprintf($textbotlang['paymentGateway']['giftReport'], $result);
         sendmessage($reportUser['id'], $text_report, null, 'HTML');
     }

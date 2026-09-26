@@ -849,7 +849,30 @@ function menu_tap_cleanup($from_id, $user)
     }
 }
 
+// A payment is settled in the wallet it was asked in. When its payer has
+// switched language since, that wallet is brought into Balance for the
+// settlement and put back after, so every branch of DirectPayment_settle()
+// keeps working on Balance as it always has.
 function DirectPayment($order_id, $image = 'images.jpg')
+{
+    $dp_report = select("Payment_report", "*", "id_order", $order_id, "select");
+    $dp_prev = null;
+    if (is_array($dp_report)) {
+        $dp_payer = select("user", "*", "id", $dp_report['id_user'], "select");
+        $dp_cur = payment_currency($dp_report);
+        if (is_array($dp_payer) && currency_for_user($dp_payer) !== $dp_cur) {
+            $dp_prev = wallet_activate($dp_report['id_user'], $dp_cur);
+        }
+    }
+    try {
+        DirectPayment_settle($order_id, $image);
+    } finally {
+        if ($dp_prev !== null) {
+            wallet_activate($dp_report['id_user'], $dp_prev);
+        }
+    }
+}
+function DirectPayment_settle($order_id, $image = 'images.jpg')
 {
     global $pdo, $ManagePanel, $textbotlang, $keyboardextendfnished, $keyboard, $Confirm_pay, $from_id, $message_id;
     $buyreport = select("topicid", "idreport", "report", "buyreport", "select")['idreport'];
@@ -975,10 +998,12 @@ function DirectPayment($order_id, $image = 'images.jpg')
                     $scorenew = $user_Balance['score'] + 2;
                     update("user", "score", $scorenew, "id", $dp_refId);
                 }
-                $Balance_prim = $user_Balance['Balance'] + $result;
+                // a share of what the buyer paid, so in the buyer's currency -
+                // into the referrer's wallet of that currency
+                $dp_payCur = currency_for_user($Balance_id);
+                wallet_credit($dp_refId, $result, $dp_payCur);
                 $dateacc = date('Y/m/d H:i:s');
-                update("user", "Balance", $Balance_prim, "id", $dp_refId);
-                $result = money($result, currency_for_user($user_Balance));
+                $result = money($result, $dp_payCur);
                 $textadd = sprintf($dp_refTexts['users']['affiliates']['commissionPaid'], $result);
                 $textreportport = sprintf(panel_texts()['hardcoded'][$dp_firstOnly ? 'affiliateCommissionPaidLogFn' : 'affiliateCommissionPaidLogFn2'], $result, $dp_refId, $Balance_id['id'], $dateacc);
                 if (strlen($setting['Channel_Report']) > 0) {
@@ -1005,8 +1030,8 @@ function DirectPayment($order_id, $image = 'images.jpg')
             $Balance_prims = 0;
         update("user", "Balance", $Balance_prims, "id", $Balance_id['id']);
         $balanceformatsell = select("user", "Balance", "id", $get_invoice['id_user'], "select")['Balance'];
-        $balanceformatsell = number_format($balanceformatsell, 0);
-        $balancebefore = number_format($Balance_id['Balance'], 0);
+        $balanceformatsell = money($balanceformatsell, currency_for_user($Balance_id), false);
+        $balancebefore = wallet_amount_text($Balance_id);
         $timejalali = jdate('Y/m/d H:i:s');
         $textonebuy = "";
         if ($countinvoice == 1) {
@@ -1037,11 +1062,11 @@ function DirectPayment($order_id, $image = 'images.jpg')
         update("invoice", "Status", "active", "username", $get_invoice['username']);
         if ($Payment_report['Payment_Method'] == "cart to cart" or $Payment_report['Payment_Method'] == "arze digital offline") {
             update("invoice", "Status", "active", "id_invoice", $get_invoice['id_invoice']);
-            $textconfrom = sprintf($textbotlang['hardcoded']['paymentConfirmedNewService'], $username_ac, $get_invoice['Service_location'], $Balance_id['id'], $Payment_report['id_order'], $Balance_id['username'], $Balance_id['Balance'], $format_price_cart, $Payment_report['dec_not_confirmed']);
+            $textconfrom = sprintf($textbotlang['hardcoded']['paymentConfirmedNewService'], $username_ac, $get_invoice['Service_location'], $Balance_id['id'], $Payment_report['id_order'], $Balance_id['username'], wallet_amount_text($Balance_id), $format_price_cart, $Payment_report['dec_not_confirmed']);
             Editmessagetext($from_id, $message_id, $textconfrom, $Confirm_pay);
         }
     } elseif ($steppay[0] == "getextenduser") {
-        $balanceformatsell = number_format(select("user", "Balance", "id", $Balance_id['id'], "select")['Balance'], 0);
+        $balanceformatsell = money(select("user", "Balance", "id", $Balance_id['id'], "select")['Balance'], currency_for_user($Balance_id), false);
         $partsdic = explode("%", $steppay[1]);
         $usernamepanel = $partsdic[0];
         $sql = "SELECT * FROM service_other WHERE username = :username  AND value  LIKE CONCAT('%', :value, '%') AND id_user = :id_user ";
@@ -1143,7 +1168,7 @@ function DirectPayment($order_id, $image = 'images.jpg')
         update("invoice", "Status", "active", "id_invoice", $nameloc['id_invoice']);
         if ($Payment_report['Payment_Method'] == "cart to cart" or $Payment_report['Payment_Method'] == "arze digital offline") {
 
-            $textconfrom = sprintf($textbotlang['hardcoded']['paymentConfirmedRenew'], $usernamepanel, $prodcut['name_product'], $nameloc['Service_location'], $Balance_id['id'], $Payment_report['id_order'], $Balance_id['username'], $Balance_id['Balance'], $format_price_cart, $Payment_report['dec_not_confirmed']);
+            $textconfrom = sprintf($textbotlang['hardcoded']['paymentConfirmedRenew'], $usernamepanel, $prodcut['name_product'], $nameloc['Service_location'], $Balance_id['id'], $Payment_report['id_order'], $Balance_id['username'], wallet_amount_text($Balance_id), $format_price_cart, $Payment_report['dec_not_confirmed']);
             Editmessagetext($from_id, $message_id, $textconfrom, $Confirm_pay);
         }
     } elseif ($steppay[0] == "getextravolumeuser") {
@@ -1206,11 +1231,11 @@ function DirectPayment($order_id, $image = 'images.jpg')
         sendmessage($Balance_id['id'], $textvolume, $keyboardextrafnished, 'HTML');
         $volumes = $volume;
         if ($Payment_report['Payment_Method'] == "cart to cart") {
-            $textconfrom = sprintf($textbotlang['hardcoded']['paymentConfirmedExtraVolume'], $volumes, $steppay[0], $Balance_id['id'], $Payment_report['id_order'], $Balance_id['username'], $Balance_id['Balance'], $format_price_cart);
+            $textconfrom = sprintf($textbotlang['hardcoded']['paymentConfirmedExtraVolume'], $volumes, $steppay[0], $Balance_id['id'], $Payment_report['id_order'], $Balance_id['username'], wallet_amount_text($Balance_id), $format_price_cart);
             Editmessagetext($from_id, $message_id, $textconfrom, $Confirm_pay);
         }
         update("invoice", "Status", "active", "id_invoice", $nameloc['id_invoice']);
-        $text_report = sprintf($textbotlang['hardcoded']['extraVolumeReportAdminFn'], $Balance_id['id'], $volumes, $Payment_report['price'], $steppay[0], $Balance_id['Balance']);
+        $text_report = sprintf($textbotlang['hardcoded']['extraVolumeReportAdminFn'], $Balance_id['id'], $volumes, $Payment_report['price'], $steppay[0], wallet_amount_text($Balance_id));
         if (strlen($setting['Channel_Report']) > 0) {
             telegram('sendmessage', [
                 'chat_id' => $setting['Channel_Report'],
@@ -1281,7 +1306,7 @@ function DirectPayment($order_id, $image = 'images.jpg')
         sendmessage($Balance_id['id'], $textextratime, $keyboardextrafnished, 'HTML');
         if ($Payment_report['Payment_Method'] == "cart to cart") {
             $volumes = $tmieextra;
-            $textconfrom = sprintf($textbotlang['hardcoded']['paymentConfirmedExtraTime'], $volumes, $steppay[0], $Balance_id['id'], $Payment_report['id_order'], $Balance_id['username'], $Balance_id['Balance'], $format_price_cart);
+            $textconfrom = sprintf($textbotlang['hardcoded']['paymentConfirmedExtraTime'], $volumes, $steppay[0], $Balance_id['id'], $Payment_report['id_order'], $Balance_id['username'], wallet_amount_text($Balance_id), $format_price_cart);
             Editmessagetext($from_id, $message_id, $textconfrom, $Confirm_pay);
         }
         update("invoice", "Status", "active", "id_invoice", $nameloc['id_invoice']);
@@ -1304,14 +1329,15 @@ function DirectPayment($order_id, $image = 'images.jpg')
         // top-up discount: the user paid the full amount through the gateway,
         // the bonus is added on top here - the one shared place every gateway's
         // wallet credit passes through, so no gateway integration changes.
-        $topup_bonus = function_exists('topup_disc_award') ? intval(topup_disc_award($Payment_report, $Balance_id)) : 0;
-        $Balance_confrim = intval($Balance_id['Balance']) + intval($Payment_report['price']) + $topup_bonus;
+        $topup_bonus = function_exists('topup_disc_award') ? round((float) topup_disc_award($Payment_report, $Balance_id), 2) : 0;
+        $Balance_confrim = round((float) $Balance_id['Balance'] + (float) $Payment_report['price'] + $topup_bonus, 2);
         update("user", "Balance", $Balance_confrim, "id", $Payment_report['id_user']);
         update("Payment_report", "payment_Status", "paid", "id_order", $Payment_report['id_order']);
-        $Payment_report['price'] = number_format($Payment_report['price'], 0);
+        $bc_cur = currency_for_user($Balance_id);
+        $Payment_report['price'] = money($Payment_report['price'], $bc_cur, false);
         $format_price_cart = $Payment_report['price'];
         if ($Payment_report['Payment_Method'] == "cart to cart" or $Payment_report['Payment_Method'] == "arze digital offline") {
-            $textconfrom = sprintf($textbotlang['hardcoded']['newPaymentBalanceChargeFn'], $Balance_id['id'], $Payment_report['id_order'], $Balance_id['username'], $format_price_cart, $Balance_id['Balance'], $Payment_report['dec_not_confirmed']);
+            $textconfrom = sprintf($textbotlang['hardcoded']['newPaymentBalanceChargeFn'], $Balance_id['id'], $Payment_report['id_order'], $Balance_id['username'], $format_price_cart, wallet_amount_text($Balance_id), $Payment_report['dec_not_confirmed']);
             Editmessagetext($from_id, $message_id, $textconfrom, $Confirm_pay);
         }
         // the old "🎁 تخفیف اعمال شد!" message and the "💲 کاربر گرامی..."
@@ -1325,15 +1351,17 @@ function DirectPayment($order_id, $image = 'images.jpg')
         $bc_lang = (is_array($Balance_id) && !empty($Balance_id['lang'])) ? $Balance_id['lang'] : 'fa';
         $bc_discountBlock = '';
         if ($topup_bonus > 0) {
+            // {bonus} has the currency's word after it in the text, {balance}
+            // does not
             $bc_discountText = strtr(bottext_resolve_key('users.Balance.chargeSuccessDiscount', $bc_lang), [
-                '{bonus}' => money($topup_bonus, currency_for_user($Balance_id)),
-                '{balance}' => money($Balance_confrim, currency_for_user($Balance_id)),
+                '{bonus}' => money($topup_bonus, $bc_cur, false),
+                '{balance}' => money($Balance_confrim, $bc_cur),
             ]);
             $bc_discountBlock = "\n<blockquote>" . $bc_discountText . '</blockquote>';
         }
         $bc_caption = strtr(bottext_resolve_key('users.Balance.chargeSuccess', $bc_lang), [
             '{amount}' => $Payment_report['price'],
-            '{balance}' => money($Balance_confrim, currency_for_user($Balance_id)),
+            '{balance}' => money($Balance_confrim, $bc_cur, false),
             '{discount_block}' => $bc_discountBlock,
         ]);
         $bc_defs = genbtn_defs('bc', lang_tab_texts($bc_lang));
@@ -1802,7 +1830,7 @@ if (!function_exists('score_on')) {
                 if ($prize <= 0) {
                     continue;
                 }
-                update("user", "Balance", (float) $r['Balance'] + $prize, "id", $r['id']);
+                wallet_credit($r['id'], $prize, currency_for_lang($lang));
                 $amount = number_format($prize);
                 sendmessage($r['id'], sprintf($tx['hardcoded']['lotteryWinnerNotice'], $rank, $amount), null, 'html');
                 $rows .= sprintf($panel['hardcoded']['lotteryWinnerRow'], $r['username'], $r['id'], $amount, $rank);
@@ -7509,8 +7537,8 @@ if (!function_exists('currency_for_lang')) {
     }
 }
 if (!function_exists('currency_for_user')) {
-    // A user's currency is sticky: it is set once and does not follow later
-    // language switches, because their wallet balance is denominated in it.
+    // The currency the user's Balance column is in right now - the wallet of
+    // their current language (see wallet_switch_lang).
     function currency_for_user($userRow)
     {
         $all = currency_all();
@@ -7519,6 +7547,164 @@ if (!function_exists('currency_for_user')) {
             return $own;
         }
         return currency_for_lang(is_array($userRow) ? ($userRow['lang'] ?? 'fa') : 'fa');
+    }
+}
+if (!function_exists('wallet_stash')) {
+    // ---- one wallet per currency ----
+    // A user has a wallet for every currency they have money in, and sees the
+    // one of the language they are on: Balance is always that wallet
+    // (user.currency names its currency), the others wait in user.wallets
+    // ({"IRT": 250000}) until the user switches back. So tomans and dollars
+    // never meet in one number, and everything that spends the user's own
+    // balance keeps working on Balance unchanged. Money that lands later - a
+    // payment confirmed after a switch, a commission, a refund - goes to the
+    // wallet of its own currency through wallet_credit().
+    function wallet_stash($userRow)
+    {
+        $w = json_decode((string) (is_array($userRow) ? ($userRow['wallets'] ?? '') : ''), true);
+        $out = [];
+        foreach (is_array($w) ? $w : [] as $cur => $amount) {
+            if (is_string($cur) && $cur !== '' && is_numeric($amount)) {
+                $out[$cur] = round((float) $amount, 2);
+            }
+        }
+        return $out;
+    }
+    // every wallet with money in it, the one in use first: [currency => amount]
+    function wallet_balances($userRow)
+    {
+        $active = currency_for_user($userRow);
+        $out = [$active => round((float) ($userRow['Balance'] ?? 0), 2)];
+        foreach (wallet_stash($userRow) as $cur => $amount) {
+            if ($cur !== $active && $amount != 0) {
+                $out[$cur] = $amount;
+            }
+        }
+        return $out;
+    }
+    // the columns these need, for a bot whose table.php has not run since
+    function wallet_ensure_schema()
+    {
+        static $done = false;
+        if ($done) {
+            return;
+        }
+        $done = true;
+        // no default: an old payment or service has no recorded currency and
+        // counts as the wallet its owner is on
+        addFieldToTable('user', 'wallets', null, 'TEXT NULL');
+        addFieldToTable('Payment_report', 'currency', null, 'VARCHAR(10) NULL');
+        addFieldToTable('invoice', 'currency', null, 'VARCHAR(10) NULL');
+    }
+    // $amount (negative takes away) into the user's wallet of $currency - the
+    // one in use or a waiting one. Returns that wallet's new amount, or null
+    // when there is no such user.
+    function wallet_credit($userId, $amount, $currency = null)
+    {
+        global $pdo;
+        $row = select("user", "*", "id", $userId, "select", ['cache' => false]);
+        if (!is_array($row)) {
+            return null;
+        }
+        $active = currency_for_user($row);
+        $cur = ($currency !== null && $currency !== '') ? (string) $currency : $active;
+        $amount = round((float) $amount, 2);
+        if ($cur === $active) {
+            // one statement: a credit landing at the same moment as a purchase
+            // must not overwrite it
+            $pdo->prepare("UPDATE user SET Balance = Balance + ? WHERE id = ?")->execute([$amount, $userId]);
+            clearSelectCache('user');
+            return round((float) $row['Balance'] + $amount, 2);
+        }
+        wallet_ensure_schema();
+        $w = wallet_stash($row);
+        $w[$cur] = round(($w[$cur] ?? 0) + $amount, 2);
+        update("user", "wallets", json_encode($w), "id", $userId);
+        return $w[$cur];
+    }
+    // makes $currency's wallet the one in Balance, putting the current one
+    // aside. Returns the currency that was in use before.
+    function wallet_activate($userId, $currency)
+    {
+        global $pdo;
+        for ($try = 0; $try < 3; $try++) {
+            $row = select("user", "*", "id", $userId, "select", ['cache' => false]);
+            if (!is_array($row)) {
+                return null;
+            }
+            $active = currency_for_user($row);
+            if ($active === $currency) {
+                return $active;
+            }
+            wallet_ensure_schema();
+            $w = wallet_stash($row);
+            $w[$active] = round((float) $row['Balance'], 2);
+            $next = $w[$currency] ?? 0;
+            unset($w[$currency]);
+            $w = array_filter($w, fn($v) => $v != 0);
+            // only if nothing touched the balance since it was read - otherwise
+            // read again, so no credit is lost in the move
+            $st = $pdo->prepare("UPDATE user SET Balance = ?, currency = ?, wallets = ? WHERE id = ? AND Balance = ?");
+            $st->execute([$next, $currency, empty($w) ? '{}' : json_encode($w), $userId, $row['Balance']]);
+            clearSelectCache('user');
+            if ($st->rowCount() > 0) {
+                return $active;
+            }
+        }
+        return null;
+    }
+    // A language switch - the user's own, or one an admin makes. The wallet
+    // follows the language; a payment still to be confirmed and every service
+    // bought so far keep the currency they were priced in, so a confirmation
+    // or a refund after the switch still lands in the right wallet.
+    function wallet_switch_lang($userId, $newLang)
+    {
+        global $pdo;
+        $row = select("user", "*", "id", $userId, "select", ['cache' => false]);
+        if (!is_array($row)) {
+            return;
+        }
+        $old = currency_for_user($row);
+        $new = currency_for_lang($newLang);
+        if ($old !== $new) {
+            wallet_ensure_schema();
+            try {
+                $pdo->prepare("UPDATE Payment_report SET currency = ? WHERE id_user = ? AND (currency IS NULL OR currency = '') AND (payment_Status IS NULL OR payment_Status != 'paid')")->execute([$old, $userId]);
+                $pdo->prepare("UPDATE invoice SET currency = ? WHERE id_user = ? AND (currency IS NULL OR currency = '')")->execute([$old, $userId]);
+            } catch (Exception $e) {
+                error_log('wallet_switch_lang stamp: ' . $e->getMessage());
+            }
+            wallet_activate($userId, $new);
+        }
+        update("user", "lang", $newLang, "id", $userId);
+    }
+    // a wallet's amount for a text that writes the currency word itself:
+    // "1,000" for tomans, "2.5" for dollars - never "1000.00", never "$3" for
+    // $2.50
+    function wallet_amount_text($userRow)
+    {
+        return money(is_array($userRow) ? ($userRow['Balance'] ?? 0) : 0, currency_for_user($userRow), false);
+    }
+    // the currency a payment was asked in: recorded at a language switch,
+    // otherwise its payer's current one
+    function payment_currency($paymentRow)
+    {
+        $c = trim((string) (is_array($paymentRow) ? ($paymentRow['currency'] ?? '') : ''));
+        if ($c !== '') {
+            return $c;
+        }
+        $u = is_array($paymentRow) ? select("user", "*", "id", $paymentRow['id_user'] ?? '', "select") : false;
+        return currency_for_user(is_array($u) ? $u : null);
+    }
+    // the currency a service was paid in, the same way
+    function invoice_currency($invoiceRow)
+    {
+        $c = trim((string) (is_array($invoiceRow) ? ($invoiceRow['currency'] ?? '') : ''));
+        if ($c !== '') {
+            return $c;
+        }
+        $u = is_array($invoiceRow) ? select("user", "*", "id", $invoiceRow['id_user'] ?? '', "select") : false;
+        return currency_for_user(is_array($u) ? $u : null);
     }
 }
 if (!function_exists('money_normalize')) {
@@ -11264,7 +11450,7 @@ if (!function_exists('render_extend_invoice_from_product')) {
         } else {
             $pricelastextend = $product['price_product'];
         }
-        $textextend = sprintf($textbotlang['users']['extend']['invoiceCreated'], $nameloc['username'], $product['name_product'], $pricelastextend, $product['Service_time'], $product['Volume_constraint'], $product['note'], $user['Balance']);
+        $textextend = sprintf($textbotlang['users']['extend']['invoiceCreated'], $nameloc['username'], $product['name_product'], $pricelastextend, $product['Service_time'], $product['Volume_constraint'], $product['note'], wallet_amount_text($user));
         $keyboardextend = extend_invoice_kb($user['lang'] ?? 'fa', $textbotlang, "confirmserivce", "product_" . $nameloc['id_invoice'], "rn_topup_" . $nameloc['id_invoice']);
         return [$textextend, $keyboardextend];
     }
@@ -12415,7 +12601,7 @@ if (!function_exists('topup_disc_award')) {
         if ($eff === null || $eff['bonus'] <= 0) {
             return 0;
         }
-        $bonus = intval($eff['bonus']);
+        $bonus = round((float) $eff['bonus'], 2);
         $codeName = ($eff['source'] === 'code') ? $eff['code'] : '';
         topup_disc_log_use($userId, $codeName, $lang, $gw, $paid, $bonus);
         // never let a notification failure disturb the payment being credited
@@ -14122,7 +14308,7 @@ if (!function_exists('topup_disc_bonus_of')) {
             return 0;
         }
         if (($disc['mode'] ?? 'percent') === 'fixed') {
-            return round($value);
+            return round($value, 2);
         }
         // The 100% ceiling is enforced where a value is TYPED, against the mode
         // selected at that moment - so switching the mode afterwards used to
@@ -14132,7 +14318,7 @@ if (!function_exists('topup_disc_bonus_of')) {
         if ($value > 100) {
             $value = 100;
         }
-        return round(($amount * $value) / 100);
+        return round(($amount * $value) / 100, 2);
     }
 }
 if (!function_exists('topup_disc_effective')) {

@@ -12959,7 +12959,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
             'show_alert' => true,
             'cache_time' => 5,
         ));
-        $textconfrom = sprintf($textbotlang['Admin']['Payment']['approvedByOther'], $Balance_id['id'], $Payment_report['id_order'], $Balance_id['username'], $Balance_id['Balance'], $format_price_cart);
+        $textconfrom = sprintf($textbotlang['Admin']['Payment']['approvedByOther'], $Balance_id['id'], $Payment_report['id_order'], $Balance_id['username'], wallet_amount_text($Balance_id), $format_price_cart);
         Editmessagetext($from_id, $message_id, $textconfrom, $Confirm_pay);
         return;
     }
@@ -12978,8 +12978,8 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     $Balance_id = select("user", "*", "id", $Payment_report['id_user'], "select");
     if ($pricecashback != "0") {
         $result = ($Payment_report['price'] * $pricecashback) / 100;
-        $Balance_confrim = intval($Balance_id['Balance']) + $result;
-        update("user", "Balance", $Balance_confrim, "id", $Balance_id['id']);
+        // into the wallet the payment was made in
+        wallet_credit($Balance_id['id'], $result, payment_currency($Payment_report));
         $pricecashback = number_format($pricecashback);
         $text_report = sprintf(lang_tab_texts($Balance_id['lang'] ?? 'fa')['users']['Balance']['giftDepositAlt'], $result);
         sendmessage($Balance_id['id'], $text_report, null, 'HTML');
@@ -15304,9 +15304,8 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     }
     $ManagePanel->RemoveUser($info_product['Service_location'], $info_product['username']);
     update('invoice', 'status', 'removebyadmin', 'id_invoice', $username);
-    $Balance_user = select("user", "*", "id", $info_product['id_user'], "select");
-    $Balance_add_user = $Balance_user['Balance'] + $info_product['price_product'];
-    update("user", "Balance", $Balance_add_user, "id", $info_product['id_user']);
+    // back into the wallet the service was bought from
+    wallet_credit($info_product['id_user'], $info_product['price_product'], invoice_currency($info_product));
     $textadd = sprintf($textbotlang['users']['Balance']['addedNotice2'], $info_product['price_product']);
     sendmessage($info_product['id_user'], $textadd, null, 'HTML');
     sendmessage($from_id, $textbotlang['Admin']['manageUser']['removedService'], $keyboardadmin, 'HTML');
@@ -15539,16 +15538,17 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     step('addbalancemanual', $from_id);
     Editmessagetext($from_id, $message_id, $text_inline, null);
 } elseif ($user['step'] == "addbalancemanual") {
-    if (!ctype_digit($text)) {
+    $text = (string) (money_normalize($text) ?? '');
+    if ($text === '') {
         sendmessage($from_id, $textbotlang['Admin']['Balance']['invalidPrice'], $backadmin, 'HTML');
         return;
     }
     sendmessage($from_id, $textbotlang['Admin']['Balance']['addBalanceUser'], $keyboardadmin, 'HTML');
     $Payment_report = select("Payment_report", "*", "id_order", $user['Processing_value'], "select");
     $Balance_user = select("user", "*", "id", $Payment_report['id_user'], "select");
-    $Balance_add_user = $Balance_user['Balance'] + $text;
-    $balanceusers = number_format($text, 0);
-    update("user", "Balance", $Balance_add_user, "id", $Payment_report['id_user']);
+    $am_cur = payment_currency($Payment_report);
+    $balanceusers = money($text, $am_cur, false);
+    wallet_credit($Payment_report['id_user'], $text, $am_cur);
     $textadd = sprintf(lang_tab_texts($Balance_user['lang'] ?? 'fa')['users']['Balance']['addedNotice3'], $balanceusers);
     sendmessage($Payment_report['id_user'], $textadd, null, 'HTML');
     $text_report = sprintf($textbotlang['Admin']['reportgroup']['balanceManualAdd'], $Payment_report['id_user'], $Balance_user['username'], $Payment_report['price'], $text);
@@ -16206,11 +16206,10 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
             $pricelast = 0;
         }
     }
-    $pricelast = intval($pricelast);
-    if (intval($pricelast) != 0) {
-        $Balance_id_cancel = select("user", "*", "id", $nameloc['id_user'], "select");
-        $Balance_id_cancel_fee = intval($Balance_id_cancel['Balance']) + intval($pricelast);
-        update("user", "Balance", $Balance_id_cancel_fee, "id", $nameloc['id_user']);
+    $pricelast = round((float) $pricelast, 2);
+    if ($pricelast != 0) {
+        // back into the wallet the service was bought from
+        wallet_credit($nameloc['id_user'], $pricelast, invoice_currency($nameloc));
         sendmessage($nameloc['id_user'], sprintf($textbotlang['users']['Balance']['addedNotice4'], $pricelast), null, 'HTML');
     }
     $ManagePanel->RemoveUser($nameloc['Service_location'], $requestcheck['username']);
@@ -16249,14 +16248,14 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     sendmessage($from_id, $textbotlang['Admin']['order']['askRefundAmount'], $backadmin, 'HTML');
     step("getpricebackremove", $from_id);
 } elseif ($user['step'] == "getpricebackremove") {
-    if (!ctype_digit($text)) {
+    $text = (string) (money_normalize($text) ?? '');
+    if ($text === '') {
         sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
         return;
     }
     $invoice = select("invoice", "*", "id_invoice", $user['Processing_value'], "select");
-    $Balance_id_cancel = select("user", "*", "id", $invoice['id_user'], "select");
-    $Balance_id_cancel_fee = intval($Balance_id_cancel['Balance']) + intval($text);
-    update("user", "Balance", $Balance_id_cancel_fee, "id", $invoice['id_user']);
+    // back into the wallet the service was bought from
+    wallet_credit($invoice['id_user'], $text, invoice_currency($invoice));
     sendmessage($invoice['id_user'], sprintf($textbotlang['users']['Balance']['addedNotice5'], $text), null, 'HTML');
     sendmessage($from_id, $textbotlang['Admin']['Balance']['addedToUser'], $keyboardadmin, 'HTML');
     $text_report = sprintf($textbotlang['Admin']['reportgroup']['deleteRequestApproved2'], $from_id, $text, $invoice['username'], $invoice['id_user']);
@@ -16578,8 +16577,7 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     $request_agent = select("Requestagent", "*", "id", $id_user, "select");
     update("Requestagent", "status", "reject", "id", $id_user);
     $userinfo = select("user", "*", "id", $id_user, "select");
-    $Balancenew = $userinfo['Balance'] + intval($setting['agentreqprice']);
-    update("user", "Balance", $Balancenew, "id", $id_user);
+    wallet_credit($id_user, $setting['agentreqprice']);
     if ($request_agent['status'] == "reject" || $request_agent['status'] == "accept") {
         telegram('answerCallbackQuery', array(
             'callback_query_id' => $callback_query_id,

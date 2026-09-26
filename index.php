@@ -230,7 +230,7 @@ if ($user['username'] == "none" || $user['username'] == null || $user['username'
 }
 $lang_array = panel_langs();
 if (!in_array($user['lang'], $lang_array)) {
-    update("user", "lang", 'fa', "id", $from_id);
+    wallet_switch_lang($from_id, 'fa');
 }
 if ($user['register'] == "none") {
     update("user", "register", time(), "id", $from_id);
@@ -440,8 +440,7 @@ if ($user['joinchannel'] != "active") {
                 $aff_reflang = $useraffiliates['lang'] ?? 'fa';
                 if (feature_setting_value('aff_startgift', $aff_reflang, $marzbanDiscountaffiliates['Discount']) == "onDiscountaffiliates") {
                     $aff_giftamount = feature_setting_value('aff_giftamount', $aff_reflang, $marzbanDiscountaffiliates['price_Discount']);
-                    $Balance_add_user = $useraffiliates['Balance'] + $aff_giftamount;
-                    update("user", "Balance", $Balance_add_user, "id", $affiliatesid);
+                    wallet_credit($affiliatesid, $aff_giftamount, currency_for_lang($aff_reflang));
                     $addbalancediscount = money($aff_giftamount, currency_for_user($useraffiliates));
                     sendmessage($affiliatesid, strtr(payer_texts($affiliatesid)['users']['affiliates']['balanceGift'], ['{addbalancediscount}' => $addbalancediscount, '{from_id}' => $from_id]), null, 'html');
                 }
@@ -2231,8 +2230,8 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         ]
     ]);
     $priceproductformat = number_format($pricelastextend);
-    $balanceformatsell = number_format(select("user", "Balance", "id", $from_id, "select")['Balance'], 0);
-    $balanceformatsellbefore = number_format($user['Balance'], 0);
+    $balanceformatsell = money(select("user", "Balance", "id", $from_id, "select")['Balance'], currency_for_user($user), false);
+    $balanceformatsellbefore = wallet_amount_text($user);
     $textextend = sprintf($textbotlang['users']['extend']['success'], $nameloc['username'], $prodcut['name_product'], $priceproductformat);
     sendmessage($from_id, $textextend, $keyboardextendfnished, 'HTML');
     $timejalali = jdate('Y/m/d H:i:s');
@@ -2649,7 +2648,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $volumes = $volume / $extrapricevalue;
     $textvolume = sprintf($textbotlang['users']['extraVolume']['success'], $nameloc['username'], $volumes, $volumesformat);
     sendmessage($from_id, $textvolume, $keyboardextrafnished, 'HTML');
-    $text_report = sprintf($textbotlang['Admin']['reportgroup']['extraVolume'], $from_id, $volumes, $volumesformat, $nameloc['username'], $user['Balance']);
+    $text_report = sprintf($textbotlang['Admin']['reportgroup']['extraVolume'], $from_id, $volumes, $volumesformat, $nameloc['username'], wallet_amount_text($user));
     if (strlen($setting['Channel_Report']) > 0) {
         telegram('sendmessage', [
             'chat_id' => $setting['Channel_Report'],
@@ -2886,7 +2885,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         update("invoice", "inboundid", $marzban_list_get_new['inboundid'], "username", $nameloc['username']);
     }
     Editmessagetext($from_id, $message_id, $textchangeloc, $keyboardextend);
-    $balanceformatsell = number_format(select("user", "Balance", "id", $from_id, "select")['Balance'], 0);
+    $balanceformatsell = money(select("user", "Balance", "id", $from_id, "select")['Balance'], currency_for_user($user), false);
     $format_byte = formatBytes($data_limit);
     $textreport = sprintf($textbotlang['Admin']['reportgroup']['locationChanged'], $from_id, $username, $marzban_list_get['name_panel'], $marzban_list_get_new['name_panel'], $nameloc['username'], $format_byte, $balanceformatsell);
     if (strlen($setting['Channel_Report']) > 0) {
@@ -3971,7 +3970,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         $user['codeInvitation'] = $randomString;
     }
     $first_name = htmlspecialchars($first_name);
-    $Balanceuser = number_format($user['Balance'], 0);
+    $Balanceuser = wallet_amount_text($user);
     if ($user['number'] == "none") {
         $numberphone = $textbotlang['common']['labels']['notSent'];
     } else {
@@ -4751,14 +4750,14 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
             if ($countinvoice == 1) {
                 $result = ($priceproduct * feature_setting_value('aff_percent', $aff_reflang, $setting['affiliatespercentage'])) / 100;
                 $user_Balance = select("user", "*", "id", $user['affiliates'], "select");
-                $Balance_prim = $user_Balance['Balance'] + $result;
                 if (score_on($aff_reflang, $setting) and !in_array($user['affiliates'], $admin_ids)) {
                     sendmessage($user['affiliates'], payer_texts($user['affiliates'])['users']['affiliates']['pointsEarned2Alt'], null, 'html');
                     $scorenew = $user_Balance['score'] + 2;
                     update("user", "score", $scorenew, "id", $user['affiliates']);
                 }
-                update("user", "Balance", $Balance_prim, "id", $user['affiliates']);
-                $result = money($result, currency_for_user($user_Balance));
+                // a share of what the buyer paid, so in the buyer's currency
+                wallet_credit($user['affiliates'], $result, currency_for_user($user));
+                $result = money($result, currency_for_user($user));
                 $dateacc = date('Y/m/d H:i:s');
                 $textadd = sprintf(payer_texts($user['affiliates'])['users']['affiliates']['commissionPaid'], $result);
                 $textreportport = sprintf(panel_texts()['Admin']['reportgroup']['commissionPaid'], $result, $user['affiliates'], $from_id, $dateacc);
@@ -4776,14 +4775,14 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
 
             $result = ($priceproduct * feature_setting_value('aff_percent', $aff_reflang, $setting['affiliatespercentage'])) / 100;
             $user_Balance = select("user", "*", "id", $user['affiliates'], "select");
-            $Balance_prim = $user_Balance['Balance'] + $result;
             if (score_on($aff_reflang, $setting) and !in_array($user['affiliates'], $admin_ids)) {
                 sendmessage($user['affiliates'], payer_texts($user['affiliates'])['users']['affiliates']['pointsEarned2Alt'], null, 'html');
                 $scorenew = $user_Balance['score'] + 2;
                 update("user", "score", $scorenew, "id", $user['affiliates']);
             }
-            update("user", "Balance", $Balance_prim, "id", $user['affiliates']);
-            $result = money($result, currency_for_user($user_Balance));
+            // a share of what the buyer paid, so in the buyer's currency
+            wallet_credit($user['affiliates'], $result, currency_for_user($user));
+            $result = money($result, currency_for_user($user));
             $dateacc = date('Y/m/d H:i:s');
             $textadd = sprintf(payer_texts($user['affiliates'])['users']['affiliates']['commissionPaid'], $result);
             $textreportport = sprintf(panel_texts()['Admin']['reportgroup']['commissionPaid2'], $result, $user['affiliates'], $from_id, $dateacc);
@@ -4803,12 +4802,12 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         $scorenew = $user['score'] + 1;
         update("user", "score", $scorenew, "id", $from_id);
     }
-    $balanceformatsell = number_format(select("user", "Balance", "id", $from_id, "select")['Balance'], 0);
+    $balanceformatsell = money(select("user", "Balance", "id", $from_id, "select")['Balance'], currency_for_user($user), false);
     $textonebuy = "";
     if ($countinvoice == 1) {
         $textonebuy = $textbotlang['common']['labels']['firstPurchaseAlt'];
     }
-    $balanceformatsellbefore = number_format($user['Balance'], 0);
+    $balanceformatsellbefore = wallet_amount_text($user);
     $Response = json_encode([
         'inline_keyboard' => [
             [
@@ -5183,8 +5182,8 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     $user_Balance = select("user", "*", "id", $from_id, "select");
     $Balance_prim = $user_Balance['Balance'] - $priceproduct;
     update("user", "Balance", $Balance_prim, "id", $from_id);
-    $balanceformatsell = number_format(select("user", "Balance", "id", $from_id, "select")['Balance'], 0);
-    $balanceformatsellbefore = number_format($user['Balance'], 0);
+    $balanceformatsell = money(select("user", "Balance", "id", $from_id, "select")['Balance'], currency_for_user($user), false);
+    $balanceformatsellbefore = wallet_amount_text($user);
     $pricebulk = $info_product['price_product'] * intval($user['Processing_value_four']);
     $count_service = $user['Processing_value_four'];
     $timejalali = jdate('Y/m/d H:i:s');
@@ -5537,8 +5536,8 @@ if (preg_match('/Confirmpay_user_(\w+)_(\w+)/', $datain, $dataget)) {
         $pricecashback = select("PaySetting", "ValuePay", "NamePay", "chashbackiranpay2", "select")['ValuePay'];
         if ($pricecashback != "0") {
             $result = ($Payment_report['price'] * $pricecashback) / 100;
-            $Balance_confrim = intval($Balance_id['Balance']) + $result;
-            update("user", "Balance", $Balance_confrim, "id", $user['id']);
+            // into the wallet the payment was made in
+            wallet_credit($user['id'], $result, payment_currency($Payment_report));
             $pricecashback = number_format($pricecashback);
             $text_report = sprintf($textbotlang['users']['Discount']['gift-deposit'], $result);
             sendmessage($from_id, $text_report, null, 'HTML');
@@ -5884,7 +5883,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     step('getresidcurrency', $from_id);
     update("user", "Processing_value", $dataget[1], "id", $from_id);
 } elseif ($user['step'] == "getresidcurrency") {
-    $format_balance = number_format($user['Balance'], 0);
+    $format_balance = wallet_amount_text($user);
     step('home', $from_id);
     $PaymentReport = select("Payment_report", "*", "id_order", $user['Processing_value'], "select");
     $Paymentusercount = select("Payment_report", "*", "id_user", $PaymentReport['id_user'], "count");
@@ -6006,7 +6005,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     $dateacc = date('Y/m/d H:i:s');
     update("Payment_report", "at_updated", $dateacc, "id_order", $PaymentReport['id_order']);
 } elseif ($user['step'] == "cart_to_cart_user") {
-    $format_balance = number_format($user['Balance'], 0);
+    $format_balance = wallet_amount_text($user);
     // a receipt can be a photo (with or without a caption) OR plain text -
     // people who bank by SMS often have no screenshot to send, just the bank's
     // message, and refusing that used to leave them with no way to pay.
@@ -6204,8 +6203,9 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     $stmt->bindParam(':code', $text);
     $stmt->execute();
     $get_codesql = $stmt->fetch(PDO::FETCH_ASSOC);
-    $balance_user = $user['Balance'] + $get_codesql['price'];
-    update("user", "Balance", $balance_user, "id", $from_id);
+    // codes are made in the shop's main currency: into that wallet, so a
+    // 50,000 code can never become $50,000
+    wallet_credit($from_id, $get_codesql['price'], currency_default_code());
     $discountlimitadd = intval($checklimit['limitused']) + 1;
     update("Discount", "limitused", $discountlimitadd, "code", $text);
     step('home', $from_id);
@@ -6307,14 +6307,13 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     $price_gift_Start = select("affiliates", "*", null, null, "select");
     $price_gift_Start = ((float) feature_setting_value('aff_giftamount', $user['lang'] ?? 'fa', $price_gift_Start['price_Discount'])) / 2;
     $useraffiliates = select("user", "*", 'id', $reagent['reagent'], "select");
-    $Balance_add_regent = $useraffiliates['Balance'] + $price_gift_Start;
-    update("user", "Balance", $Balance_add_regent, "id", $reagent['reagent']);
+    $Balance_add_regent = wallet_credit($reagent['reagent'], $price_gift_Start, currency_for_user($user));
     $Balance_add_user = $user['Balance'] + $price_gift_Start;
     update("user", "Balance", $Balance_add_user, "id", $from_id);
     $addbalancediscount = money($price_gift_Start, currency_for_user($user));
     sendmessage($reagent['reagent'], $textbotlang['users']['affiliates']['joinedGift'], null, 'html');
     sendmessage($from_id, $textbotlang['users']['affiliates']['joinGiftActivated'], null, 'html');
-    $report_join_gift = sprintf($textbotlang['Admin']['reportgroup']['membershipGiftPaid'], $from_id, $username, $reagent['reagent'], $user['Balance'], $Balance_add_user, $useraffiliates['Balance'], $Balance_add_regent);
+    $report_join_gift = sprintf($textbotlang['Admin']['reportgroup']['membershipGiftPaid'], $from_id, $username, $reagent['reagent'], wallet_amount_text($user), $Balance_add_user, wallet_amount_text($useraffiliates), $Balance_add_regent);
     if (strlen($setting['Channel_Report']) > 0) {
         telegram('sendmessage', [
             'chat_id' => $setting['Channel_Report'],
@@ -6452,7 +6451,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     sendmessage($from_id, $textbotlang['users']['extend']['thanks'], $back, 'HTML');
     $volumes = $volume / $extrapricevalue;
     $volumes = number_format($volumes, 0);
-    $text_report = sprintf($textbotlang['Admin']['reportgroup']['volumePurchase'], $from_id, $volumes, $volume, $user['Balance'], $user['Processing_value']);
+    $text_report = sprintf($textbotlang['Admin']['reportgroup']['volumePurchase'], $from_id, $volumes, $volume, wallet_amount_text($user), $user['Processing_value']);
     if (strlen($setting['Channel_Report']) > 0) {
         telegram('sendmessage', [
             'chat_id' => $setting['Channel_Report'],
@@ -6996,8 +6995,8 @@ if (isset($update['message']['successful_payment'])) {
     $Balance_id = select("user", "*", "id", $Payment_report['id_user'], "select");
     if ($pricecashback != "0") {
         $result = ($Payment_report['price'] * $pricecashback) / 100;
-        $Balance_confrim = intval($Balance_id['Balance']) + $result;
-        update("user", "Balance", $Balance_confrim, "id", $Balance_id['id']);
+        // into the wallet the payment was made in
+        wallet_credit($Balance_id['id'], $result, payment_currency($Payment_report));
         $text_report = sprintf($textbotlang['users']['Discount']['gift-deposit'], $result);
         sendmessage($Balance_id['id'], $text_report, null, 'HTML');
     }
@@ -7056,7 +7055,7 @@ if (isset($update['message']['successful_payment'])) {
             ]
         ]
     ]);
-    sendmessage($from_id, sprintf($textbotlang['users']['extend']['renewalinvoice'], $username, $prodcut['name_product'], $prodcut['price_product'], $prodcut['Service_time'], $prodcut['Volume_constraint'], $prodcut['note'], $user['Balance']), $keyboardextend, 'html');
+    sendmessage($from_id, sprintf($textbotlang['users']['extend']['renewalinvoice'], $username, $prodcut['name_product'], $prodcut['price_product'], $prodcut['Service_time'], $prodcut['Volume_constraint'], $prodcut['note'], wallet_amount_text($user)), $keyboardextend, 'html');
 } elseif (preg_match('/^confirmserivces-(.*)-(.*)/', $datain, $dataget)) {
     $codeproduct = $dataget[1];
     $usernamePanelExtends = $dataget[2];
@@ -7158,7 +7157,7 @@ if (isset($update['message']['successful_payment'])) {
         ':output' => json_encode($extend)
     ]);
     $prodcut['price_product'] = number_format($prodcut['price_product']);
-    $balanceformatsell = number_format(select("user", "Balance", "id", $from_id, "select")['Balance'], 0);
+    $balanceformatsell = money(select("user", "Balance", "id", $from_id, "select")['Balance'], currency_for_user($user), false);
     $textextend = sprintf($textbotlang['users']['extend']['success2'], $usernamePanelExtends, $prodcut['name_product'], $prodcut['price_product']);
     sendmessage($from_id, $textextend, $keyboard, 'HTML');
     $timejalali = jdate('Y/m/d H:i:s');
@@ -7177,7 +7176,9 @@ if (isset($update['message']['successful_payment'])) {
 
 } elseif (preg_match('/^setlang:(fa|en|ru|zh|tk)$/', $datain, $dataget)) {
     $lang = $dataget[1];
-    update("user", "lang", $lang, "id", $from_id);
+    // the wallet follows the language: tomans stay with Persian, dollars
+    // with English, each waiting for the user to come back
+    wallet_switch_lang($from_id, $lang);
     clearSelectCache();
     // $users was read at the top of keyboard.php, before this switch happened,
     // so it still carries the OLD language - and build_main_keyboard() below

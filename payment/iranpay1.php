@@ -65,8 +65,8 @@ if ($StatusPayment == 100) {
             $Balance_id = select("user", "*", "id", $Payment_report['id_user'], "select");
             if ($pricecashback != "0") {
                 $result = ($Payment_report['price'] * $pricecashback) / 100;
-                $Balance_confrim = intval($Balance_id['Balance']) + $result;
-                update("user", "Balance", $Balance_confrim, "id", $Balance_id['id']);
+                // into the wallet the payment was made in
+                wallet_credit($Balance_id['id'], $result, payment_currency($Payment_report));
                 $pricecashback = number_format($pricecashback);
                 $text_report = sprintf($textbotlang['paymentGateway']['giftReport'], $result);
                 sendmessage($Balance_id['id'], $text_report, null, 'HTML');

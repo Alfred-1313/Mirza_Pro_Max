@@ -24,7 +24,7 @@ try {
             step VARCHAR(500) NOT NULL,
             description_blocking TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
             number VARCHAR(300) NOT NULL,
-            Balance INT(255) NOT NULL,
+            Balance DECIMAL(20,2) NOT NULL DEFAULT 0,
             User_Status VARCHAR(500) NOT NULL,
             pagenumber INT(10) NOT NULL,
             message_count VARCHAR(100) NOT NULL,
@@ -1459,6 +1459,36 @@ addFieldToTable("setting", "lang_gwsettings", '{}', "TEXT");
 addFieldToTable("setting", "gw_currency_map", '{"card":"IRT","zarinpal":"IRT","aqayepardakht":"IRT","iranpay1":"IRT","iranpay2":"IRT","iranpay3":"IRT","paymentnotverify":"IRT","plisio":"USD","nowpayment":"USD","digitaltron":"USD"}', "TEXT");
 addFieldToTable("product", "currency", "IRT", "VARCHAR(10)");
 addFieldToTable("user", "currency", "IRT", "VARCHAR(10)");
+// ---- a wallet per currency (wallet_switch_lang in function.php) ----
+// the wallets not in use, and the currency a payment or a service was priced in
+// once its payer switched language - no default, an old row counts as its
+// owner's current wallet
+addFieldToTable("user", "wallets", null, "TEXT NULL");
+addFieldToTable("Payment_report", "currency", null, "VARCHAR(10) NULL");
+addFieldToTable("invoice", "currency", null, "VARCHAR(10) NULL");
+addFieldToTable("setting", "wallet_migrated", "0", "VARCHAR(5)");
+try {
+    // cents: a dollar wallet holds $0.10
+    $wm_col = $pdo->query("SHOW COLUMNS FROM `user` LIKE 'Balance'")->fetch(PDO::FETCH_ASSOC);
+    if ($wm_col && stripos((string) $wm_col['Type'], 'decimal') === false) {
+        $pdo->exec("ALTER TABLE `user` MODIFY `Balance` DECIMAL(20,2) NOT NULL DEFAULT 0");
+    }
+    // once: every wallet was labelled tomans, but an English user has always
+    // been topped up and charged in dollars - label each with its language's
+    // currency
+    if ((string) $pdo->query("SELECT wallet_migrated FROM setting LIMIT 1")->fetchColumn() !== '1') {
+        $wm_map = json_decode((string) $pdo->query("SELECT lang_currency FROM setting LIMIT 1")->fetchColumn(), true);
+        $wm_st = $pdo->prepare("UPDATE user SET currency = ? WHERE lang = ?");
+        foreach (is_array($wm_map) ? $wm_map : [] as $wm_lang => $wm_cur) {
+            if ($wm_lang !== 'fa' && is_string($wm_cur) && $wm_cur !== '') {
+                $wm_st->execute([$wm_cur, $wm_lang]);
+            }
+        }
+        $pdo->exec("UPDATE setting SET wallet_migrated = '1'");
+    }
+} catch (Exception $e) {
+    error_log("wallet migration: " . $e->getMessage());
+}
 addFieldToTable("channels", "id", null, "INT AUTO_INCREMENT PRIMARY KEY");
 addFieldToTable("channels", "style", null, "VARCHAR(20)");
 addFieldToTable("channels", "custom_text", null, "VARCHAR(300)");
