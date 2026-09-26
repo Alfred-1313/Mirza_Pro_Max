@@ -2604,6 +2604,7 @@ function keyboard_list_text($lang, $groupFilter = null)
             'verify' => 'groupVerifyCaption',
             'wheel' => 'groupWheelCaption',
             'referral' => 'groupReferralCaption',
+            'usermgmt' => 'groupUserMgmtCaption',
         ][$groupFilter] ?? 'groupBuyflowCaption';
         $bt_caption_tpl = $textbotlang['bottext'][$bt_captionKey];
         $bt_caption = strtr($bt_caption_tpl, ['{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang]);
@@ -2639,6 +2640,8 @@ function keyboard_list_text($lang, $groupFilter = null)
         // off - their messages had no row here at all until now, so they were
         // the only customer-facing flows with no way to reword them
         'home_features' => [],
+        // what 👤 مدیریت کاربر sends a customer: one row into its own group
+        'home_usermgmt' => [],
     ];
     $bt_home_sectioned_keys = array_merge(...array_values($bt_home_sections));
     foreach ($bt_home_sections as $bt_sec_key => $bt_sec_items) {
@@ -2705,6 +2708,7 @@ function keyboard_list_text($lang, $groupFilter = null)
             'home_features:verify' => ['verify', 'groupVerifyLabel'],
             'home_features:wheel' => ['wheel', 'groupWheelLabel'],
             'home_features:referral' => ['referral', 'groupReferralLabel'],
+            'home_usermgmt' => ['usermgmt', 'groupUserMgmtLabel'],
         ] as $bt_sec_owner => $bt_sec_group) {
             // one section may own several group rows, so the key carries the
             // section before the ":" and stays unique in this map

@@ -10851,6 +10851,26 @@ if (!function_exists('bt_section_meta')) {
                 'label' => '🔔 هشدارها و اطلاع‌رسانی',
                 'alert' => 'پیام‌هایی که ربات خودش به کاربر می‌فرسته - نه در جواب یه دکمه، بلکه وقتی اتفاقی می‌افته (مثلاً مصرف بسته به حد مشخصی می‌رسه).',
             ],
+            'home_usermgmt' => [
+                'label' => '👤 مدیریت کاربر',
+                'alert' => 'پیام‌ها و دکمه‌هایی که از «👤 مدیریت کاربر» به کاربر می‌رسن: افزایش و کسر موجودی، هدیه‌ی شارژ همگانی، بازگشت مبلغ، رفع مسدودی، پیام ادمین و دکمه‌های زیر پیام همگانی.',
+            ],
+            'um_balance' => [
+                'label' => '💰 موجودی کیف پول',
+                'alert' => 'پیام‌هایی که وقتی ادمین موجودی کاربر رو زیاد یا کم می‌کنه (تکی یا همگانی) به خود کاربر می‌رسه - به زبان و با ارز کیف پول خودش.',
+            ],
+            'um_orders' => [
+                'label' => '🛍 حذف سرویس و بازگشت مبلغ',
+                'alert' => 'پیام‌هایی که بعد از حذف سرویس توسط ادمین یا جواب درخواست حذف سرویس به کاربر می‌رسه.',
+            ],
+            'um_account' => [
+                'label' => '👤 حساب کاربر',
+                'alert' => 'پیام‌هایی که بعد از کاری که ادمین روی حساب کاربر انجام می‌ده (احراز هویت، رفع مسدودی، کارت به کارت، نمایندگی) به کاربر می‌رسه.',
+            ],
+            'um_messages' => [
+                'label' => '📣 پیام‌های ادمین',
+                'alert' => 'قالب پیامی که ادمین به یک کاربر می‌فرسته و دکمه‌ی پاسخش، و دکمه‌هایی که زیر پیام همگانی گذاشته می‌شن. هر زبان جدا تنظیم می‌شه و کاربر هر زبان، دکمه‌ی همون زبان رو می‌بینه.',
+            ],
             'home_features' => [
                 'label' => '🎯 قابلیت‌های ربات',
                 'alert' => 'پیام‌ها و دکمه‌های قابلیت‌هایی که از «🌐 وضعیت قابلیت‌ها (هر زبان)» روشن/خاموش می‌شن: احراز شماره و قوانین، گردونه شانس، و زیرمجموعه‌گیری.',
@@ -10948,6 +10968,16 @@ if (!function_exists('genbtn_alias_map')) {
             // own-key trick again - the one button under the "you left the
             // channel" message
             'lc' => 'users.channel.left_channel',
+            // 👤 مدیریت کاربر: the reply button under the admin's message to one
+            // user (own-key), and the six buttons a broadcast can carry - each
+            // a button of its own, like the close buttons
+            'ma' => 'users.support.messageFromAdminAlt',
+            'b1' => 'bottext.bcBuyBtn',
+            'b2' => 'bottext.bcStartBtn',
+            'b3' => 'bottext.bcTestBtn',
+            'b4' => 'bottext.bcHelpBtn',
+            'b5' => 'bottext.bcAffBtn',
+            'b6' => 'bottext.bcTopupBtn',
         ];
     }
 }
@@ -10971,7 +11001,7 @@ if (!function_exists('genbtn_alias_to_key')) {
     {
         // their render sites (keyboard.php) never read 'hidden', and hiding
         // «پذیرش قوانین» would strand a customer on the rules screen
-        if ($alias === 'sp' || $alias === 'ar') {
+        if ($alias === 'sp' || $alias === 'ar' || $alias === 'ma' || preg_match('/^b[1-6]$/', (string) $alias)) {
             return false;
         }
         $key = genbtn_alias_to_key($alias);
@@ -11124,6 +11154,23 @@ if (!function_exists('genbtn_defs')) {
             // a link button: the url is the channel the customer left, filled
             // in where the message is sent
             return [0 => ['name' => '📌 دکمه عضویت مجدد', 'text' => $textbotlang['keyboard']['rejoin'], 'style' => '', 'callback_data' => 'none']];
+        }
+        if ($alias === 'ma') {
+            return [0 => ['name' => '↩️ دکمه پاسخ به پیام ادمین', 'text' => $textbotlang['users']['support']['answermessage'], 'style' => '', 'callback_data' => 'Responseuser']];
+        }
+        // a broadcast's buttons: the same labels they always had (the main
+        // menu's words), the same action each always took
+        $bcNote = 'این دکمه زیر پیام همگانی میاد، وقتی موقع ارسال پیام (👤 مدیریت کاربر ← 📣 ارسال پیام) همین دکمه رو براش انتخاب کنی. پیام به کاربرای هر زبان با دکمه‌ی همون زبان می‌رسه.';
+        $bc = [
+            'b1' => ['🛒 دکمه خرید (زیر پیام همگانی)', $textbotlang['textbot']['sell'], 'buy'],
+            'b2' => ['🏠 دکمه شروع (زیر پیام همگانی و هدیه‌ی شارژ)', $textbotlang['keyboard']['start'], 'start'],
+            'b3' => ['🎁 دکمه اکانت تست (زیر پیام همگانی)', $textbotlang['textbot']['userTest'], 'usertestbtn'],
+            'b4' => ['📚 دکمه آموزش (زیر پیام همگانی)', $textbotlang['textbot']['help'], 'helpbtn'],
+            'b5' => ['👥 دکمه زیرمجموعه‌گیری (زیر پیام همگانی)', $textbotlang['textbot']['affiliates'], 'affiliatesbtn'],
+            'b6' => ['💰 دکمه افزایش موجودی (زیر پیام همگانی)', $textbotlang['textbot']['addBalance'], 'Add_Balance'],
+        ];
+        if (isset($bc[$alias])) {
+            return [0 => ['name' => $bc[$alias][0], 'text' => $bc[$alias][1], 'style' => '', 'callback_data' => $bc[$alias][2], 'note' => $alias === 'b2' ? $bcNote . ' زیر پیام «🎁 هدیه‌ی شارژ همگانی» هم همین دکمه میاد.' : $bcNote]];
         }
         if ($alias === 'sl') {
             return [0 => ['name' => '🔗 دکمه اشتراک‌گذاری لینک', 'text' => $textbotlang['keyboard']['shareLink'], 'style' => '', 'callback_data' => 'none', 'note' => 'این دکمه لینکه و تلگرام برای دکمه‌ی لینک رنگ و ایموجی نمی‌پذیره - فقط متنش قابل تغییره.']];
@@ -11567,7 +11614,7 @@ if (!function_exists('genbtn_hub_payload')) {
 
     function genbtn_group_title($alias, $textbotlang)
     {
-        $titles = ['su' => '🔘 دکمه‌های نام‌گذاری سرویس', 'cf' => '🔘 دکمه‌های تأیید خرید', 'ns' => '🔘 دکمه‌ی نداشتن سرویس فعال', 'te' => '🔘 دکمه‌ی پیام اتمام اکانت تست', 'sc' => '🔘 دکمه‌ی بستن (سرویس‌های من)', 'bc' => '🔘 دکمه‌ی تهیه اشتراک (شارژ کیف پول)', 'rn' => '🔘 دکمه‌های فاکتور تمدید سرویس', 'cl' => '🔘 دکمه‌های تغییر لینک اتصال', 'td' => '🔘 دکمه‌های کد تخفیف شارژ', 'hb' => '🔘 دکمه‌ی بازگشت به دسته‌بندی آموزش', 'hv' => '🔘 دکمه‌ی بازگشت (زیر محتوای آموزش)', 'ab' => '📚 دکمه‌ی مشاهده آموزش (پیام بعد از خرید)', 'ut' => '📚 دکمه‌ی مشاهده آموزش (اکانت تست)', 'lc' => '📌 دکمه‌ی عضویت مجدد (پیام خروج از کانال)'];
+        $titles = ['su' => '🔘 دکمه‌های نام‌گذاری سرویس', 'cf' => '🔘 دکمه‌های تأیید خرید', 'ns' => '🔘 دکمه‌ی نداشتن سرویس فعال', 'te' => '🔘 دکمه‌ی پیام اتمام اکانت تست', 'sc' => '🔘 دکمه‌ی بستن (سرویس‌های من)', 'bc' => '🔘 دکمه‌ی تهیه اشتراک (شارژ کیف پول)', 'rn' => '🔘 دکمه‌های فاکتور تمدید سرویس', 'cl' => '🔘 دکمه‌های تغییر لینک اتصال', 'td' => '🔘 دکمه‌های کد تخفیف شارژ', 'hb' => '🔘 دکمه‌ی بازگشت به دسته‌بندی آموزش', 'hv' => '🔘 دکمه‌ی بازگشت (زیر محتوای آموزش)', 'ab' => '📚 دکمه‌ی مشاهده آموزش (پیام بعد از خرید)', 'ut' => '📚 دکمه‌ی مشاهده آموزش (اکانت تست)', 'lc' => '📌 دکمه‌ی عضویت مجدد (پیام خروج از کانال)', 'ma' => '↩️ دکمه‌ی پاسخ به پیام ادمین'];
         if (isset($titles[$alias])) {
             return $titles[$alias];
         }
@@ -11590,6 +11637,7 @@ if (!function_exists('genbtn_hub_payload')) {
             'ab' => 'این ۱ دکمه، زیر پیام «✅ سرویس با موفقیت ایجاد شد» (بعد از خرید) نشون داده می‌شه - برای همه‌ی نوع پنل‌ها، خرید چندتایی، پرداخت آنلاین و سفارشی که ادمین برای کاربر ثبت می‌کنه. پیش‌فرض مخفیه؛ برای نمایش، «👁 نمایش دادن این دکمه» رو بزن.',
             'ut' => 'این ۱ دکمه، زیر پیام «✅ سرویس با موفقیت ایجاد شد» بعد از گرفتن اکانت تست نشون داده می‌شه. پیش‌فرض مخفیه؛ برای نمایش، «👁 نمایش دادن این دکمه» رو بزن.',
             'lc' => 'این ۱ دکمه، زیر پیام «از کانال خارج شدید» میاد و کاربر رو به همون کانالی که ازش خارج شده برمی‌گردونه.',
+            'ma' => 'این ۱ دکمه، زیر پیامی میاد که از «👀 اطلاعات کاربر ← ارسال پیام» به یک کاربر می‌فرستی - وقتی موقع ارسال اجازه‌ی پاسخ داده باشی. کاربر با زدنش جواب رو برای ادمین می‌فرسته.',
         ];
         if (isset($notes[$alias])) {
             return $notes[$alias];
@@ -11605,7 +11653,7 @@ if (!function_exists('genbtn_hub_payload')) {
             return bt_btnitem_back_cb($key, $lang);
         }
         // 'cf' points at textbot.preInvoice (the normal-purchase تأیید خرید)
-        $backKeyMap = ['su' => 'users.sell.selectUsernamePrompt', 'cf' => 'textbot.preInvoice', 'ns' => 'users.sell.service_not_available', 'te' => 'textbot.testExpired', 'sc' => 'users.sell.service_sell', 'bc' => 'users.Balance.chargeSuccess', 'rn' => 'users.extend.invoiceCreated', 'cl' => 'users.changeLink.warnchange', 'td' => 'users.Balance.topupDiscPrompt', 'hb' => 'users.help.listCaption', 'hv' => 'users.help.categoryCaption', 'ab' => 'textbot.afterPay', 'ut' => 'textbot.afterText', 'lc' => 'users.channel.left_channel'];
+        $backKeyMap = ['su' => 'users.sell.selectUsernamePrompt', 'cf' => 'textbot.preInvoice', 'ns' => 'users.sell.service_not_available', 'te' => 'textbot.testExpired', 'sc' => 'users.sell.service_sell', 'bc' => 'users.Balance.chargeSuccess', 'rn' => 'users.extend.invoiceCreated', 'cl' => 'users.changeLink.warnchange', 'td' => 'users.Balance.topupDiscPrompt', 'hb' => 'users.help.listCaption', 'hv' => 'users.help.categoryCaption', 'ab' => 'textbot.afterPay', 'ut' => 'textbot.afterText', 'lc' => 'users.channel.left_channel', 'ma' => 'users.support.messageFromAdminAlt'];
         $backKey = ($origin === 'u') ? 'users.usertest.selectUsernamePrompt' : ($backKeyMap[$alias] ?? 'users.sell.selectUsernamePrompt');
         return "bt_edit|{$lang}|{$backKey}";
     }
@@ -15920,6 +15968,13 @@ if (!function_exists('bt_button')) {
             'keyboard.acceptRules',
             'keyboard.receiveMembershipGift',
             'keyboard.shareLink',
+            // the six buttons a broadcast from 👤 مدیریت کاربر can carry
+            'bottext.bcBuyBtn',
+            'bottext.bcStartBtn',
+            'bottext.bcTestBtn',
+            'bottext.bcHelpBtn',
+            'bottext.bcAffBtn',
+            'bottext.bcTopupBtn',
         ];
     }
     // label-only override, for buttons that may render on a reply keyboard
@@ -15953,6 +16008,12 @@ if (!function_exists('bt_button')) {
             'keyboard.acceptRules' => 'verify',
             'keyboard.receiveMembershipGift' => 'referral',
             'keyboard.shareLink' => 'referral',
+            'bottext.bcBuyBtn' => 'usermgmt',
+            'bottext.bcStartBtn' => 'usermgmt',
+            'bottext.bcTestBtn' => 'usermgmt',
+            'bottext.bcHelpBtn' => 'usermgmt',
+            'bottext.bcAffBtn' => 'usermgmt',
+            'bottext.bcTopupBtn' => 'usermgmt',
         ];
         $group = $groups[$key] ?? '';
         return $group !== '' ? "bt_group|{$lang}|{$group}" : "btact|back|{$lang}";

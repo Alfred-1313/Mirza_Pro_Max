@@ -25,7 +25,8 @@ if(count($userid) == 0){
 }
 // the buttons under the message are in its readers' language (the whole
 // list is one language tab's users); the admin's progress stays Persian
-$bm_tx = lang_tab_texts(in_array($info['lang'] ?? '', panel_langs(), true) ? $info['lang'] : 'fa');
+$bm_lang = in_array($info['lang'] ?? '', panel_langs(), true) ? $info['lang'] : 'fa';
+$bm_tx = lang_tab_texts($bm_lang);
 $count_remein = count($userid);
 $textprocces = sprintf($textbotlang['hardcoded']['bulkMessageProgress'], $count_remein);
 $cancelmessage = json_encode([
@@ -36,48 +37,17 @@ $cancelmessage = json_encode([
         ]
     ]);
 Editmessagetext($info['id_admin'], $info['id_message'],$textprocces, $cancelmessage);
-$keyboardbuy = json_encode([
-        'inline_keyboard' => [
-            [
-                ['text' => $bm_tx['textbot']['sell'], 'callback_data' => 'buy'],
-            ],
-        ]
-    ]);
-$keyboardstart = json_encode([
-        'inline_keyboard' => [
-            [
-                ['text' => $bm_tx['keyboard']['start'], 'callback_data' => 'start'],
-            ],
-        ]
-    ]);
-$keyboardusertest = json_encode([
-        'inline_keyboard' => [
-            [
-                ['text' => $bm_tx['textbot']['userTest'], 'callback_data' => 'usertestbtn'],
-            ],
-        ]
-    ]);
-$keyboardhelpbtn = json_encode([
-        'inline_keyboard' => [
-            [
-                ['text' => $bm_tx['textbot']['help'], 'callback_data' => 'helpbtn'],
-            ],
-        ]
-    ]);
-$keyboardaffiliates = json_encode([
-        'inline_keyboard' => [
-            [
-                ['text' => $bm_tx['textbot']['affiliates'], 'callback_data' => 'affiliatesbtn'],
-            ],
-        ]
-    ]);
-$keyboardaddbalance = json_encode([
-        'inline_keyboard' => [
-            [
-                ['text' => $bm_tx['textbot']['addBalance'], 'callback_data' => 'Add_Balance'],
-            ],
-        ]
-    ]);
+// each button as that language's tab has it in 🎨 (👤 پیام‌ها و دکمه‌های مدیریت کاربر)
+$bm_btn = function ($alias) use ($bm_lang, $bm_tx) {
+    $def = genbtn_defs($alias, $bm_tx)[0];
+    return json_encode(['inline_keyboard' => [[genbtn_render($def, genbtn_override($bm_lang, genbtn_alias_to_key($alias), 0), $def['callback_data'])]]]);
+};
+$keyboardbuy = $bm_btn('b1');
+$keyboardstart = $bm_btn('b2');
+$keyboardusertest = $bm_btn('b3');
+$keyboardhelpbtn = $bm_btn('b4');
+$keyboardaffiliates = $bm_btn('b5');
+$keyboardaddbalance = $bm_btn('b6');
 for ($i = 0; $i < 20; $i++) {
     $iduser = $userid[$i];
     unset($userid[$i]);
@@ -85,6 +55,11 @@ for ($i = 0; $i < 20; $i++) {
     if ($info['type'] == "unpinmessage") {
         unpinmessage($iduser->id);
     } elseif ($info['type'] == "sendmessage" or $info['type'] == "xdaynotmessage") {
+        // a message with a 🎨 item of its own (the top-up gift) gets its sticker,
+        // in each reader's language
+        if (!empty($info['hint']) && function_exists('bottext_extras_key_hint')) {
+            bottext_extras_key_hint($info['hint']);
+        }
         if ($info['btnmessage'] == "none") {
             $meesage = sendmessage($iduser->id, $info['message'], null, 'HTML');
         } elseif ($info['btnmessage'] == "buy") {

@@ -1015,6 +1015,9 @@ if (!function_exists('bottext_item_menu_payload')) {
             $kb['inline_keyboard'][] = [['text' => '🚪 پیام و دکمه‌ی خروج از کانال', 'callback_data' => "bt_edit|{$bt_lang}|users.channel.left_channel", 'style' => 'primary']];
         } elseif ($bt_key === 'users.channel.left_channel') {
             $kb['inline_keyboard'][] = [$bt_live_row(genbtn_row_label($bt_key, $bt_lang), '📌 ویرایش دکمه عضویت مجدد', "gbs|hub|{$bt_lang}|lc", $bt_btn_custom)];
+        } elseif ($bt_key === 'users.support.messageFromAdminAlt') {
+            // the reply button under it ('ma', own-key)
+            $kb['inline_keyboard'][] = [$bt_live_row(genbtn_row_label($bt_key, $bt_lang), '↩️ ویرایش دکمه پاسخ', "gbs|hub|{$bt_lang}|ma", $bt_btn_custom)];
         } elseif ($bt_key === 'users.extend.invoiceCreated') {
             $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های تأیید تمدید/بازگشت', 'callback_data' => "gbs|hub|{$bt_lang}|rn", 'style' => 'primary']];
             $kb['inline_keyboard'][] = [$bt_live_row($bt_balance_live(), '💰 ویرایش دکمه‌ی افزایش موجودی', "bt_edit|{$bt_lang}|users.Balance.insufficientBalanceSimple", is_array($bt_be) && !empty($bt_be[$bt_lang]['users.Balance.insufficientBalanceSimple']))];
@@ -9829,19 +9832,21 @@ elseif ($datain == "systemsms") {
         return;
     }
     savedata("save", "typepinmessage", $type);
+    // each button as the customers of this message's language will see it
+    $bm_pickLang = in_array($userdata['lang'] ?? '', panel_langs(), true) ? $userdata['lang'] : um_tab($user);
     $listbtn = json_encode([
         'inline_keyboard' => [
             [
-                ['text' => $textbotlang['keyboard']['startBtn'], 'callback_data' => 'btntypemessage-start'],
-                ['text' => $textbotlang['keyboard']['educationBtn'], 'callback_data' => 'btntypemessage-helpbtn'],
+                ['text' => genbtn_row_label('bottext.bcStartBtn', $bm_pickLang)[0], 'callback_data' => 'btntypemessage-start'],
+                ['text' => genbtn_row_label('bottext.bcHelpBtn', $bm_pickLang)[0], 'callback_data' => 'btntypemessage-helpbtn'],
             ],
             [
-                ['text' => $textbotlang['keyboard']['purchaseBtn'], 'callback_data' => 'btntypemessage-buy'],
-                ['text' => $textbotlang['keyboard']['testAccountBtn'], 'callback_data' => 'btntypemessage-usertestbtn'],
+                ['text' => genbtn_row_label('bottext.bcBuyBtn', $bm_pickLang)[0], 'callback_data' => 'btntypemessage-buy'],
+                ['text' => genbtn_row_label('bottext.bcTestBtn', $bm_pickLang)[0], 'callback_data' => 'btntypemessage-usertestbtn'],
             ],
             [
-                ['text' => $textbotlang['keyboard']['affiliatesBtn'], 'callback_data' => 'btntypemessage-affiliatesbtn'],
-                ['text' => $textbotlang['keyboard']['chargeWallet'], 'callback_data' => 'btntypemessage-addbalance'],
+                ['text' => genbtn_row_label('bottext.bcAffBtn', $bm_pickLang)[0], 'callback_data' => 'btntypemessage-affiliatesbtn'],
+                ['text' => genbtn_row_label('bottext.bcTopupBtn', $bm_pickLang)[0], 'callback_data' => 'btntypemessage-addbalance'],
             ],
             [
                 ['text' => $textbotlang['keyboard']['sendWithoutButton'], 'callback_data' => 'btntypemessage-none'],
@@ -10027,12 +10032,15 @@ elseif ($datain == "systemsms") {
     }
     // in the words of the user it goes to
     $sm_texts = payer_texts($userdata['iduser']);
+    $sm_row = select("user", "*", "id", $userdata['iduser'], "select");
+    $sm_lang = in_array($sm_row['lang'] ?? '', panel_langs(), true) ? $sm_row['lang'] : 'fa';
     $textsendadmin = sprintf($sm_texts['users']['support']['messageFromAdminAlt'], $userdata['text']);
     if (intval($text) == "1") {
+        $sm_def = genbtn_defs('ma', $sm_texts)[0];
         $Response = json_encode([
             'inline_keyboard' => [
                 [
-                    ['text' => $sm_texts['users']['support']['answermessage'], 'callback_data' => 'Responseuser'],
+                    genbtn_render($sm_def, genbtn_override($sm_lang, 'users.support.messageFromAdminAlt', 0), 'Responseuser'),
                 ],
             ]
         ]);
@@ -10045,6 +10053,7 @@ elseif ($datain == "systemsms") {
                 'parse_mode' => "HTML",
             ]);
         } else {
+            bottext_extras_key_hint('users.support.messageFromAdminAlt');
             sendmessage($userdata['iduser'], $textsendadmin, $Response, 'HTML');
         }
     } else {
@@ -10056,6 +10065,7 @@ elseif ($datain == "systemsms") {
                 'parse_mode' => "HTML",
             ]);
         } else {
+            bottext_extras_key_hint('users.support.messageFromAdminAlt');
             sendmessage($userdata['iduser'], $textsendadmin, null, 'HTML');
         }
     }
@@ -13543,7 +13553,8 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
             "message" => $textgift,
             "pingmessage" => "no",
             "btnmessage" => "start",
-            "lang" => $ga_lang
+            "lang" => $ga_lang,
+            "hint" => 'users.Balance.giftFromManagement'
         ));
         file_put_contents("cronbot/users.json", json_encode($Balance_user));
         file_put_contents('cronbot/info', $data);
@@ -13575,6 +13586,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     // from the wallet the user is on, told in their own words and currency
     $Balance_user_afters = money(wallet_credit($user['Processing_value'], -(float) $nb_amount, $nb_cur), $nb_cur);
     $text = money($nb_amount, $nb_cur);
+    bottext_extras_key_hint('users.Balance.deductedNotice');
     sendmessage($user['Processing_value'], sprintf(payer_texts($user['Processing_value'])['users']['Balance']['deductedNotice'], money($nb_amount, $nb_cur, false)), null, 'HTML');
     step('home', $from_id);
     if (strlen($setting['Channel_Report']) > 0) {
@@ -14535,6 +14547,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     $ab_after = wallet_credit($ab_id, (float) $ab_amount, $ab_cur);
     sendmessage($from_id, $textbotlang['Admin']['manageUser']['addBalanced'], $keyboardadmin, 'html');
     // told in their own language, the amount in their own currency
+    bottext_extras_key_hint('users.Balance.addedNotice');
     sendmessage($ab_id, sprintf(payer_texts($ab_id)['users']['Balance']['addedNotice'], money($ab_amount, $ab_cur, false)), null, 'HTML');
     step('home', $from_id);
     if (strlen($setting['Channel_Report']) > 0) {
@@ -14582,6 +14595,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     $ab_after = wallet_credit($ab_id, -(float) $ab_amount, $ab_cur);
     sendmessage($from_id, $textbotlang['Admin']['manageUser']['lowBalanced'], $keyboardadmin, 'html');
     // told in their own language, the amount in their own currency
+    bottext_extras_key_hint('users.Balance.deductedNotice2');
     sendmessage($ab_id, sprintf(payer_texts($ab_id)['users']['Balance']['deductedNotice2'], money($ab_amount, $ab_cur, false)), null, 'HTML');
     step('home', $from_id);
     if (strlen($setting['Channel_Report']) > 0) {
@@ -14640,6 +14654,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     $iduser = $dataget[1];
     update("user", "verify", "1", "id", $iduser);
     sendmessage($from_id, $textbotlang['Admin']['manageUser']['verifiedSuccess'], null, 'HTML');
+    bottext_extras_key_hint('users.account.verifiedByAdmin');
     sendmessage($iduser, payer_texts($iduser)['users']['account']['verifiedByAdmin'], null, 'HTML');
 } elseif (preg_match('/unverify-(\w+)/', $datain, $dataget)) {
     $iduser = $dataget[1];
@@ -14674,6 +14689,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     update("user", "User_Status", "Active", "id", $iduser);
     update("user", "description_blocking", " ", "id", $iduser);
     sendmessage($from_id, $textbotlang['Admin']['manageUser']['userUnblocked'], $keyboardadmin, 'HTML');
+    bottext_extras_key_hint('users.block.unblockedNotice');
     sendmessage($iduser, payer_texts($iduser)['users']['block']['unblockedNotice'], null, 'HTML');
     step('home', $from_id);
 } elseif (preg_match('/confirmnumber_(\w+)/', $datain, $dataget)) {
@@ -14751,6 +14767,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     // back into the wallet the service was bought from
     wallet_credit($info_product['id_user'], $info_product['price_product'], invoice_currency($info_product));
     $textadd = sprintf(payer_texts($info_product['id_user'])['users']['Balance']['addedNotice2'], money($info_product['price_product'], invoice_currency($info_product), false));
+    bottext_extras_key_hint('users.Balance.addedNotice2');
     sendmessage($info_product['id_user'], $textadd, null, 'HTML');
     sendmessage($from_id, $textbotlang['Admin']['manageUser']['removedService'], $keyboardadmin, 'HTML');
     Editmessagetext($from_id, $message_id, $text_inline, json_encode(['inline_keyboard' => []]));
@@ -14994,6 +15011,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     $balanceusers = money($text, $am_cur, false);
     wallet_credit($Payment_report['id_user'], $text, $am_cur);
     $textadd = sprintf(lang_tab_texts($Balance_user['lang'] ?? 'fa')['users']['Balance']['addedNotice3'], $balanceusers);
+    bottext_extras_key_hint('users.Balance.addedNotice3');
     sendmessage($Payment_report['id_user'], $textadd, null, 'HTML');
     $text_report = sprintf($textbotlang['Admin']['reportgroup']['balanceManualAdd'], $Payment_report['id_user'], $Balance_user['username'], $Payment_report['price'], $text);
     if (strlen($setting['Channel_Report']) > 0) {
@@ -15586,6 +15604,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     update("cancel_service", "status", "reject", "username", $user['Processing_value']);
     update("cancel_service", "description", $text, "username", $user['Processing_value']);
     step("home", $from_id);
+    bottext_extras_key_hint('users.status.deleteRequestRejected');
     sendmessage($nameloc['id_user'], sprintf(payer_texts($nameloc['id_user'])['users']['status']['deleteRequestRejected'], $user['Processing_value'], $text), null, 'HTML');
 } elseif (preg_match('/remoceserviceadmin-(\w+)/', $datain, $dataget)) {
     $id_invoice = $dataget[1];
@@ -15654,12 +15673,14 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     if ($pricelast != 0) {
         // back into the wallet the service was bought from
         wallet_credit($nameloc['id_user'], $pricelast, invoice_currency($nameloc));
+        bottext_extras_key_hint('users.Balance.addedNotice4');
         sendmessage($nameloc['id_user'], sprintf(payer_texts($nameloc['id_user'])['users']['Balance']['addedNotice4'], money($pricelast, invoice_currency($nameloc), false)), null, 'HTML');
     }
     $ManagePanel->RemoveUser($nameloc['Service_location'], $requestcheck['username']);
     update("cancel_service", "status", "accept", "username", $requestcheck['username']);
     update("invoice", "status", "removedbyadmin", "username", $requestcheck['username']);
     sendmessage($from_id, sprintf($textbotlang['Admin']['Balance']['addedToUserNotice'], $pricelast), null, 'HTML');
+    bottext_extras_key_hint('users.status.deleteRequestApproved');
     sendmessage($nameloc['id_user'], sprintf(payer_texts($nameloc['id_user'])['users']['status']['deleteRequestApproved'], $nameloc['username']), null, 'HTML');
     $text_report = sprintf($textbotlang['Admin']['reportgroup']['deleteRequestApproved'], $from_id, $pricelast, $requestcheck['username'], $nameloc['id_user']);
     if (strlen($setting['Channel_Report']) > 0) {
@@ -15688,6 +15709,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     $ManagePanel->RemoveUser($invoice['Service_location'], $requestcheck['username']);
     update("cancel_service", "status", "accept", "username", $requestcheck['username']);
     update("invoice", "status", "removedbyadmin", "username", $requestcheck['username']);
+    bottext_extras_key_hint('users.status.deleteRequestApproved2');
     sendmessage($invoice['id_user'], sprintf(payer_texts($invoice['id_user'])['users']['status']['deleteRequestApproved2'], $invoice['username']), null, 'HTML');
     sendmessage($from_id, $textbotlang['Admin']['order']['askRefundAmount'], $backadmin, 'HTML');
     step("getpricebackremove", $from_id);
@@ -15700,6 +15722,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     $invoice = select("invoice", "*", "id_invoice", $user['Processing_value'], "select");
     // back into the wallet the service was bought from
     wallet_credit($invoice['id_user'], $text, invoice_currency($invoice));
+    bottext_extras_key_hint('users.Balance.addedNotice5');
     sendmessage($invoice['id_user'], sprintf(payer_texts($invoice['id_user'])['users']['Balance']['addedNotice5'], money($text, invoice_currency($invoice), false)), null, 'HTML');
     sendmessage($from_id, $textbotlang['Admin']['Balance']['addedToUser'], $keyboardadmin, 'HTML');
     $text_report = sprintf($textbotlang['Admin']['reportgroup']['deleteRequestApproved2'], $from_id, $text, $invoice['username'], $invoice['id_user']);
@@ -16000,6 +16023,7 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     step('home', $from_id);
 } elseif (preg_match('/showcarduser-(.*)/', $datain, $dataget)) {
     $id_user = $dataget[1];
+    bottext_extras_key_hint('users.Balance.cardEnabledNotice');
     sendmessage($id_user, payer_texts($id_user)['users']['Balance']['cardEnabledNotice'], null, 'HTML');
     sendmessage($from_id, $textbotlang['Admin']['card']['enabled'], null, 'HTML');
     update("user", "cardpayment", "1", "id", $id_user);
@@ -16037,6 +16061,7 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         ]
     ]);
     sendmessage($from_id, $textbotlang['Admin']['agent']['requestRejected'], null, 'HTML');
+    bottext_extras_key_hint('users.agent.requestRejected');
     sendmessage($id_user, payer_texts($id_user)['users']['agent']['requestRejected'], null, 'HTML');
     $textrequestagent = sprintf($textbotlang['Admin']['agent']['requestNotice'], $id_user, $request_agent['username'], $request_agent['Description']);
     Editmessagetext($from_id, $message_id, $textrequestagent, $keyboardreject);
@@ -16070,6 +16095,7 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     update("Requestagent", "type", $defaultAgentType, "id", $id_user);
     update("user", "agent", $defaultAgentType, "id", $id_user);
     update("user", "expire", null, "id", $id_user);
+    bottext_extras_key_hint('users.agent.requestApproved');
     sendmessage($id_user, payer_texts($id_user)['users']['agent']['requestApproved'], null, 'HTML');
     sendmessage($from_id, $textbotlang['Admin']['agent']['userAgented'], $keyboardadmin, 'HTML');
     $agentTypeButtons = [];
