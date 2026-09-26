@@ -123,7 +123,7 @@ if (!function_exists('build_main_keyboard')) {
             'text_extend' => $textbotlang['textbot']['extend'],
             'text_change_language' => $textbotlang['language']['changeButton']
         ];
-        if ($setting['inlinebtnmain'] == "oninline" && !empty($keyboardRows)) {
+        if (glass_on($mm_lang, $setting) && !empty($keyboardRows)) {
             $trace_keyboard = $keyboardRows;
             foreach ($trace_keyboard as $key => $callback_set) {
                 foreach ($callback_set as $keyboard_key => $keyboard) {
@@ -653,7 +653,7 @@ $bulkproduct_note_keyboard = json_encode([
     'resize_keyboard' => true
 ]);
 $kb_userlang = $users['lang'] ?? 'fa';
-if ($setting['inlinebtnmain'] == "oninline") {
+if (glass_on($kb_userlang, $setting)) {
     $confrimrolls = json_encode([
         'inline_keyboard' => [
             [
@@ -694,7 +694,7 @@ $channelkeyboard = json_encode([
     ],
     'resize_keyboard' => true
 ]);
-if ($setting['inlinebtnmain'] == "oninline") {
+if (glass_on($kb_userlang, $setting)) {
     $backuser = json_encode([
         'inline_keyboard' => [
             [['text' => $customer_texts['users']['backbtn'], 'callback_data' => "backuser"]]
@@ -1746,7 +1746,7 @@ $keyboardtypepanel = json_encode([
 ]);
 
 $panelechekc = select("marzban_panel", "*", "MethodUsername", $textbotlang['keyboard']['usernameMethodAgentCustom'], "count");
-if ($setting['inlinebtnmain'] == "oninline") {
+if (glass_on($users['lang'] ?? 'fa', $setting)) {
     $keyboardagent = [
         'inline_keyboard' => [
             [
@@ -1869,14 +1869,6 @@ $list_departman = json_encode($list_departman);
 $active_panell = json_encode([
     'keyboard' => [
         [['text' => $textbotlang['keyboard']['botReports']]],
-    ],
-    'resize_keyboard' => true
-]);
-$lottery = json_encode([
-    'keyboard' => [
-        [['text' => $textbotlang['keyboard']['setFirstPrize']], ['text' => $textbotlang['keyboard']['setSecondPrize']]],
-        [['text' => $textbotlang['keyboard']['setThirdPrize']]],
-        [['text' => $textbotlang['Admin']['backAdminBtn']]]
     ],
     'resize_keyboard' => true
 ]);

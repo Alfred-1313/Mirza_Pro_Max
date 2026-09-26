@@ -970,7 +970,7 @@ function DirectPayment($order_id, $image = 'images.jpg')
                 $dp_refTexts = payer_texts($dp_refId);
                 $result = ($Payment_report['price'] * feature_setting_value('aff_percent', $dp_refLang, $setting['affiliatespercentage'])) / 100;
                 $user_Balance = select("user", "*", "id", $dp_refId, "select");
-                if (intval($setting['scorestatus']) == 1 and !in_array($dp_refId, $admin_ids)) {
+                if (score_on($dp_refLang, $setting) and !in_array($dp_refId, $admin_ids)) {
                     sendmessage($dp_refId, $dp_refTexts['users']['affiliates']['pointsEarned2Alt'], null, 'html');
                     $scorenew = $user_Balance['score'] + 2;
                     update("user", "score", $scorenew, "id", $dp_refId);
@@ -1029,7 +1029,7 @@ function DirectPayment($order_id, $image = 'images.jpg')
                 'reply_markup' => $Response
             ]);
         }
-        if (intval($setting['scorestatus']) == 1 and !in_array($Balance_id['id'], $admin_ids)) {
+        if (score_on($Balance_id['lang'] ?? 'fa', $setting) and !in_array($Balance_id['id'], $admin_ids)) {
             sendmessage($Balance_id['id'], payer_texts($Balance_id['id'])['users']['affiliates']['pointsEarned1Alt'], null, 'html');
             $scorenew = $Balance_id['score'] + 1;
             update("user", "score", $scorenew, "id", $Balance_id['id']);
@@ -1125,7 +1125,7 @@ function DirectPayment($order_id, $image = 'images.jpg')
         $priceproductformat = number_format($prodcut['price_product']);
         $textextend = sprintf($textbotlang['hardcoded']['renewServiceSuccessFn'], $usernamepanel, $prodcut['name_product'], $priceproductformat);
         sendmessage($Balance_id['id'], $textextend, $keyboardextendfnished, 'HTML');
-        if (intval($setting['scorestatus']) == 1 and !in_array($Balance_id['id'], $admin_ids)) {
+        if (score_on($Balance_id['lang'] ?? 'fa', $setting) and !in_array($Balance_id['id'], $admin_ids)) {
             sendmessage($Balance_id['id'], payer_texts($Balance_id['id'])['users']['affiliates']['pointsEarned2Alt'], null, 'html');
             $scorenew = $Balance_id['score'] + 2;
             update("user", "score", $scorenew, "id", $Balance_id['id']);
@@ -1197,7 +1197,7 @@ function DirectPayment($order_id, $image = 'images.jpg')
             ]
         ]);
         $volumesformat = number_format($Payment_report['price'], 0);
-        if (intval($setting['scorestatus']) == 1 and !in_array($Balance_id['id'], $admin_ids)) {
+        if (score_on($Balance_id['lang'] ?? 'fa', $setting) and !in_array($Balance_id['id'], $admin_ids)) {
             sendmessage($Balance_id['id'], payer_texts($Balance_id['id'])['users']['affiliates']['pointsEarned1Alt'], null, 'html');
             $scorenew = $Balance_id['score'] + 1;
             update("user", "score", $scorenew, "id", $Balance_id['id']);
@@ -1272,7 +1272,7 @@ function DirectPayment($order_id, $image = 'images.jpg')
             ]
         ]);
         $volumesformat = number_format($Payment_report['price']);
-        if (intval($setting['scorestatus']) == 1 and !in_array($Balance_id['id'], $admin_ids)) {
+        if (score_on($Balance_id['lang'] ?? 'fa', $setting) and !in_array($Balance_id['id'], $admin_ids)) {
             sendmessage($Balance_id['id'], payer_texts($Balance_id['id'])['users']['affiliates']['pointsEarned1Alt'], null, 'html');
             $scorenew = $Balance_id['score'] + 1;
             update("user", "score", $scorenew, "id", $Balance_id['id']);
@@ -1724,6 +1724,104 @@ if (!function_exists('app_rows_for_lang')) {
         $stmt->bindValue(':userlang', (string) $lang);
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+}
+if (!function_exists('score_on')) {
+    // 🎲 points and the nightly lottery, per language - 🌐 وضعیت قابلیت‌ها (هر
+    // زبان), falling back to the bot-wide switch they used to be
+    function score_on($lang, $setting = null)
+    {
+        if (!is_array($setting)) {
+            $setting = select("setting", "*", null, null, "select");
+        }
+        return intval(feature_value('scorestatus', $lang ?: 'fa', (string) ($setting['scorestatus'] ?? '0'))) === 1;
+    }
+    // [first, second, third] prize of one language's lottery
+    function lottery_prizes_for_lang($lang)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $m = json_decode((string) feature_setting_value('lottery_prize', $lang, (string) ($setting['Lottery_prize'] ?? '')), true);
+        $m = is_array($m) ? $m : [];
+        return [(string) ($m['one'] ?? '0'), (string) ($m['tow'] ?? '0'), (string) ($m['theree'] ?? '0')];
+    }
+    function lottery_prize_set($lang, $rank, $amount)
+    {
+        $p = lottery_prizes_for_lang($lang);
+        $p[max(1, min(3, (int) $rank)) - 1] = (string) $amount;
+        feature_setting_set('lottery_prize', $lang, json_encode(['one' => $p[0], 'tow' => $p[1], 'theree' => $p[2]]));
+    }
+    // 🔲 glass (inline) main menu, per language
+    function glass_on($lang, $setting = null)
+    {
+        if (!is_array($setting)) {
+            $setting = select("setting", "*", null, null, "select");
+        }
+        return feature_value('inlinebtnmain', $lang ?: 'fa', (string) ($setting['inlinebtnmain'] ?? 'offinline')) === 'oninline';
+    }
+    // the users one language's lottery draws from: another tab's language its
+    // own; Persian everyone else (no language yet, or one without a tab)
+    function lottery_lang_where($lang)
+    {
+        if ($lang !== 'fa') {
+            return ["lang = ?", [$lang]];
+        }
+        $others = array_values(array_diff(panel_langs(), ['fa']));
+        if (empty($others)) {
+            return ["1 = 1", []];
+        }
+        return ["(lang IS NULL OR lang = '' OR lang NOT IN (" . implode(',', array_fill(0, count($others), '?')) . "))", $others];
+    }
+    // 🎲 the nightly draw, one per language that has it on: that language's
+    // three highest scores win that language's prizes, told in their own
+    // language, and that language's points start again. One Persian report
+    // for the admins, a section per language.
+    function lottery_run_nightly()
+    {
+        global $pdo;
+        $setting = select("setting", "*", null, null, "select");
+        if (!is_array($setting)) {
+            return;
+        }
+        $panel = panel_texts();
+        $report = '';
+        foreach (panel_langs() as $lang) {
+            if (!score_on($lang, $setting)) {
+                continue;
+            }
+            $prizes = lottery_prizes_for_lang($lang);
+            $agents = (string) feature_value('Lotteryagent', $lang, (string) ($setting['Lotteryagent'] ?? '0')) === '1';
+            list($where, $params) = lottery_lang_where($lang);
+            $stmt = $pdo->prepare("SELECT * FROM user WHERE User_Status = 'Active' AND score != '0' AND {$where}" . ($agents ? '' : " AND agent = 'f'") . " ORDER BY score DESC LIMIT 3");
+            $stmt->execute($params);
+            $tx = lang_tab_texts($lang);
+            $rows = '';
+            $rank = 0;
+            while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $prize = (float) (money_normalize($prizes[$rank] ?? '0') ?? 0);
+                $rank++;
+                if ($prize <= 0) {
+                    continue;
+                }
+                update("user", "Balance", (float) $r['Balance'] + $prize, "id", $r['id']);
+                $amount = number_format($prize);
+                sendmessage($r['id'], sprintf($tx['hardcoded']['lotteryWinnerNotice'], $rank, $amount), null, 'html');
+                $rows .= sprintf($panel['hardcoded']['lotteryWinnerRow'], $r['username'], $r['id'], $amount, $rank);
+            }
+            // this language's points start again tomorrow
+            $pdo->prepare("UPDATE user SET score = '0' WHERE {$where}")->execute($params);
+            if ($rows !== '') {
+                $report .= "\n🌐 " . ($panel['bottext']['langs'][$lang] ?? $lang) . ':' . $rows;
+            }
+        }
+        if ($report !== '' && strlen((string) ($setting['Channel_Report'] ?? '')) > 0) {
+            $otherreport = select("topicid", "idreport", "report", "otherreport", "select");
+            telegram('sendmessage', [
+                'chat_id' => $setting['Channel_Report'],
+                'message_thread_id' => is_array($otherreport) ? ($otherreport['idreport'] ?? null) : null,
+                'text' => $panel['hardcoded']['lotteryAdminReport'] . $report,
+                'parse_mode' => "HTML",
+            ]);
+        }
     }
 }
 if (!function_exists('app_row_langs')) {

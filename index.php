@@ -570,7 +570,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     // the contact keyboard has to go: a reply-keyboard main menu takes its place
     // in this same message, an inline one can't ride on a keyboard removal
     $verifyMenuIsReply = array_key_exists('keyboard', (array) json_decode((string) $keyboard, true));
-    sendmessage($from_id, $textbotlang['users']['number']['active'], $verifyMenuIsReply ? $keyboard : json_encode(['inline_keyboard' => [], 'remove_keyboard' => true]), 'html');
+    sendmessage($from_id, $textbotlang['users']['number']['active'], $verifyMenuIsReply ? $keyboard : json_encode(['remove_keyboard' => true]), 'html');
     if ($verify_resume === 'verifyusertest') {
         // the test-account entry is further down this same elseif chain, so this
         // request can't reach it - its next screen, behind the same checks
@@ -734,6 +734,11 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     }
     step('home', $from_id);
     close_sticker_play($from_id, $mm_key, $mm_toDelete);
+    // the test-account list is a message of its own under the menu; the other
+    // three took the menu's message
+    if ($mm_key !== 'bottext.btnCloseTest' && glass_on($user['lang'] ?? 'fa', $setting)) {
+        sendmessage($from_id, $textbotlang['users']['back'], $keyboard, 'html');
+    }
 } elseif ($datain == "gwinvclose") {
     // An invoice's own way out. Same cleanup as the shared close, plus the
     // main menu back on screen: someone who gives up on a payment should
@@ -785,6 +790,9 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     update("user", "topup_range_msg_id", "0", "id", $from_id);
     step('home', $from_id);
     close_sticker_play($from_id, 'bottext.btnCloseTopup', $tr_toDelete);
+    if (glass_on($user['lang'] ?? 'fa', $setting)) {
+        sendmessage($from_id, $textbotlang['users']['back'], $keyboard, 'html');
+    }
 } elseif ($datain == "sellclose") {
     // closes the panel picker and takes the buy-button sticker that was sent
     // with it along with it. Processing_value_tow is the right field to read
@@ -809,6 +817,9 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     }
     step('home', $from_id);
     close_sticker_play($from_id, 'bottext.btnCloseBuy', $sc_toDelete);
+    if (glass_on($user['lang'] ?? 'fa', $setting)) {
+        sendmessage($from_id, $textbotlang['users']['back'], $keyboard, 'html');
+    }
 } elseif ($datain == "servclose") {
     // closes the list the same way every other ❌ بستن in the bot does, and
     // takes the main-menu sticker that was sent alongside it with it
@@ -823,6 +834,9 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         $sv_toDelete[] = $sv_tap;
     }
     close_sticker_play($from_id, 'servclose', $sv_toDelete);
+    if (glass_on($user['lang'] ?? 'fa', $setting)) {
+        sendmessage($from_id, $textbotlang['users']['back'], $keyboard, 'html');
+    }
 } elseif ($datain == 'next_page') {
     $numpage = select("invoice", "id_user", "id_user", $from_id, "count");
     $page = $user['pagenumber'];
@@ -2201,7 +2215,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $extend_json = json_encode($extend);
     $stmt->execute([$from_id, $nameloc['username'], $value, $type, $dateacc, $prodcut['price_product'], $extend_json, $status]);
     update("invoice", "Status", "active", "id_invoice", $id_invoice);
-    if (intval($setting['scorestatus']) == 1 and !in_array($from_id, $admin_ids)) {
+    if (score_on($user['lang'] ?? 'fa', $setting) and !in_array($from_id, $admin_ids)) {
         sendmessage($from_id, $textbotlang['users']['affiliates']['pointsEarned2Alt'], null, 'html');
         $scorenew = $user['score'] + 2;
         update("user", "score", $scorenew, "id", $from_id);
@@ -2626,7 +2640,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             ]
         ]
     ]);
-    if (intval($setting['scorestatus']) == 1 and !in_array($from_id, $admin_ids)) {
+    if (score_on($user['lang'] ?? 'fa', $setting) and !in_array($from_id, $admin_ids)) {
         sendmessage($from_id, $textbotlang['users']['affiliates']['pointsEarned1Alt'], null, 'html');
         $scorenew = $user['score'] + 1;
         update("user", "score", $scorenew, "id", $from_id);
@@ -3220,7 +3234,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             ]
         ]
     ]);
-    if (intval($setting['scorestatus']) == 1 and !in_array($from_id, $admin_ids)) {
+    if (score_on($user['lang'] ?? 'fa', $setting) and !in_array($from_id, $admin_ids)) {
         sendmessage($from_id, $textbotlang['users']['affiliates']['pointsEarned1Alt'], null, 'html');
         $scorenew = $user['score'] + 1;
         update("user", "score", $scorenew, "id", $from_id);
@@ -3984,7 +3998,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         'n2' => $textbotlang['common']['roles']['advancedAgentAlt'],
     ][$user['agent']];
     $userjoin = format_datetime('Y/m/d H:i:s', $user['register'], $user['lang']);
-    if (intval($setting['scorestatus']) == 1) {
+    if (score_on($user['lang'] ?? 'fa', $setting)) {
         $textscore = strtr($textbotlang['users']['affiliates']['accountScore'], ['{score}' => $user['score']]);
     } else {
         $textscore = "";
@@ -4738,7 +4752,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
                 $result = ($priceproduct * feature_setting_value('aff_percent', $aff_reflang, $setting['affiliatespercentage'])) / 100;
                 $user_Balance = select("user", "*", "id", $user['affiliates'], "select");
                 $Balance_prim = $user_Balance['Balance'] + $result;
-                if (intval($setting['scorestatus']) == 1 and !in_array($user['affiliates'], $admin_ids)) {
+                if (score_on($aff_reflang, $setting) and !in_array($user['affiliates'], $admin_ids)) {
                     sendmessage($user['affiliates'], payer_texts($user['affiliates'])['users']['affiliates']['pointsEarned2Alt'], null, 'html');
                     $scorenew = $user_Balance['score'] + 2;
                     update("user", "score", $scorenew, "id", $user['affiliates']);
@@ -4763,7 +4777,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
             $result = ($priceproduct * feature_setting_value('aff_percent', $aff_reflang, $setting['affiliatespercentage'])) / 100;
             $user_Balance = select("user", "*", "id", $user['affiliates'], "select");
             $Balance_prim = $user_Balance['Balance'] + $result;
-            if (intval($setting['scorestatus']) == 1 and !in_array($user['affiliates'], $admin_ids)) {
+            if (score_on($aff_reflang, $setting) and !in_array($user['affiliates'], $admin_ids)) {
                 sendmessage($user['affiliates'], payer_texts($user['affiliates'])['users']['affiliates']['pointsEarned2Alt'], null, 'html');
                 $scorenew = $user_Balance['score'] + 2;
                 update("user", "score", $scorenew, "id", $user['affiliates']);
@@ -4784,7 +4798,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
             sendmessage($user['affiliates'], $textadd, null, 'HTML');
         }
     }
-    if (intval($setting['scorestatus']) == 1 and !in_array($from_id, $admin_ids)) {
+    if (score_on($user['lang'] ?? 'fa', $setting) and !in_array($from_id, $admin_ids)) {
         sendmessage($from_id, $textbotlang['users']['affiliates']['pointsEarned1Alt'], null, 'html');
         $scorenew = $user['score'] + 1;
         update("user", "score", $scorenew, "id", $from_id);
@@ -6483,7 +6497,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     }
     step('home', $from_id);
 } elseif (($text == $textbotlang['textbot']['agentPanel'] || $datain == "agentpanel") && $user['agent'] != "f") {
-    if ($setting['inlinebtnmain'] == "oninline") {
+    if (glass_on($user['lang'] ?? 'fa', $setting)) {
         Editmessagetext($from_id, $message_id, $textbotlang['users']['agent']['welcome'], $keyboardagent, 'HTML');
     } else {
         sendmessage($from_id, $textbotlang['users']['agent']['welcome'], $keyboardagent, 'HTML');

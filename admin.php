@@ -977,7 +977,7 @@ if (!function_exists('emoji_sticker_editor_payload')) {
         $prefix = ($kind == 'emoji') ? 'btnemoji' : 'btnsticker';
         $es_simple_mode = (is_array($layout) && !empty($layout['simple_emoji']));
         $es_pos_global = (is_array($layout) && isset($layout['emoji_pos_global']) && $layout['emoji_pos_global'] === 'left') ? 'left' : 'right';
-        $es_use_inline = (isset($setting['inlinebtnmain']) && $setting['inlinebtnmain'] == "oninline");
+        $es_use_inline = glass_on($lang, $setting);
         $kb = ['inline_keyboard' => []];
         foreach ($rows as $r => $row) {
             if (!is_array($row)) {
@@ -1077,7 +1077,7 @@ if (!function_exists('layout_editor_payload')) {
                     $cb = "layoutbtn-{$lang}-{$r}-{$c}";
                 }
                 $kbBtn = ['text' => $name, 'callback_data' => $cb];
-                $ed_color = (isset($setting['inlinebtnmain']) && $setting['inlinebtnmain'] == "oninline") ? (isset($btn['style']) ? $btn['style'] : '') : (isset($btn['style_reply']) ? $btn['style_reply'] : '');
+                $ed_color = glass_on($lang, $setting) ? (isset($btn['style']) ? $btn['style'] : '') : (isset($btn['style_reply']) ? $btn['style_reply'] : '');
                 if ($ed_color !== '' && in_array($ed_color, ['primary', 'success', 'danger'], true)) {
                     $kbBtn['style'] = $ed_color;
                 }
@@ -1283,7 +1283,7 @@ if (!function_exists('rename_editor_payload')) {
                 if ($rn_icon !== '') {
                     $kbBtn['icon_custom_emoji_id'] = $rn_icon;
                 }
-                $ed_color = (isset($setting['inlinebtnmain']) && $setting['inlinebtnmain'] == "oninline") ? (isset($btn['style']) ? $btn['style'] : '') : (isset($btn['style_reply']) ? $btn['style_reply'] : '');
+                $ed_color = glass_on($lang, $setting) ? (isset($btn['style']) ? $btn['style'] : '') : (isset($btn['style_reply']) ? $btn['style_reply'] : '');
                 if ($ed_color !== '' && in_array($ed_color, ['primary', 'success', 'danger'], true)) {
                     $kbBtn['style'] = $ed_color;
                 }
@@ -4774,18 +4774,6 @@ if (!function_exists('feature_status_global_payload')) {
             'onnewuser' => $textbotlang['Admin']['Status']['statuson'],
             'offnewuser' => $textbotlang['Admin']['Status']['statusoff'],
         ][$setting['statusnewuser']];
-        $statusinline = [
-            'oninline' => $textbotlang['Admin']['Status']['statuson'],
-            'offinline' => $textbotlang['Admin']['Status']['statusoff'],
-        ][$setting['inlinebtnmain']];
-        $score = [
-            '1' => $textbotlang['Admin']['Status']['statuson'],
-            '0' => $textbotlang['Admin']['Status']['statusoff'],
-        ][$setting['scorestatus']];
-        $Lotteryagent = [
-            '1' => $textbotlang['Admin']['Status']['statuson'],
-            '0' => $textbotlang['Admin']['Status']['statusoff'],
-        ][$setting['Lotteryagent']];
         $cronteststatustext = [
             true => $textbotlang['Admin']['Status']['statuson'],
             false => $textbotlang['Admin']['Status']['statusoff'],
@@ -4825,14 +4813,6 @@ if (!function_exists('feature_status_global_payload')) {
                     ['text' => $textbotlang['Admin']['Status']['statusNotifNewUser'], 'callback_data' => "statusnewuser"],
                 ],
                 [
-                    ['text' => $statusinline, 'callback_data' => "editstsuts-inlinebtnmain-{$setting['inlinebtnmain']}"],
-                    ['text' => $textbotlang['Admin']['Status']['inlinebtns'], 'callback_data' => "inlinebtnmain"],
-                ],
-                [
-                    ['text' => $Lotteryagent, 'callback_data' => "editstsuts-Lotteryagent-{$setting['Lotteryagent']}"],
-                    ['text' => $textbotlang['keyboard']['agentLottery'], 'callback_data' => "Lotteryagent"],
-                ],
-                [
                     ['text' => $cronteststatustext, 'callback_data' => "editstsuts-crontest-{$status_cron['test']}"],
                     ['text' => $textbotlang['keyboard']['cronTest'], 'callback_data' => "none"],
                 ],
@@ -4858,11 +4838,6 @@ if (!function_exists('feature_status_global_payload')) {
                     ['text' => $textbotlang['keyboard']['deleteTime'], 'callback_data' => "settimecornremovevolume"],
                     ['text' => $cronremovevolumestatustext, 'callback_data' => "editstsuts-notifremove_volume-{$status_cron['remove_volume']}"],
                     ['text' => $textbotlang['keyboard']['cronDeleteVolume'], 'callback_data' => "none"],
-                ],
-                [
-                    ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "scoresetting"],
-                    ['text' => $score, 'callback_data' => "editstsuts-score-{$setting['scorestatus']}"],
-                    ['text' => $textbotlang['keyboard']['nightLottery'], 'callback_data' => "score"],
                 ],
             ],
         ]);
@@ -4921,8 +4896,15 @@ if (!function_exists('feature_status_lang_payload')) {
         $wheelـluck_v = feature_value('wheelـluck', $lang, $setting['wheelـluck']);
         $affiliatesstatus_v = feature_value('affiliatesstatus', $lang, $setting['affiliatesstatus']);
         $statuslimitchangeloc_v = feature_value('statuslimitchangeloc', $lang, $setting['statuslimitchangeloc']);
+        $inlinebtnmain_v = feature_value('inlinebtnmain', $lang, $setting['inlinebtnmain']);
+        $scorestatus_v = feature_value('scorestatus', $lang, $setting['scorestatus']);
         $rows = [];
         $rows[] = panel_lang_tabs($lang, "fls_lang:%s");
+        // this tab's main menu: glass (inline) buttons or the keyboard
+        $rows[] = [
+            ['text' => $inlinebtnmain_v == 'oninline' ? $on : $off, 'callback_data' => $tog('inlinebtnmain', $inlinebtnmain_v)],
+            ['text' => $tx['Admin']['Status']['inlinebtns'], 'callback_data' => "none"],
+        ];
         $rows[] = [
             ['text' => $NotUser_v == 'onnotuser' ? $on : $off, 'callback_data' => $tog('usernamebtn', $NotUser_v)],
             ['text' => $tx['Admin']['Status']['statusUsernameBtn'], 'callback_data' => "usernamebtn"],
@@ -5021,6 +5003,12 @@ if (!function_exists('feature_status_lang_payload')) {
             ['text' => $statuslimitchangeloc_v == '1' ? $on : $off, 'callback_data' => $tog('changeloc', $statuslimitchangeloc_v)],
             ['text' => $tx['keyboard']['locationChangeLimit'], 'callback_data' => "changeloc"],
         ];
+        // 🎲 points and the nightly lottery of this language's users
+        $rows[] = [
+            ['text' => $tx['keyboard']['settings'], 'callback_data' => "flsec:{$lang}:lottery"],
+            ['text' => $scorestatus_v == '1' ? $on : $off, 'callback_data' => $tog('score', $scorestatus_v)],
+            ['text' => $tx['keyboard']['nightLottery'], 'callback_data' => "none"],
+        ];
         return json_encode(['inline_keyboard' => $rows]);
     }
 }
@@ -5079,6 +5067,9 @@ if (!function_exists('feature_section_of_key')) {
             'app_name' => 'linkapp',
             'app_link' => 'linkapp',
             'phone_prefix' => 'phone',
+            'lottery_1' => 'lottery',
+            'lottery_2' => 'lottery',
+            'lottery_3' => 'lottery',
         ];
         return $map[$key] ?? null;
     }
@@ -5124,6 +5115,17 @@ if (!function_exists('feature_section_caption')) {
             }
             return strtr($s['appTitle'], ['{lang}' => $langName, '{list}' => $list]);
         }
+        if ($section === 'lottery') {
+            $lp = lottery_prizes_for_lang($lang);
+            $la = (string) feature_value('Lotteryagent', $lang, (string) (select("setting", "*", null, null, "select")['Lotteryagent'] ?? '0')) === '1';
+            return strtr($s['lotteryTitle'], [
+                '{lang}' => $langName,
+                '{p1}' => money($lp[0], $cur),
+                '{p2}' => money($lp[1], $cur),
+                '{p3}' => money($lp[2], $cur),
+                '{agents}' => $la ? $tx['Admin']['Status']['statuson'] : $tx['Admin']['Status']['statusoff'],
+            ]);
+        }
         if ($section === 'phone') {
             return strtr($s['phoneTitle'], [
                 '{lang}' => $langName,
@@ -5167,6 +5169,16 @@ if (!function_exists('feature_section_payload')) {
                 ];
             }
             $rows[] = [['text' => $s['appAdd'], 'callback_data' => "flsask:{$lang}:app_name", 'style' => 'success']];
+        } elseif ($section === 'lottery') {
+            $lp = lottery_prizes_for_lang($lang);
+            foreach ([1 => '🥇', 2 => '🥈', 3 => '🥉'] as $lr => $lm) {
+                $rows[] = [['text' => strtr($s['lotteryPrizeBtn'], ['{medal}' => $lm, '{rank}' => (string) $lr, '{prize}' => money($lp[$lr - 1], $cur)]), 'callback_data' => "flsask:{$lang}:lottery_{$lr}"]];
+            }
+            $la = (string) feature_value('Lotteryagent', $lang, (string) (select("setting", "*", null, null, "select")['Lotteryagent'] ?? '0'));
+            $rows[] = [
+                ['text' => $la === '1' ? $on : $off, 'callback_data' => "flstog:{$lang}:lottery_agent:" . ($la === '1' ? '1' : '0'), 'style' => $la === '1' ? 'success' : 'danger'],
+                ['text' => $s['lotteryAgentsBtn'], 'callback_data' => "none"],
+            ];
         } elseif ($section === 'phone') {
             $ph_cur = phone_prefixes_for_lang($lang);
             $ph_all = empty($ph_cur);
@@ -10538,6 +10550,12 @@ elseif ($datain == "systemsms") {
     } elseif ($type == "changeloc") {
         $featureKey = "statuslimitchangeloc";
         $valuenew = ($value == "1") ? "0" : "1";
+    } elseif ($type == "inlinebtnmain") {
+        $featureKey = "inlinebtnmain";
+        $valuenew = ($value == "oninline") ? "offinline" : "oninline";
+    } elseif ($type == "score") {
+        $featureKey = "scorestatus";
+        $valuenew = ($value == "1") ? "0" : "1";
     } else {
         return;
     }
@@ -10547,12 +10565,16 @@ elseif ($datain == "systemsms") {
     feature_set($featureKey, $fls_lang, $valuenew);
     $Bot_Status = feature_status_lang_payload($textbotlang, $fls_lang);
     Editmessagetext($from_id, $message_id, feature_status_lang_caption($textbotlang, $fls_lang), $Bot_Status);
-} elseif (preg_match('/^flsec:([a-z]{2}):(linkapp|wheel|aff|loc|phone)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^flsec:([a-z]{2}):(linkapp|wheel|aff|loc|phone|lottery)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
     // ⚙️ تنظیمات - opens the section inline, in the same message, in the same
     // language, instead of the old reply-keyboard screen
     $fs_lang = $fs_m[1];
     $fs_sec = $fs_m[2];
     Editmessagetext($from_id, $message_id, feature_section_caption($textbotlang, $fs_lang, $fs_sec), feature_section_payload($textbotlang, $fs_lang, $fs_sec));
+} elseif (preg_match('/^flstog:([a-z]{2}):lottery_agent:([01])$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
+    // agents in this language's nightly lottery
+    feature_set('Lotteryagent', $fs_m[1], $fs_m[2] === '1' ? '0' : '1');
+    Editmessagetext($from_id, $message_id, feature_section_caption($textbotlang, $fs_m[1], 'lottery'), feature_section_payload($textbotlang, $fs_m[1], 'lottery'));
 } elseif (preg_match('/^flstog:([a-z]{2}):(aff_commission|aff_startgift|aff_firstbuy):([a-zA-Z_]+)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
     $fs_lang = $fs_m[1];
     $fs_key = $fs_m[2];
@@ -10611,7 +10633,7 @@ elseif ($datain == "systemsms") {
         phone_prefixes_set($ph_lang, in_array($ph_code, $ph_cur, true) ? array_diff($ph_cur, [$ph_code]) : array_merge($ph_cur, [$ph_code]));
     }
     Editmessagetext($from_id, $message_id, feature_section_caption($textbotlang, $ph_lang, 'phone'), feature_section_payload($textbotlang, $ph_lang, 'phone'));
-} elseif (preg_match('/^flscan:([a-z]{2}):(linkapp|wheel|aff|loc|phone)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^flscan:([a-z]{2}):(linkapp|wheel|aff|loc|phone|lottery)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
     $fs_lang = $fs_m[1];
     $fs_sec = $fs_m[2];
     step("home", $from_id);
@@ -10678,6 +10700,14 @@ elseif ($datain == "systemsms") {
         }
         // added to what this tab already allows; "0" opens it to every country
         phone_prefixes_set($fs_lang, $fs_clean ? array_merge(phone_prefixes_for_lang($fs_lang), $fs_clean) : []);
+    } elseif (in_array($fs_key, ['lottery_1', 'lottery_2', 'lottery_3'], true)) {
+        // a prize in this language's currency
+        $fs_cur = currency_for_lang($fs_lang);
+        if (!money_valid($text, $fs_cur)) {
+            sendmessage($from_id, $fs_tx['common']['invalidInput'], null, 'HTML');
+            return;
+        }
+        lottery_prize_set($fs_lang, (int) substr($fs_key, -1), money_normalize($text));
     } elseif ($fs_key === 'wheel_price' || $fs_key === 'aff_giftamount') {
         // an amount in this language's currency - USD/CNY/RUB/TMT carry
         // decimals, so "12.5" has to be accepted, not just whole numbers
@@ -19003,50 +19033,6 @@ elseif ($text == $textbotlang['keyboard']['hidePanelForUser'] && $adminrulecheck
     $hideuserid = json_encode($hideuserid);
     update("marzban_panel", "hide_user", $hideuserid, "name_panel", $user['Processing_value']);
     outtypepanel($typepanel['type'], $textbotlang['Admin']['managepanel']['userRemovedFromList']);
-} elseif ($datain == "scoresetting") {
-    sendmessage($from_id, $textbotlang['users']['selectoption'], $lottery, 'HTML');
-} elseif ($text == $textbotlang['keyboard']['setFirstPrize']) {
-    sendmessage($from_id, $textbotlang['Admin']['Balance']['askChargeAmount'], $lottery, 'HTML');
-    step("getonelotary", $from_id);
-} elseif ($user['step'] == "getonelotary") {
-    if (!ctype_digit($text)) {
-        sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
-        return;
-    }
-    sendmessage($from_id, $textbotlang['Admin']['price']['rewardSaved'], $lottery, 'HTML');
-    step("home", $from_id);
-    $data = json_decode($setting['Lottery_prize'], true);
-    $data['one'] = $text;
-    $data = json_encode($data, true);
-    update("setting", "Lottery_prize", $data, null, null);
-} elseif ($text == $textbotlang['keyboard']['setSecondPrize']) {
-    sendmessage($from_id, $textbotlang['Admin']['Balance']['askChargeAmount'], $lottery, 'HTML');
-    step("getonelotary2", $from_id);
-} elseif ($user['step'] == "getonelotary2") {
-    if (!ctype_digit($text)) {
-        sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
-        return;
-    }
-    sendmessage($from_id, $textbotlang['Admin']['price']['rewardSaved'], $lottery, 'HTML');
-    step("home", $from_id);
-    $data = json_decode($setting['Lottery_prize'], true);
-    $data['tow'] = $text;
-    $data = json_encode($data, true);
-    update("setting", "Lottery_prize", $data, null, null);
-} elseif ($text == $textbotlang['keyboard']['setThirdPrize']) {
-    sendmessage($from_id, $textbotlang['Admin']['Balance']['askChargeAmount'], $lottery, 'HTML');
-    step("getonelotary3", $from_id);
-} elseif ($user['step'] == "getonelotary3") {
-    if (!ctype_digit($text)) {
-        sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
-        return;
-    }
-    sendmessage($from_id, $textbotlang['Admin']['price']['rewardSaved'], $lottery, 'HTML');
-    step("home", $from_id);
-    $data = json_decode($setting['Lottery_prize'], true);
-    $data['theree'] = $text;
-    $data = json_encode($data, true);
-    update("setting", "Lottery_prize", $data, null, null);
 } elseif ($datain == "gradonhshans") {
     sendmessage($from_id, $textbotlang['users']['selectoption'], $wheelkeyboard, 'HTML');
 } elseif ($text == $textbotlang['keyboard']['lotteryWinAmount']) {

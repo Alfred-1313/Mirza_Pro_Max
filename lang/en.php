@@ -5286,6 +5286,10 @@ Payment tracking code : %s',
                 'topupDiscMinPkgPercent' => '🎁 Since you top up {min} or more, you get a {bonus} gift — that is {value}% more!',
                 'topupDiscMinPkgFixed' => '🎁 Since you top up {min} or more, you get a {bonus} gift!',
                 'topupDiscMinSuffix' => '({min} and up)',
+                // the nightly lottery, told to an English winner
+                'lotteryWinnerNotice' => '🎁 Lottery result
+
+😎 Congratulations, dear user! You came %s and won %s Dollar of balance; your account has been charged.',
                 // the config page's line when its own caption is left empty
                 'getConfigHint' => '📌 To get the config, tap the «Get config» button',
                 // units formatBytes() writes after a size, and the service
