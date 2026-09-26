@@ -2643,7 +2643,7 @@ function keyboard_list_text($lang, $groupFilter = null)
         // rest of this section, and with nowhere of its own it used to fall
         // through to the bottom of the screen, under whatever heading happened
         // to be last
-        'home_general' => ['users.text_start', 'users.back', 'textbot.faqDesc', 'textbot.tariffListDesc', 'textbot.rules', 'textbot.channel'],
+        'home_general' => ['users.text_start', 'users.back', 'textbot.faqDesc', 'textbot.tariffListDesc', 'textbot.rules', 'textbot.channel', 'textbot.botOff'],
         // preInvoice/afterPay used to be listed directly here; they now live
         // inside the 🛒 پیام‌های مراحل خرید group itself (section
         // 'preinvoice_afterpay') - this divider now only leads into the two

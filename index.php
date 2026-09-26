@@ -364,7 +364,12 @@ if ($text == $textbotlang['keyboard']['acceptRules'] or $text == $rules_btn_labe
 }
 
 #-----------Bot_Status------------#
-if ($setting['Bot_Status'] == "botstatusoff" && !in_array($from_id, $admin_ids)) {
+// on or off per language (🌐 وضعیت قابلیت‌ها (هر زبان)). Picking another
+// language still goes through, so a customer can move to one that is on.
+if (feature_value('Bot_Status', $user['lang'] ?? 'fa', $setting['Bot_Status']) == "botstatusoff" && !in_array($from_id, $admin_ids)
+    && $datain !== 'change_language' && strpos((string) $datain, 'setlang:') !== 0) {
+    // its 🎨 text and sticker, this language's
+    bottext_extras_key_hint('textbot.botOff');
     sendmessage($from_id, $textbotlang['textbot']['botOff'], null, 'html');
     return;
 }

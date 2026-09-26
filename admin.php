@@ -5022,10 +5022,6 @@ if (!function_exists('feature_status_global_payload')) {
     {
         $setting = select("setting", "*", null, null, "select");
         $status_cron = json_decode($setting['cron_status'], true);
-        $name_status = [
-            'botstatuson' => $textbotlang['Admin']['Status']['statuson'],
-            'botstatusoff' => $textbotlang['Admin']['Status']['statusoff'],
-        ][$setting['Bot_Status']];
         $name_status_notifnewuser = [
             'onnewuser' => $textbotlang['Admin']['Status']['statuson'],
             'offnewuser' => $textbotlang['Admin']['Status']['statusoff'],
@@ -5059,10 +5055,6 @@ if (!function_exists('feature_status_global_payload')) {
                 [
                     ['text' => $textbotlang['Admin']['Status']['subject'], 'callback_data' => "subject"],
                     ['text' => $textbotlang['Admin']['Status']['statusSubject'], 'callback_data' => "subjectde"],
-                ],
-                [
-                    ['text' => $name_status, 'callback_data' => "editstsuts-statusbot-{$setting['Bot_Status']}"],
-                    ['text' => $textbotlang['Admin']['Status']['statusBot'], 'callback_data' => "statusbot"],
                 ],
                 [
                     ['text' => $name_status_notifnewuser, 'callback_data' => "editstsuts-notifnew-{$setting['statusnewuser']}"],
@@ -5189,8 +5181,15 @@ if (!function_exists('feature_status_lang_payload')) {
         $statuslimitchangeloc_v = feature_value('statuslimitchangeloc', $lang, $setting['statuslimitchangeloc']);
         $inlinebtnmain_v = feature_value('inlinebtnmain', $lang, $setting['inlinebtnmain']);
         $scorestatus_v = feature_value('scorestatus', $lang, $setting['scorestatus']);
+        $Bot_Status_v = feature_value('Bot_Status', $lang, $setting['Bot_Status']);
         $rows = [];
         $rows[] = panel_lang_tabs($lang, "fls_lang:%s");
+        // 📡 the bot itself, for this language's customers - off, they get only
+        // «❌ ربات خاموش است» (its text per tab in 🎨); admins always get in
+        $rows[] = [
+            ['text' => $Bot_Status_v == 'botstatusoff' ? $off : $on, 'callback_data' => $tog('botstatus', $Bot_Status_v), 'style' => $Bot_Status_v == 'botstatusoff' ? 'danger' : 'success'],
+            ['text' => $tx['Admin']['Status']['statusBot'], 'callback_data' => "flsbotinfo"],
+        ];
         // this tab's main menu: glass (inline) buttons or the keyboard
         $rows[] = [
             ['text' => $inlinebtnmain_v == 'oninline' ? $on : $off, 'callback_data' => $tog('inlinebtnmain', $inlinebtnmain_v)],
@@ -10433,14 +10432,8 @@ elseif ($datain == "systemsms") {
     $status_cron = json_decode($setting['cron_status'], true);
     $type = $dataget[1];
     $value = $dataget[2];
-    if ($type == "statusbot") {
-        if ($value == "botstatuson") {
-            $valuenew = "botstatusoff";
-        } else {
-            $valuenew = "botstatuson";
-        }
-        update("setting", "Bot_Status", $valuenew);
-    } elseif ($type == "usernamebtn") {
+    // 📡 وضعیت ربات moved to 🌐 وضعیت قابلیت‌ها (هر زبان) - one per language
+    if ($type == "usernamebtn") {
         if ($value == "onnotuser") {
             $valuenew = "offnotuser";
         } else {
@@ -10716,6 +10709,8 @@ elseif ($datain == "systemsms") {
     Editmessagetext($from_id, $message_id, feature_status_lang_caption($textbotlang, $fls_lang), $Bot_Status);
 // the type group has to allow "_" - btn_status_category and wheel_luck carry
 // this screen's historical underscored callback identifiers
+} elseif ($datain == "flsbotinfo" && $adminrulecheck['rule'] == "administrator") {
+    telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $textbotlang['Admin']['Status']['botStatusInfo'], 'show_alert' => true]);
 } elseif (preg_match('/^fls_tog:([a-z]{2}):([a-zA-Z_]+):([a-zA-Z0-9_]+)$/', $datain, $fls_m) && $adminrulecheck['rule'] == "administrator") {
     $fls_lang = $fls_m[1];
     $type = $fls_m[2];
@@ -10786,6 +10781,9 @@ elseif ($datain == "systemsms") {
     } elseif ($type == "changeloc") {
         $featureKey = "statuslimitchangeloc";
         $valuenew = ($value == "1") ? "0" : "1";
+    } elseif ($type == "botstatus") {
+        $featureKey = "Bot_Status";
+        $valuenew = ($value == "botstatuson") ? "botstatusoff" : "botstatuson";
     } elseif ($type == "inlinebtnmain") {
         $featureKey = "inlinebtnmain";
         $valuenew = ($value == "oninline") ? "offinline" : "oninline";

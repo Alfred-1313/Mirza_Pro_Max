@@ -10,8 +10,6 @@ require __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../jdf.php';
 $ManagePanel = new ManagePanel();
 $setting = select("setting", "*");
-if ($setting['Bot_Status'] == "botstatusoff")
-    return;
 $paymentreports = select("topicid", "idreport", "report", "paymentreport", "select")['idreport'];
 $stmt = $pdo->prepare("SELECT * FROM Payment_report WHERE payment_Status = 'waiting' AND (Payment_Method = 'cart to cart' OR Payment_Method = 'arze digital offline') AND bottype IS NULL");
 $stmt->execute();
@@ -24,6 +22,10 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
     // against ITS OWN payer's language instead of one bot-wide switch, same
     // per-row lang lookup payment_expire.php already uses.
     $payer_lang = is_array($Balance_id) && !empty($Balance_id['lang']) ? $Balance_id['lang'] : 'fa';
+    // the bot is off for this payer's language: nothing is confirmed for them
+    // (it used to stop for everyone at once)
+    if (feature_value('Bot_Status', $payer_lang, $setting['Bot_Status']) == "botstatusoff")
+        continue;
     $autoconfirm = pay_value("autoconfirmcart", $payer_lang, 'offauto');
     if ($autoconfirm != "onauto")
         continue;
