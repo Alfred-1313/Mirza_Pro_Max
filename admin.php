@@ -6203,8 +6203,8 @@ if (preg_match('/^clst2tog:([a-z]{2}):([a-z]{2})$/', $datain, $cs_m) && $adminru
     if ($cs_key === null) {
         return;
     }
-    $cs_on = !close_sticker_settings($cs_key)['enabled'];
-    close_sticker_save($cs_key, ['enabled' => $cs_on]);
+    $cs_on = !close_sticker_settings($cs_key, false, $cs_m[1])['enabled'];
+    close_sticker_save($cs_key, ['enabled' => $cs_on], $cs_m[1]);
     list($cs_txt, $cs_kb) = close_sticker_screen($cs_m[1], $cs_key, $textbotlang, $cs_on ? '✅ استیکر روشن شد' : '❌ استیکر خاموش شد');
     Editmessagetext($from_id, $message_id, $cs_txt, $cs_kb, 'HTML');
     return;
@@ -6252,7 +6252,7 @@ if (preg_match('/^closestickerwait2:([a-z]{2}):([a-z]{2})$/', (string) $user['st
         sendmessage($from_id, "⚠️ لطفاً یه استیکر بفرست (هر نوع استیکری قابل قبوله) 😅", $btpromptcancel, 'HTML');
         return;
     }
-    close_sticker_save($cs_key, ['file_id' => $cs_fileid]);
+    close_sticker_save($cs_key, ['file_id' => $cs_fileid], $cs_m[1]);
     step('home', $from_id);
     $cs_msgid = intval(json_decode((string) ($user['Processing_value'] ?? ''), true)['bt_msgid'] ?? 0);
     list($cs_done, $cs_kb) = close_sticker_screen($cs_m[1], $cs_key, $textbotlang, '✅ استیکر جدید ذخیره شد');
@@ -6271,7 +6271,7 @@ if (preg_match('/^closestickertime2:([a-z]{2}):([a-z]{2})$/', (string) $user['st
         sendmessage($from_id, "⚠️ یه عدد بین ۱ تا ۱۰ بفرست 😅", $btpromptcancel, 'HTML');
         return;
     }
-    close_sticker_save($cs_key, ['duration' => (int) $cs_text]);
+    close_sticker_save($cs_key, ['duration' => (int) $cs_text], $cs_m[1]);
     step('home', $from_id);
     $cs_msgid = intval(json_decode((string) ($user['Processing_value'] ?? ''), true)['bt_msgid'] ?? 0);
     list($cs_done, $cs_kb) = close_sticker_screen($cs_m[1], $cs_key, $textbotlang, "✅ مدت نمایش روی {$cs_text} ثانیه ذخیره شد");
@@ -7386,7 +7386,7 @@ if (preg_match('/^gbs\|(hub|lay|layp|layc|lays|layw|layr|col|colp|emo|emop|emos|
         // 🖼 استیکر دکمه بستن sits on this hub too, so it goes back to factory as well
         $gs_csKey = genbtn_close_sticker_key($gs_alias, $gs_key, 0);
         if ($gs_csKey !== '') {
-            close_sticker_save($gs_csKey, ['enabled' => true, 'file_id' => close_sticker_default_file_id(), 'duration' => close_sticker_default_duration()]);
+            close_sticker_save($gs_csKey, ['enabled' => true, 'file_id' => close_sticker_default_file_id(), 'duration' => close_sticker_default_duration()], $gs_lang);
         }
         $gs_note = '🔁 همه‌ی تنظیمات این دکمه‌ها به پیش‌فرض برگشت.';
         $gs_screen = 'hub';

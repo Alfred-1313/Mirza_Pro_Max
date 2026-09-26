@@ -9477,6 +9477,7 @@ if (!function_exists('bt_reset_sections')) {
             'gw_look' => ['bit' => 2048, 'label' => '💳 ظاهر دکمه‌های درگاه‌ها', 'sep' => ''],
             'topup_text' => ['bit' => 4096, 'label' => '💰 کپشن‌های افزایش موجودی و فاکتورها', 'sep' => ''],
             'topup_look' => ['bit' => 8192, 'label' => '🎛 ظاهر دکمه‌های افزایش موجودی و فاکتورها', 'sep' => ''],
+            'close_stk' => ['bit' => 16384, 'label' => '🖼 استیکر دکمه‌های بستن', 'sep' => ''],
             'mm_sticker' => ['bit' => 16, 'label' => '✨ استیکر دکمه‌های منو', 'sep' => '⬇️ دکمه‌های منوی اصلی (پایین صفحه‌ی کاربر)'],
             'mm_color' => ['bit' => 32, 'label' => '🎨 رنگ دکمه‌های منو', 'sep' => ''],
             'mm_emoji' => ['bit' => 64, 'label' => '😀 ایموجی دکمه‌های منو', 'sep' => ''],
@@ -9602,7 +9603,7 @@ if (!function_exists('bt_reset_counts')) {
     function bt_reset_counts($lang, $textbotlang)
     {
         $c = ['msg_text' => 0, 'msg_media' => 0, 'msg_buttons' => 0, 'warnings' => 0,
-              'shop_look' => 0, 'help_look' => 0, 'chn_look' => 0, 'gw_look' => 0, 'topup_text' => 0, 'topup_look' => 0,
+              'shop_look' => 0, 'help_look' => 0, 'chn_look' => 0, 'gw_look' => 0, 'topup_text' => 0, 'topup_look' => 0, 'close_stk' => 0,
               'mm_sticker' => 0, 'mm_color' => 0, 'mm_emoji' => 0, 'mm_visibility' => 0];
         $hl = help_layout_get();
         foreach (['shop_look', 'help_look', 'gw_look'] as $row) {
@@ -9615,6 +9616,7 @@ if (!function_exists('bt_reset_counts')) {
         $c['chn_look'] = bt_reset_channel_count($lang);
         $c['topup_text'] = bt_reset_lang_columns_count($lang, bt_reset_topup_caption_columns());
         $c['topup_look'] = bt_reset_lang_columns_count($lang, bt_reset_topup_look_columns());
+        $c['close_stk'] = close_sticker_custom_count($lang);
         $setting = select("setting", "*", null, null, "select");
         $te = json_decode((string) ($setting['text_edit'] ?? ''), true);
         $layout = json_decode((string) ($setting['keyboardmain'] ?? ''), true);
@@ -9788,6 +9790,9 @@ if (!function_exists('bt_reset_apply_mask')) {
         }
         if ($mask & $sections['topup_look']['bit']) {
             bt_reset_lang_columns($lang, bt_reset_topup_look_columns());
+        }
+        if ($mask & $sections['close_stk']['bit']) {
+            close_sticker_view_save($lang, []);
         }
         $mmParts = [];
         if ($mask & $sections['mm_sticker']['bit']) {
@@ -11403,7 +11408,7 @@ if (!function_exists('genbtn_hub_payload')) {
             $info .= "\n👁 <b>نام فعلی دکمه:</b>\n" . genbtn_label_preview_html($alias, $lang) . "\n";
         }
         if ($csKey !== '') {
-            $info .= close_sticker_caption_block($csKey, $note);
+            $info .= close_sticker_caption_block($csKey, $note, $lang);
         } elseif ($note !== '') {
             $info .= "<blockquote>{$note}</blockquote>\n";
         }
@@ -11443,7 +11448,7 @@ if (!function_exists('genbtn_hub_payload')) {
         // knows about
         if ($csKey !== '') {
             $sc_alias = close_sticker_key_to_alias($csKey);
-            $sc_cs = close_sticker_settings($csKey);
+            $sc_cs = close_sticker_settings($csKey, false, $lang);
             $kb['inline_keyboard'][] = [['text' => bt_section_meta('genbtn_closesticker')['label'], 'callback_data' => 'bt_sep|genbtn_closesticker']];
             $kb['inline_keyboard'][] = [[
                 'text' => $sc_cs['enabled'] ? '✅ استیکر بستن: روشن' : '❌ استیکر بستن: خاموش',
@@ -15541,24 +15546,61 @@ if (!function_exists('close_sticker_keys')) {
     }
 }
 if (!function_exists('close_sticker_settings')) {
-    // Reads ONE key's sticker+timer out of the shared close_sticker JSON blob
-    // (shaped {key: {enabled, file_id, duration}, ...}) - independent of every
-    // other key, so customizing خرید اشتراک's sticker never touches افزایش
-    // موجودی's.
-    function close_sticker_settings($key, $fresh = false)
+    // ONE section's sticker+timer on ONE language tab - independent of every
+    // other section, so customizing خرید اشتراک's sticker never touches افزایش
+    // موجودی's, and of every other tab.
+    //
+    // setting.close_sticker was {key: {enabled, file_id, duration}} for the
+    // whole bot; per tab it is {"v":2, "<lang>": {key: {...}}}. A value saved
+    // before the tabs answers for every tab until one of them changes
+    // something, and is then copied into each tab first - so nothing a
+    // customer sees changes on its own.
+    function close_sticker_blob()
     {
-        static $cache = [];
-        if (isset($cache[$key]) && !$fresh) {
-            return $cache[$key];
-        }
         $setting = select("setting", "*", null, null, "select");
         $all = json_decode((string) ($setting['close_sticker'] ?? ''), true);
-        if (!is_array($all)) {
-            $all = [];
+        return is_array($all) ? $all : [];
+    }
+    // what $lang's tab has set; a language with no tab of its own follows Persian
+    function close_sticker_view($lang)
+    {
+        $all = close_sticker_blob();
+        if ((int) ($all['v'] ?? 0) !== 2) {
+            return $all;
         }
-        $cs = is_array($all[$key] ?? null) ? $all[$key] : [];
+        $v = in_array($lang, panel_langs(), true) ? ($all[$lang] ?? []) : ($all[$lang] ?? ($all['fa'] ?? []));
+        return is_array($v) ? $v : [];
+    }
+    function close_sticker_view_save($lang, array $view)
+    {
+        $all = close_sticker_blob();
+        if ((int) ($all['v'] ?? 0) !== 2) {
+            $legacy = $all;
+            $all = ['v' => 2];
+            foreach (panel_langs() as $l) {
+                if (!empty($legacy)) {
+                    $all[$l] = $legacy;
+                }
+            }
+        }
+        if (empty($view)) {
+            unset($all[$lang]);
+        } else {
+            $all[$lang] = $view;
+        }
+        update("setting", "close_sticker", json_encode($all, JSON_UNESCAPED_UNICODE), null, null);
+    }
+    function close_sticker_settings($key, $fresh = false, $lang = 'fa')
+    {
+        static $cache = [];
+        $ck = $lang . '|' . $key;
+        if (isset($cache[$ck]) && !$fresh) {
+            return $cache[$ck];
+        }
+        $view = close_sticker_view($lang);
+        $cs = is_array($view[$key] ?? null) ? $view[$key] : [];
         $duration = isset($cs['duration']) ? (int) $cs['duration'] : close_sticker_default_duration();
-        $cache[$key] = [
+        $cache[$ck] = [
             // never configured for this key = on, with the shop's own default
             // sticker - every key starts out identical until customized apart
             'enabled' => array_key_exists('enabled', $cs) ? ($cs['enabled'] === '1') : true,
@@ -15568,31 +15610,39 @@ if (!function_exists('close_sticker_settings')) {
             // cannot turn every ❌ بستن tap into a long hang
             'duration' => max(1, min(10, $duration > 0 ? $duration : close_sticker_default_duration())),
         ];
-        return $cache[$key];
+        return $cache[$ck];
     }
-    function close_sticker_save($key, array $patch)
+    function close_sticker_save($key, array $patch, $lang = 'fa')
     {
-        $cur = close_sticker_settings($key, true);
+        $cur = close_sticker_settings($key, true, $lang);
         $next = array_merge($cur, $patch);
-        $setting = select("setting", "*", null, null, "select");
-        $all = json_decode((string) ($setting['close_sticker'] ?? ''), true);
-        if (!is_array($all)) {
-            $all = [];
-        }
-        $all[$key] = [
+        $view = close_sticker_view($lang);
+        $view[$key] = [
             'enabled' => $next['enabled'] ? '1' : '0',
             'file_id' => (string) $next['file_id'],
             'duration' => (string) max(1, min(10, (int) $next['duration'])),
         ];
-        update("setting", "close_sticker", json_encode($all, JSON_UNESCAPED_UNICODE), null, null);
-        close_sticker_settings($key, true);
+        close_sticker_view_save($lang, $view);
+        close_sticker_settings($key, true, $lang);
+    }
+    // how many sections this tab has changed from the factory sticker/timer
+    function close_sticker_custom_count($lang)
+    {
+        $n = 0;
+        foreach (close_sticker_keys() as $key) {
+            $cs = close_sticker_settings($key, true, $lang);
+            if (!$cs['enabled'] || $cs['file_id'] !== close_sticker_default_file_id() || $cs['duration'] !== close_sticker_default_duration()) {
+                $n++;
+            }
+        }
+        return $n;
     }
     // The sticker/timer state as a Telegram quote, shown inside the button's own
     // edit caption. $note is the "just changed" line and sits in the same quote,
     // so the confirmation and the state it produced read as one block.
-    function close_sticker_caption_block($key, $note = '')
+    function close_sticker_caption_block($key, $note = '', $lang = 'fa')
     {
-        $cs = close_sticker_settings($key);
+        $cs = close_sticker_settings($key, false, $lang);
         $lines = [];
         if ($note !== '') {
             $lines[] = $note;
@@ -15636,7 +15686,8 @@ if (!function_exists('close_sticker_play')) {
         $alsoDelete = array_values(array_unique(array_filter(array_map('intval', $alsoDelete), function ($id) {
             return $id > 0;
         })));
-        $cs = close_sticker_settings($key);
+        // the sticker of the language whoever tapped ❌ بستن uses the bot in
+        $cs = close_sticker_settings($key, false, function_exists('bottext_receiver_lang') ? bottext_receiver_lang($chat_id) : 'fa');
         if (!$cs['enabled'] || trim($cs['file_id']) === '') {
             foreach ($alsoDelete as $mid) {
                 deletemessage($chat_id, $mid);
