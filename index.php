@@ -237,7 +237,9 @@ if (!in_array($user['agent'], ["n", "n2", "f"]))
 // handler stays reachable, so switching to a served language is the way out.
 if (!lang_is_served($user['lang'] ?? '', in_array($from_id, $admin_ids))
     && strpos((string) $datain, 'setlang:') !== 0) {
-    $langBlockText = bottext_resolve_key('bottext.langBlockedMsg');
+    // the copy 🌐 تنظیمات تغییر زبان edits - this user's own language is the
+    // one that is not served, so there is no tab of theirs to read it from
+    $langBlockText = bottext_resolve_key('bottext.langBlockedMsg', 'fa');
     if (trim((string) $langBlockText) === '') {
         $langBlockText = $textbotlang['bottext']['langBlockedMsg'] ?? '⛔️';
     }

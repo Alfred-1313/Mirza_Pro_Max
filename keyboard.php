@@ -2333,7 +2333,11 @@ if (!function_exists('language_picker_payload')) {
     // "please choose" line per language the shop offers.
     function lang_picker_caption()
     {
-        $v = function_exists('bottext_resolve_key') ? trim((string) bottext_resolve_key('bottext.langPickerCaption')) : '';
+        // One screen for everyone, like its button styling: the copy that
+        // 🌐 تنظیمات تغییر زبان edits (the Persian one), whatever language the
+        // reader has so far - read in the reader's language, an edit never
+        // reached anyone but Persian users.
+        $v = function_exists('bottext_resolve_key') ? trim((string) bottext_resolve_key('bottext.langPickerCaption', 'fa')) : '';
         global $textbotlang;
         if ($v === '') {
             $v = (string) ($textbotlang['bottext']['langPickerCaption'] ?? '');
