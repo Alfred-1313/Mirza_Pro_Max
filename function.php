@@ -1668,6 +1668,29 @@ if (!function_exists('phone_prefixes_for_lang')) {
         }
         return $out;
     }
+    // The countries 🌐 وضعیت قابلیت‌ها (هر زبان) → 📞 offers as one-tap buttons,
+    // code => [flag, Persian name]; any other code can still be typed in.
+    function phone_country_choices()
+    {
+        return [
+            '98' => ['🇮🇷', 'ایران'], '1' => ['🇺🇸', 'آمریکا و کانادا'], '44' => ['🇬🇧', 'انگلیس'],
+            '49' => ['🇩🇪', 'آلمان'], '90' => ['🇹🇷', 'ترکیه'], '971' => ['🇦🇪', 'امارات'],
+            '7' => ['🇷🇺', 'روسیه'], '964' => ['🇮🇶', 'عراق'], '93' => ['🇦🇫', 'افغانستان'],
+            '86' => ['🇨🇳', 'چین'], '31' => ['🇳🇱', 'هلند'], '33' => ['🇫🇷', 'فرانسه'],
+        ];
+    }
+    // one language's list written back; an empty list means every country
+    function phone_prefixes_set($lang, array $codes)
+    {
+        $clean = [];
+        foreach ($codes as $c) {
+            $c = preg_replace('/\D+/', '', (string) $c);
+            if ($c !== '' && $c !== '0' && !in_array($c, $clean, true)) {
+                $clean[] = $c;
+            }
+        }
+        feature_setting_set('phone_prefix', $lang, $clean ? implode(',', $clean) : '0');
+    }
     // Telegram hands contact numbers over without a "+", so a prefix test is
     // enough - and it is the only shape that generalises past one fixed country.
     function phone_matches_lang($phone, $lang)
