@@ -2495,9 +2495,14 @@ function keyboard_list_text($lang, $groupFilter = null)
                 $keyboard_text['inline_keyboard'][] = [['text' => bt_section_meta($bt_section)['label'], 'callback_data' => "bt_sep|{$bt_section}"]];
                 $bt_cur_section = $bt_section;
             }
-            list($bt_label, $bt_style) = $bt_decorate($data['key'], $data['label']);
+            // a button item shows the button itself, as this tab has it now
+            $bt_live = in_array($data['key'], bt_btnitem_keys(), true) ? genbtn_row_label($data['key'], $lang) : null;
+            list($bt_label, $bt_style) = $bt_decorate($data['key'], $bt_live !== null ? $bt_live[0] : $data['label']);
             // blue by default, green (from $bt_decorate) once something is customized
             $bt_btn = ['text' => $bt_label, 'callback_data' => "bt_edit|$lang|{$data['key']}", 'style' => ($bt_style !== '' ? $bt_style : 'primary')];
+            if ($bt_live !== null && $bt_live[1] !== '') {
+                $bt_btn['icon_custom_emoji_id'] = $bt_live[1];
+            }
             $keyboard_text['inline_keyboard'][] = [$bt_btn];
             if ($groupFilter === 'myservices' && $data['key'] === 'users.sell.service_sell') {
                 $keyboard_text['inline_keyboard'][] = [['text' => bt_section_meta('myservices_related')['label'], 'callback_data' => 'bt_sep|myservices_related']];

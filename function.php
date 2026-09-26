@@ -11227,6 +11227,21 @@ if (!function_exists('genbtn_hub_payload')) {
         }
         return '<blockquote>' . implode("\n", $lines) . '</blockquote>';
     }
+    // A button item's row in a 🎨 list: the button itself as this tab's customer
+    // gets it - its current emoji and name, 🚫 when hidden - instead of the
+    // registry's fixed Persian label. [text, premium emoji id]; null when the
+    // key has no button definition.
+    function genbtn_row_label($key, $lang)
+    {
+        $alias = genbtn_key_to_alias($key);
+        $defs = $alias !== '' ? genbtn_defs($alias, lang_tab_texts($lang)) : [];
+        if (!isset($defs[0])) {
+            return null;
+        }
+        $ov = genbtn_override($lang, $key, 0);
+        $btn = genbtn_render($defs[0], $ov, 'none');
+        return [(genbtn_is_hidden($defs[0], $ov) ? '🚫 ' : '') . $btn['text'], (string) ($btn['icon_custom_emoji_id'] ?? '')];
+    }
     function genbtn_hub_payload($alias, $lang, $textbotlang, $origin = '', $note = '')
     {
         $key = (string) genbtn_alias_to_key($alias);
