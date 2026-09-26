@@ -147,8 +147,18 @@ if ($user == false) {
 // inline "❌ انصراف" cancel button, so a typed reply that happens to match
 // an existing menu label's text (e.g. re-typing a button's current name)
 // must reach that step's own handler instead of being hijacked as navigation
+// Two English main-menu labels were renamed to match the Persian buttons. A
+// reply keyboard already on a customer's phone keeps sending the old text
+// until the bot sends a new one, so the old text still means the same button.
+$mm_legacy = [
+    '🏦 Wallet + Top-up' => $textbotlang['textbot']['accountWallet'] ?? null,
+    '👥 Referral collection' => $textbotlang['textbot']['affiliates'] ?? null,
+];
+if ((string) $datain === '' && ($mm_legacy[(string) $text] ?? null) !== null) {
+    $text = $mm_legacy[(string) $text];
+}
 $mm_step = (string) ($user['step'] ?? '');
-$mm_exempt_step = ((string) $datain === '' && preg_match('/^(btbtntext|btbbtntext|gbtntxt|gbtnemo)-/', $mm_step) === 1);
+$mm_exempt_step =((string) $datain === '' && preg_match('/^(btbtntext|btbbtntext|gbtntxt|gbtnemo)-/', $mm_step) === 1);
 if (!$mm_exempt_step && is_main_menu_trigger($text, $datain, $textbotlang)) {
     preempt_active_session($user, $from_id);
 }

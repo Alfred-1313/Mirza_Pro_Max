@@ -3,7 +3,7 @@
 
 return [
         'bottext' => [
-                'open_button' => '📝 Edit bot texts',
+                'open_button' => '🎨 Customize bot messages',
                 'home_text' => '📝 <b>Edit bot texts</b>
 
 Pick the text you want to change.
@@ -15,6 +15,19 @@ Current language: <b>{lang}</b>',
                 'btnCloseAccount' => '❌ Close',
                 'btnCloseTest' => '❌ Close',
                 'btnCloseHelp' => '❌ Close',
+                // the language screen: the picker is written in English
+                // already, the "blocked" note only needs the English half
+                'langPickerCaption' => '═══════════════════════
+       🌍 WELCOME
+═══════════════════════
+
+{lines}
+
+━━━━━━━━━━━━━━━━━━━━━━━
+👇 Tap to continue:',
+                'langBlockedMsg' => '⛔️ No service in this language right now
+
+👇 Please choose one of the languages below',
                 'reset_hint' => '♻️ To restore this text to its default, send <b>0</b>.',
                 'msg_reset_done' => '✅ This text has been restored to its default.',
                 'msg_session' => '⛔️ Session expired. Please open it again.',
@@ -1127,14 +1140,15 @@ You can now use the bot ✔️',
 📌 As a renewal gift, an amount of %s Dollar was credited to your account',
                         'giftChargedFn' => 'Congratulations 🎉
 📌 As a renewal gift, an amount of %s Dollar was credited to your account',
-                        'invoiceCreated' => '📜 Your renewal invoice for username %s was created.
-        
-🛍 Product name :%s
-💸 Renewal amount : %s Dollar
-⏱ Renewal duration :%s days
-🔋 Renewal volume :%s GB
-✍️ Description : %s
-💸 Wallet balance : %s
+                        'invoiceCreated' => '📜 Your renewal invoice for
+👤 Subscription username: %s
+
+🛍 Product name: %s
+💸 Renewal amount: %s Dollar
+⏱️ Renewal duration: %s days
+🔋 Renewal volume: %s GB
+✍️ Description: %s
+💸 Wallet balance: %s
 ✅ To confirm and renew the service, click the button below',
                         'invoiceCreated2' => '📜 Your renewal invoice for username %s was created.
         
@@ -1332,7 +1346,7 @@ Support account : @%s',
                         'previous' => 'Previous',
                 ],
                 'priceArze' => [
-                        'tetherPrice' => 'The current Tether price is: %s Dollar',
+                        'tetherPrice' => 'The current Tether price is: %s Toman',
                         'tronPrice' => 'The current TRON price is: %s Toman',
                         'fetchError' => '❌ Retrieving the price is not possible at the moment. Please try again later.',
                 ],
@@ -1349,12 +1363,10 @@ Support account : @%s',
 🪪(example: Ali, Ahmad, Uncle, customer from out of town, etc.)',
                         'serviceSelect' => '🛍️ Please select the service you want to purchase!',
                         'serviceSelectFirst' => '🛍️ Please select the service you want to purchase!',
-                        'service_not_available' => '⛔️ You have no active service',
+                        'service_not_available' => '<b>Unfortunately, you have no active service.</b>',
                         'service_sell' => '🛍 Subscriptions purchased by you
 
-⚠️ To view details and manage, click on the username
-
-⭕️ You can also use the "🔎 Quick search" button to quickly find and manage your service',
+⚠️ To view details and manage, click on the username',
                         'nullProduct' => '⭕️ No product was found. Please contact support to resolve the issue',
                         'panelCapacityFull' => '❌ Unfortunately, the account creation capacity on this panel has been reached. Use another panel',
                         'capacityFull' => '❌ Unfortunately, the account creation capacity has been reached. Try again in a few hours.',
@@ -1402,28 +1414,30 @@ To use the default name, press the green button; to cancel and go back to the pl
 🔔 The minimum volume is %s gigabytes and the maximum is %s gigabytes.',
                         'invalidTimeRestart' => 'The time is invalid. Perform the purchase from the beginning',
                         'invalidVolumeRestart' => 'The volume is invalid. Perform the purchase from the beginning',
-                        'preInvoice' => '
-📇 Your pro forma invoice:
-👤 Username: <code>%s</code>
-🔐 Service name: %s
-📆 Validity period: %s days
-💶 Original price: <del>%s</del>
-💶 Discounted price: %s
-👥 Account volume: %s GB
-💵 Your wallet balance : %s
-                  
-        💰 Your order is ready for payment.  ',
-                        'preInvoice2' => '
-📇 Your pro forma invoice:
-👤 Username: <code>%s</code>
-🔐 Service name: %s
-📆 Validity period: %s days
-💶 Price: %s
-👥 Account volume: %s GB
-💵 Your wallet balance : %s
-⭕️Number of configs : %s
-                  
-💰 Your order is ready for payment.  ',
+                        'preInvoice' => '🌐 Purchase confirmation
+
+⬅️ All right, are you sure you want to get this service?
+
+✏️ Service name: %2$s
+📤 Service volume: %6$s GB
+📅 Validity: %3$s days
+
+🏷 Original price: <del>%4$s</del>
+🏷 Discounted price: %5$s
+
+✅ If you confirm, the service will be purchased.',
+                        'preInvoice2' => '🌐 Purchase confirmation
+
+⬅️ All right, are you sure you want to get this service?
+
+✏️ Service name: %2$s
+📤 Service volume: %5$s GB
+📅 Validity: %3$s days
+🔢 Number of configs: %7$s
+
+🏷 Final service price: %4$s
+
+✅ If you confirm, the service will be purchased.',
                         'panelInactive' => 'The selected panel is currently not active',
                         'panelMissing' => 'The selected panel does not exist.',
                         'productNotFound' => 'The selected product was not found',
@@ -1522,7 +1536,7 @@ Thank you for using our services.',
                         'configNote' => '✍️ Config note : {note}',
                         'lastOnline' => '📶 Your last connection time : {lastonline}',
                         'subscriptionFile' => 'Your subscription file',
-                        'btnTurnOff' => '❌ Disable account',
+                        'btnTurnOff' => '❌ Turn off account',
                         'btnTurnOn' => '💡 Turn on account',
                         'btnEditNote' => '📝 Change note',
                         'btnRefresh' => '♻️ Update information',
@@ -1538,7 +1552,10 @@ Thank you for using our services.',
 ⚠️ If you want the config to be activated again, you must click the <u>💡 Turn on account</u> button from the service management section',
                         'confirmEnableConfig' => '📌 By confirming the option below, your config will be turned on and you will be able to connect to it.
 ⚠️ If you want the config to be deactivated again, you must click the <u>❌ Turn off account</u> button from the service management section',
-                        'getConfigHint' => '📌 To get the config, click the Get config button',
+                        'getConfigHint' => '📌 To get the config, click the Get config button
+
+⏳ Service duration: {testtime} hours
+🗜 Service volume: {testvolume} MB',
                         'getConfigHintBuy' => '📌 To get the config, click the Get config button
 
 ⏳ Service duration: {time} hours
@@ -4077,9 +4094,9 @@ Follow the steps above, then send the address below:
                 ],
         ],
         'textbot' => [
-                'accountWallet' => '🏦 Wallet + Top-up',
+                'accountWallet' => '👤 User account',
                 'addBalance' => '💰 Increase balance',
-                'affiliates' => '👥 Referral collection',
+                'affiliates' => '👥 Referrals',
                 'getConfigHintBuy' => '📌 To get the config, click the Get config button',
                 'getConfigHintTest' => '📌 To get the config, click the Get config button',
                 'afterPay' => '✅ Service was created successfully
@@ -4114,7 +4131,7 @@ Connection link:
 {config}',
                 'agentPanel' => '👨‍💻 Agency panel',
                 'agentRequestDesc' => '📌 Send your description to submit an agency request.',
-                'aqayePardakht' => '🔵 Aghaye Pardakht gateway',
+                'aqayePardakht' => 'Aghaye Pardakht gateway',
                 'botOff' => '❌ The bot is off, please check back in a few minutes',
                 'cardRandomAmountNotice' => '⚠️ Dear user, deposit exactly <code>{price_rial}</code> Rials for this invoice; not a single rial more or less, so your receipt is checked without delay.',
                 'tonPayment' => '💎 Pay with TON',
@@ -4145,12 +4162,12 @@ Connection link:
 💰Deposit exactly the amount mentioned above so it is approved instantly.
 ‼️Withdrawing money from the wallet is not possible.
 🔝There is no need to send a receipt, but if your deposit is not approved after some time, send your receipt image.',
-                'cartToCart' => '💳 Card to card',
+                'cartToCart' => 'Card to card',
                 'channel' => '   
         ⚠️ Dear user; you are not a member of our channel
 Join the channel via the button below
 After joining, click the check membership button',
-                'cryptoPayment' => '💰 Crypto Payment with NowPayments',
+                'cryptoPayment' => 'Crypto payment with NowPayments',
                 'discount' => '🎁 Gift code',
                 'extend' => '♻️ Renew service',
                 'faq' => '❓ FAQ',
@@ -4195,9 +4212,9 @@ After joining, click the check membership button',
 
 💡 If you didn\'t get the answer to your question, you can contact «support».',
                 'help' => '📚 Tutorial',
-                'iranPay1' => '💸 Rial payment gateway',
-                'iranPay2' => '💸 Second Rial payment gateway',
-                'iranPay3' => '💸 Third Rial payment gateway',
+                'iranPay1' => 'Rial payment gateway',
+                'iranPay2' => 'Second rial payment gateway',
+                'iranPay3' => 'Third rial payment gateway',
                 'manual' => '✅ Service was created successfully
 
 👤 Service username: {username}
@@ -4206,19 +4223,20 @@ After joining, click the check membership button',
 
 Service information:
 {config}',
-                'nowPayment' => '💰 Crypto Payment with Plisio',
-                'nowPaymentTron' => '💵 Tron crypto deposit',
+                'nowPayment' => 'Crypto payment with Plisio',
+                'nowPaymentTron' => 'Direct TRON payment (TRX)',
                 'paymentNotVerify' => 'Rial gateway',
-                'preInvoice' => '📇 Your pro forma invoice:
-👤 Username:  {username}
-🔐 Service name: {name_product}
-📆 Validity period: {Service_time} days
-💶 Price:  {price}
-👥 Account volume: {Volume} GB
-🗒 Product note : {note}
-💵 Your wallet balance : {userBalance}
-          
-💰 Your order is ready for payment',
+                'preInvoice' => '🌐 Purchase confirmation
+
+⬅️ All right, are you sure you want to get this service?
+
+✏️ Service name: {name_product}
+📤 Service volume: {Volume} GB
+📅 Validity: {Service_time} days
+
+🏷 Final service price: {price}
+
+✅ If you confirm, the service will be purchased.',
                 'purchasedServices' => '🛍 My services',
                 'requestAgent' => '👨‍💻 Agency request',
                 'rules' => '
@@ -4229,10 +4247,10 @@ Service information:
 3- Do not send services via SMS; to send them, you can send via email.
     
 ',
-                'selectLocation' => '📌 Select the service location.',
-                'selectLocationTest' => '📌 Select the panel for your test service.',
+                'selectLocation' => '<b>To buy, choose the panel you want!</b>',
+                'selectLocationTest' => '<b>Which panel do you want your test service from? Choose!</b>',
                 'sell' => '🔐 Buy subscription',
-                'starTelegram' => '💫 Star Telegram',
+                'starTelegram' => '⭐️ Pay with Stars',
                 'support' => '☎️ Support',
                 'tariffList' => '💵 Subscription rates',
                 'tariffListDesc' => 'Not set',
@@ -4249,7 +4267,7 @@ We hope you had a good experience with the ease and speed of your service. If yo
 ⏳ Duration: {time_human}
 🗜 Service volume: {volume_human}',
                 'wheelLuck' => '🎲 Wheel of fortune',
-                'zarinPal' => '🟡 ZarinPal',
+                'zarinPal' => 'ZarinPal',
         ],
         'keyboard' => [
                 'acceptRules' => '✅ I accept the rules',
@@ -4345,7 +4363,7 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'cashbackStar' => '💰 Star cashback',
                 'cashbackZarinPal' => '💰 ZarinPal cashback',
                 'category' => 'Category',
-                'categoryBug' => '🐛 Category ',
+                'categoryBug' => '🗂 Category',
                 'changeLocation' => '🌍 Change location',
                 'changeLocationLimit' => 'Location change limit',
                 'changeLocationPrice' => '🌍 Location change price',
@@ -4451,8 +4469,8 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'featureStatusLang' => '🌐 Feature status (per language)',
                 'financial' => '💎 Financial',
                 'firstConnectTime' => '⚙️ First connection time',
-                'firstConnection' => '📊 First connection',
-                'firstConnectionTest' => '📊 Test account first connection',
+                'firstConnection' => '⏳ Start time from the first connection',
+                'firstConnectionTest' => '⏳ Start test time from the first connection',
                 'firstPurchaseBtn' => 'First purchase',
                 'firstPurchaseCommission' => '🎉 Commission only for first purchase',
                 'firstPurchaseWheel' => '🎲 First purchase wheel of fortune',
@@ -4474,7 +4492,7 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'inactiveDays' => 'Number of days not used',
                 'inboundDeactivate' => '⚙️  Inactive account inbound',
                 'increaseGroupPrice' => '⬆️ Bulk price increase',
-                'infoRefreshed' => '♻️ Information updated',
+                'infoRefreshed' => '♻️ Service information updated successfully',
                 'infoUpdated' => 'Information was updated',
                 'iranPay1Label' => '📌 First Rial currency',
                 'iranPay2Label' => '📌 Second Rial currency',
@@ -4540,7 +4558,7 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'panelName' => '✍️ Panel name',
                 'panelUptime' => '🎛 Panel uptime',
                 'passargadPanel' => 'Pasargard',
-                'payAndGetService' => '💰 Pay and receive service',
+                'payAndGetService' => '✅ Confirm and pay',
                 'backToPlansBtn' => '🔙 Back',
                 'cancelUsernameBtn' => '❌ Cancel',
                 'useDefaultUsernameBtn' => '✅ Default',
@@ -4621,7 +4639,7 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'setProtocolInbound' => '⚙️ Set protocol and inbound',
                 'setSecondPrize' => '2️⃣ Set second place prize',
                 'setSupportId' => '👤 Set support ID',
-                'setTestAccountLimitAll' => '➕ Test account creation limit for everyone',
+                'setTestAccountLimitAll' => '🎁 Reset test account',
                 'setThirdPrize' => '3️⃣ Set third place prize',
                 'settings' => '⚙️ Settings',
                 'settleDebt' => '💎 Settle debt',
