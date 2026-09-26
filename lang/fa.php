@@ -14,8 +14,7 @@ return array (
     'groupVerifyLabel' => "📞 پیام و دکمه‌های احراز شماره و قوانین",
     'groupWheelLabel' => "🎲 پیام‌های گردونه شانس",
     'groupReferralLabel' => "🎁 پیام و دکمه‌های زیرمجموعه‌گیری",
-    'groupUserMgmtLabel' => "👤 پیام‌ها و دکمه‌های مدیریت کاربر",
-    'groupUserMgmtCaption' => "👤 <b>پیام‌ها و دکمه‌های مدیریت کاربر</b>\n\nهر چیزی که از «👤 مدیریت کاربر» به کاربر می‌رسه: متن پیام‌ها (با استیکر) و دکمه‌های زیرشون. کاربر هر زبان، متن و دکمه‌ی همون زبان رو می‌بینه.\n\nکدوم مورد رو می‌خوای تنظیم کنی؟\n\nزبان فعلی: <b>{lang}</b>",
+    'groupUserMgmtCaption' => "🎨 <b>پیام‌ها و دکمه‌های مدیریت کاربر</b> — {lang}\n\n🌐 الان داری تب <b>{lang}</b> رو تنظیم می‌کنی: هر تغییری اینجا فقط به کاربرایی می‌رسه که زبان رباتشون {lang} هست. برای زبان دیگه، تبش رو از بالا بزن.\n\n📩 <b>پیام‌ها</b>: روی هر پیام بزن تا متن و استیکرش رو عوض کنی.\n🔘 <b>دکمه‌ها</b> (پایین لیست، همون‌طور که کاربر می‌بینه): روی هر دکمه بزن تا اسم، ایموجی، رنگ یا استیکر لمسش رو عوض کنی.\n\n🔵 آبی = دست‌نخورده · 🟢 سبز = تغییر داده شده\n✏️ متن عوض شده · 🖼 استیکر داره · 🔘 دکمه‌ش عوض شده",
     'groupVerifyCaption' => "📞 <b>احراز شماره و قوانین</b>\n\nکدوم مورد رو می‌خوای تنظیم کنی؟\n\n📌 کد کشور مجاز برای هر زبان از «🌐 وضعیت قابلیت‌ها (هر زبان)» تنظیم می‌شه، نه اینجا. اینجا فقط متن‌ها و دکمه‌هاست.\n\nزبان فعلی: <b>{lang}</b>",
     'groupWheelCaption' => "🎲 <b>پیام‌های گردونه شانس</b>\n\nکدوم مورد رو می‌خوای تنظیم کنی؟\n\n📌 مبلغ برد از «🌐 وضعیت قابلیت‌ها (هر زبان)» ← ⚙️ تنظیمات گردونه تنظیم می‌شه.\n\nزبان فعلی: <b>{lang}</b>",
     'groupReferralCaption' => "🎁 <b>پیام و دکمه‌های زیرمجموعه‌گیری</b>\n\nکدوم مورد رو می‌خوای تنظیم کنی؟\n\n📌 درصد پورسانت، مبلغ هدیه و بنر از «🌐 وضعیت قابلیت‌ها (هر زبان)» ← ⚙️ تنظیمات زیرمجموعه تنظیم می‌شن.\n\nزبان فعلی: <b>{lang}</b>",
@@ -884,12 +883,12 @@ return array (
       'um_25' => array ('label' => '💬 جواب ادمین به پیام کاربر (و دکمه‌ی پاسخ)', 'key' => 'users.support.messageFromManagement', 'group' => 'usermgmt', 'section' => 'um_messages'),
       'um_26' => array ('label' => '🖼 جواب ادمین با عکس (و دکمه‌ی پاسخ)', 'key' => 'users.support.messageFromManagement2', 'group' => 'usermgmt', 'section' => 'um_messages'),
       'um_27' => array ('label' => '☎️ جواب پشتیبانی به تیکت (و دکمه‌ی پاسخ)', 'key' => 'users.support.messageFromAdmin', 'group' => 'usermgmt', 'section' => 'um_messages'),
-      'um_18' => array ('label' => '🛒 دکمه خرید (زیر پیام همگانی)', 'key' => 'bottext.bcBuyBtn', 'group' => 'usermgmt', 'section' => 'um_messages'),
-      'um_19' => array ('label' => '🏠 دکمه شروع (زیر پیام همگانی)', 'key' => 'bottext.bcStartBtn', 'group' => 'usermgmt', 'section' => 'um_messages'),
-      'um_20' => array ('label' => '🎁 دکمه اکانت تست (زیر پیام همگانی)', 'key' => 'bottext.bcTestBtn', 'group' => 'usermgmt', 'section' => 'um_messages'),
-      'um_21' => array ('label' => '📚 دکمه آموزش (زیر پیام همگانی)', 'key' => 'bottext.bcHelpBtn', 'group' => 'usermgmt', 'section' => 'um_messages'),
-      'um_22' => array ('label' => '👥 دکمه زیرمجموعه‌گیری (زیر پیام همگانی)', 'key' => 'bottext.bcAffBtn', 'group' => 'usermgmt', 'section' => 'um_messages'),
-      'um_23' => array ('label' => '💰 دکمه افزایش موجودی (زیر پیام همگانی)', 'key' => 'bottext.bcTopupBtn', 'group' => 'usermgmt', 'section' => 'um_messages'),
+      'um_18' => array ('label' => '🛒 دکمه خرید (زیر پیام همگانی)', 'key' => 'bottext.bcBuyBtn', 'group' => 'usermgmt', 'section' => 'um_buttons'),
+      'um_19' => array ('label' => '🏠 دکمه شروع (زیر پیام همگانی)', 'key' => 'bottext.bcStartBtn', 'group' => 'usermgmt', 'section' => 'um_buttons'),
+      'um_20' => array ('label' => '🎁 دکمه اکانت تست (زیر پیام همگانی)', 'key' => 'bottext.bcTestBtn', 'group' => 'usermgmt', 'section' => 'um_buttons'),
+      'um_21' => array ('label' => '📚 دکمه آموزش (زیر پیام همگانی)', 'key' => 'bottext.bcHelpBtn', 'group' => 'usermgmt', 'section' => 'um_buttons'),
+      'um_22' => array ('label' => '👥 دکمه زیرمجموعه‌گیری (زیر پیام همگانی)', 'key' => 'bottext.bcAffBtn', 'group' => 'usermgmt', 'section' => 'um_buttons'),
+      'um_23' => array ('label' => '💰 دکمه افزایش موجودی (زیر پیام همگانی)', 'key' => 'bottext.bcTopupBtn', 'group' => 'usermgmt', 'section' => 'um_buttons'),
     ),
   ),  'language' =>
   array (
@@ -6339,7 +6338,7 @@ nowpayments.io
 کیف پول‌های الان: {wallets}',
       'langChanged' => '✅ زبان کاربر شد {lang} — حالا کیف پول {currency} اون رو می‌بینه ({amount}).',
       'langSame' => 'زبان کاربر همینه.',
-      'customizeBtn' => '🎨 پیام‌ها و دکمه‌هایی که این بخش به کاربر می‌فرسته',
+      'customizeBtn' => '🎨 شخصی‌سازی پیام‌ها و دکمه‌های این بخش',
     ),
     'LangScope' =>
     array (

@@ -2467,6 +2467,11 @@ function keyboard_list_text($lang, $groupFilter = null)
         }
     }
     if ($groupFilter !== null) {
+        // 👤 مدیریت کاربر's screen is opened from there, not from this list:
+        // it carries its own language tabs, since nothing above it chose one
+        if ($groupFilter === 'usermgmt') {
+            $keyboard_text['inline_keyboard'][] = panel_lang_tabs($lang, "bt_group|%s|usermgmt", null);
+        }
         $bt_cur_section = null;
         foreach (($bt_grouped[$groupFilter] ?? []) as $data) {
             // Items a group screen no longer lists because they moved onto a
@@ -2587,13 +2592,27 @@ function keyboard_list_text($lang, $groupFilter = null)
             $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['categoriesBtn'], 'callback_data' => "help_disp_cat:{$lang}:bt", 'style' => 'primary']];
             $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['Admin']['Help']['tutorialsBtn'], 'callback_data' => "help_disp_tut:{$lang}:bt", 'style' => 'primary']];
         }
+        if ($groupFilter === 'usermgmt') {
+            // the reply button is not an item of its own (its look is owned by
+            // the admin's message) - listed with the other buttons, as it is
+            $bt_ma = genbtn_row_label('users.support.messageFromAdminAlt', $lang);
+            $bt_ma_custom = is_array($bt_list_be) && !empty($bt_list_be[$lang]['users.support.messageFromAdminAlt']);
+            $bt_ma_btn = ['text' => $bt_ma[0] . ($bt_ma_custom ? ' 🔘' : ''), 'callback_data' => "gbs|hub|{$lang}|ma", 'style' => $bt_ma_custom ? 'success' : 'primary'];
+            if ($bt_ma[1] !== '') {
+                $bt_ma_btn['icon_custom_emoji_id'] = $bt_ma[1];
+            }
+            $keyboard_text['inline_keyboard'][] = [$bt_ma_btn];
+        }
         $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['resetAllLabel'], 'callback_data' => "bt_group_resetall|$lang|$groupFilter", 'style' => 'danger']];
         // a submenu of another group needs one step back to its parent - the
         // shared "برگشت به لیست" row below jumps all the way out to the home list
         if ($groupFilter === 'topupdisc') {
             $keyboard_text['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "bt_group|$lang|topup", 'style' => 'danger']];
         }
-        $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['backToListLabel'], 'callback_data' => "btact|back|$lang", 'style' => 'danger']];
+        // 👤's screen goes back to 👤 مدیریت کاربر, on this same tab
+        $keyboard_text['inline_keyboard'][] = $groupFilter === 'usermgmt'
+            ? [['text' => '🔙 بازگشت به مدیریت کاربر', 'callback_data' => "umlang:$lang", 'style' => 'danger']]
+            : [['text' => $textbotlang['bottext']['backToListLabel'], 'callback_data' => "btact|back|$lang", 'style' => 'danger']];
         $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']];
         $bt_captionKey = [
             'myservices' => 'groupServicesCaption',
@@ -2640,8 +2659,6 @@ function keyboard_list_text($lang, $groupFilter = null)
         // off - their messages had no row here at all until now, so they were
         // the only customer-facing flows with no way to reword them
         'home_features' => [],
-        // what 👤 مدیریت کاربر sends a customer: one row into its own group
-        'home_usermgmt' => [],
     ];
     $bt_home_sectioned_keys = array_merge(...array_values($bt_home_sections));
     foreach ($bt_home_sections as $bt_sec_key => $bt_sec_items) {
@@ -2708,7 +2725,6 @@ function keyboard_list_text($lang, $groupFilter = null)
             'home_features:verify' => ['verify', 'groupVerifyLabel'],
             'home_features:wheel' => ['wheel', 'groupWheelLabel'],
             'home_features:referral' => ['referral', 'groupReferralLabel'],
-            'home_usermgmt' => ['usermgmt', 'groupUserMgmtLabel'],
         ] as $bt_sec_owner => $bt_sec_group) {
             // one section may own several group rows, so the key carries the
             // section before the ":" and stays unique in this map

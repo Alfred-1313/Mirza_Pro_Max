@@ -9905,8 +9905,6 @@ elseif ($datain == "systemsms") {
             [
                 ['text' => $textbotlang['keyboard']['sendWithoutButton'], 'callback_data' => 'btntypemessage-none'],
             ],
-            // where these buttons are made - so nobody has to hunt for it
-            ...($adminrulecheck['rule'] == "administrator" ? [[['text' => '🎨 شخصی‌سازی این دکمه‌ها (' . ($textbotlang['bottext']['langs'][$bm_pickLang] ?? $bm_pickLang) . ')', 'callback_data' => "bt_group|{$bm_pickLang}|usermgmt", 'style' => 'success']]] : []),
             [
                 ['text' => $textbotlang['keyboard']['backToPrev'], 'callback_data' => 'typeagent-' . $userdata['agent'], 'style' => 'danger'],
             ],

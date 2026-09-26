@@ -66,9 +66,12 @@ if ($info['type'] == "forwardmessage" && function_exists('bt_effective_sticker')
     $bm_fwdSticker = bt_effective_sticker(is_array($bm_layout['text_stickers'] ?? null) ? $bm_layout['text_stickers'] : [], 'users.broadcast.message', $bm_lang);
 }
 for ($i = 0; $i < 20; $i++) {
-    $iduser = $userid[$i];
-    unset($userid[$i]);
-    $userid = array_values($userid);
+    // twenty a run, in order, and no further than the list goes - it used to
+    // skip every other user and then send to nobody when fewer were left
+    if (empty($userid)) {
+        break;
+    }
+    $iduser = array_shift($userid);
     if ($info['type'] == "unpinmessage") {
         unpinmessage($iduser->id);
     } elseif ($info['type'] == "sendmessage" or $info['type'] == "xdaynotmessage") {
