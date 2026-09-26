@@ -7183,7 +7183,7 @@ if (isset($update['message']['successful_payment'])) {
     $lang = $dataget[1];
     // the wallet follows the language: tomans stay with Persian, dollars
     // with English, each waiting for the user to come back
-    wallet_switch_lang($from_id, $lang);
+    $ws_conv = wallet_switch_lang($from_id, $lang);
     clearSelectCache();
     // $users was read at the top of keyboard.php, before this switch happened,
     // so it still carries the OLD language - and build_main_keyboard() below
@@ -7200,6 +7200,18 @@ if (isset($update['message']['successful_payment'])) {
     $textbotlang = ui_texts();
     $keyboard = build_main_keyboard();
     sendmessage($from_id, strtr($textbotlang['users']['text_start'], bottext_user_placeholders($user, $from_id)), $keyboard, 'html');
+    // 💱 their balance followed them into the new currency - say how much
+    if (is_array($ws_conv)) {
+        $ws_from = [];
+        foreach ($ws_conv['from'] as $ws_c => $ws_a) {
+            $ws_from[] = money($ws_a, $ws_c);
+        }
+        bottext_extras_key_hint('users.Balance.walletConverted');
+        sendmessage($from_id, strtr($textbotlang['users']['Balance']['walletConverted'], [
+            '{from}' => implode(' + ', $ws_from),
+            '{balance}' => money($ws_conv['balance'], $ws_conv['to']),
+        ]), null, 'HTML');
+    }
     step('home', $from_id);
     return;
 }

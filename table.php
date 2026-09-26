@@ -1467,6 +1467,8 @@ addFieldToTable("user", "wallets", null, "TEXT NULL");
 addFieldToTable("Payment_report", "currency", null, "VARCHAR(10) NULL");
 addFieldToTable("invoice", "currency", null, "VARCHAR(10) NULL");
 addFieldToTable("setting", "wallet_migrated", "0", "VARCHAR(5)");
+// 💱 converting a balance on a language switch - off until an admin turns it on
+addFieldToTable("setting", "wallet_convert", '{}', "TEXT");
 try {
     // cents: a dollar wallet holds $0.10
     $wm_col = $pdo->query("SHOW COLUMNS FROM `user` LIKE 'Balance'")->fetch(PDO::FETCH_ASSOC);

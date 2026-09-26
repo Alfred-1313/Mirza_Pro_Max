@@ -5068,6 +5068,12 @@ if (!function_exists('feature_status_global_payload')) {
                     ['text' => $name_status_notifnewuser, 'callback_data' => "editstsuts-notifnew-{$setting['statusnewuser']}"],
                     ['text' => $textbotlang['Admin']['Status']['statusNotifNewUser'], 'callback_data' => "statusnewuser"],
                 ],
+                // 💱 converting a balance on a language switch - bot-wide
+                [
+                    ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "wcv|open"],
+                    ['text' => wallet_convert_on() ? $textbotlang['Admin']['Status']['statuson'] : $textbotlang['Admin']['Status']['statusoff'], 'callback_data' => "wcv|tog"],
+                    ['text' => $textbotlang['Admin']['WalletConvert']['rowLabel'], 'callback_data' => "wcv|info"],
+                ],
                 [
                     ['text' => $cronteststatustext, 'callback_data' => "editstsuts-crontest-{$status_cron['test']}"],
                     ['text' => $textbotlang['keyboard']['cronTest'], 'callback_data' => "none"],
@@ -5097,6 +5103,35 @@ if (!function_exists('feature_status_global_payload')) {
                 ],
             ],
         ]);
+    }
+}
+if (!function_exists('wallet_convert_payload')) {
+    // 💱 its own screen: on/off, where the rate comes from, the rate now
+    function wallet_convert_payload($textbotlang, $note = '')
+    {
+        $t = $textbotlang['Admin']['WalletConvert'];
+        $s = wallet_convert_settings(true);
+        $rate = wallet_toman_per_dollar();
+        $cap = strtr($t['caption'], [
+            '{state}' => $s['on'] ? $t['stateOn'] : $t['stateOff'],
+            '{source}' => $s['source'] === 'manual' ? $t['srcManual'] : $t['srcNobitex'],
+            '{rate}' => $rate > 0 ? money($rate, 'IRT') : $t['noRate'],
+            '{manual}' => $s['rate'] > 0 ? money($s['rate'], 'IRT') : $t['notSet'],
+        ]);
+        if ($note !== '') {
+            $cap = $note . "\n\n" . $cap;
+        }
+        $kb = [
+            [['text' => $s['on'] ? $t['turnOff'] : $t['turnOn'], 'callback_data' => "wcv|tog2", 'style' => $s['on'] ? 'danger' : 'success']],
+            [
+                ['text' => ($s['source'] === 'manual' ? '✅ ' : '') . $t['srcManual'], 'callback_data' => "wcv|src|manual", 'style' => $s['source'] === 'manual' ? 'success' : 'primary'],
+                ['text' => ($s['source'] === 'nobitex' ? '✅ ' : '') . $t['srcNobitex'], 'callback_data' => "wcv|src|nobitex", 'style' => $s['source'] === 'nobitex' ? 'success' : 'primary'],
+            ],
+            [['text' => strtr($t['rateBtn'], ['{manual}' => $s['rate'] > 0 ? money($s['rate'], 'IRT') : $t['notSet']]), 'callback_data' => "wcv|rate", 'style' => 'primary']],
+            [['text' => $t['refreshBtn'], 'callback_data' => "wcv|open", 'style' => 'primary']],
+            [['text' => $t['backBtn'], 'callback_data' => "wcv|back", 'style' => 'danger']],
+        ];
+        return [$cap, json_encode(['inline_keyboard' => $kb])];
     }
 }
 if (!function_exists('feature_status_global_caption')) {
@@ -14576,6 +14611,59 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
         Editmessagetext($from_id, $message_id, um_hub_caption($um_lang, $textbotlang), um_hub_payload($um_lang, $textbotlang, $adminrulecheck['rule'] == "administrator"), 'HTML');
     } else {
         sendmessage($from_id, um_hub_caption($um_lang, $textbotlang), um_hub_payload($um_lang, $textbotlang, $adminrulecheck['rule'] == "administrator"), 'HTML');
+    }
+} elseif (preg_match('/^wcv\|(open|tog|tog2|info|src|rate|back)(?:\|(manual|nobitex))?$/', $datain, $wcv_m) && $adminrulecheck['rule'] == "administrator") {
+    // 💱 تبدیل ارز با تغییر زبان
+    $wcv_t = $textbotlang['Admin']['WalletConvert'];
+    if ($wcv_m[1] === 'info') {
+        telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $wcv_t['infoAlert'], 'show_alert' => true]);
+        return;
+    }
+    if ($wcv_m[1] === 'tog' || $wcv_m[1] === 'tog2') {
+        $wcv_on = !wallet_convert_on();
+        wallet_convert_set(['on' => $wcv_on]);
+        // on without a rate converts nothing yet - say so rather than let it look done
+        if ($wcv_on && wallet_toman_per_dollar() <= 0) {
+            telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $wcv_t['noRateAlert'], 'show_alert' => true]);
+        }
+        if ($wcv_m[1] === 'tog') {
+            Editmessagetext($from_id, $message_id, feature_status_global_caption($textbotlang), feature_status_global_payload($textbotlang), 'HTML');
+            return;
+        }
+    }
+    if ($wcv_m[1] === 'src' && !empty($wcv_m[2])) {
+        wallet_convert_set(['source' => $wcv_m[2]]);
+    }
+    if ($wcv_m[1] === 'rate') {
+        savedata("clear", "bt_msgid", $message_id);
+        step('wcvrate', $from_id);
+        Editmessagetext($from_id, $message_id, $wcv_t['askRate'], json_encode(['inline_keyboard' => [[['text' => '❌ انصراف', 'callback_data' => "wcv|open", 'style' => 'danger']]]]), 'HTML');
+        return;
+    }
+    if ($wcv_m[1] === 'back') {
+        Editmessagetext($from_id, $message_id, feature_status_global_caption($textbotlang), feature_status_global_payload($textbotlang), 'HTML');
+        return;
+    }
+    if ($wcv_m[1] === 'open') {
+        step('home', $from_id);
+    }
+    list($wcv_cap, $wcv_kb) = wallet_convert_payload($textbotlang);
+    Editmessagetext($from_id, $message_id, $wcv_cap, $wcv_kb, 'HTML');
+} elseif ($user['step'] == "wcvrate" && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+    $wcv_rate = um_amount_read($text, 'IRT');
+    if ($wcv_rate === null) {
+        sendmessage($from_id, $textbotlang['Admin']['WalletConvert']['badRate'], $btpromptcancel, 'HTML');
+        return;
+    }
+    wallet_convert_set(['rate' => (float) $wcv_rate, 'source' => 'manual']);
+    step('home', $from_id);
+    deletemessage($from_id, $message_id);
+    $wcv_msgid = intval(json_decode((string) ($user['Processing_value'] ?? ''), true)['bt_msgid'] ?? 0);
+    list($wcv_cap, $wcv_kb) = wallet_convert_payload($textbotlang, $textbotlang['Admin']['WalletConvert']['rateSaved']);
+    if ($wcv_msgid > 0) {
+        Editmessagetext($from_id, $wcv_msgid, $wcv_cap, $wcv_kb, 'HTML');
+    } else {
+        sendmessage($from_id, $wcv_cap, $wcv_kb, 'HTML');
     }
 } elseif ($datain == "umprev") {
     telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $textbotlang['Admin']['UserMgmt']['previewAlert'], 'show_alert' => false]);

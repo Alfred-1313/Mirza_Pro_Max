@@ -454,6 +454,9 @@ Please use the menu buttons below, or send /start.',
                         'giftFromManagement' => '🎁 Dear user, an amount of %s Dollar was credited to your wallet as a gift from management.',
                         'deductedNotice' => '❌ Dear user, an amount of %s Dollar was deducted from your wallet balance.',
                         'addedNotice' => '💎 Dear user, an amount of %s Dollar was added to your wallet balance.',
+                        'walletConverted' => '💱 Your wallet balance was converted to your new language\'s currency.
+
+{from} ← <b>{balance}</b>',
                         'deductedNotice2' => '❌ Dear user, an amount of %s Dollar was deducted from your wallet balance.',
                         'addedNotice2' => '💎 Dear user, an amount of %s Dollar was added to your wallet balance.',
                         'addedNotice3' => '💎 Dear user, an amount of %s Dollar was added to your wallet balance.',

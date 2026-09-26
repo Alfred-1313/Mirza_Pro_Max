@@ -869,6 +869,8 @@ function DirectPayment($order_id, $image = 'images.jpg')
     } finally {
         if ($dp_prev !== null) {
             wallet_activate($dp_report['id_user'], $dp_prev);
+            // 💱 on: what it paid in joins the wallet in use
+            wallet_fold($dp_report['id_user']);
         }
     }
 }
@@ -7616,6 +7618,15 @@ if (!function_exists('wallet_stash')) {
             clearSelectCache('user');
             return round((float) $row['Balance'] + $amount, 2);
         }
+        // 💱 on: straight into the wallet in use, converted
+        if (wallet_convert_on()) {
+            $conv = wallet_convert_amount($amount, $cur, $active);
+            if ($conv !== null) {
+                $pdo->prepare("UPDATE user SET Balance = Balance + ? WHERE id = ?")->execute([$conv, $userId]);
+                clearSelectCache('user');
+                return round((float) $row['Balance'] + $conv, 2);
+            }
+        }
         wallet_ensure_schema();
         $w = wallet_stash($row);
         $w[$cur] = round(($w[$cur] ?? 0) + $amount, 2);
@@ -7657,6 +7668,9 @@ if (!function_exists('wallet_stash')) {
     // follows the language; a payment still to be confirmed and every service
     // bought so far keep the currency they were priced in, so a confirmation
     // or a refund after the switch still lands in the right wallet.
+    // With 💱 on the old wallet is then converted in: returns
+    // ['from' => [currency => amount], 'to' => currency, 'balance' => total],
+    // or null when nothing was converted.
     function wallet_switch_lang($userId, $newLang)
     {
         global $pdo;
@@ -7677,6 +7691,13 @@ if (!function_exists('wallet_stash')) {
             wallet_activate($userId, $new);
         }
         update("user", "lang", $newLang, "id", $userId);
+        // 💱 on: one wallet, in the new language's currency
+        $folded = ($old !== $new) ? wallet_fold($userId) : [];
+        if (empty($folded)) {
+            return null;
+        }
+        $row = select("user", "*", "id", $userId, "select", ['cache' => false]);
+        return ['from' => $folded, 'to' => $new, 'balance' => (float) ($row['Balance'] ?? 0)];
     }
     // a wallet's amount for a text that writes the currency word itself:
     // "1,000" for tomans, "2.5" for dollars - never "1000.00", never "$3" for
@@ -7684,6 +7705,100 @@ if (!function_exists('wallet_stash')) {
     function wallet_amount_text($userRow)
     {
         return money(is_array($userRow) ? ($userRow['Balance'] ?? 0) : 0, currency_for_user($userRow), false);
+    }
+    // ---- 💱 تبدیل ارز با تغییر زبان (⚙️ وضعیت قابلیت ها, off by default) ----
+    // On, a language switch converts the user's whole balance into the new
+    // language's currency, and money arriving later in the other currency is
+    // converted on arrival - one wallet again. Off, the wallets stay apart.
+    // {on, source: nobitex|manual, rate: tomans per dollar}
+    function wallet_convert_settings($fresh = false)
+    {
+        static $cache = null;
+        if ($cache !== null && !$fresh) {
+            return $cache;
+        }
+        $setting = select("setting", "*", null, null, "select");
+        $m = json_decode((string) ($setting['wallet_convert'] ?? ''), true);
+        $m = is_array($m) ? $m : [];
+        $cache = [
+            'on' => !empty($m['on']),
+            'source' => ($m['source'] ?? 'nobitex') === 'manual' ? 'manual' : 'nobitex',
+            'rate' => max(0, (float) ($m['rate'] ?? 0)),
+        ];
+        return $cache;
+    }
+    function wallet_convert_set(array $fields)
+    {
+        $m = array_merge(wallet_convert_settings(true), $fields);
+        update("setting", "wallet_convert", json_encode($m), null, null);
+        wallet_convert_settings(true);
+    }
+    function wallet_convert_on()
+    {
+        return wallet_convert_settings()['on'];
+    }
+    // tomans per dollar right now from the chosen source; 0 = none to be had
+    function wallet_toman_per_dollar()
+    {
+        $s = wallet_convert_settings();
+        if ($s['source'] === 'manual') {
+            return $s['rate'] > 0 ? $s['rate'] : 0.0;
+        }
+        return function_exists('nobitex_rate_toman') ? (float) nobitex_rate_toman('usdt') : 0.0;
+    }
+    // $amount of $from in $to, rounded DOWN to $to's decimals - so switching
+    // back and forth can never make money out of rounding. null when there is
+    // no rate for the pair (then nothing is converted and nothing is lost).
+    function wallet_convert_amount($amount, $from, $to)
+    {
+        if ($from === $to) {
+            return round((float) $amount, 2);
+        }
+        $perDollar = wallet_toman_per_dollar();
+        $inToman = ['IRT' => 1.0, 'USD' => $perDollar];
+        if (!isset($inToman[$from], $inToman[$to]) || $inToman[$from] <= 0 || $inToman[$to] <= 0) {
+            return null;
+        }
+        $v = (float) $amount * $inToman[$from] / $inToman[$to];
+        $dec = (int) (currency_get($to)['decimals'] ?? 0);
+        $f = pow(10, $dec);
+        // the tiny epsilon keeps 1.1 * 100 = 110.00000000000001 from flooring to 109
+        return floor($v * $f + 1e-9) / $f;
+    }
+    // with 💱 on: every waiting wallet into the one in use. Returns what was
+    // folded in as [currency => amount], empty when nothing was.
+    function wallet_fold($userId)
+    {
+        global $pdo;
+        if (!wallet_convert_on()) {
+            return [];
+        }
+        $row = select("user", "*", "id", $userId, "select", ['cache' => false]);
+        if (!is_array($row)) {
+            return [];
+        }
+        $active = currency_for_user($row);
+        $w = wallet_stash($row);
+        $add = 0.0;
+        $folded = [];
+        foreach ($w as $cur => $amount) {
+            if ($cur === $active || $amount == 0) {
+                continue;
+            }
+            $conv = wallet_convert_amount($amount, $cur, $active);
+            if ($conv === null) {
+                continue;
+            }
+            $add += $conv;
+            $folded[$cur] = $amount;
+            unset($w[$cur]);
+        }
+        if (empty($folded)) {
+            return [];
+        }
+        $pdo->prepare("UPDATE user SET Balance = Balance + ?, wallets = ? WHERE id = ?")->execute([round($add, 2), empty($w) ? '{}' : json_encode($w), $userId]);
+        clearSelectCache('user');
+        return $folded;
     }
     // the currency a payment was asked in: recorded at a language switch,
     // otherwise its payer's current one
