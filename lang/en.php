@@ -1876,6 +1876,7 @@ Note: To select all panels, send the word <code>/all</code>',
                                 'rial' => '🏧 Rial gateways',
                                 'rialforex' => '💱 Rial-to-crypto gateways',
                                 'card' => '💳 Card to card',
+                                'all' => '⚡️ All gateways',
                         ],
                 ],
                 'Help' => [

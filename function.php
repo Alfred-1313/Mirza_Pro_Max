@@ -1326,14 +1326,14 @@ function DirectPayment($order_id, $image = 'images.jpg')
         $bc_discountBlock = '';
         if ($topup_bonus > 0) {
             $bc_discountText = strtr(bottext_resolve_key('users.Balance.chargeSuccessDiscount', $bc_lang), [
-                '{bonus}' => money($topup_bonus),
-                '{balance}' => money($Balance_confrim),
+                '{bonus}' => money($topup_bonus, currency_for_user($Balance_id)),
+                '{balance}' => money($Balance_confrim, currency_for_user($Balance_id)),
             ]);
             $bc_discountBlock = "\n<blockquote>" . $bc_discountText . '</blockquote>';
         }
         $bc_caption = strtr(bottext_resolve_key('users.Balance.chargeSuccess', $bc_lang), [
             '{amount}' => $Payment_report['price'],
-            '{balance}' => money($Balance_confrim),
+            '{balance}' => money($Balance_confrim, currency_for_user($Balance_id)),
             '{discount_block}' => $bc_discountBlock,
         ]);
         $bc_defs = genbtn_defs('bc', lang_tab_texts($bc_lang));
@@ -2730,6 +2730,49 @@ if (!function_exists('gateway_group_label')) {
     {
         return $textbotlang['Admin']['GatewayLang']['groups'][$group]
             ?? ($textbotlang['Admin']['GatewayLang']['groups']['online'] ?? $group);
+    }
+}
+if (!function_exists('gateway_tab_button')) {
+    // A gateway, and a family of them, the way a customer of this language sees
+    // it at checkout: that language's own name, with the name and emoji set in
+    // 🎨 ظاهر نمایش درگاه ها (a family: its own button look). Every admin screen
+    // with a language tab draws its gateways with these, so the English tab
+    // lists them in English.
+    function gateway_tab_button($lang, $key, $callback)
+    {
+        $section = help_layout_section($lang, 'gateway');
+        $emo = help_layout_emoji_prefix($key, $section);
+        $name = $section['rename'][$key] ?? (gateway_registry(lang_tab_texts($lang))[$key] ?? $key);
+        $btn = ['text' => $emo['prefix'] . $name, 'callback_data' => $callback, 'style' => 'primary'];
+        if ($emo['icon'] !== '') {
+            $btn['icon_custom_emoji_id'] = $emo['icon'];
+        }
+        return $btn;
+    }
+    // card-to-card is a category only in 🏦 and 🎁, never a family the customer
+    // taps - what they see there is the card button itself
+    function gateway_tab_group_button($lang, $group, $callback)
+    {
+        if (!isset(gateway_groups()[$group])) {
+            $members = gateway_disc_groups()[$group] ?? [];
+            if (count($members) === 1) {
+                return gateway_tab_button($lang, $members[0], $callback);
+            }
+            return ['text' => gateway_group_label($group, lang_tab_texts($lang)), 'callback_data' => $callback, 'style' => 'primary'];
+        }
+        $btn = topup_group_button($lang, $group, lang_tab_texts($lang));
+        $btn['callback_data'] = $callback;
+        $btn['style'] = 'primary';
+        return $btn;
+    }
+    // the same as plain text, for a caption or an alert
+    function gateway_tab_name($lang, $key)
+    {
+        return trim(strip_tags((string) gateway_tab_button($lang, $key, '')['text']));
+    }
+    function gateway_tab_group_name($lang, $group)
+    {
+        return trim(strip_tags((string) gateway_tab_group_button($lang, $group, '')['text']));
     }
 }
 if (!function_exists('gateway_group_of')) {
@@ -11958,14 +12001,15 @@ if (!function_exists('topup_disc_usage_breakdown')) {
     function topup_disc_usage_breakdown($sinceTs = 0, $code = null, $limit = 20)
     {
         global $pdo;
-        $sql = "SELECT id_user, COUNT(*) uses, COALESCE(SUM(bonus),0) bonus, COALESCE(SUM(paid),0) paid
+        $sql = "SELECT id_user, lang, COUNT(*) uses, COALESCE(SUM(bonus),0) bonus, COALESCE(SUM(paid),0) paid
                 FROM topup_discount_use WHERE used_at > :s";
         $params = [':s' => (string) intval($sinceTs)];
         if ($code !== null && $code !== '') {
             $sql .= " AND code = :c";
             $params[':c'] = $code;
         }
-        $sql .= " GROUP BY id_user ORDER BY bonus DESC";
+        // per language too: a user's bonuses are in their language's currency
+        $sql .= " GROUP BY id_user, lang ORDER BY bonus DESC";
         $st = $pdo->prepare($sql);
         $st->execute($params);
         $rows = $st->fetchAll(PDO::FETCH_ASSOC);
@@ -11979,13 +12023,39 @@ if (!function_exists('topup_disc_usage_breakdown')) {
                 break;
             }
             $n++;
-            $out .= "{$n}. <code>{$r['id_user']}</code> · " . intval($r['uses']) . " بار · تخفیف " . money(intval($r['bonus'])) . "\n";
+            $out .= "{$n}. <code>{$r['id_user']}</code> · " . intval($r['uses']) . " بار · تخفیف " . money(intval($r['bonus']), currency_for_lang($r['lang'] ?: 'fa')) . "\n";
         }
         $rest = count($rows) - $n;
         if ($rest > 0) {
             $out .= "… و {$rest} کاربر دیگر\n";
         }
         return $out;
+    }
+}
+if (!function_exists('topup_disc_sums_by_currency')) {
+    // paid and bonus summed per currency - adding tomans to dollars says
+    // nothing - since $sinceTs (0 = from the start)
+    function topup_disc_sums_by_currency($sinceTs = 0)
+    {
+        global $pdo;
+        $st = $pdo->prepare("SELECT lang, COALESCE(SUM(bonus),0) b, COALESCE(SUM(paid),0) p FROM topup_discount_use WHERE used_at > :s GROUP BY lang");
+        $st->execute([':s' => (string) intval($sinceTs)]);
+        $out = [];
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $cur = currency_for_lang($r['lang'] ?: 'fa');
+            $out[$cur]['p'] = ($out[$cur]['p'] ?? 0) + floatval($r['p']);
+            $out[$cur]['b'] = ($out[$cur]['b'] ?? 0) + floatval($r['b']);
+        }
+        return $out;
+    }
+    // "1,000 تومان + $5"
+    function topup_disc_sums_text(array $byCur, $field)
+    {
+        $parts = [];
+        foreach ($byCur as $cur => $s) {
+            $parts[] = money($s[$field] ?? 0, $cur);
+        }
+        return empty($parts) ? money(0) : implode(' + ', $parts);
     }
 }
 if (!function_exists('topup_disc_notify_map')) {
@@ -12055,17 +12125,20 @@ if (!function_exists('topup_disc_notify_admin')) {
         $u = select("user", "*", "id", $userId, "select");
         $uname = (is_array($u) && !empty($u['username']) && $u['username'] !== 'none') ? ('@' . $u['username']) : '—';
         $what = ($codeName === '' || $codeName === null) ? 'تخفیف خودکار (بدون کد)' : ("کد <code>" . htmlspecialchars((string) $codeName, ENT_QUOTES) . "</code>");
+        // the admins' report: Persian names, the customer's own currency
+        $panel = panel_texts();
+        $cur = is_array($u) ? currency_for_user($u) : currency_for_lang($lang);
         $txt = "🎁 <b>استفاده از تخفیف شارژ</b>\n➖➖➖➖➖➖➖➖➖➖\n"
             . "👤 کاربر: {$uname} (<code>{$userId}</code>)\n"
             . "🏷 {$what}\n"
-            . "💳 درگاه: <code>{$gatewayKey}</code> · زبان: <code>{$lang}</code>\n"
-            . "💰 پرداختی: " . money($paid) . "\n"
-            . "🎁 تخفیف: " . money($bonus) . "\n"
-            . "💼 مجموع واریز به کیف پول: " . money(floatval($paid) + floatval($bonus)) . "\n"
+            . "💳 درگاه: " . htmlspecialchars(topup_disc_gateway_label($gatewayKey, $panel)) . " · زبان: " . ($panel['bottext']['langs'][$lang] ?? $lang) . "\n"
+            . "💰 پرداختی: " . money($paid, $cur) . "\n"
+            . "🎁 تخفیف: " . money($bonus, $cur) . "\n"
+            . "💼 مجموع واریز به کیف پول: " . money(floatval($paid) + floatval($bonus), $cur) . "\n"
             // this notifier runs from inside topup_disc_award(), i.e. BEFORE
             // DirectPayment writes the new balance - so the after-figure has to
             // be computed, never read back from the user row
-            . "💳 موجودی پس از واریز: " . money(floatval(is_array($u) ? ($u['Balance'] ?? 0) : 0) + floatval($paid) + floatval($bonus));
+            . "💳 موجودی پس از واریز: " . money(floatval(is_array($u) ? ($u['Balance'] ?? 0) : 0) + floatval($paid) + floatval($bonus), $cur);
         telegram('sendmessage', [
             'chat_id' => $setting['Channel_Report'],
             'text' => $txt,
@@ -12111,10 +12184,11 @@ if (!function_exists('topup_disc_periodic_report')) {
         $txt .= "🕒 بازه: " . ($since > 0 ? "{$hours} ساعت گذشته" : "از ابتدا تا الان") . "\n\n";
         $txt .= "🔁 دفعات استفاده: " . intval($win['c']) . "\n";
         $txt .= "👥 کاربران: " . intval($win['u']) . " نفر\n";
-        $txt .= "💰 مجموع پرداختی: " . money(intval($win['p'])) . "\n";
-        $txt .= "🎁 مجموع تخفیف: " . money(intval($win['b'])) . "\n";
+        $winSums = topup_disc_sums_by_currency($since);
+        $txt .= "💰 مجموع پرداختی: " . topup_disc_sums_text($winSums, 'p') . "\n";
+        $txt .= "🎁 مجموع تخفیف: " . topup_disc_sums_text($winSums, 'b') . "\n";
         $txt .= "➖➖➖➖➖➖➖➖➖➖\n";
-        $txt .= "<b>از ابتدا:</b> " . intval($all['c']) . " استفاده · " . intval($all['u']) . " کاربر · تخفیف " . money(intval($all['b'])) . "\n";
+        $txt .= "<b>از ابتدا:</b> " . intval($all['c']) . " استفاده · " . intval($all['u']) . " کاربر · تخفیف " . topup_disc_sums_text(topup_disc_sums_by_currency(0), 'b') . "\n";
         $txt .= topup_disc_usage_breakdown($since);
 
         telegram('sendmessage', [
@@ -12409,13 +12483,14 @@ if (!function_exists('topup_disc_send_report')) {
         $st->execute([':c' => $c['code']]);
         $totalBonus = intval($st->fetchColumn());
         $reason = ($status === 'expired') ? 'مدت اعتبارش تموم شد' : 'ظرفیتش پر شد';
+        $panel = panel_texts();
         $txt = "🎁 <b>پایان کد تخفیف</b>\n➖➖➖➖➖➖➖➖➖➖\n"
             . "کد: <code>{$c['code']}</code>\n"
-            . "درگاه: <code>{$gatewayKey}</code> · زبان: <code>{$lang}</code>\n"
+            . "درگاه: " . htmlspecialchars(topup_disc_gateway_label($gatewayKey, $panel)) . " · زبان: " . ($panel['bottext']['langs'][$lang] ?? $lang) . "\n"
             . "دلیل: {$reason}\n"
             . "👥 استفاده‌کننده‌ها: {$users} نفر\n"
             . "🔁 دفعات استفاده: {$uses}\n"
-            . "💸 مجموع تخفیف داده‌شده: " . money($totalBonus) . "\n"
+            . "💸 مجموع تخفیف داده‌شده: " . money($totalBonus, currency_for_lang($lang)) . "\n"
             . topup_disc_usage_breakdown(0, $c['code']);
         telegram('sendmessage', [
             'chat_id' => $setting['Channel_Report'],
@@ -12450,15 +12525,15 @@ if (!function_exists('topup_disc_sweep_expired')) {
 if (!function_exists('topup_disc_terms_line')) {
     // the human summary shown to the USER when a code is activated, and to the
     // admin in the info alert - uses left and the Jalali expiry date
-    function topup_disc_terms_line(array $c, $userId = null, $gatewayKey = null, $textbotlang = null)
+    function topup_disc_terms_line(array $c, $userId = null, $gatewayKey = null, $textbotlang = null, $lang = 'fa')
     {
         $perUser = intval($c['limitPerUser'] ?? 0);
         $used = ($perUser > 0 && $userId !== null) ? topup_disc_code_user_count($c['code'] ?? '', $userId) : 0;
         return topup_disc_render_block('users.Balance.topupDiscActiveBlock', $textbotlang, [
-            '{title}' => topup_disc_caption_line($c, $textbotlang),
-            '{gateway}' => ($gatewayKey !== null && $textbotlang !== null) ? topup_disc_gateway_label($gatewayKey, $textbotlang) : '',
+            '{title}' => topup_disc_caption_line($c, $textbotlang, null, false, $lang),
+            '{gateway}' => ($gatewayKey !== null && $textbotlang !== null) ? topup_disc_gateway_label($gatewayKey, $textbotlang, $lang) : '',
             '{uses}' => topup_disc_uses_text($perUser, $used, $textbotlang),
-            '{expiry}' => topup_disc_expiry_text(intval($c['expiry'] ?? 0), $textbotlang),
+            '{expiry}' => topup_disc_expiry_text(intval($c['expiry'] ?? 0), $textbotlang, $lang),
         ]);
     }
 }
@@ -12498,11 +12573,15 @@ if (!function_exists('topup_disc_uses_text')) {
     }
 }
 if (!function_exists('topup_disc_expiry_text')) {
-    function topup_disc_expiry_text($ts, $textbotlang)
+    // a Persian customer reads the Jalali date, everyone else the Gregorian one
+    function topup_disc_expiry_text($ts, $textbotlang, $lang = 'fa')
     {
         $bal = $textbotlang['users']['Balance'] ?? [];
         if (intval($ts) <= 0) {
             return (string) ($bal['topupDiscExpiryNone'] ?? 'بدون محدودیت زمانی');
+        }
+        if ($lang !== 'fa') {
+            return date('Y-m-d H:i', intval($ts));
         }
         require_once __DIR__ . '/jdf.php';
         return jdate('Y/m/d - H:i', intval($ts));
@@ -12600,13 +12679,18 @@ if (!function_exists('topup_disc_live_autos')) {
     }
 }
 if (!function_exists('topup_disc_gateway_label')) {
-    function topup_disc_gateway_label($gatewayKey, $textbotlang)
+    // $lang: the gateway as that language's customer sees it (its own name,
+    // renamed in 🎨 if it was) - what an admin tab and the customer both want
+    function topup_disc_gateway_label($gatewayKey, $textbotlang, $lang = null)
     {
         // a '@'-prefixed key names a scope, not a gateway - the code screens
         // pass whichever they are editing
         $scope = topup_disc_scope_of_key($gatewayKey);
         if ($scope !== null) {
-            return topup_disc_scope_label($scope, $textbotlang);
+            return topup_disc_scope_label($scope, $textbotlang, $lang);
+        }
+        if ($lang !== null) {
+            return gateway_tab_name($lang, $gatewayKey);
         }
         $reg = function_exists('gateway_registry') ? gateway_registry($textbotlang) : [];
         $label = $reg[$gatewayKey] ?? $gatewayKey;
@@ -12662,7 +12746,7 @@ if (!function_exists('topup_disc_method_caption')) {
                 // the code itself is deliberately NOT printed here - the whole
                 // block comes from the admin-editable template, which has no
                 // placeholder for it
-                $parts[] = topup_disc_terms_line($found['code'], $userId, $found['gateway'], $textbotlang);
+                $parts[] = topup_disc_terms_line($found['code'], $userId, $found['gateway'], $textbotlang, $lang);
             }
         }
 
@@ -12691,8 +12775,8 @@ if (!function_exists('topup_disc_method_caption')) {
             foreach ($eligibleGroups as $grp => $g) {
                 $perUser = intval($g['limitPerUser'] ?? 0);
                 $autoLines[] = topup_disc_render_block('users.Balance.topupDiscAutoLine', $textbotlang, [
-                    '{gateway}' => topup_disc_scope_label($grp, $textbotlang),
-                    '{value}' => topup_disc_admin_value_label($g) . topup_disc_min_suffix($g, $textbotlang),
+                    '{gateway}' => topup_disc_scope_label($grp, $textbotlang, $lang),
+                    '{value}' => topup_disc_admin_value_label($g, $lang) . topup_disc_min_suffix($g, $textbotlang, $lang),
                     '{uses}' => topup_disc_uses_text($perUser, $perUser > 0 ? topup_disc_group_user_count($userId, $lang, $grp) : 0, $textbotlang),
                 ]);
                 $e = intval($g['expiry'] ?? 0);
@@ -12703,8 +12787,8 @@ if (!function_exists('topup_disc_method_caption')) {
             foreach ($eligibleAutos as $gw => $a) {
                 $perUser = intval($a['limitPerUser'] ?? 0);
                 $autoLines[] = topup_disc_render_block('users.Balance.topupDiscAutoLine', $textbotlang, [
-                    '{gateway}' => topup_disc_gateway_label($gw, $textbotlang),
-                    '{value}' => topup_disc_admin_value_label($a) . topup_disc_min_suffix($a, $textbotlang),
+                    '{gateway}' => topup_disc_gateway_label($gw, $textbotlang, $lang),
+                    '{value}' => topup_disc_admin_value_label($a, $lang) . topup_disc_min_suffix($a, $textbotlang, $lang),
                     '{uses}' => topup_disc_uses_text($perUser, $perUser > 0 ? topup_disc_auto_user_count($userId, $lang, $gw) : 0, $textbotlang),
                 ]);
                 $e = intval($a['expiry'] ?? 0);
@@ -12715,7 +12799,7 @@ if (!function_exists('topup_disc_method_caption')) {
             // {lines} is already-rendered markup, so it is substituted after the
             // escaping pass rather than through it
             $parts[] = strtr(topup_disc_render_block('users.Balance.topupDiscAutoBlock', $textbotlang, [
-                '{expiry}' => topup_disc_expiry_text($exp, $textbotlang),
+                '{expiry}' => topup_disc_expiry_text($exp, $textbotlang, $lang),
             ]), ['{lines}' => implode("\n", $autoLines)]);
         }
 
@@ -12814,8 +12898,10 @@ if (!function_exists('topup_disc_caption_line')) {
     // the single bold line shown to the user describing the active discount.
     // $amount is optional: when given, a percent discount can also state the
     // concrete bonus for that specific package.
-    function topup_disc_caption_line(array $disc, $textbotlang, $amount = null, $forPackage = false)
+    // $lang: the language the discount belongs to, for its currency and names
+    function topup_disc_caption_line(array $disc, $textbotlang, $amount = null, $forPackage = false, $lang = 'fa')
     {
+        $cur = currency_for_lang($lang);
         $value = $disc['value'] ?? 0;
         $isFixed = (($disc['mode'] ?? 'percent') === 'fixed');
         $valueTxt = rtrim(rtrim(number_format((float) $value, 2, '.', ','), '0'), '.');
@@ -12831,9 +12917,9 @@ if (!function_exists('topup_disc_caption_line')) {
             }
             return strtr($tpl, [
                 '{value}' => $valueTxt,
-                '{bonus}' => money($bonus),
-                '{amount}' => money($amount),
-                '{min}' => money($min),
+                '{bonus}' => money($bonus, $cur),
+                '{amount}' => money($amount, $cur),
+                '{min}' => money($min, $cur),
             ]);
         }
         // a discount with a 💰 حداقل مبلغ says so up front - the rate alone would
@@ -12843,9 +12929,9 @@ if (!function_exists('topup_disc_caption_line')) {
             $tpl = $textbotlang['hardcoded'][$key] ?? ($isFixed ? '🎁 شارژ از {min} به بالا، {value} شارژ اضافه بگیر!' : '🎁 شارژ از {min} به بالا، {value}٪ شارژ اضافه بگیر!');
             $minGroup = (string) ($disc['group'] ?? '');
             return strtr($tpl, [
-                '{min}' => money($min),
-                '{value}' => $isFixed ? money($value) : $valueTxt,
-                '{group}' => ($minGroup !== '' && $minGroup !== 'all') ? topup_disc_scope_label($minGroup, $textbotlang) : '',
+                '{min}' => money($min, $cur),
+                '{value}' => $isFixed ? money($value, $cur) : $valueTxt,
+                '{group}' => ($minGroup !== '' && $minGroup !== 'all') ? topup_disc_scope_label($minGroup, $textbotlang, $lang) : '',
             ]);
         }
         // a discount that came from a whole category says so by name, so the
@@ -12858,22 +12944,22 @@ if (!function_exists('topup_disc_caption_line')) {
             $key = $isFixed ? 'topupDiscAllFixedCaption' : 'topupDiscAllPercentCaption';
             $tpl = $textbotlang['hardcoded'][$key]
                 ?? ($isFixed ? '{value} اضافه روی هر شارژ' : 'تخفیف {value} درصدی روی همه‌ی روش‌های پرداخت');
-            return strtr($tpl, ['{value}' => $isFixed ? money($value) : $valueTxt]);
+            return strtr($tpl, ['{value}' => $isFixed ? money($value, $cur) : $valueTxt]);
         }
         if ($group !== '') {
             $key = $isFixed ? 'topupDiscGroupFixedCaption' : 'topupDiscGroupPercentCaption';
             $tpl = $textbotlang['hardcoded'][$key]
                 ?? ($isFixed ? '{value} اضافه برای هر شارژ با {group}' : 'تخفیف {value} درصدی برای {group}');
             return strtr($tpl, [
-                '{value}' => $isFixed ? money($value) : $valueTxt,
+                '{value}' => $isFixed ? money($value, $cur) : $valueTxt,
                 // scope-aware: gateway_group_label() would answer for 'all'
                 // with the online label, since it falls back to that key
-                '{group}' => topup_disc_scope_label($group, $textbotlang),
+                '{group}' => topup_disc_scope_label($group, $textbotlang, $lang),
             ]);
         }
         $key = $isFixed ? 'topupDiscFixedCaption' : 'topupDiscPercentCaption';
         $tpl = $textbotlang['hardcoded'][$key] ?? ($isFixed ? '{value} اضافه برای هر شارژ' : 'تخفیف {value} درصدی برای افزایش موجودی');
-        return strtr($tpl, ['{value}' => $isFixed ? money($value) : $valueTxt]);
+        return strtr($tpl, ['{value}' => $isFixed ? money($value, $cur) : $valueTxt]);
     }
 }
 if (!function_exists('topup_disc_caption_block')) {
@@ -12891,7 +12977,7 @@ if (!function_exists('topup_disc_caption_block')) {
         if ($eff === null) {
             return '';
         }
-        $line = topup_disc_caption_line($eff['disc'], $textbotlang, $amount, $forPackage);
+        $line = topup_disc_caption_line($eff['disc'], $textbotlang, $amount, $forPackage, $lang);
         return "\n\n<blockquote><b>" . htmlspecialchars($line, ENT_QUOTES) . "</b></blockquote>";
     }
 }
@@ -12908,17 +12994,22 @@ if (!function_exists('topup_disc_admin_status_label')) {
     }
 }
 if (!function_exists('topup_disc_admin_value_label')) {
-    function topup_disc_admin_value_label(array $d)
+    // $lang: the language the discount belongs to - its amount is in that
+    // language's currency, and only Persian writes the percent sign first
+    function topup_disc_admin_value_label(array $d, $lang = 'fa')
     {
         $v = $d['value'] ?? 0;
         $txt = rtrim(rtrim(number_format((float) $v, 2, '.', ','), '0'), '.');
-        return (($d['mode'] ?? 'percent') === 'fixed') ? (money($v)) : ('٪' . $txt);
+        if (($d['mode'] ?? 'percent') === 'fixed') {
+            return money($v, currency_for_lang($lang));
+        }
+        return $lang === 'fa' ? ('٪' . $txt) : ($txt . '%');
     }
 }
 if (!function_exists('topup_disc_min_suffix')) {
     // " (از 5,000,000 تومان به بالا)" after a discount's value wherever only the
     // value is printed (the payment-method screen) - '' when no minimum is set
-    function topup_disc_min_suffix(array $d, $textbotlang)
+    function topup_disc_min_suffix(array $d, $textbotlang, $lang = 'fa')
     {
         $min = floatval($d['minAmount'] ?? 0);
         if ($min <= 0) {
@@ -12928,7 +13019,7 @@ if (!function_exists('topup_disc_min_suffix')) {
         if (trim((string) $tpl) === '') {
             $tpl = '(از {min} به بالا)';
         }
-        return ' ' . strtr(trim((string) $tpl), ['{min}' => money($min)]);
+        return ' ' . strtr(trim((string) $tpl), ['{min}' => money($min, currency_for_lang($lang))]);
     }
 }
 if (!function_exists('topup_disc_enabled_gateways')) {
@@ -12956,7 +13047,8 @@ if (!function_exists('topup_disc_enabled_gateways')) {
             if (function_exists('gateway_globally_on') && !gateway_globally_on($key)) {
                 continue;
             }
-            $out[$key] = $label;
+            // named the way this language's customer sees it
+            $out[$key] = gateway_tab_name($lang, $key);
         }
         return $out;
     }
@@ -12971,7 +13063,7 @@ if (!function_exists('topup_disc_gw_summary')) {
         $liveAuto = !empty($auto['enabled']) && floatval($auto['value'] ?? 0) > 0
             && (intval($auto['expiry'] ?? 0) === 0 || time() < intval($auto['expiry']));
         if ($liveAuto) {
-            $bits[] = topup_disc_admin_value_label($auto);
+            $bits[] = topup_disc_admin_value_label($auto, $lang);
         }
         $codes = topup_disc_codes_for($lang, $key);
         $activeCodes = 0;
@@ -12991,7 +13083,7 @@ if (!function_exists('topup_disc_gw_list_payload')) {
     function topup_disc_group_summary($lang, $group)
     {
         $g = topup_disc_group_live($lang, $group);
-        return $g === null ? '' : topup_disc_admin_value_label($g);
+        return $g === null ? '' : topup_disc_admin_value_label($g, $lang);
     }
     // Only the discount itself, for a button label - no code counts, no
     // gateway counts. topup_disc_gw_summary() stays the fuller string the
@@ -13001,7 +13093,7 @@ if (!function_exists('topup_disc_gw_list_payload')) {
         $auto = topup_disc_auto_for($lang, $key);
         $live = !empty($auto['enabled']) && floatval($auto['value'] ?? 0) > 0
             && (intval($auto['expiry'] ?? 0) === 0 || time() < intval($auto['expiry']));
-        return $live ? topup_disc_admin_value_label($auto) : '';
+        return $live ? topup_disc_admin_value_label($auto, $lang) : '';
     }
     // the category screen: the discount for the whole family, then its gateways
     function topup_disc_group_list_payload($lang, $group, $textbotlang)
@@ -13011,7 +13103,7 @@ if (!function_exists('topup_disc_gw_list_payload')) {
             return topup_disc_hub_payload($lang, $single, $textbotlang);
         }
         $members = topup_disc_scope_members($group, $lang, $textbotlang);
-        $groupLabel = topup_disc_scope_label($group, $textbotlang);
+        $groupLabel = topup_disc_scope_label($group, $textbotlang, $lang);
         $isAll = ($group === 'all');
         $g = topup_disc_group_for($lang, $group);
         $gLive = topup_disc_group_live($lang, $group);
@@ -13031,7 +13123,7 @@ if (!function_exists('topup_disc_gw_list_payload')) {
             $info .= "تخفیف <b>تک‌درگاهی</b> هم می‌تونی جدا بذاری — روی هم سوار نمی‌شن، هرکدوم به کاربر بیشتر بده همون اعمال می‌شه.\n";
         }
         $info .= "➖➖➖➖➖➖➖➖➖➖\n";
-        $info .= "🎯 تخفیف خودکار: " . ($gLive !== null ? topup_disc_admin_value_label($gLive) . ' ✅' : 'خاموش') . "\n";
+        $info .= "🎯 تخفیف خودکار: " . ($gLive !== null ? topup_disc_admin_value_label($gLive, $lang) . ' ✅' : 'خاموش') . "\n";
         $info .= "🎟 کدهای تخفیف: " . count(topup_disc_codes_for($lang, $scopeKey)) . "\n";
         if ($gLive === null && floatval($g['value'] ?? 0) > 0) {
             $info .= "\n⚠️ <b>مقدار داره ولی فعال نیست</b> — یا خاموشه یا مدتش تموم شده.\n";
@@ -13040,7 +13132,7 @@ if (!function_exists('topup_disc_gw_list_payload')) {
             $preview = $gLive;
             $preview['group'] = $group;
             $info .= "\n👁 چیزی که کاربر می‌بینه:\n<blockquote><b>"
-                . htmlspecialchars(topup_disc_caption_line($preview, lang_tab_texts($lang)), ENT_QUOTES) . "</b></blockquote>";
+                . htmlspecialchars(topup_disc_caption_line($preview, lang_tab_texts($lang), null, false, $lang), ENT_QUOTES) . "</b></blockquote>";
         }
 
         $kb = ['inline_keyboard' => []];
@@ -13048,7 +13140,7 @@ if (!function_exists('topup_disc_gw_list_payload')) {
         // what is set - a green row said only "something here is configured"
         $kb['inline_keyboard'][] = [[
             'text' => ($isAll ? '🎯 تخفیف خودکار همگانی' : '🎯 تخفیف گروهی این دسته')
-                . ($gLive !== null ? ' • ' . topup_disc_admin_value_label($gLive) : ''),
+                . ($gLive !== null ? ' • ' . topup_disc_admin_value_label($gLive, $lang) : ''),
             'callback_data' => "dsgrpauto:{$lang}:{$group}",
             'style' => 'primary',
         ]];
@@ -13058,7 +13150,7 @@ if (!function_exists('topup_disc_gw_list_payload')) {
             $st = topup_disc_code_status($c);
             $used = topup_disc_code_used_count($c['code']);
             $lim = intval($c['limitTotal'] ?? 0);
-            $label = "{$c['code']} · " . topup_disc_admin_value_label($c) . ' · ' . ($lim > 0 ? "{$used}/{$lim}" : (string) $used);
+            $label = "{$c['code']} · " . topup_disc_admin_value_label($c, $lang) . ' · ' . ($lim > 0 ? "{$used}/{$lim}" : (string) $used);
             if ($st !== 'active') {
                 $label .= ' · ' . topup_disc_admin_status_label($st);
             }
@@ -13121,7 +13213,7 @@ if (!function_exists('topup_disc_gw_list_payload')) {
             if (empty($members)) {
                 continue;
             }
-            $groupLabel = trim(strip_tags((string) gateway_group_label($group, $textbotlang)));
+            $groupLabel = gateway_tab_group_name($lang, $group);
             $bits = [];
             $gSum = topup_disc_group_summary($lang, $group);
             if ($gSum !== '') {
@@ -13269,18 +13361,18 @@ if (!function_exists('topup_disc_hub_payload')) {
         $codes = topup_disc_codes_for($lang, $key);
         $autoOn = !empty($auto['enabled']) && floatval($auto['value'] ?? 0) > 0;
 
-        $info = "🎁 <b>تخفیف شارژ</b> — " . topup_disc_gateway_label($key, $textbotlang) . "\n➖➖➖➖➖➖➖➖➖➖\n";
+        $info = "🎁 <b>تخفیف شارژ</b> — " . topup_disc_gateway_label($key, $textbotlang, $lang) . "\n➖➖➖➖➖➖➖➖➖➖\n";
         $info .= "کاربر همون مبلغ رو پرداخت می‌کنه، ولی بیشتر شارژ می‌شه.\n";
         $info .= "🎟 کد تخفیف رو کاربر توی «💰 افزایش موجودی» با دکمه‌ی «🎁 کد تخفیف دارم» وارد می‌کنه.\n";
         $info .= "➖➖➖➖➖➖➖➖➖➖\n";
-        $info .= "🎯 تخفیف خودکار (بدون کد): " . ($autoOn ? topup_disc_admin_value_label($auto) . ' ✅' : 'خاموش') . "\n";
+        $info .= "🎯 تخفیف خودکار (بدون کد): " . ($autoOn ? topup_disc_admin_value_label($auto, $lang) . ' ✅' : 'خاموش') . "\n";
         $info .= "🎟 کدهای تخفیف: " . count($codes) . "\n";
         if (!$autoOn && floatval($auto['value'] ?? 0) > 0) {
             $info .= "\n⚠️ <b>تخفیف خودکار مقدار داره ولی خاموشه</b> — روشنش کن تا اعمال بشه.\n";
         }
         if ($autoOn) {
             $info .= "\n👁 چیزی که کاربر می‌بینه:\n<blockquote><b>"
-                . htmlspecialchars(topup_disc_caption_line($auto, lang_tab_texts($lang)), ENT_QUOTES) . "</b></blockquote>";
+                . htmlspecialchars(topup_disc_caption_line($auto, lang_tab_texts($lang), null, false, $lang), ENT_QUOTES) . "</b></blockquote>";
         }
 
         $kb = ['inline_keyboard' => []];
@@ -13294,7 +13386,7 @@ if (!function_exists('topup_disc_hub_payload')) {
             $used = topup_disc_code_used_count($c['code']);
             $lim = intval($c['limitTotal'] ?? 0);
             $usedTxt = $lim > 0 ? "{$used}/{$lim}" : (string) $used;
-            $label = "{$c['code']} · " . topup_disc_admin_value_label($c) . " · {$usedTxt}";
+            $label = "{$c['code']} · " . topup_disc_admin_value_label($c, $lang) . " · {$usedTxt}";
             if ($st !== 'active') {
                 $label .= ' · ' . topup_disc_admin_status_label($st);
             }
@@ -13327,12 +13419,12 @@ if (!function_exists('topup_disc_auto_payload')) {
         $perUser = intval($auto['limitPerUser'] ?? 1);
         $newOnly = !empty($auto['newUserOnly']);
 
-        $info = "🎯 <b>تخفیف خودکار</b> — " . topup_disc_gateway_label($key, $textbotlang) . "\n➖➖➖➖➖➖➖➖➖➖\n";
+        $info = "🎯 <b>تخفیف خودکار</b> — " . topup_disc_gateway_label($key, $textbotlang, $lang) . "\n➖➖➖➖➖➖➖➖➖➖\n";
         $info .= "بدون نیاز به کد، برای همه‌ی کاربرهای این زبان و این درگاه.\n";
         $info .= "➖➖➖➖➖➖➖➖➖➖\n";
         $info .= "وضعیت: " . ($on ? 'روشن ✅' : 'خاموش') . "\n";
         $info .= "نوع: " . ($mode === 'fixed' ? 'مبلغ ثابت' : 'درصدی') . "\n";
-        $info .= "مقدار: " . topup_disc_admin_value_label($auto) . "\n";
+        $info .= "مقدار: " . topup_disc_admin_value_label($auto, $lang) . "\n";
         $minAmt = floatval($auto['minAmount'] ?? 0);
         $info .= "حداقل مبلغ شارژ: " . ($minAmt > 0 ? money($minAmt) : 'ندارد') . "\n";
         $autoExp = intval($auto['expiry'] ?? 0);
@@ -13351,7 +13443,7 @@ if (!function_exists('topup_disc_auto_payload')) {
         }
         if ($on && $val > 0) {
             $info .= "\n👁 چیزی که کاربر می‌بینه:\n<blockquote><b>"
-                . htmlspecialchars(topup_disc_caption_line($auto, lang_tab_texts($lang)), ENT_QUOTES) . "</b></blockquote>";
+                . htmlspecialchars(topup_disc_caption_line($auto, lang_tab_texts($lang), null, false, $lang), ENT_QUOTES) . "</b></blockquote>";
         }
 
         $kb = ['inline_keyboard' => []];
@@ -13364,7 +13456,7 @@ if (!function_exists('topup_disc_auto_payload')) {
             ['text' => ($mode === 'percent' ? '✅ ' : '') . '٪ درصدی', 'callback_data' => "tpdautomode:{$lang}:{$key}:percent", 'style' => 'primary'],
             ['text' => ($mode === 'fixed' ? '✅ ' : '') . '💵 مبلغ ثابت', 'callback_data' => "tpdautomode:{$lang}:{$key}:fixed", 'style' => 'primary'],
         ];
-        $kb['inline_keyboard'][] = [['text' => '✏️ تغییر مقدار (' . topup_disc_admin_value_label($auto) . ')', 'callback_data' => "tpdautoval:{$lang}:{$key}", 'style' => $val > 0 ? 'success' : 'primary']];
+        $kb['inline_keyboard'][] = [['text' => '✏️ تغییر مقدار (' . topup_disc_admin_value_label($auto, $lang) . ')', 'callback_data' => "tpdautoval:{$lang}:{$key}", 'style' => $val > 0 ? 'success' : 'primary']];
         $kb['inline_keyboard'][] = [['text' => '💰 حداقل مبلغ' . ($minAmt > 0 ? ' (' . money($minAmt) . ')' : ''), 'callback_data' => "tpdautomin:{$lang}:{$key}", 'style' => $minAmt > 0 ? 'success' : 'primary']];
         $kb['inline_keyboard'][] = [['text' => '⏳ مدت اعتبار', 'callback_data' => "tpdautoexp:{$lang}:{$key}", 'style' => $autoExp > 0 ? 'success' : 'primary']];
         $kb['inline_keyboard'][] = [['text' => '👤 سهمیه هر کاربر' . ($perUser > 0 ? " ({$perUser} بار)" : ''), 'callback_data' => "tpdautolimit:{$lang}:{$key}", 'style' => $perUser > 0 ? 'success' : 'primary']];
@@ -13388,7 +13480,7 @@ if (!function_exists('topup_disc_group_auto_payload')) {
         require_once __DIR__ . '/jdf.php';
         $g = topup_disc_group_for($lang, $group);
         $members = topup_disc_scope_members($group, $lang, $textbotlang);
-        $groupLabel = topup_disc_scope_label($group, $textbotlang);
+        $groupLabel = topup_disc_scope_label($group, $textbotlang, $lang);
         $on = !empty($g['enabled']);
         $mode = ($g['mode'] ?? 'percent') === 'fixed' ? 'fixed' : 'percent';
         $val = floatval($g['value'] ?? 0);
@@ -13402,7 +13494,7 @@ if (!function_exists('topup_disc_group_auto_payload')) {
         $info .= "➖➖➖➖➖➖➖➖➖➖\n";
         $info .= "وضعیت: " . ($on ? 'روشن ✅' : 'خاموش') . "\n";
         $info .= "نوع: " . ($mode === 'fixed' ? 'مبلغ ثابت' : 'درصدی') . "\n";
-        $info .= "مقدار: " . topup_disc_admin_value_label($g) . "\n";
+        $info .= "مقدار: " . topup_disc_admin_value_label($g, $lang) . "\n";
         $minAmt = floatval($g['minAmount'] ?? 0);
         $info .= "حداقل مبلغ شارژ: " . ($minAmt > 0 ? money($minAmt) : 'ندارد') . "\n";
         $info .= "انقضا: " . ($exp > 0 ? jdate('Y/m/d - H:i', $exp) : 'ندارد') . "\n";
@@ -13423,7 +13515,7 @@ if (!function_exists('topup_disc_group_auto_payload')) {
             $preview = $g;
             $preview['group'] = $group;
             $info .= "\n👁 چیزی که کاربر می‌بینه:\n<blockquote><b>"
-                . htmlspecialchars(topup_disc_caption_line($preview, lang_tab_texts($lang)), ENT_QUOTES) . "</b></blockquote>";
+                . htmlspecialchars(topup_disc_caption_line($preview, lang_tab_texts($lang), null, false, $lang), ENT_QUOTES) . "</b></blockquote>";
         }
 
         $kb = ['inline_keyboard' => []];
@@ -13436,7 +13528,7 @@ if (!function_exists('topup_disc_group_auto_payload')) {
             ['text' => ($mode === 'percent' ? '✅ ' : '') . '٪ درصدی', 'callback_data' => "dsgrpmode:{$lang}:{$group}:percent", 'style' => 'primary'],
             ['text' => ($mode === 'fixed' ? '✅ ' : '') . '💵 مبلغ ثابت', 'callback_data' => "dsgrpmode:{$lang}:{$group}:fixed", 'style' => 'primary'],
         ];
-        $kb['inline_keyboard'][] = [['text' => '✏️ تغییر مقدار (' . topup_disc_admin_value_label($g) . ')', 'callback_data' => "dsgrpval:{$lang}:{$group}", 'style' => $val > 0 ? 'success' : 'primary']];
+        $kb['inline_keyboard'][] = [['text' => '✏️ تغییر مقدار (' . topup_disc_admin_value_label($g, $lang) . ')', 'callback_data' => "dsgrpval:{$lang}:{$group}", 'style' => $val > 0 ? 'success' : 'primary']];
         $kb['inline_keyboard'][] = [['text' => '💰 حداقل مبلغ' . ($minAmt > 0 ? ' (' . money($minAmt) . ')' : ''), 'callback_data' => "dsgrpmin:{$lang}:{$group}", 'style' => $minAmt > 0 ? 'success' : 'primary']];
         $kb['inline_keyboard'][] = [['text' => '⏳ مدت اعتبار', 'callback_data' => "dsgrpexp:{$lang}:{$group}", 'style' => $exp > 0 ? 'success' : 'primary']];
         $kb['inline_keyboard'][] = [['text' => '👤 سهمیه هر کاربر' . ($perUser > 0 ? " ({$perUser} بار)" : ''), 'callback_data' => "dsgrplimit:{$lang}:{$group}", 'style' => $perUser > 0 ? 'success' : 'primary']];
@@ -13466,9 +13558,9 @@ if (!function_exists('topup_disc_code_payload')) {
 
         $info = "🎟 <b>کد تخفیف</b>\n➖➖➖➖➖➖➖➖➖➖\n";
         $info .= "کد: <code>{$c['code']}</code>\n";
-        $info .= "💳 فقط برای درگاه: " . topup_disc_gateway_label($key, $textbotlang) . "\n";
+        $info .= "💳 فقط برای درگاه: " . topup_disc_gateway_label($key, $textbotlang, $lang) . "\n";
         $info .= "وضعیت: " . topup_disc_admin_status_label($st) . "\n";
-        $info .= "نوع: " . ($mode === 'fixed' ? 'مبلغ ثابت' : 'درصدی') . " — " . topup_disc_admin_value_label($c) . "\n";
+        $info .= "نوع: " . ($mode === 'fixed' ? 'مبلغ ثابت' : 'درصدی') . " — " . topup_disc_admin_value_label($c, $lang) . "\n";
         $minAmt = floatval($c['minAmount'] ?? 0);
         $info .= "حداقل مبلغ شارژ: " . ($minAmt > 0 ? money($minAmt) : 'ندارد') . "\n";
         $info .= "سهمیه کل: " . ($lim > 0 ? "{$used} از {$lim}" : "{$used} (نامحدود)") . "\n";
@@ -13478,7 +13570,7 @@ if (!function_exists('topup_disc_code_payload')) {
         $info .= "👥 استفاده‌کننده‌ها: {$uniq} نفر\n";
         if (floatval($c['value'] ?? 0) > 0) {
             $info .= "\n👁 چیزی که کاربر می‌بینه:\n<blockquote><b>"
-                . htmlspecialchars(topup_disc_caption_line($c, lang_tab_texts($lang)), ENT_QUOTES) . "</b></blockquote>";
+                . htmlspecialchars(topup_disc_caption_line($c, lang_tab_texts($lang), null, false, $lang), ENT_QUOTES) . "</b></blockquote>";
         }
 
         $on = !empty($c['enabled']);
@@ -13492,7 +13584,7 @@ if (!function_exists('topup_disc_code_payload')) {
             ['text' => ($mode === 'percent' ? '✅ ' : '') . '٪ درصدی', 'callback_data' => "tpdmode:{$lang}:{$key}:{$idx}:percent", 'style' => 'primary'],
             ['text' => ($mode === 'fixed' ? '✅ ' : '') . '💵 مبلغ ثابت', 'callback_data' => "tpdmode:{$lang}:{$key}:{$idx}:fixed", 'style' => 'primary'],
         ];
-        $kb['inline_keyboard'][] = [['text' => '✏️ مقدار (' . topup_disc_admin_value_label($c) . ')', 'callback_data' => "tpdval:{$lang}:{$key}:{$idx}", 'style' => floatval($c['value'] ?? 0) > 0 ? 'success' : 'primary']];
+        $kb['inline_keyboard'][] = [['text' => '✏️ مقدار (' . topup_disc_admin_value_label($c, $lang) . ')', 'callback_data' => "tpdval:{$lang}:{$key}:{$idx}", 'style' => floatval($c['value'] ?? 0) > 0 ? 'success' : 'primary']];
         $kb['inline_keyboard'][] = [['text' => '💰 حداقل مبلغ' . ($minAmt > 0 ? ' (' . money($minAmt) . ')' : ''), 'callback_data' => "tpdmin:{$lang}:{$key}:{$idx}", 'style' => $minAmt > 0 ? 'success' : 'primary']];
         $kb['inline_keyboard'][] = [
             ['text' => '🔢 سهمیه کل', 'callback_data' => "tpdlimit:{$lang}:{$key}:{$idx}", 'style' => $lim > 0 ? 'success' : 'primary'],
@@ -13764,10 +13856,15 @@ if (!function_exists('topup_disc_scope_of_key')) {
         }
         return gateway_disc_group_members($scope, $lang, $textbotlang);
     }
-    function topup_disc_scope_label($scope, $textbotlang)
+    // 'all' in the words of $textbotlang (the admin's on an admin screen, the
+    // customer's in their caption); a category as $lang's customer sees it
+    function topup_disc_scope_label($scope, $textbotlang, $lang = null)
     {
         if ($scope === 'all') {
-            return '⚡️ همه‌ی درگاه‌ها';
+            return (string) ($textbotlang['Admin']['GatewayLang']['groups']['all'] ?? '⚡️ همه‌ی درگاه‌ها');
+        }
+        if ($lang !== null) {
+            return gateway_tab_group_name($lang, $scope);
         }
         return trim(strip_tags((string) gateway_group_label($scope, $textbotlang)));
     }

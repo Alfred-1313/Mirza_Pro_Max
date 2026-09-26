@@ -170,7 +170,8 @@ if (!function_exists('langscope_hub_payload')) {
             [['text' => $textbotlang['Admin']['LangScope']['productsBtn'], 'callback_data' => 'langscope_list:product']],
             [['text' => $textbotlang['Admin']['LangScope']['categoriesBtn'], 'callback_data' => 'langscope_list:category']],
             [['text' => $textbotlang['Admin']['LangScope']['cascadeBtn'], 'callback_data' => 'langscope_casc_hub', 'style' => 'danger']],
-            [['text' => $textbotlang['Admin']['LangScope']['backToHubBtn'], 'callback_data' => 'displayhub_back']],
+            // opened from its own button under 🏬 تنظیمات فروشگاه - the "back"
+            // that used to sit here led into 🎨 شخصی‌سازی نمایش دکمه‌ها instead
             [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'langscope_close', 'style' => 'danger']],
         ]];
         return json_encode($kb);
@@ -179,7 +180,10 @@ if (!function_exists('langscope_hub_payload')) {
 if (!function_exists('langscope_list_payload')) {
     // one list per kind (panel/product/category): every row + its current
     // language, tap to open the picker for that one item
-    function langscope_list_payload($kind, $textbotlang)
+    // Telegram refuses a keyboard of more than 100 buttons, so a long catalogue
+    // is shown a page at a time; $focusId opens on the page holding that item
+    // (coming back from its picker)
+    function langscope_list_payload($kind, $textbotlang, $page = 0, $focusId = null)
     {
         $meta = langscope_kind_meta($kind);
         $rows = select($meta['table'], "*", null, null, "fetchAll");
@@ -187,13 +191,61 @@ if (!function_exists('langscope_list_payload')) {
         if (!is_array($rows) || empty($rows)) {
             $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['emptyList'], 'callback_data' => 'langscope_hub']];
         } else {
-            foreach ($rows as $row) {
-                $label = $row[$meta['nameField']] . ' — ' . lang_scope_display($row['lang'] ?? 'all', $textbotlang);
+            $rows = array_values($rows);
+            $per = 40;
+            $pages = (int) ceil(count($rows) / $per);
+            if ($focusId !== null) {
+                foreach ($rows as $i => $row) {
+                    if ((string) $row[$meta['idField']] === (string) $focusId) {
+                        $page = intdiv($i, $per);
+                        break;
+                    }
+                }
+            }
+            $page = max(0, min($pages - 1, (int) $page));
+            foreach (array_slice($rows, $page * $per, $per) as $row) {
+                $name = (string) $row[$meta['nameField']];
+                // two products can share a name - their category tells them apart
+                if ($kind === 'product' && trim((string) ($row['category'] ?? '')) !== '') {
+                    $name .= ' · ' . $row['category'];
+                }
+                $label = $name . ' — ' . lang_scope_display($row['lang'] ?? 'all', $textbotlang);
                 $kb['inline_keyboard'][] = [['text' => $label, 'callback_data' => "langscope_open:{$kind}:{$row[$meta['idField']]}"]];
+            }
+            if ($pages > 1) {
+                // next on the left, previous on the right - the order the
+                // user list's pages already use
+                $nav = [];
+                if ($page < $pages - 1) {
+                    $nav[] = ['text' => $textbotlang['users']['page']['next'], 'callback_data' => "langscope_list:{$kind}:" . ($page + 1)];
+                }
+                $nav[] = ['text' => ($page + 1) . ' / ' . $pages, 'callback_data' => "langscope_list:{$kind}:{$page}"];
+                if ($page > 0) {
+                    $nav[] = ['text' => $textbotlang['users']['page']['previous'], 'callback_data' => "langscope_list:{$kind}:" . ($page - 1)];
+                }
+                $kb['inline_keyboard'][] = $nav;
             }
         }
         $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['backToHubBtn'], 'callback_data' => 'langscope_hub']];
         return json_encode($kb);
+    }
+}
+if (!function_exists('langscope_picker_caption')) {
+    // the picker's caption, naming the panel/product/category being set and
+    // where it shows now - it used to ask "which languages?" about nothing
+    function langscope_picker_caption($kind, $id, $textbotlang)
+    {
+        $t = $textbotlang['Admin']['LangScope'];
+        $meta = langscope_kind_meta($kind);
+        $row = select($meta['table'], "*", $meta['idField'], $id, "select");
+        if (!is_array($row)) {
+            return $t['pickerCaption'];
+        }
+        return strtr($t['pickerItem'], [
+            '{kind}' => $t['kind_' . $kind] ?? '',
+            '{name}' => htmlspecialchars((string) $row[$meta['nameField']]),
+            '{current}' => lang_scope_display($row['lang'] ?? 'all', $textbotlang),
+        ]) . "\n\n" . $t['pickerCaption'];
     }
 }
 if (!function_exists('lang_scope_picker_payload')) {
@@ -232,7 +284,7 @@ if (!function_exists('lang_scope_picker_payload')) {
         if (!$isAll) {
             $kb['inline_keyboard'][] = [['text' => '💾 ذخیره', 'callback_data' => "langscope_apply:{$kind}:{$id}:{$bitmask}", 'style' => 'success']];
         }
-        $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['backToHubBtn'], 'callback_data' => "langscope_list:{$kind}"]];
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['backToHubBtn'], 'callback_data' => "langscope_back:{$kind}:{$id}"]];
         return json_encode($kb);
     }
 }
@@ -279,7 +331,7 @@ if (!function_exists('langscope_cascade_hub_payload')) {
             $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['emptyList'], 'callback_data' => 'langscope_hub']];
         } else {
             foreach ($cats as $c) {
-                $kb['inline_keyboard'][] = [['text' => $c['remark'], 'callback_data' => "langscope_casc_pick:{$c['id']}"]];
+                $kb['inline_keyboard'][] = [['text' => $c['remark'] . ' — ' . lang_scope_display($c['lang'] ?? 'all', $textbotlang), 'callback_data' => "langscope_casc_pick:{$c['id']}"]];
             }
         }
         $kb['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['backToHubBtn'], 'callback_data' => 'langscope_hub']];
@@ -1937,7 +1989,7 @@ if (!function_exists('gateway_hub_payload')) {
             ['text' => $t['colTitle'], 'callback_data' => "gwname:{$lang}:_col", 'style' => 'danger'],
         ];
         $shownGroups = [];
-        foreach (gateway_registry($textbotlang) as $key => $label) {
+        foreach (array_keys(gateway_registry($textbotlang)) as $key) {
             if (!gateway_applicable_for_lang($key, $lang)) {
                 continue;
             }
@@ -1958,7 +2010,8 @@ if (!function_exists('gateway_hub_payload')) {
                         'callback_data' => "gwgrouptoggle:{$lang}:{$group}",
                         'style' => $state === 'all' ? 'success' : ($state === 'some' ? 'primary' : 'danger'),
                     ],
-                    ['text' => gateway_group_label($group, $textbotlang), 'callback_data' => "gwgroup:{$lang}:{$group}", 'style' => 'primary'],
+                    // the family as this tab's customer sees it
+                    gateway_tab_group_button($lang, $group, "gwgroup:{$lang}:{$group}"),
                 ];
                 continue;
             }
@@ -1979,8 +2032,9 @@ if (!function_exists('gateway_hub_payload')) {
                     'style' => $effectivelyOn ? 'success' : 'danger',
                 ],
                 // the name is a label, not a second way into تنظیمات - tapping
-                // it explains what the row is instead of navigating
-                ['text' => $label, 'callback_data' => "gwname:{$lang}:{$key}", 'style' => 'primary'],
+                // it explains what the row is instead of navigating. It is
+                // the gateway exactly as this tab's customer sees it.
+                gateway_tab_button($lang, $key, "gwname:{$lang}:{$key}"),
             ];
         }
         $kb['inline_keyboard'][] = [['text' => $t['disableAll'], 'callback_data' => "gwall:{$lang}:0", 'style' => 'danger']];
@@ -2024,7 +2078,6 @@ if (!function_exists('gateway_group_payload')) {
             ['text' => $t['colStatus'], 'callback_data' => "gwname:{$lang}:_col", 'style' => 'danger'],
             ['text' => $t['colTitle'], 'callback_data' => "gwname:{$lang}:_col", 'style' => 'danger'],
         ];
-        $registry = gateway_registry($textbotlang);
         foreach (gateway_group_members($group, $lang) as $key) {
             $effectivelyOn = gateway_allowed_for_lang($key, $lang) && gateway_globally_on($key);
             $kb['inline_keyboard'][] = [
@@ -2034,7 +2087,7 @@ if (!function_exists('gateway_group_payload')) {
                     'callback_data' => "gwtoggle:{$lang}:{$key}",
                     'style' => $effectivelyOn ? 'success' : 'danger',
                 ],
-                ['text' => $registry[$key] ?? $key, 'callback_data' => "gwname:{$lang}:{$key}", 'style' => 'primary'],
+                gateway_tab_button($lang, $key, "gwname:{$lang}:{$key}"),
             ];
         }
         $kb['inline_keyboard'][] = [['text' => $t['backBtn'], 'callback_data' => "gwlang:{$lang}", 'style' => 'danger']];
@@ -2046,7 +2099,7 @@ if (!function_exists('gateway_group_caption')) {
     {
         $t = $textbotlang['Admin']['GatewayLang'];
         $cap = strtr($t['groupCaption'], [
-            '{group}' => gateway_group_label($group, $textbotlang),
+            '{group}' => gateway_tab_group_name($lang, $group),
             '{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang,
         ]);
         // some families need a word of explanation (the offline ones settle
@@ -2064,8 +2117,7 @@ if (!function_exists('gateway_name_alert')) {
         if ($key === '_col') {
             return $t['colAlert'];
         }
-        $registry = gateway_registry($textbotlang);
-        $label = $registry[$key] ?? $key;
+        $label = gateway_tab_name($lang, $key);
         $langOn = gateway_allowed_for_lang($key, $lang);
         $globalOn = gateway_globally_on($key);
         if ($langOn && $globalOn) {
@@ -2126,30 +2178,28 @@ if (!function_exists('topup_hub_payload')) {
     // reported here instead of colouring the row.
     function topup_hub_group_report($lang, $members, $textbotlang)
     {
-        $registry = gateway_registry($textbotlang);
         $lines = [];
         foreach ($members as $key) {
             $n = count(topup_packages_for($lang, $key));
             if ($n > 0) {
-                $lines[] = '• ' . trim(strip_tags((string) ($registry[$key] ?? $key))) . ": <b>{$n} بسته</b>";
+                $lines[] = '• ' . htmlspecialchars(gateway_tab_name($lang, $key)) . ": <b>{$n} بسته</b>";
             }
         }
         return empty($lines) ? '' : "\n\n<blockquote>📦 <b>بسته‌های تعریف‌شده</b>\n" . implode("\n", $lines) . '</blockquote>';
     }
     function topup_hub_group_payload($lang, $group, $textbotlang)
     {
-        $registry = gateway_registry($textbotlang);
         $members = topup_hub_live_members($group, $lang);
         $rows = [];
         foreach ($members as $key) {
             // always blue, like every other row in this section: green used to
             // mean "has packages", which the quote under the caption now says
             // by name and by count
-            $rows[] = [['text' => $registry[$key] ?? $key, 'callback_data' => "topupset:{$lang}:{$key}", 'style' => 'primary']];
+            $rows[] = [gateway_tab_button($lang, $key, "topupset:{$lang}:{$key}")];
         }
         $rows[] = [['text' => $textbotlang['Admin']['TopupPkg']['backToPrevBtn'], 'callback_data' => "topuplang:{$lang}", 'style' => 'danger']];
         $cap = strtr($textbotlang['Admin']['TopupPkg']['hubGroupCaption'], [
-            '{group}' => gateway_group_label($group, $textbotlang),
+            '{group}' => htmlspecialchars(gateway_tab_group_name($lang, $group)),
             '{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang,
         ]);
         $cap .= topup_hub_group_report($lang, $members, $textbotlang);
@@ -2184,11 +2234,7 @@ if (!function_exists('topup_hub_payload')) {
             }
             // no count, no green: this row opens a menu. What is configured
             // inside is reported as a quote under the caption.
-            $kb['inline_keyboard'][] = [[
-                'text' => gateway_group_label($group, $textbotlang),
-                'callback_data' => "topupgrp:{$lang}:{$group}",
-                'style' => 'primary',
-            ]];
+            $kb['inline_keyboard'][] = [gateway_tab_group_button($lang, $group, "topupgrp:{$lang}:{$group}")];
         }
         // 🎨 ظاهر نمایش درگاه ها moved to 🎨 شخصی‌سازی پیام‌های ربات →
         // 💰 پیام‌های افزایش موجودی, alongside the other top-up appearance and
@@ -2221,10 +2267,10 @@ if (!function_exists('topup_hub_caption')) {
                 // twice - "کارت به کارت: کارت به کارت (3)"
                 $tp_bits[] = count($tp_members) === 1
                     ? "<b>{$tp_n} بسته</b>"
-                    : trim(strip_tags((string) (gateway_registry($textbotlang)[$tp_k] ?? $tp_k))) . " ({$tp_n})";
+                    : htmlspecialchars(gateway_tab_name($lang, $tp_k)) . " ({$tp_n})";
             }
             if (!empty($tp_bits)) {
-                $tp_rep[] = '• ' . trim(strip_tags((string) gateway_group_label($tp_g, $textbotlang))) . ': ' . implode('، ', $tp_bits);
+                $tp_rep[] = '• ' . htmlspecialchars(gateway_tab_group_name($lang, $tp_g)) . ': ' . implode('، ', $tp_bits);
             }
         }
         if (!empty($tp_rep)) {
@@ -3674,7 +3720,7 @@ if (!function_exists('topup_gw_edit_payload')) {
         ]];
         $rows[] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']];
 
-        $label = gateway_registry($textbotlang)[$key] ?? $key;
+        $label = gateway_tab_name($lang, $key);
         $cap = strtr($textbotlang['Admin']['TopupPkg']['gwEditCaption'], [
             '{gateway}' => $label,
             '{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang,
@@ -3743,19 +3789,14 @@ if (!function_exists('topup_gw_group_payload')) {
     // sections read the same way
     function topup_gw_group_payload($lang, $group, $textbotlang)
     {
-        $registry = gateway_registry($textbotlang);
         $rows = [];
         foreach (gateway_group_members($group, $lang) as $key) {
-            $rows[] = [[
-                'text' => $registry[$key] ?? $key,
-                'callback_data' => "topupgw:{$lang}:{$key}",
-                'style' => 'primary',
-            ]];
+            $rows[] = [gateway_tab_button($lang, $key, "topupgw:{$lang}:{$key}")];
         }
         $rows[] = [['text' => $textbotlang['Admin']['GatewayLang']['backBtn'], 'callback_data' => "topupgwlist:{$lang}", 'style' => 'danger']];
         $rows[] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']];
         $cap = strtr($textbotlang['Admin']['TopupPkg']['gwGroupCaption'], [
-            '{group}' => gateway_group_label($group, $textbotlang),
+            '{group}' => gateway_tab_group_name($lang, $group),
             '{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang,
         ]);
         return [$cap, json_encode(['inline_keyboard' => $rows])];
@@ -3771,9 +3812,7 @@ if (!function_exists('topup_gw_list_payload')) {
         $shown = [];
         // each row is the gateway as this tab's customer sees it: the tab's
         // own name, with the name and emoji set in 🎨 ظاهر نمایش درگاه ها
-        $gwTexts = lang_tab_texts($lang);
-        $gwSection = help_layout_section($lang, 'gateway');
-        foreach (gateway_registry($gwTexts) as $key => $label) {
+        foreach (array_keys(gateway_registry($textbotlang)) as $key) {
             if (!gateway_applicable_for_lang($key, $lang)) {
                 continue;
             }
@@ -3785,22 +3824,10 @@ if (!function_exists('topup_gw_list_payload')) {
                     continue;
                 }
                 $shown[$group] = true;
-                $gwBtn = topup_group_button($lang, $group, $gwTexts);
-                $gwBtn['callback_data'] = "topupgwgrp:{$lang}:{$group}";
-                $gwBtn['style'] = 'primary';
-                $rows[] = [$gwBtn];
+                $rows[] = [gateway_tab_group_button($lang, $group, "topupgwgrp:{$lang}:{$group}")];
                 continue;
             }
-            $gwEmo = help_layout_emoji_prefix($key, $gwSection);
-            $gwBtn = [
-                'text' => $gwEmo['prefix'] . ($gwSection['rename'][$key] ?? $label),
-                'callback_data' => "topupgw:{$lang}:{$key}",
-                'style' => 'primary',
-            ];
-            if ($gwEmo['icon'] !== '') {
-                $gwBtn['icon_custom_emoji_id'] = $gwEmo['icon'];
-            }
-            $rows[] = [$gwBtn];
+            $rows[] = [gateway_tab_button($lang, $key, "topupgw:{$lang}:{$key}")];
         }
         $rows[] = [['text' => $textbotlang['Admin']['GatewayLang']['backBtn'], 'callback_data' => "bt_group|{$lang}|topup", 'style' => 'danger']];
         $rows[] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']];
@@ -3904,7 +3931,7 @@ if (!function_exists('gateway_settings_caption')) {
         $t = $textbotlang['Admin']['GatewayLang'];
         $cur = currency_for_lang($lang);
         $cap = strtr($t['setCaption'], [
-            '{gateway}' => gateway_registry($textbotlang)[$key] ?? $key,
+            '{gateway}' => gateway_tab_name($lang, $key),
             '{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang,
             '{currency}' => currency_get($cur)['title'] ?? $cur,
         ]);
@@ -19946,10 +19973,14 @@ if ($datain == "linkappsetting") {
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['LangScope']['hubCaption'], $ls_kb, 'HTML');
 } elseif ($datain == "langscope_close" && $adminrulecheck['rule'] == "administrator") {
     deletemessage($from_id, $message_id);
-} elseif (preg_match('/^langscope_list:(panel|product|category)$/', $datain, $ls_m) && $adminrulecheck['rule'] == "administrator") {
-    $ls_kind = $ls_m[1];
+} elseif (preg_match('/^langscope_(list|back):(panel|product|category)(?::(.+))?$/', $datain, $ls_m) && $adminrulecheck['rule'] == "administrator") {
+    // list:{kind}[:{page}] - a page of the list; back:{kind}:{id} - the page
+    // holding the item whose picker was just left
+    $ls_kind = $ls_m[2];
     $ls_meta = langscope_kind_meta($ls_kind);
-    $ls_kb = langscope_list_payload($ls_kind, $textbotlang);
+    $ls_kb = $ls_m[1] === 'back'
+        ? langscope_list_payload($ls_kind, $textbotlang, 0, $ls_m[3] ?? null)
+        : langscope_list_payload($ls_kind, $textbotlang, (int) ($ls_m[3] ?? 0));
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['LangScope'][$ls_meta['captionKey']], $ls_kb, 'HTML');
 } elseif (preg_match('/^langscope_open:(panel|product|category):(.+)$/', $datain, $ls_m) && $adminrulecheck['rule'] == "administrator") {
     $ls_kind = $ls_m[1];
@@ -19957,7 +19988,7 @@ if ($datain == "linkappsetting") {
     $ls_meta = langscope_kind_meta($ls_kind);
     $ls_row = select($ls_meta['table'], "*", $ls_meta['idField'], $ls_id, "select");
     $ls_kb = lang_scope_picker_payload($ls_kind, $ls_id, $ls_row['lang'] ?? 'all', $textbotlang);
-    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['LangScope']['pickerCaption'], $ls_kb, 'HTML');
+    Editmessagetext($from_id, $message_id, langscope_picker_caption($ls_kind, $ls_id, $textbotlang), $ls_kb, 'HTML');
 } elseif (preg_match('/^tpdnotif:([a-z]{2}):([a-z0-9_]+)$/', $datain, $td_m) && $adminrulecheck['rule'] == "administrator") {
     list($td_text, $td_kb) = topup_disc_notify_payload($td_m[1], $td_m[2], $textbotlang);
     Editmessagetext($from_id, $message_id, $td_text, $td_kb, 'HTML');
@@ -20219,14 +20250,14 @@ if ($datain == "linkappsetting") {
     // pure re-render of the picker with the new in-progress selection - nothing
     // is written until the admin taps ذخیره
     $ls_kb = lang_scope_picker_payload($ls_m[1], $ls_m[2], null, $textbotlang, $ls_m[3]);
-    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['LangScope']['pickerCaption'], $ls_kb, 'HTML');
+    Editmessagetext($from_id, $message_id, langscope_picker_caption($ls_m[1], $ls_m[2], $textbotlang), $ls_kb, 'HTML');
 } elseif (preg_match('/^langscope_apply:(panel|product|category):(.+):([01]+)$/', $datain, $ls_m) && $adminrulecheck['rule'] == "administrator") {
     $ls_kind = $ls_m[1];
     $ls_id = $ls_m[2];
     $ls_picked = langscope_casc_bitmask_to_langs($ls_m[3]);
     // an empty selection means "no restriction" rather than "invisible to
     // everyone" - same meaning the column already gives 'all'/empty
-    $ls_value = empty($ls_picked) ? 'all' : implode(',', $ls_picked);
+    $ls_value = (empty($ls_picked) || count($ls_picked) === count(panel_langs())) ? 'all' : implode(',', $ls_picked);
     $ls_meta = langscope_kind_meta($ls_kind);
     update($ls_meta['table'], "lang", $ls_value, $ls_meta['idField'], $ls_id);
     telegram('answerCallbackQuery', [
@@ -20235,7 +20266,7 @@ if ($datain == "linkappsetting") {
         'show_alert' => false,
         'cache_time' => 1,
     ]);
-    $ls_kb = langscope_list_payload($ls_kind, $textbotlang);
+    $ls_kb = langscope_list_payload($ls_kind, $textbotlang, 0, $ls_id);
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['LangScope'][$ls_meta['captionKey']], $ls_kb, 'HTML');
 } elseif (preg_match('/^langscope_set:(panel|product|category):(.+):(fa|en|ru|zh|tk|all)$/', $datain, $ls_m) && $adminrulecheck['rule'] == "administrator") {
     $ls_kind = $ls_m[1];
@@ -20249,7 +20280,7 @@ if ($datain == "linkappsetting") {
         'show_alert' => false,
         'cache_time' => 1,
     ]);
-    $ls_kb = langscope_list_payload($ls_kind, $textbotlang);
+    $ls_kb = langscope_list_payload($ls_kind, $textbotlang, 0, $ls_id);
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['LangScope'][$ls_meta['captionKey']], $ls_kb, 'HTML');
 } elseif ($datain == "langscope_casc_hub" && $adminrulecheck['rule'] == "administrator") {
     $lc_kb = langscope_cascade_hub_payload($textbotlang);
@@ -20298,7 +20329,8 @@ if ($datain == "linkappsetting") {
         return;
     }
     $lc_picked = langscope_casc_bitmask_to_langs($lc_bitmask);
-    $lc_langValue = (count($lc_picked) === 5) ? 'all' : implode(',', $lc_picked);
+    // every language the bot has, not a fixed five
+    $lc_langValue = (count($lc_picked) === count(panel_langs())) ? 'all' : implode(',', $lc_picked);
     update("category", "lang", $lc_langValue, "id", $lc_id);
     update("product", "lang", $lc_langValue, "category", $lc_cat['remark']);
     $lc_prodCount = select("product", "*", "category", $lc_cat['remark'], "count");

@@ -6258,6 +6258,11 @@ nowpayments.io
       'pickerCaption' => '🌐 این برای کدوم زبان(ها) نمایش داده بشه؟
 
 روی یکی از گزینه‌های زیر بزن.',
+      'pickerItem' => '{kind} <b>{name}</b>
+الان نمایش برای: <b>{current}</b>',
+      'kind_panel' => '🖥 پنل',
+      'kind_product' => '🛍 محصول',
+      'kind_category' => '🗂 دسته‌بندی',
       'allLangsBtn' => '🌍 همه زبان‌ها',
       'savedConfirm' => '✅ زبان با موفقیت ذخیره شد.',
       'langBtn' => '🌐 زبان',
@@ -6578,6 +6583,8 @@ nowpayments.io
         // never a collapsible family on the customer's payment screen - see
         // gateway_disc_groups()
         'card' => '💳 کارت به کارت',
+        // a discount set on every gateway at once - the customer reads it too
+        'all' => '⚡️ همه‌ی درگاه‌ها',
       ),
       'groupNotes' => array(
         'offline' => '📌 پرداخت این درگاه‌ها مستقیم به کیف پول خودت میاد، پس هر تراکنش باید دستی توسط مدیر تایید بشه.',
