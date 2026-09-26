@@ -1163,6 +1163,7 @@ if (!function_exists('lang_switch_settings_payload')) {
             $on[] = $names[$c] ?? $c;
         }
         $cap = "🌐 <b>تنظیمات تغییر زبان کاربر</b>\n➖➖➖➖➖➖➖➖➖➖\n";
+        $cap .= "📌 این بخش بین همه‌ی زبان‌ها مشترکه: از تب فارسی یا انگلیسی باز بشه همین یکیه، و متن و ظاهرش برای همه‌ی کاربرها یکسانه.\n\n";
         $cap .= "نمایش خودکار: " . ($ls['enabled']
             ? ('روشن ✅ — ' . ($ls['mode'] === 'always' ? 'هر بار /start' : 'فقط بار اول'))
             : 'خاموش') . "\n";
@@ -5327,6 +5328,9 @@ if (!function_exists('topup_group_hub_payload')) {
 if (!function_exists('btnstyle_kindhub_caption_key')) {
     function btnstyle_kindhub_caption_key($kind)
     {
+        if ($kind === 'langpick') {
+            return 'langpickSubCaption';
+        }
         if ($kind === 'panel') {
             return 'panelsSubCaption';
         }
