@@ -800,10 +800,10 @@ if (!function_exists('bottext_item_menu_payload')) {
             $kb['inline_keyboard'][] = [$bt_live_row(genbtn_row_label($bt_key, $bt_lang), '📚 ویرایش دکمه مشاهده آموزش', "gbs|hub|{$bt_lang}|ut", $bt_btn_custom)];
         } elseif ($bt_key === 'users.help.listCaption') {
             // the one button under the tutorial list ('hb' alias, own-key trick)
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه بازگشت به دسته‌بندی', 'callback_data' => "gbs|hub|{$bt_lang}|hb", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [$bt_live_row(genbtn_row_label($bt_key, $bt_lang), '🔘 ویرایش دکمه بازگشت به دسته‌بندی', "gbs|hub|{$bt_lang}|hb", is_array($bt_be) && !empty($bt_be[$bt_lang][$bt_key]))];
         } elseif ($bt_key === 'users.help.categoryCaption') {
             // and the one under a tutorial's own content screen ('hv' alias)
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه بازگشت به لیست دسته‌بندی', 'callback_data' => "gbs|hub|{$bt_lang}|hv", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [$bt_live_row(genbtn_row_label($bt_key, $bt_lang), '🔘 ویرایش دکمه بازگشت به لیست دسته‌بندی', "gbs|hub|{$bt_lang}|hv", is_array($bt_be) && !empty($bt_be[$bt_lang][$bt_key]))];
         } elseif ($bt_key === 'users.Balance.topupDiscPrompt') {
             // the 'td' alias was wired everywhere except here, so this item's
             // label promised "+ دکمه‌هایش" while the screen offered no way in

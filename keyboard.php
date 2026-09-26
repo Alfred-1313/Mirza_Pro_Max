@@ -2581,7 +2581,7 @@ function keyboard_list_text($lang, $groupFilter = null)
             // is the second, more discoverable way in, right next to the
             // messages/buttons that describe this same feature.
             $keyboard_text['inline_keyboard'][] = [['text' => bt_section_meta('help_manage')['label'], 'callback_data' => 'bt_sep|help_manage']];
-            $keyboard_text['inline_keyboard'][] = [['text' => '📚 مدیریت آموزش‌ها (افزودن/ویرایش/حذف)', 'callback_data' => 'help_lang:fa', 'style' => 'primary']];
+            $keyboard_text['inline_keyboard'][] = [['text' => '📚 مدیریت آموزش‌ها (افزودن/ویرایش/حذف)', 'callback_data' => "help_lang:{$lang}", 'style' => 'primary']];
             // the appearance of the tutorial buttons themselves (order, width,
             // colour, emoji, and now show/hide). These two hubs already existed
             // under 📚 آموزش in the admin panel - this is a second way in, from

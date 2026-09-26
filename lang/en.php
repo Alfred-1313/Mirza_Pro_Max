@@ -917,6 +917,15 @@ If you just paid, wait a little; the bot keeps checking on its own and charges y
     @%s',
                         'verifiedNotice' => '💎 Dear user, your account was verified successfully and you can now make your purchase',
                         'verified' => 'Your account was verified successfully',
+                        'infoSimple' => '👤 <b>User account</b>
+
+Username: %s
+User ID: <code>%s</code>
+Active services: %s
+Wallet balance: %s
+
+✔️ Use the button below to top up your balance.',
+                        'usernameNotSet' => 'Not set',
                 ],
                 'affiliates' => [
                         'affiliateedago' => '❌ You have previously been another user\'s referral, so you cannot become a referral again',
@@ -1237,6 +1246,8 @@ n2 = agent with more features',
                         'disablehelp' => 'Dear user, the tutorial section is currently disabled. 😔',
                         'categoryCaption' => '📌 Select a category',
                         'listCaption' => 'Choose an option',
+                        'backToCategoriesBtn' => '🔙 Back to tutorial categories',
+                        'backToCategoryListBtn' => '🔙 Back to the tutorial category list',
                 ],
                 'lottery' => [
                         'winnerNotice' => '🎁 Lottery result 
