@@ -155,20 +155,25 @@ if (!function_exists('um_tab')) {
             '{wallet}' => money(um_lang_wallet_sum($lang), currency_for_lang($lang)),
         ]);
     }
-    function um_hub_payload($lang, $textbotlang)
+    // $canCustomize: an administrator, who can open 🎨 from here
+    function um_hub_payload($lang, $textbotlang, $canCustomize = false)
     {
         $k = $textbotlang['keyboard'];
-        return json_encode(['inline_keyboard' => [
+        $rows = [
             panel_lang_tabs($lang, "umlang:%s", null),
-            [['text' => $k['usersWithBalance'], 'callback_data' => "uml:balance:1"]],
-            [['text' => $k['usersWithAffiliates'], 'callback_data' => "uml:ref:1"]],
-            [['text' => $k['activeCardUserList'], 'callback_data' => "uml:card:1"]],
-            [['text' => $k['usersWithNegativeBalance'], 'callback_data' => "uml:neg:1"]],
-            [['text' => $k['agentList'], 'callback_data' => "agentlistusers"], ['text' => $k['allUserList'], 'callback_data' => "uml:all:1"]],
-            [['text' => $k['searchOrder'], 'callback_data' => "searchorder"], ['text' => $k['groupCharge'], 'callback_data' => "balanceaddall"]],
-            [['text' => $k['searchUserBtn'], 'callback_data' => "searchuser"], ['text' => $k['messagingSection'], 'callback_data' => "systemsms"]],
-            [['text' => $k['groupVolumeOrTime'], 'callback_data' => "voloume_or_day_all"]],
-        ]]);
+            [['text' => $k['usersWithBalance'], 'callback_data' => "uml:balance:1", 'style' => 'primary']],
+            [['text' => $k['usersWithAffiliates'], 'callback_data' => "uml:ref:1", 'style' => 'primary']],
+            [['text' => $k['activeCardUserList'], 'callback_data' => "uml:card:1", 'style' => 'primary']],
+            [['text' => $k['usersWithNegativeBalance'], 'callback_data' => "uml:neg:1", 'style' => 'danger']],
+            [['text' => $k['agentList'], 'callback_data' => "agentlistusers", 'style' => 'primary'], ['text' => $k['allUserList'], 'callback_data' => "uml:all:1", 'style' => 'primary']],
+            [['text' => $k['searchOrder'], 'callback_data' => "searchorder", 'style' => 'primary'], ['text' => $k['groupCharge'], 'callback_data' => "balanceaddall", 'style' => 'success']],
+            [['text' => $k['searchUserBtn'], 'callback_data' => "searchuser", 'style' => 'primary'], ['text' => $k['messagingSection'], 'callback_data' => "systemsms", 'style' => 'success']],
+            [['text' => $k['groupVolumeOrTime'], 'callback_data' => "voloume_or_day_all", 'style' => 'success']],
+        ];
+        if ($canCustomize) {
+            $rows[] = [['text' => $textbotlang['Admin']['UserMgmt']['customizeBtn'], 'callback_data' => "bt_group|{$lang}|usermgmt"]];
+        }
+        return json_encode(['inline_keyboard' => $rows]);
     }
     // each list: its title, and what it asks of a user on top of the language
     function um_list_kinds($textbotlang)
@@ -217,7 +222,7 @@ if (!function_exists('um_tab')) {
                 $name .= ' · ' . money($r['Balance'], currency_for_user($r));
             }
             $rows[] = [
-                ['text' => $textbotlang['Admin']['manageUser']['manageUserBtn'], 'callback_data' => "manageuser_" . $r['id']],
+                ['text' => $textbotlang['Admin']['manageUser']['manageUserBtn'], 'callback_data' => "manageuser_" . $r['id'], 'style' => 'primary'],
                 ['text' => $name, 'callback_data' => "username"],
                 ['text' => (string) $r['id'], 'callback_data' => (string) $r['id']],
             ];
@@ -226,15 +231,15 @@ if (!function_exists('um_tab')) {
             // next on the left, previous on the right, as the old lists had them
             $nav = [];
             if ($page < $pages) {
-                $nav[] = ['text' => $textbotlang['users']['page']['next'], 'callback_data' => "uml:{$kind}:" . ($page + 1)];
+                $nav[] = ['text' => $textbotlang['users']['page']['next'], 'callback_data' => "uml:{$kind}:" . ($page + 1), 'style' => 'primary'];
             }
             $nav[] = ['text' => "{$page} / {$pages}", 'callback_data' => "uml:{$kind}:{$page}"];
             if ($page > 1) {
-                $nav[] = ['text' => $textbotlang['users']['page']['previous'], 'callback_data' => "uml:{$kind}:" . ($page - 1)];
+                $nav[] = ['text' => $textbotlang['users']['page']['previous'], 'callback_data' => "uml:{$kind}:" . ($page - 1), 'style' => 'primary'];
             }
             $rows[] = $nav;
         }
-        $rows[] = [['text' => $textbotlang['keyboard']['backToPrev'], 'callback_data' => 'backlistuser']];
+        $rows[] = [['text' => $textbotlang['keyboard']['backToPrev'], 'callback_data' => 'backlistuser', 'style' => 'danger']];
         $t = $textbotlang['Admin']['UserMgmt'];
         $cap = strtr($n > 0 ? $t['listCaption'] : $t['listEmpty'], [
             '{title}' => $title,
@@ -1015,9 +1020,10 @@ if (!function_exists('bottext_item_menu_payload')) {
             $kb['inline_keyboard'][] = [['text' => '🚪 پیام و دکمه‌ی خروج از کانال', 'callback_data' => "bt_edit|{$bt_lang}|users.channel.left_channel", 'style' => 'primary']];
         } elseif ($bt_key === 'users.channel.left_channel') {
             $kb['inline_keyboard'][] = [$bt_live_row(genbtn_row_label($bt_key, $bt_lang), '📌 ویرایش دکمه عضویت مجدد', "gbs|hub|{$bt_lang}|lc", $bt_btn_custom)];
-        } elseif ($bt_key === 'users.support.messageFromAdminAlt') {
-            // the reply button under it ('ma', own-key)
-            $kb['inline_keyboard'][] = [$bt_live_row(genbtn_row_label($bt_key, $bt_lang), '↩️ ویرایش دکمه پاسخ', "gbs|hub|{$bt_lang}|ma", $bt_btn_custom)];
+        } elseif (in_array($bt_key, ['users.support.messageFromAdminAlt', 'users.support.messageFromManagement', 'users.support.messageFromManagement2', 'users.support.messageFromAdmin'], true)) {
+            // the reply button under them - one look for all the admin's
+            // messages to a customer ('ma', owned by messageFromAdminAlt)
+            $kb['inline_keyboard'][] = [$bt_live_row(genbtn_row_label('users.support.messageFromAdminAlt', $bt_lang), '↩️ ویرایش دکمه پاسخ', "gbs|hub|{$bt_lang}|ma", is_array($bt_be) && !empty($bt_be[$bt_lang]['users.support.messageFromAdminAlt']))];
         } elseif ($bt_key === 'users.extend.invoiceCreated') {
             $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های تأیید تمدید/بازگشت', 'callback_data' => "gbs|hub|{$bt_lang}|rn", 'style' => 'primary']];
             $kb['inline_keyboard'][] = [$bt_live_row($bt_balance_live(), '💰 ویرایش دکمه‌ی افزایش موجودی', "bt_edit|{$bt_lang}|users.Balance.insufficientBalanceSimple", is_array($bt_be) && !empty($bt_be[$bt_lang]['users.Balance.insufficientBalanceSimple']))];
@@ -6432,6 +6438,50 @@ if (preg_match('/^clst2tog:([a-z]{2}):([a-z]{2})$/', $datain, $cs_m) && $adminru
     Editmessagetext($from_id, $message_id, $cs_txt, $cs_kb, 'HTML');
     return;
 }
+if (preg_match('/^gbtst\|(set|del|cancel)\|([a-z]{2})\|([a-z0-9]{2})$/', $datain, $ts_m) && $adminrulecheck['rule'] == "administrator") {
+    // 🖼 استیکر لمس دکمه on a button's own 🎨 screen
+    $ts_key = genbtn_alias_to_key($ts_m[3]);
+    if ($ts_key === null || !in_array($ts_m[3], genbtn_tap_sticker_aliases(), true) || !in_array($ts_m[2], panel_langs(), true)) {
+        return;
+    }
+    if ($ts_m[1] === 'set') {
+        savedata("clear", "bt_msgid", $message_id);
+        step("gbtstwait:{$ts_m[2]}:{$ts_m[3]}", $from_id);
+        Editmessagetext($from_id, $message_id, "🖼 استیکری که وقتی کاربر این دکمه رو می‌زنه براش فرستاده بشه رو بفرست (معمولی یا پریمیوم) 🎁\n\nبرای انصراف، از دکمه‌ی پایین استفاده کن 👇", json_encode(['inline_keyboard' => [
+            [['text' => '❌ انصراف', 'callback_data' => "gbtst|cancel|{$ts_m[2]}|{$ts_m[3]}", 'style' => 'danger']],
+        ]]), 'HTML');
+        return;
+    }
+    $ts_note = '';
+    if ($ts_m[1] === 'del') {
+        genbtn_set_tap_sticker($ts_m[2], $ts_key, '');
+        $ts_note = '🗑 استیکر این دکمه حذف شد';
+    } else {
+        step('home', $from_id);
+    }
+    list($ts_cap, $ts_kb) = genbtn_hub_payload($ts_m[3], $ts_m[2], $textbotlang, '', $ts_note);
+    Editmessagetext($from_id, $message_id, $ts_cap, $ts_kb, 'HTML');
+    return;
+}
+if (preg_match('/^gbtstwait:([a-z]{2}):([a-z0-9]{2})$/', (string) $user['step'], $ts_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+    $ts_key = genbtn_alias_to_key($ts_m[2]);
+    $ts_file = $update['message']['sticker']['file_id'] ?? '';
+    if ($ts_key === null || $ts_file === '') {
+        sendmessage($from_id, "⚠️ لطفاً یه استیکر بفرست (هر نوع استیکری قابل قبوله) 😅", $btpromptcancel, 'HTML');
+        return;
+    }
+    genbtn_set_tap_sticker($ts_m[1], $ts_key, $ts_file);
+    step('home', $from_id);
+    $ts_msgid = intval(json_decode((string) ($user['Processing_value'] ?? ''), true)['bt_msgid'] ?? 0);
+    list($ts_cap, $ts_kb) = genbtn_hub_payload($ts_m[2], $ts_m[1], $textbotlang, '', '✅ استیکر این دکمه ذخیره شد');
+    deletemessage($from_id, $message_id);
+    if ($ts_msgid > 0) {
+        Editmessagetext($from_id, $ts_msgid, $ts_cap, $ts_kb, 'HTML');
+    } else {
+        sendmessage($from_id, $ts_cap, $ts_kb, 'HTML');
+    }
+    return;
+}
 if (preg_match('/^clst2set:([a-z]{2}):([a-z]{2})$/', $datain, $cs_m) && $adminrulecheck['rule'] == "administrator") {
     $cs_key = close_sticker_alias_to_key($cs_m[2]);
     if ($cs_key === null) {
@@ -9660,19 +9710,19 @@ elseif ($datain == "systemsms") {
     $listbtn = json_encode([
         'inline_keyboard' => [
             [
-                ['text' => $textbotlang['keyboard']['broadcastSend'], 'callback_data' => 'typeservice-sendmessage'],
+                ['text' => $textbotlang['keyboard']['broadcastSend'], 'callback_data' => 'typeservice-sendmessage', 'style' => 'primary'],
             ],
             [
-                ['text' => $textbotlang['keyboard']['broadcastForward'], 'callback_data' => 'typeservice-forwardmessage'],
+                ['text' => $textbotlang['keyboard']['broadcastForward'], 'callback_data' => 'typeservice-forwardmessage', 'style' => 'primary'],
             ],
             [
-                ['text' => $textbotlang['keyboard']['inactiveDays'], 'callback_data' => 'typeservice-xdaynotmessage'],
+                ['text' => $textbotlang['keyboard']['inactiveDays'], 'callback_data' => 'typeservice-xdaynotmessage', 'style' => 'primary'],
             ],
             [
-                ['text' => $textbotlang['keyboard']['cancelPinnedMessages'], 'callback_data' => 'typeservice-unpinmessage'],
+                ['text' => $textbotlang['keyboard']['cancelPinnedMessages'], 'callback_data' => 'typeservice-unpinmessage', 'style' => 'primary'],
             ],
             [
-                ['text' => $textbotlang['keyboard']['backToMain'], 'callback_data' => 'backlistuser'],
+                ['text' => $textbotlang['keyboard']['backToMain'], 'callback_data' => 'backlistuser', 'style' => 'danger'],
             ],
         ]
     ]);
@@ -9691,7 +9741,7 @@ elseif ($datain == "systemsms") {
         $startaction = json_encode([
             'inline_keyboard' => [
                 [
-                    ['text' => $textbotlang['keyboard']['confirmAndStart'], 'callback_data' => 'startaction'],
+                    ['text' => $textbotlang['keyboard']['confirmAndStart'], 'callback_data' => 'startaction', 'style' => 'success'],
                 ],
             ]
         ]);
@@ -9704,16 +9754,16 @@ elseif ($datain == "systemsms") {
     $listbtn = json_encode([
         'inline_keyboard' => [
             [
-                ['text' => $textbotlang['keyboard']['allUsers'], 'callback_data' => 'typeusermessage-all'],
+                ['text' => $textbotlang['keyboard']['allUsers'], 'callback_data' => 'typeusermessage-all', 'style' => 'primary'],
             ],
             [
-                ['text' => $textbotlang['keyboard']['customersBought'], 'callback_data' => 'typeusermessage-customer'],
+                ['text' => $textbotlang['keyboard']['customersBought'], 'callback_data' => 'typeusermessage-customer', 'style' => 'primary'],
             ],
             [
-                ['text' => $textbotlang['keyboard']['usersNotBought'], 'callback_data' => 'typeusermessage-nonecustomer'],
+                ['text' => $textbotlang['keyboard']['usersNotBought'], 'callback_data' => 'typeusermessage-nonecustomer', 'style' => 'primary'],
             ],
             [
-                ['text' => $textbotlang['keyboard']['backToPrev'], 'callback_data' => 'systemsms'],
+                ['text' => $textbotlang['keyboard']['backToPrev'], 'callback_data' => 'systemsms', 'style' => 'danger'],
             ],
         ]
     ]);
@@ -9729,19 +9779,19 @@ elseif ($datain == "systemsms") {
     $listbtn = json_encode([
         'inline_keyboard' => [
             [
-                ['text' => $textbotlang['keyboard']['allUsers'], 'callback_data' => 'typeagent-all'],
+                ['text' => $textbotlang['keyboard']['allUsers'], 'callback_data' => 'typeagent-all', 'style' => 'primary'],
             ],
             [
-                ['text' => $textbotlang['keyboard']['usersGroupF'], 'callback_data' => 'typeagent-f'],
+                ['text' => $textbotlang['keyboard']['usersGroupF'], 'callback_data' => 'typeagent-f', 'style' => 'primary'],
             ],
             [
-                ['text' => $textbotlang['keyboard']['usersGroupN'], 'callback_data' => 'typeagent-n'],
+                ['text' => $textbotlang['keyboard']['usersGroupN'], 'callback_data' => 'typeagent-n', 'style' => 'primary'],
             ],
             [
-                ['text' => $textbotlang['keyboard']['usersGroupN2'], 'callback_data' => 'typeagent-n2'],
+                ['text' => $textbotlang['keyboard']['usersGroupN2'], 'callback_data' => 'typeagent-n2', 'style' => 'primary'],
             ],
             [
-                ['text' => $textbotlang['keyboard']['backToPrev'], 'callback_data' => 'typeservice-' . $userdata['typeservice']],
+                ['text' => $textbotlang['keyboard']['backToPrev'], 'callback_data' => 'typeservice-' . $userdata['typeservice'], 'style' => 'danger'],
             ],
         ]
     ]);
@@ -9760,13 +9810,13 @@ elseif ($datain == "systemsms") {
         $stmt->bindParam(':agent', $type);
         $stmt->execute();
         $list_panel = ['inline_keyboard' => []];
-        $list_panel['inline_keyboard'][] = [['text' => $textbotlang['keyboard']['allPanelsList'], 'callback_data' => 'locationmessage_all']];
+        $list_panel['inline_keyboard'][] = [['text' => $textbotlang['keyboard']['allPanelsList'], 'callback_data' => 'locationmessage_all', 'style' => 'primary']];
         while ($result = $stmt->fetch(PDO::FETCH_ASSOC)) {
             $list_panel['inline_keyboard'][] = [
-                ['text' => $result['name_panel'], 'callback_data' => "locationmessage_{$result['code_panel']}"]
+                ['text' => $result['name_panel'], 'callback_data' => "locationmessage_{$result['code_panel']}", 'style' => 'primary']
             ];
         }
-        $list_panel['inline_keyboard'][] = [['text' => $textbotlang['keyboard']['backToPrev'], 'callback_data' => 'typeusermessage-' . $userdata['typeusermessage']],];
+        $list_panel['inline_keyboard'][] = [['text' => $textbotlang['keyboard']['backToPrev'], 'callback_data' => 'typeusermessage-' . $userdata['typeusermessage'], 'style' => 'danger'],];
         Editmessagetext($from_id, $message_id, $textbotlang['Admin']['messageBulk']['askPanelUsers'], json_encode($list_panel));
         return;
     }
@@ -9774,11 +9824,11 @@ elseif ($datain == "systemsms") {
         $listbtn = json_encode([
             'inline_keyboard' => [
                 [
-                    ['text' => $textbotlang['keyboard']['yes'], 'callback_data' => 'typepinmessage-yes'],
-                    ['text' => $textbotlang['keyboard']['no'], 'callback_data' => 'typepinmessage-no'],
+                    ['text' => $textbotlang['keyboard']['yes'], 'callback_data' => 'typepinmessage-yes', 'style' => 'success'],
+                    ['text' => $textbotlang['keyboard']['no'], 'callback_data' => 'typepinmessage-no', 'style' => 'danger'],
                 ],
                 [
-                    ['text' => $textbotlang['keyboard']['backToPrev'], 'callback_data' => 'typeusermessage-' . $userdata['typeusermessage']],
+                    ['text' => $textbotlang['keyboard']['backToPrev'], 'callback_data' => 'typeusermessage-' . $userdata['typeusermessage'], 'style' => 'danger'],
                 ],
             ]
         ]);
@@ -9805,11 +9855,11 @@ elseif ($datain == "systemsms") {
         $listbtn = json_encode([
             'inline_keyboard' => [
                 [
-                    ['text' => $textbotlang['keyboard']['yes'], 'callback_data' => 'typepinmessage-yes'],
-                    ['text' => $textbotlang['keyboard']['no'], 'callback_data' => 'typepinmessage-no'],
+                    ['text' => $textbotlang['keyboard']['yes'], 'callback_data' => 'typepinmessage-yes', 'style' => 'success'],
+                    ['text' => $textbotlang['keyboard']['no'], 'callback_data' => 'typepinmessage-no', 'style' => 'danger'],
                 ],
                 [
-                    ['text' => $textbotlang['keyboard']['backToPrev'], 'callback_data' => 'typeagent-' . $userdata['agent']],
+                    ['text' => $textbotlang['keyboard']['backToPrev'], 'callback_data' => 'typeagent-' . $userdata['agent'], 'style' => 'danger'],
                 ],
             ]
         ]);
@@ -9832,27 +9882,33 @@ elseif ($datain == "systemsms") {
         return;
     }
     savedata("save", "typepinmessage", $type);
-    // each button as the customers of this message's language will see it
+    // each button as the customers of this message's language will see it -
+    // name, emoji, colour
     $bm_pickLang = in_array($userdata['lang'] ?? '', panel_langs(), true) ? $userdata['lang'] : um_tab($user);
+    $bm_pick = function ($alias, $cb) use ($bm_pickLang) {
+        return genbtn_render(genbtn_defs($alias, lang_tab_texts($bm_pickLang))[0], genbtn_override($bm_pickLang, genbtn_alias_to_key($alias), 0), $cb);
+    };
     $listbtn = json_encode([
         'inline_keyboard' => [
             [
-                ['text' => genbtn_row_label('bottext.bcStartBtn', $bm_pickLang)[0], 'callback_data' => 'btntypemessage-start'],
-                ['text' => genbtn_row_label('bottext.bcHelpBtn', $bm_pickLang)[0], 'callback_data' => 'btntypemessage-helpbtn'],
+                $bm_pick('b2', 'btntypemessage-start'),
+                $bm_pick('b4', 'btntypemessage-helpbtn'),
             ],
             [
-                ['text' => genbtn_row_label('bottext.bcBuyBtn', $bm_pickLang)[0], 'callback_data' => 'btntypemessage-buy'],
-                ['text' => genbtn_row_label('bottext.bcTestBtn', $bm_pickLang)[0], 'callback_data' => 'btntypemessage-usertestbtn'],
+                $bm_pick('b1', 'btntypemessage-buy'),
+                $bm_pick('b3', 'btntypemessage-usertestbtn'),
             ],
             [
-                ['text' => genbtn_row_label('bottext.bcAffBtn', $bm_pickLang)[0], 'callback_data' => 'btntypemessage-affiliatesbtn'],
-                ['text' => genbtn_row_label('bottext.bcTopupBtn', $bm_pickLang)[0], 'callback_data' => 'btntypemessage-addbalance'],
+                $bm_pick('b5', 'btntypemessage-affiliatesbtn'),
+                $bm_pick('b6', 'btntypemessage-addbalance'),
             ],
             [
                 ['text' => $textbotlang['keyboard']['sendWithoutButton'], 'callback_data' => 'btntypemessage-none'],
             ],
+            // where these buttons are made - so nobody has to hunt for it
+            ...($adminrulecheck['rule'] == "administrator" ? [[['text' => '🎨 شخصی‌سازی این دکمه‌ها (' . ($textbotlang['bottext']['langs'][$bm_pickLang] ?? $bm_pickLang) . ')', 'callback_data' => "bt_group|{$bm_pickLang}|usermgmt", 'style' => 'success']]] : []),
             [
-                ['text' => $textbotlang['keyboard']['backToPrev'], 'callback_data' => 'typeagent-' . $userdata['agent']],
+                ['text' => $textbotlang['keyboard']['backToPrev'], 'callback_data' => 'typeagent-' . $userdata['agent'], 'style' => 'danger'],
             ],
         ]
     ]);
@@ -9938,7 +9994,7 @@ elseif ($datain == "systemsms") {
     $startaction = json_encode([
         'inline_keyboard' => [
             [
-                ['text' => $textbotlang['keyboard']['confirmAndStart'], 'callback_data' => 'startaction'],
+                ['text' => $textbotlang['keyboard']['confirmAndStart'], 'callback_data' => 'startaction', 'style' => 'success'],
             ],
         ]
     ]);
@@ -9959,7 +10015,7 @@ elseif ($datain == "systemsms") {
     $cancelmessage = json_encode([
         'inline_keyboard' => [
             [
-                ['text' => $textbotlang['keyboard']['cancelOperation'], 'callback_data' => 'cancel_sendmessage'],
+                ['text' => $textbotlang['keyboard']['cancelOperation'], 'callback_data' => 'cancel_sendmessage', 'style' => 'danger'],
             ],
         ]
     ]);
@@ -10040,7 +10096,7 @@ elseif ($datain == "systemsms") {
         $Response = json_encode([
             'inline_keyboard' => [
                 [
-                    genbtn_render($sm_def, genbtn_override($sm_lang, 'users.support.messageFromAdminAlt', 0), 'Responseuser'),
+                    genbtn_render($sm_def, genbtn_override($sm_lang, 'users.support.messageFromAdminAlt', 0), genbtn_tap_cb('ma', 'Responseuser')),
                 ],
             ]
         ]);
@@ -10219,19 +10275,24 @@ elseif ($datain == "systemsms") {
     sendmessage($from_id, $textbotlang['Admin']['manageUser']['getTextResponse'], $backadmin, 'HTML');
 } elseif ($user['step'] == "getmessageAsAdmin") {
     sendmessage($from_id, $textbotlang['Admin']['manageUser']['sendMessageUser'], null, 'HTML');
+    // in the words, and with the reply button, of the customer it goes to
+    $ra_texts = payer_texts($user['Processing_value']);
+    $ra_row = select("user", "*", "id", $user['Processing_value'], "select");
+    $ra_lang = in_array($ra_row['lang'] ?? '', panel_langs(), true) ? $ra_row['lang'] : 'fa';
     $Respuseronse = json_encode([
         'inline_keyboard' => [
             [
-                ['text' => $textbotlang['users']['support']['answermessage'], 'callback_data' => 'Responseuser'],
+                genbtn_render(genbtn_defs('ma', $ra_texts)[0], genbtn_override($ra_lang, 'users.support.messageFromAdminAlt', 0), genbtn_tap_cb('ma', 'Responseuser')),
             ],
         ]
     ]);
     if ($text) {
-        $textSendAdminToUser = sprintf($textbotlang['users']['support']['messageFromManagement'], $text);
+        $textSendAdminToUser = sprintf($ra_texts['users']['support']['messageFromManagement'], $text);
+        bottext_extras_key_hint('users.support.messageFromManagement');
         sendmessage($user['Processing_value'], $textSendAdminToUser, $Respuseronse, 'HTML');
     }
     if ($photo) {
-        $textSendAdminToUser = sprintf($textbotlang['users']['support']['messageFromManagement2'], $caption);
+        $textSendAdminToUser = sprintf($ra_texts['users']['support']['messageFromManagement2'], $caption);
         telegram('sendphoto', [
             'chat_id' => $user['Processing_value'],
             'photo' => $photoid,
@@ -13471,15 +13532,15 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     $keyboardagent = json_encode([
         'inline_keyboard' => [
             [
-                ['text' => $textbotlang['keyboard']['allUsers'], 'callback_data' => 'typebalanceall_all'],
+                ['text' => $textbotlang['keyboard']['allUsers'], 'callback_data' => 'typebalanceall_all', 'style' => 'primary'],
             ],
             [
-                ['text' => $textbotlang['keyboard']['usersGroupF'], 'callback_data' => 'typebalanceall_f'],
-                ['text' => $textbotlang['keyboard']['usersGroupN'], 'callback_data' => 'typebalanceall_nl'],
-                ['text' => $textbotlang['keyboard']['usersGroupN2'], 'callback_data' => 'typebalanceall_n2'],
+                ['text' => $textbotlang['keyboard']['usersGroupF'], 'callback_data' => 'typebalanceall_f', 'style' => 'primary'],
+                ['text' => $textbotlang['keyboard']['usersGroupN'], 'callback_data' => 'typebalanceall_nl', 'style' => 'primary'],
+                ['text' => $textbotlang['keyboard']['usersGroupN2'], 'callback_data' => 'typebalanceall_n2', 'style' => 'primary'],
             ],
             [
-                ['text' => $textbotlang['keyboard']['backToMain'], 'callback_data' => 'backuser'],
+                ['text' => $textbotlang['keyboard']['backToMain'], 'callback_data' => 'backuser', 'style' => 'danger'],
             ]
         ]
     ]);
@@ -13490,16 +13551,16 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     $keyboardtypeuser = json_encode([
         'inline_keyboard' => [
             [
-                ['text' => $textbotlang['keyboard']['allUsers'], 'callback_data' => 'typecustomer_all'],
+                ['text' => $textbotlang['keyboard']['allUsers'], 'callback_data' => 'typecustomer_all', 'style' => 'primary'],
             ],
             [
-                ['text' => $textbotlang['keyboard']['usersBought'], 'callback_data' => 'typecustomer_customer'],
+                ['text' => $textbotlang['keyboard']['usersBought'], 'callback_data' => 'typecustomer_customer', 'style' => 'primary'],
             ],
             [
-                ['text' => $textbotlang['keyboard']['usersNotBought'], 'callback_data' => 'typecustomer_notcustomer'],
+                ['text' => $textbotlang['keyboard']['usersNotBought'], 'callback_data' => 'typecustomer_notcustomer', 'style' => 'primary'],
             ],
             [
-                ['text' => $textbotlang['keyboard']['backToMain'], 'callback_data' => 'backuser'],
+                ['text' => $textbotlang['keyboard']['backToMain'], 'callback_data' => 'backuser', 'style' => 'danger'],
             ]
         ]
     ]);
@@ -13540,7 +13601,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
         $cancelmessage = json_encode([
             'inline_keyboard' => [
                 [
-                    ['text' => $textbotlang['keyboard']['cancelOperation'], 'callback_data' => 'cancel_sendmessage'],
+                    ['text' => $textbotlang['keyboard']['cancelOperation'], 'callback_data' => 'cancel_sendmessage', 'style' => 'danger'],
                 ],
             ]
         ]);
@@ -13647,52 +13708,52 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
         $subbuyuser['SUM(price_product)'] = 0;
     $keyboardmanage = [
         'inline_keyboard' => [
-            [['text' => $textbotlang['keyboard']['refreshInfoAlt'], 'callback_data' => "updateinfouser_" . $id_user],],
-            [['text' => strtr($textbotlang['Admin']['UserMgmt']['langBtn'], ['{lang}' => um_lang_name(in_array($user['lang'] ?? '', panel_langs(), true) ? $user['lang'] : 'fa', $textbotlang)]), 'callback_data' => "umsetlang_" . $id_user]],
-            [['text' => $textbotlang['Admin']['manageUser']['addBalanceUser'], 'callback_data' => "addbalanceuser_" . $id_user], ['text' => $textbotlang['Admin']['manageUser']['lowBalanceUser'], 'callback_data' => "lowbalanceuser_" . $id_user],],
-            [['text' => $textbotlang['Admin']['manageUser']['banUserList'], 'callback_data' => "banuserlist_" . $id_user], ['text' => $textbotlang['Admin']['manageUser']['unbanUserList'], 'callback_data' => "unbanuserr_" . $id_user]],
-            [['text' => $textbotlang['Admin']['manageUser']['addagent'], 'callback_data' => "addagent_" . $id_user], ['text' => $textbotlang['Admin']['manageUser']['removeagent'], 'callback_data' => "removeagent_" . $id_user]],
-            [['text' => $textbotlang['Admin']['manageUser']['confirmNumber'], 'callback_data' => "confirmnumber_" . $id_user]],
-            [['text' => $textbotlang['keyboard']['discountPercent'], 'callback_data' => "Percentlow_" . $id_user], ['text' => $textbotlang['keyboard']['sendMessageToUser'], 'callback_data' => "sendmessageuser_" . $id_user]],
-            [['text' => $textbotlang['Admin']['manageUser']['viewOrderUser'], 'callback_data' => "vieworderuser_" . $id_user]],
-            [['text' => $textbotlang['keyboard']['userAffiliates'], 'callback_data' => "affiliates-" . $id_user]],
-            [['text' => $textbotlang['keyboard']['removeFromAffiliate'], 'callback_data' => "removeaffiliate-" . $id_user], ['text' => $textbotlang['keyboard']['deleteUserAffiliates'], 'callback_data' => "removeaffiliateuser-" . $id_user]],
-            [['text' => $textbotlang['keyboard']['activateCard'], 'callback_data' => "showcarduser-" . $id_user]],
-            [['text' => $textbotlang['keyboard']['authenticateUser'], 'callback_data' => "verify_" . $id_user], ['text' => $textbotlang['keyboard']['unauthUser'], 'callback_data' => "unverify-" . $id_user]],
-            [['text' => $textbotlang['keyboard']['deactivateCard'], 'callback_data' => "carduserhide-" . $id_user]],
-            [['text' => $textbotlang['keyboard']['addOrder'], 'callback_data' => "addordermanualـ" . $id_user], ['text' => $textbotlang['keyboard']['testAccountLimit'], 'callback_data' => "limitusertest_" . $id_user]],
-            [['text' => $textbotlang['Admin']['manageUser']['viewPaymentUser'], 'callback_data' => "viewpaymentuser_" . $id_user], ['text' => $textbotlang['keyboard']['transferAccount'], 'callback_data' => "transferaccount_" . $id_user]],
-            [['text' => $textbotlang['keyboard']['deactivateAccount'], 'callback_data' => "disableconfig-" . $id_user], ['text' => $textbotlang['keyboard']['activateAccount'], 'callback_data' => "activeconfig-" . $id_user]],
-            [['text' => $textbotlang['keyboard']['verifyChannelMembership'], 'callback_data' => "confirmchannel-" . $id_user], ['text' => $textbotlang['keyboard']['zeroBalance'], 'callback_data' => "zerobalance-" . $id_user]],
-            [['text' => $textbotlang['keyboard']['cronMessageStatus'], 'callback_data' => "statuscronuser-" . $id_user]],
+            [['text' => $textbotlang['keyboard']['refreshInfoAlt'], 'callback_data' => "updateinfouser_" . $id_user, 'style' => 'primary'],],
+            [['text' => strtr($textbotlang['Admin']['UserMgmt']['langBtn'], ['{lang}' => um_lang_name(in_array($user['lang'] ?? '', panel_langs(), true) ? $user['lang'] : 'fa', $textbotlang)]), 'callback_data' => "umsetlang_" . $id_user, 'style' => 'primary']],
+            [['text' => $textbotlang['Admin']['manageUser']['addBalanceUser'], 'callback_data' => "addbalanceuser_" . $id_user, 'style' => 'success'], ['text' => $textbotlang['Admin']['manageUser']['lowBalanceUser'], 'callback_data' => "lowbalanceuser_" . $id_user, 'style' => 'danger'],],
+            [['text' => $textbotlang['Admin']['manageUser']['banUserList'], 'callback_data' => "banuserlist_" . $id_user, 'style' => 'danger'], ['text' => $textbotlang['Admin']['manageUser']['unbanUserList'], 'callback_data' => "unbanuserr_" . $id_user, 'style' => 'success']],
+            [['text' => $textbotlang['Admin']['manageUser']['addagent'], 'callback_data' => "addagent_" . $id_user, 'style' => 'success'], ['text' => $textbotlang['Admin']['manageUser']['removeagent'], 'callback_data' => "removeagent_" . $id_user, 'style' => 'danger']],
+            [['text' => $textbotlang['Admin']['manageUser']['confirmNumber'], 'callback_data' => "confirmnumber_" . $id_user, 'style' => 'success']],
+            [['text' => $textbotlang['keyboard']['discountPercent'], 'callback_data' => "Percentlow_" . $id_user, 'style' => 'primary'], ['text' => $textbotlang['keyboard']['sendMessageToUser'], 'callback_data' => "sendmessageuser_" . $id_user, 'style' => 'primary']],
+            [['text' => $textbotlang['Admin']['manageUser']['viewOrderUser'], 'callback_data' => "vieworderuser_" . $id_user, 'style' => 'primary']],
+            [['text' => $textbotlang['keyboard']['userAffiliates'], 'callback_data' => "affiliates-" . $id_user, 'style' => 'primary']],
+            [['text' => $textbotlang['keyboard']['removeFromAffiliate'], 'callback_data' => "removeaffiliate-" . $id_user, 'style' => 'danger'], ['text' => $textbotlang['keyboard']['deleteUserAffiliates'], 'callback_data' => "removeaffiliateuser-" . $id_user, 'style' => 'danger']],
+            [['text' => $textbotlang['keyboard']['activateCard'], 'callback_data' => "showcarduser-" . $id_user, 'style' => 'success']],
+            [['text' => $textbotlang['keyboard']['authenticateUser'], 'callback_data' => "verify_" . $id_user, 'style' => 'success'], ['text' => $textbotlang['keyboard']['unauthUser'], 'callback_data' => "unverify-" . $id_user, 'style' => 'danger']],
+            [['text' => $textbotlang['keyboard']['deactivateCard'], 'callback_data' => "carduserhide-" . $id_user, 'style' => 'danger']],
+            [['text' => $textbotlang['keyboard']['addOrder'], 'callback_data' => "addordermanualـ" . $id_user, 'style' => 'success'], ['text' => $textbotlang['keyboard']['testAccountLimit'], 'callback_data' => "limitusertest_" . $id_user, 'style' => 'primary']],
+            [['text' => $textbotlang['Admin']['manageUser']['viewPaymentUser'], 'callback_data' => "viewpaymentuser_" . $id_user, 'style' => 'primary'], ['text' => $textbotlang['keyboard']['transferAccount'], 'callback_data' => "transferaccount_" . $id_user, 'style' => 'primary']],
+            [['text' => $textbotlang['keyboard']['deactivateAccount'], 'callback_data' => "disableconfig-" . $id_user, 'style' => 'danger'], ['text' => $textbotlang['keyboard']['activateAccount'], 'callback_data' => "activeconfig-" . $id_user, 'style' => 'success']],
+            [['text' => $textbotlang['keyboard']['verifyChannelMembership'], 'callback_data' => "confirmchannel-" . $id_user, 'style' => 'success'], ['text' => $textbotlang['keyboard']['zeroBalance'], 'callback_data' => "zerobalance-" . $id_user, 'style' => 'danger']],
+            [['text' => $textbotlang['keyboard']['cronMessageStatus'], 'callback_data' => "statuscronuser-" . $id_user, 'style' => 'primary']],
         ]
     ];
     if ($user['agent'] == "n2")
-        $keyboardmanage['inline_keyboard'][] = [['text' => $textbotlang['keyboard']['agentPurchaseCap'], 'callback_data' => "maxbuyagent_" . $id_user]];
+        $keyboardmanage['inline_keyboard'][] = [['text' => $textbotlang['keyboard']['agentPurchaseCap'], 'callback_data' => "maxbuyagent_" . $id_user, 'style' => 'primary']];
     if ($user['agent'] != "f") {
         $keyboardmanage['inline_keyboard'][] = [
-            ['text' => $textbotlang['keyboard']['activateSalesBot'], 'callback_data' => "createbot_" . $id_user],
-            ['text' => $textbotlang['keyboard']['deleteSalesBot'], 'callback_data' => "removebotsell_" . $id_user]
+            ['text' => $textbotlang['keyboard']['activateSalesBot'], 'callback_data' => "createbot_" . $id_user, 'style' => 'success'],
+            ['text' => $textbotlang['keyboard']['deleteSalesBot'], 'callback_data' => "removebotsell_" . $id_user, 'style' => 'danger']
         ];
     }
     if ($user['agent'] != "f") {
         $keyboardmanage['inline_keyboard'][] = [
-            ['text' => $textbotlang['keyboard']['baseVolumePrice'], 'callback_data' => "setvolumesrc_" . $id_user],
-            ['text' => $textbotlang['keyboard']['baseTimePrice'], 'callback_data' => "settimepricesrc_" . $id_user]
+            ['text' => $textbotlang['keyboard']['baseVolumePrice'], 'callback_data' => "setvolumesrc_" . $id_user, 'style' => 'primary'],
+            ['text' => $textbotlang['keyboard']['baseTimePrice'], 'callback_data' => "settimepricesrc_" . $id_user, 'style' => 'primary']
         ];
         $keyboardmanage['inline_keyboard'][] = [
-            ['text' => $textbotlang['keyboard']['hidePanelForAgent'], 'callback_data' => "hidepanel_" . $id_user],
+            ['text' => $textbotlang['keyboard']['hidePanelForAgent'], 'callback_data' => "hidepanel_" . $id_user, 'style' => 'danger'],
         ];
         $keyboardmanage['inline_keyboard'][] = [
-            ['text' => $textbotlang['keyboard']['showHiddenPanels'], 'callback_data' => "removehide_" . $id_user],
+            ['text' => $textbotlang['keyboard']['showHiddenPanels'], 'callback_data' => "removehide_" . $id_user, 'style' => 'success'],
         ];
         $keyboardmanage['inline_keyboard'][] = [
-            ['text' => $textbotlang['keyboard']['agentExpireTime'], 'callback_data' => "expireset_" . $id_user],
+            ['text' => $textbotlang['keyboard']['agentExpireTime'], 'callback_data' => "expireset_" . $id_user, 'style' => 'primary'],
         ];
     }
     if (intval($setting['statuslimitchangeloc']) == 1) {
         $keyboardmanage['inline_keyboard'][] = [
-            ['text' => $textbotlang['keyboard']['changeLocationLimit'], 'callback_data' => "changeloclimitbyuser_" . $id_user]
+            ['text' => $textbotlang['keyboard']['changeLocationLimit'], 'callback_data' => "changeloclimitbyuser_" . $id_user, 'style' => 'primary']
         ];
     }
     $keyboardmanage = json_encode($keyboardmanage, JSON_UNESCAPED_UNICODE);
@@ -14436,9 +14497,9 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     }
     $um_lang = um_tab($user);
     if ($datain != '') {
-        Editmessagetext($from_id, $message_id, um_hub_caption($um_lang, $textbotlang), um_hub_payload($um_lang, $textbotlang), 'HTML');
+        Editmessagetext($from_id, $message_id, um_hub_caption($um_lang, $textbotlang), um_hub_payload($um_lang, $textbotlang, $adminrulecheck['rule'] == "administrator"), 'HTML');
     } else {
-        sendmessage($from_id, um_hub_caption($um_lang, $textbotlang), um_hub_payload($um_lang, $textbotlang), 'HTML');
+        sendmessage($from_id, um_hub_caption($um_lang, $textbotlang), um_hub_payload($um_lang, $textbotlang, $adminrulecheck['rule'] == "administrator"), 'HTML');
     }
 } elseif (preg_match('/^uml:([a-z_0-9]+):(\d+)$/', $datain, $um_m)) {
     [$um_cap, $um_kb] = um_list_payload($um_m[1], um_tab($user), (int) $um_m[2], $textbotlang);
@@ -14455,14 +14516,14 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     $keyboardtypelistuser = json_encode([
         'inline_keyboard' => [
             [
-                ['text' => "n", 'callback_data' => "uml:agent_n:1"],
-                ['text' => "n2", 'callback_data' => "uml:agent_n2:1"],
+                ['text' => "n", 'callback_data' => "uml:agent_n:1", 'style' => 'primary'],
+                ['text' => "n2", 'callback_data' => "uml:agent_n2:1", 'style' => 'primary'],
             ],
             [
-                ['text' => $textbotlang['keyboard']['allAgents'], 'callback_data' => "uml:agent:1"],
+                ['text' => $textbotlang['keyboard']['allAgents'], 'callback_data' => "uml:agent:1", 'style' => 'primary'],
             ],
             [
-                ['text' => $textbotlang['keyboard']['backToPrev'], 'callback_data' => "backlistuser"],
+                ['text' => $textbotlang['keyboard']['backToPrev'], 'callback_data' => "backlistuser", 'style' => 'danger'],
             ]
         ]
     ]);
@@ -20146,8 +20207,8 @@ if ($datain == "linkappsetting") {
     $keyboardstatistics = json_encode([
         'inline_keyboard' => [
             [
-                ['text' => $textbotlang['keyboard']['volume2'], 'callback_data' => 'typegift_volume'],
-                ['text' => $textbotlang['keyboard']['timeDuration'], 'callback_data' => 'typegift_day'],
+                ['text' => $textbotlang['keyboard']['volume2'], 'callback_data' => 'typegift_volume', 'style' => 'primary'],
+                ['text' => $textbotlang['keyboard']['timeDuration'], 'callback_data' => 'typegift_day', 'style' => 'primary'],
             ],
         ]
     ]);
@@ -20177,7 +20238,7 @@ if ($datain == "linkappsetting") {
     $keyboardstatistics = json_encode([
         'inline_keyboard' => [
             [
-                ['text' => $textbotlang['keyboard']['confirmStartProcess'], 'callback_data' => 'startgift'],
+                ['text' => $textbotlang['keyboard']['confirmStartProcess'], 'callback_data' => 'startgift', 'style' => 'success'],
             ],
         ]
     ]);
@@ -20187,7 +20248,7 @@ if ($datain == "linkappsetting") {
     $keyboardstatistics = json_encode([
         'inline_keyboard' => [
             [
-                ['text' => $textbotlang['keyboard']['cancelGiftSend'], 'callback_data' => 'cancel_gift'],
+                ['text' => $textbotlang['keyboard']['cancelGiftSend'], 'callback_data' => 'cancel_gift', 'style' => 'danger'],
             ],
         ]
     ]);

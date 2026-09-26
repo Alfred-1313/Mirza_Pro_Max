@@ -879,7 +879,11 @@ return array (
       'um_14' => array ('label' => '💳 فعال شدن کارت به کارت', 'key' => 'users.Balance.cardEnabledNotice', 'group' => 'usermgmt', 'section' => 'um_account'),
       'um_15' => array ('label' => '🤝 تایید درخواست نمایندگی', 'key' => 'users.agent.requestApproved', 'group' => 'usermgmt', 'section' => 'um_account'),
       'um_16' => array ('label' => '🚫 رد درخواست نمایندگی', 'key' => 'users.agent.requestRejected', 'group' => 'usermgmt', 'section' => 'um_account'),
+      'um_24' => array ('label' => '📣 پیام همگانی (قالب و استیکر)', 'key' => 'users.broadcast.message', 'group' => 'usermgmt', 'section' => 'um_messages'),
       'um_17' => array ('label' => '✉️ پیام ادمین به یک کاربر (و دکمه‌ی پاسخ)', 'key' => 'users.support.messageFromAdminAlt', 'group' => 'usermgmt', 'section' => 'um_messages'),
+      'um_25' => array ('label' => '💬 جواب ادمین به پیام کاربر (و دکمه‌ی پاسخ)', 'key' => 'users.support.messageFromManagement', 'group' => 'usermgmt', 'section' => 'um_messages'),
+      'um_26' => array ('label' => '🖼 جواب ادمین با عکس (و دکمه‌ی پاسخ)', 'key' => 'users.support.messageFromManagement2', 'group' => 'usermgmt', 'section' => 'um_messages'),
+      'um_27' => array ('label' => '☎️ جواب پشتیبانی به تیکت (و دکمه‌ی پاسخ)', 'key' => 'users.support.messageFromAdmin', 'group' => 'usermgmt', 'section' => 'um_messages'),
       'um_18' => array ('label' => '🛒 دکمه خرید (زیر پیام همگانی)', 'key' => 'bottext.bcBuyBtn', 'group' => 'usermgmt', 'section' => 'um_messages'),
       'um_19' => array ('label' => '🏠 دکمه شروع (زیر پیام همگانی)', 'key' => 'bottext.bcStartBtn', 'group' => 'usermgmt', 'section' => 'um_messages'),
       'um_20' => array ('label' => '🎁 دکمه اکانت تست (زیر پیام همگانی)', 'key' => 'bottext.bcTestBtn', 'group' => 'usermgmt', 'section' => 'um_messages'),
@@ -2306,6 +2310,11 @@ n2  = نماینده با قابلیت های بیشتر',
       'invalidUsername' => '❌ نام کاربری نامعتبر است.
 🔄 مجددا نام کاربری خود را ارسال کنید',
       'requestadmin' => '📌 درخواست رد کردن حذف با موفقیت ثبت شد دلیل عدم تایید را ارسال کنید',
+    ),
+    // a broadcast's own wrapping, per tab: {message} is what the admin wrote
+    'broadcast' =>
+    array (
+      'message' => '{message}',
     ),
     'support' => 
     array (
@@ -6330,6 +6339,7 @@ nowpayments.io
 کیف پول‌های الان: {wallets}',
       'langChanged' => '✅ زبان کاربر شد {lang} — حالا کیف پول {currency} اون رو می‌بینه ({amount}).',
       'langSame' => 'زبان کاربر همینه.',
+      'customizeBtn' => '🎨 پیام‌ها و دکمه‌هایی که این بخش به کاربر می‌فرسته',
     ),
     'LangScope' =>
     array (

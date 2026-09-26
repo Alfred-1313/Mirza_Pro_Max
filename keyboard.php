@@ -2891,9 +2891,23 @@ $sticker_callback_map = [
     'usertestbtn' => 'text_usertest',
     'change_language' => 'text_change_language',
 ];
+// a button under a message from 👤 مدیریت کاربر with a sticker of its own on
+// this tab sends that one - and then not the main menu's for the same action
+$bcb_sent = false;
+if (!empty($bcb_tap) && function_exists('genbtn_tap_sticker') && function_exists('telegram')) {
+    $bcb_key = genbtn_alias_to_key($bcb_tap);
+    $bcb_file = $bcb_key !== null ? genbtn_tap_sticker(in_array($users['lang'] ?? '', panel_langs(), true) ? $users['lang'] : 'fa', $bcb_key) : '';
+    if ($bcb_file !== '') {
+        $bcb_res = telegram('sendSticker', ['chat_id' => $from_id, 'sticker' => $bcb_file]);
+        $bcb_sent = true;
+        // the screen it opens can take it away with its own ❌ بستن
+        $bcb_msId = (int) ($bcb_res['result']['message_id'] ?? 0);
+        update("user", "menu_sticker_id", $bcb_msId > 0 ? (string) $bcb_msId : "0", "id", $from_id);
+    }
+}
 $sticker_btn_key = null;
 $menu_tap_from_text = false;
-if (!empty($datain) && isset($sticker_callback_map[$datain])) {
+if (!empty($datain) && isset($sticker_callback_map[$datain]) && !$bcb_sent) {
     $sticker_btn_key = $sticker_callback_map[$datain];
 } elseif (!empty($text)) {
     $text_stripped = strip_leading_emoji($text);

@@ -40,7 +40,8 @@ Editmessagetext($info['id_admin'], $info['id_message'],$textprocces, $cancelmess
 // each button as that language's tab has it in 🎨 (👤 پیام‌ها و دکمه‌های مدیریت کاربر)
 $bm_btn = function ($alias) use ($bm_lang, $bm_tx) {
     $def = genbtn_defs($alias, $bm_tx)[0];
-    return json_encode(['inline_keyboard' => [[genbtn_render($def, genbtn_override($bm_lang, genbtn_alias_to_key($alias), 0), $def['callback_data'])]]]);
+    // marked with which button it is, for its own tap sticker (genbtn_tap_cb)
+    return json_encode(['inline_keyboard' => [[genbtn_render($def, genbtn_override($bm_lang, genbtn_alias_to_key($alias), 0), genbtn_tap_cb($alias, $def['callback_data']))]]]);
 };
 $keyboardbuy = $bm_btn('b1');
 $keyboardstart = $bm_btn('b2');
@@ -48,6 +49,22 @@ $keyboardusertest = $bm_btn('b3');
 $keyboardhelpbtn = $bm_btn('b4');
 $keyboardaffiliates = $bm_btn('b5');
 $keyboardaddbalance = $bm_btn('b6');
+// a broadcast the admin wrote goes out in this tab's 🎨 wrapping ({message} is
+// the admin's text) with that item's sticker; the top-up gift has an item of
+// its own and goes as it is
+$bm_hint = !empty($info['hint']) ? $info['hint'] : 'users.broadcast.message';
+if (empty($info['hint']) && ($info['type'] == "sendmessage" or $info['type'] == "xdaynotmessage")) {
+    $bm_tpl = (string) ($bm_tx['users']['broadcast']['message'] ?? '{message}');
+    $info['message'] = strpos($bm_tpl, '{message}') !== false
+        ? str_replace('{message}', (string) $info['message'], $bm_tpl)
+        : trim($bm_tpl) . "\n\n" . $info['message'];
+}
+// a forwarded message cannot be wrapped, but its sticker can go before it
+$bm_fwdSticker = '';
+if ($info['type'] == "forwardmessage" && function_exists('bt_effective_sticker')) {
+    $bm_layout = json_decode((string) (select("setting", "*", null, null, "select")['keyboardmain'] ?? ''), true);
+    $bm_fwdSticker = bt_effective_sticker(is_array($bm_layout['text_stickers'] ?? null) ? $bm_layout['text_stickers'] : [], 'users.broadcast.message', $bm_lang);
+}
 for ($i = 0; $i < 20; $i++) {
     $iduser = $userid[$i];
     unset($userid[$i]);
@@ -55,10 +72,9 @@ for ($i = 0; $i < 20; $i++) {
     if ($info['type'] == "unpinmessage") {
         unpinmessage($iduser->id);
     } elseif ($info['type'] == "sendmessage" or $info['type'] == "xdaynotmessage") {
-        // a message with a 🎨 item of its own (the top-up gift) gets its sticker,
-        // in each reader's language
-        if (!empty($info['hint']) && function_exists('bottext_extras_key_hint')) {
-            bottext_extras_key_hint($info['hint']);
+        // its 🎨 sticker, in each reader's language
+        if (function_exists('bottext_extras_key_hint')) {
+            bottext_extras_key_hint($bm_hint);
         }
         if ($info['btnmessage'] == "none") {
             $meesage = sendmessage($iduser->id, $info['message'], null, 'HTML');
@@ -90,6 +106,9 @@ for ($i = 0; $i < 20; $i++) {
             pinmessage($iduser->id, $meesage['result']['message_id']);
         }
     } elseif ($info['type'] == "forwardmessage") {
+        if ($bm_fwdSticker !== '') {
+            telegram('sendSticker', ['chat_id' => $iduser->id, 'sticker' => $bm_fwdSticker]);
+        }
         $meesage = forwardMessage($info['id_admin'], $info['message'], $iduser->id);
         if ($meesage['ok'] and $info['pingmessage'] == "yes") {
             pinmessage($iduser->id, $meesage['result']['message_id']);

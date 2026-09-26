@@ -1655,6 +1655,9 @@ User subscription link:
 🔄 Last subscription link update time: %s
 #️⃣ Connected client:<code>%s</code>',
                 ],
+                'broadcast' => [
+                        'message' => '{message}',
+                ],
                 'support' => [
                         'answermessage' => 'Reply to message',
                         'btnsupport' => '☎️ In the button below (FAQ), your frequently asked questions are listed. Click the button below; if you do not find your question, click the support button',

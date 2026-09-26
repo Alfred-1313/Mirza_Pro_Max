@@ -10663,6 +10663,10 @@ if (!function_exists('bt_section_meta')) {
                 'label' => '⚙️ عملیات',
                 'alert' => 'دکمه‌ی 🔁 ریست، این دکمه رو کامل به حالت پیش‌فرض برمی‌گردونه (متن، رنگ، ایموجی، جای دکمه، و اگه استیکر بستن داره اونم). 🔙 بازگشت و ❌ بستن هم فقط از این صفحه خارج می‌شن و چیزی رو تغییر نمی‌دن.',
             ],
+            'genbtn_tapsticker' => [
+                'label' => '🖼 استیکر لمس دکمه',
+                'alert' => 'وقتی کاربر این دکمه رو بزنه، اول این استیکر براش فرستاده می‌شه، بعد همون کاری که دکمه همیشه می‌کرد. برای هر زبان جداست.',
+            ],
             'genbtn_closesticker' => [
                 'label' => '🖼 استیکر دکمه بستن',
                 'alert' => 'وقتی کاربر روی ❌ بستنِ همین بخش می‌زنه، این استیکر فرستاده می‌شه و بعد از مدت تعیین‌شده، صفحه و استیکرِ خودِ صفحه و این استیکر با هم پاک می‌شن. این تنظیم فقط مال همین بخشه و دکمه‌ی 🔁 ریست این دکمه، اینو هم به پیش‌فرض برمی‌گردونه.',
@@ -10869,7 +10873,7 @@ if (!function_exists('bt_section_meta')) {
             ],
             'um_messages' => [
                 'label' => '📣 پیام‌های ادمین',
-                'alert' => 'قالب پیامی که ادمین به یک کاربر می‌فرسته و دکمه‌ی پاسخش، و دکمه‌هایی که زیر پیام همگانی گذاشته می‌شن. هر زبان جدا تنظیم می‌شه و کاربر هر زبان، دکمه‌ی همون زبان رو می‌بینه.',
+                'alert' => 'قالب پیام همگانی ({message} جای متنی که می‌نویسی میاد) و پیام‌های ادمین به کاربر با دکمه‌ی پاسخشون، و دکمه‌هایی که زیر پیام همگانی گذاشته می‌شن. هر زبان جدا تنظیم می‌شه و کاربر هر زبان، متن و دکمه و استیکر همون زبان رو می‌بینه.',
             ],
             'home_features' => [
                 'label' => '🎯 قابلیت‌های ربات',
@@ -11156,7 +11160,7 @@ if (!function_exists('genbtn_defs')) {
             return [0 => ['name' => '📌 دکمه عضویت مجدد', 'text' => $textbotlang['keyboard']['rejoin'], 'style' => '', 'callback_data' => 'none']];
         }
         if ($alias === 'ma') {
-            return [0 => ['name' => '↩️ دکمه پاسخ به پیام ادمین', 'text' => $textbotlang['users']['support']['answermessage'], 'style' => '', 'callback_data' => 'Responseuser']];
+            return [0 => ['name' => '↩️ دکمه پاسخ به پیام ادمین', 'text' => $textbotlang['users']['support']['answermessage'], 'style' => 'primary', 'callback_data' => 'Responseuser']];
         }
         // a broadcast's buttons: the same labels they always had (the main
         // menu's words), the same action each always took
@@ -11170,7 +11174,7 @@ if (!function_exists('genbtn_defs')) {
             'b6' => ['💰 دکمه افزایش موجودی (زیر پیام همگانی)', $textbotlang['textbot']['addBalance'], 'Add_Balance'],
         ];
         if (isset($bc[$alias])) {
-            return [0 => ['name' => $bc[$alias][0], 'text' => $bc[$alias][1], 'style' => '', 'callback_data' => $bc[$alias][2], 'note' => $alias === 'b2' ? $bcNote . ' زیر پیام «🎁 هدیه‌ی شارژ همگانی» هم همین دکمه میاد.' : $bcNote]];
+            return [0 => ['name' => $bc[$alias][0], 'text' => $bc[$alias][1], 'style' => 'primary', 'callback_data' => $bc[$alias][2], 'note' => $alias === 'b2' ? $bcNote . ' زیر پیام «🎁 هدیه‌ی شارژ همگانی» هم همین دکمه میاد.' : $bcNote]];
         }
         if ($alias === 'sl') {
             return [0 => ['name' => '🔗 دکمه اشتراک‌گذاری لینک', 'text' => $textbotlang['keyboard']['shareLink'], 'style' => '', 'callback_data' => 'none', 'note' => 'این دکمه لینکه و تلگرام برای دکمه‌ی لینک رنگ و ایموجی نمی‌پذیره - فقط متنش قابل تغییره.']];
@@ -11263,6 +11267,50 @@ if (!function_exists('genbtn_set_text')) {
             $be[$lang][$key][$idx]['text'] = $text;
         }
         update("setting", "button_edit", empty($be) ? null : json_encode($be, JSON_UNESCAPED_UNICODE), null, null);
+    }
+}
+if (!function_exists('genbtn_tap_sticker')) {
+    // The buttons 👤 مدیریت کاربر puts under a customer's message (the six a
+    // broadcast can carry, and the reply button under the admin's own
+    // messages) can each have a sticker per tab, sent the moment the customer
+    // taps it - the way the main menu's buttons have one. Kept on the button's
+    // own entry in button_edit, so 🔁 ریست and «ریست همه» take it with them.
+    function genbtn_tap_sticker_aliases()
+    {
+        return ['b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'ma'];
+    }
+    function genbtn_tap_sticker($lang, $key)
+    {
+        return (string) (genbtn_override($lang, $key, 0)['tapSticker'] ?? '');
+    }
+    function genbtn_set_tap_sticker($lang, $key, $fileId)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $be = json_decode((string) ($setting['button_edit'] ?? ''), true);
+        if (!is_array($be)) {
+            $be = [];
+        }
+        if ($fileId === null || $fileId === '') {
+            unset($be[$lang][$key][0]['tapSticker']);
+            if (empty($be[$lang][$key][0])) {
+                unset($be[$lang][$key][0]);
+            }
+            if (empty($be[$lang][$key])) {
+                unset($be[$lang][$key]);
+            }
+            if (empty($be[$lang])) {
+                unset($be[$lang]);
+            }
+        } else {
+            $be[$lang][$key][0]['tapSticker'] = (string) $fileId;
+        }
+        update("setting", "button_edit", empty($be) ? null : json_encode($be, JSON_UNESCAPED_UNICODE), null, null);
+    }
+    // what such a button sends: its action, marked with which button it is so
+    // its sticker can go first (botapi.php reads the mark off again)
+    function genbtn_tap_cb($alias, $action)
+    {
+        return "bcb|{$alias}|{$action}";
     }
 }
 if (!function_exists('genbtn_set_style')) {
@@ -11637,7 +11685,7 @@ if (!function_exists('genbtn_hub_payload')) {
             'ab' => 'این ۱ دکمه، زیر پیام «✅ سرویس با موفقیت ایجاد شد» (بعد از خرید) نشون داده می‌شه - برای همه‌ی نوع پنل‌ها، خرید چندتایی، پرداخت آنلاین و سفارشی که ادمین برای کاربر ثبت می‌کنه. پیش‌فرض مخفیه؛ برای نمایش، «👁 نمایش دادن این دکمه» رو بزن.',
             'ut' => 'این ۱ دکمه، زیر پیام «✅ سرویس با موفقیت ایجاد شد» بعد از گرفتن اکانت تست نشون داده می‌شه. پیش‌فرض مخفیه؛ برای نمایش، «👁 نمایش دادن این دکمه» رو بزن.',
             'lc' => 'این ۱ دکمه، زیر پیام «از کانال خارج شدید» میاد و کاربر رو به همون کانالی که ازش خارج شده برمی‌گردونه.',
-            'ma' => 'این ۱ دکمه، زیر پیامی میاد که از «👀 اطلاعات کاربر ← ارسال پیام» به یک کاربر می‌فرستی - وقتی موقع ارسال اجازه‌ی پاسخ داده باشی. کاربر با زدنش جواب رو برای ادمین می‌فرسته.',
+            'ma' => 'این ۱ دکمه زیر پیام‌هایی میاد که ادمین به کاربر می‌نویسه: پیام از «👀 اطلاعات کاربر ← ارسال پیام» (وقتی اجازه‌ی پاسخ داده باشی)، جواب ادمین به پیام کاربر، و جواب پشتیبانی به تیکت. کاربر با زدنش جواب رو می‌فرسته.',
         ];
         if (isset($notes[$alias])) {
             return $notes[$alias];
@@ -11882,6 +11930,10 @@ if (!function_exists('genbtn_hub_payload')) {
         } elseif ($note !== '') {
             $info .= "<blockquote>{$note}</blockquote>\n";
         }
+        $tapSt = in_array($alias, genbtn_tap_sticker_aliases(), true);
+        if ($tapSt) {
+            $info .= "\n🖼 <b>استیکر لمس دکمه:</b> " . (genbtn_tap_sticker($lang, $key) !== '' ? 'دارد ✅' : 'ندارد') . "\n";
+        }
         $info .= "\n" . strtr($h['curLangLine'], ['{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang]);
         $kb = ['inline_keyboard' => []];
         if ($hasLayout) {
@@ -11912,6 +11964,14 @@ if (!function_exists('genbtn_hub_payload')) {
                 foreach ($hideRows as $r) {
                     $kb['inline_keyboard'][] = $r;
                 }
+            }
+        }
+        if ($tapSt) {
+            $hasTap = genbtn_tap_sticker($lang, $key) !== '';
+            $kb['inline_keyboard'][] = [['text' => bt_section_meta('genbtn_tapsticker')['label'], 'callback_data' => 'bt_sep|genbtn_tapsticker']];
+            $kb['inline_keyboard'][] = [['text' => $hasTap ? '🖼 تغییر استیکر (الان: دارد ✅)' : '🖼 تنظیم استیکر', 'callback_data' => "gbtst|set|{$lang}|{$alias}", 'style' => $hasTap ? 'success' : 'primary']];
+            if ($hasTap) {
+                $kb['inline_keyboard'][] = [['text' => '🗑 حذف استیکر', 'callback_data' => "gbtst|del|{$lang}|{$alias}", 'style' => 'danger']];
             }
         }
         // 🖼 استیکر دکمه بستن - only the six ❌ بستن buttons close_sticker_keys()

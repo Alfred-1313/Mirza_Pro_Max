@@ -3909,14 +3909,19 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     $time = date('Y/m/d H:i:s');
     update("support_message", "status", "Answered", "Tracking", $user['Processing_value']);
     update("support_message", "result", $text, "Tracking", $user['Processing_value']);
-    $textSendAdminToUser = sprintf($textbotlang['users']['support']['messageFromAdmin'], $text);
+    // in the words, and with the reply button, of the customer it goes to
+    $sa_texts = payer_texts($trakingdetail['iduser']);
+    $sa_row = select("user", "*", "id", $trakingdetail['iduser'], "select");
+    $sa_lang = in_array($sa_row['lang'] ?? '', panel_langs(), true) ? $sa_row['lang'] : 'fa';
+    $textSendAdminToUser = sprintf($sa_texts['users']['support']['messageFromAdmin'], $text);
     $Response = json_encode([
         'inline_keyboard' => [
             [
-                ['text' => $textbotlang['users']['support']['answermessage'], 'callback_data' => 'Responsesusera_' . $trakingdetail['Tracking']],
+                genbtn_render(genbtn_defs('ma', $sa_texts)[0], genbtn_override($sa_lang, 'users.support.messageFromAdminAlt', 0), genbtn_tap_cb('ma', 'Responsesusera_' . $trakingdetail['Tracking'])),
             ],
         ]
     ]);
+    bottext_extras_key_hint('users.support.messageFromAdmin');
     sendmessage($trakingdetail['iduser'], $textSendAdminToUser, $Response, 'HTML');
     sendmessage($from_id, $textbotlang['users']['support']['sentSuccess'], null, 'HTML');
     step("home", $from_id);
