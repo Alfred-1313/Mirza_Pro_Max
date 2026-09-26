@@ -126,6 +126,168 @@ if (!function_exists('color_editor_payload')) {
     }
 }
 
+if (!function_exists('um_tab')) {
+    // 👤 مدیریت کاربر has a tab per language: every list, message, top-up and
+    // gift started from it is about that language's users only, and amounts are
+    // in that language's currency. The tab an admin is on is kept on their own
+    // row (um_lang), so each step of a longer flow knows it.
+    function um_tab($adminRow)
+    {
+        $l = is_array($adminRow) ? (string) ($adminRow['um_lang'] ?? '') : '';
+        return in_array($l, panel_langs(), true) ? $l : 'fa';
+    }
+    function um_lang_name($lang, $textbotlang)
+    {
+        return $textbotlang['bottext']['langs'][$lang] ?? $lang;
+    }
+    function um_hub_caption($lang, $textbotlang)
+    {
+        $t = $textbotlang['Admin']['UserMgmt'];
+        $counts = um_lang_counts();
+        $lines = [];
+        foreach (panel_langs() as $l) {
+            $lines[] = strtr($t['countLine'], ['{lang}' => um_lang_name($l, $textbotlang), '{n}' => number_format($counts[$l] ?? 0)]);
+        }
+        return strtr($t['hubCaption'], [
+            '{lang}' => um_lang_name($lang, $textbotlang),
+            '{counts}' => implode("\n", $lines),
+            '{total}' => number_format($counts['total']),
+            '{wallet}' => money(um_lang_wallet_sum($lang), currency_for_lang($lang)),
+        ]);
+    }
+    function um_hub_payload($lang, $textbotlang)
+    {
+        $k = $textbotlang['keyboard'];
+        return json_encode(['inline_keyboard' => [
+            panel_lang_tabs($lang, "umlang:%s", null),
+            [['text' => $k['usersWithBalance'], 'callback_data' => "uml:balance:1"]],
+            [['text' => $k['usersWithAffiliates'], 'callback_data' => "uml:ref:1"]],
+            [['text' => $k['activeCardUserList'], 'callback_data' => "uml:card:1"]],
+            [['text' => $k['usersWithNegativeBalance'], 'callback_data' => "uml:neg:1"]],
+            [['text' => $k['agentList'], 'callback_data' => "agentlistusers"], ['text' => $k['allUserList'], 'callback_data' => "uml:all:1"]],
+            [['text' => $k['searchOrder'], 'callback_data' => "searchorder"], ['text' => $k['groupCharge'], 'callback_data' => "balanceaddall"]],
+            [['text' => $k['searchUserBtn'], 'callback_data' => "searchuser"], ['text' => $k['messagingSection'], 'callback_data' => "systemsms"]],
+            [['text' => $k['groupVolumeOrTime'], 'callback_data' => "voloume_or_day_all"]],
+        ]]);
+    }
+    // each list: its title, and what it asks of a user on top of the language
+    function um_list_kinds($textbotlang)
+    {
+        $k = $textbotlang['keyboard'];
+        return [
+            'all' => [$k['allUserList'], "1 = 1"],
+            'balance' => [$k['usersWithBalance'], "Balance > 0"],
+            'neg' => [$k['usersWithNegativeBalance'], "Balance < 0"],
+            'ref' => [$k['usersWithAffiliates'], "affiliatescount != '0'"],
+            'card' => [$k['activeCardUserList'], "cardpayment = '1'"],
+            'agent' => [$k['agentList'], "agent != 'f'"],
+            'agent_n' => [$k['agentList'] . ' (n)', "agent = 'n'"],
+            'agent_n2' => [$k['agentList'] . ' (n2)', "agent = 'n2'"],
+        ];
+    }
+    // one page of a list of this tab's users - the six lists used to be three
+    // copies each of the same screen, none of them aware of a language
+    function um_list_payload($kind, $lang, $page, $textbotlang)
+    {
+        global $pdo;
+        $kinds = um_list_kinds($textbotlang);
+        if (!isset($kinds[$kind])) {
+            $kind = 'all';
+        }
+        [$title, $cond] = $kinds[$kind];
+        [$lw, $lp] = user_lang_where($lang);
+        $st = $pdo->prepare("SELECT COUNT(*) FROM user WHERE {$lw} AND {$cond}");
+        $st->execute($lp);
+        $n = (int) $st->fetchColumn();
+        $per = 10;
+        $pages = max(1, (int) ceil($n / $per));
+        $page = max(1, min($pages, (int) $page));
+        $st = $pdo->prepare("SELECT * FROM user WHERE {$lw} AND {$cond} ORDER BY id LIMIT " . (($page - 1) * $per) . ", {$per}");
+        $st->execute($lp);
+        $rows = [[
+            ['text' => $textbotlang['keyboard']['operation'], 'callback_data' => "action"],
+            ['text' => $textbotlang['keyboard']['username'], 'callback_data' => "username"],
+            ['text' => $textbotlang['keyboard']['userId'], 'callback_data' => "iduser"],
+        ]];
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $name = (string) ($r['username'] ?? '');
+            $name = ($name === '' || $name === 'none') ? '—' : $name;
+            // a money list says how much, in that user's own wallet currency
+            if ($kind === 'balance' || $kind === 'neg') {
+                $name .= ' · ' . money($r['Balance'], currency_for_user($r));
+            }
+            $rows[] = [
+                ['text' => $textbotlang['Admin']['manageUser']['manageUserBtn'], 'callback_data' => "manageuser_" . $r['id']],
+                ['text' => $name, 'callback_data' => "username"],
+                ['text' => (string) $r['id'], 'callback_data' => (string) $r['id']],
+            ];
+        }
+        if ($pages > 1) {
+            // next on the left, previous on the right, as the old lists had them
+            $nav = [];
+            if ($page < $pages) {
+                $nav[] = ['text' => $textbotlang['users']['page']['next'], 'callback_data' => "uml:{$kind}:" . ($page + 1)];
+            }
+            $nav[] = ['text' => "{$page} / {$pages}", 'callback_data' => "uml:{$kind}:{$page}"];
+            if ($page > 1) {
+                $nav[] = ['text' => $textbotlang['users']['page']['previous'], 'callback_data' => "uml:{$kind}:" . ($page - 1)];
+            }
+            $rows[] = $nav;
+        }
+        $rows[] = [['text' => $textbotlang['keyboard']['backToPrev'], 'callback_data' => 'backlistuser']];
+        $t = $textbotlang['Admin']['UserMgmt'];
+        $cap = strtr($n > 0 ? $t['listCaption'] : $t['listEmpty'], [
+            '{title}' => $title,
+            '{lang}' => um_lang_name($lang, $textbotlang),
+            '{n}' => number_format($n),
+        ]);
+        return [$cap, json_encode(['inline_keyboard' => $rows])];
+    }
+    // the users a group top-up or a message goes to: this language, this user
+    // group ('all', 'f', 'n', 'n2'), buyers or not (optionally of one panel)
+    function um_group_where($lang, $agent, $buyers, $panelName = null)
+    {
+        [$w, $p] = user_lang_where($lang, 'u');
+        // the "n" group's button has always sent "nl", which matched nobody
+        $agent = $agent === 'nl' ? 'n' : (string) $agent;
+        if ($agent !== '' && $agent !== 'all') {
+            $w .= " AND u.agent = ?";
+            $p[] = $agent;
+        }
+        if ($buyers === 'customer') {
+            $w .= " AND EXISTS (SELECT 1 FROM invoice i WHERE i.id_user = u.id" . ($panelName !== null ? " AND i.Service_location = ?" : "") . ")";
+            if ($panelName !== null) {
+                $p[] = $panelName;
+            }
+        } elseif ($buyers === 'notcustomer' || $buyers === 'nonecustomer') {
+            $w .= " AND NOT EXISTS (SELECT 1 FROM invoice i WHERE i.id_user = u.id)";
+        }
+        return [$w, $p];
+    }
+    // "send the amount in dollars (0.5 works too)" - the question for an amount
+    // in $currency, with the tab and, for one user, what they have now
+    function um_amount_ask($tpl, $lang, $currency, $balanceText, $textbotlang)
+    {
+        $t = $textbotlang['Admin']['UserMgmt'];
+        $dec = (int) (currency_get($currency)['decimals'] ?? 0);
+        return strtr($tpl, [
+            '{lang}' => um_lang_name($lang, $textbotlang),
+            '{currency}' => currency_get($currency)['title'] ?? $currency,
+            '{balance}' => (string) $balanceText,
+            '{decimals}' => $dec > 0 ? $t['decimalsHint'] : '',
+        ]);
+    }
+    // an amount typed for $currency: its decimals allowed, above zero; null
+    // when it is not one
+    function um_amount_read($raw, $currency)
+    {
+        $n = money_normalize($raw);
+        if ($n === null || !money_valid($n, $currency) || (float) $n <= 0) {
+            return null;
+        }
+        return $n;
+    }
+}
 if (!function_exists('lang_scope_display')) {
     function lang_scope_display($lang, $textbotlang)
     {
@@ -9511,10 +9673,12 @@ elseif ($datain == "systemsms") {
             ],
         ]
     ]);
-    Editmessagetext($from_id, $message_id, $textbotlang['users']['selectoption'], $listbtn);
+    Editmessagetext($from_id, $message_id, strtr($textbotlang['Admin']['UserMgmt']['msgCaption'], ['{lang}' => um_lang_name(um_tab($user), $textbotlang)]), $listbtn, 'HTML');
 } elseif (preg_match('/^typeservice-(\w+)/', $datain, $dataget)) {
     $type = $dataget[1];
     savedata("clear", "typeservice", $type);
+    // the tab it was started on - a message goes to that language's users only
+    savedata("save", "lang", um_tab($user));
     if ($type == "unpinmessage") {
         deletemessage($from_id, $message_id);
         $typesend = [
@@ -9528,6 +9692,7 @@ elseif ($datain == "systemsms") {
                 ],
             ]
         ]);
+        $textconfirm .= "\n" . strtr($textbotlang['Admin']['UserMgmt']['onlyLang'], ['{lang}' => um_lang_name(um_tab($user), $textbotlang)]);
         sendmessage($from_id, $textconfirm, $startaction, 'HTML');
         sendmessage($from_id, $textbotlang['Admin']['messageBulk']['confirmStart'], $keyboardadmin, 'HTML');
         step("home", $from_id);
@@ -9763,7 +9928,8 @@ elseif ($datain == "systemsms") {
     } else {
         $textday = "";
     }
-    $textconfirm = sprintf($textbotlang['Admin']['messageBulk']['confirmSummary2'], $typesend, $typeservice, $userdata['agent'], $textday);
+    $textconfirm = sprintf($textbotlang['Admin']['messageBulk']['confirmSummary2'], $typesend, $typeservice, $userdata['agent'], $textday)
+        . "\n" . strtr($textbotlang['Admin']['UserMgmt']['onlyLang'], ['{lang}' => um_lang_name(in_array($userdata['lang'] ?? '', panel_langs(), true) ? $userdata['lang'] : um_tab($user), $textbotlang)]);
     $startaction = json_encode([
         'inline_keyboard' => [
             [
@@ -9780,10 +9946,11 @@ elseif ($datain == "systemsms") {
         sendmessage($from_id, $textbotlang['Admin']['messageBulk']['errorRestart'], $keyboardadmin, 'HTML');
         return;
     }
-    $agent = $userdata['agent'];
+    $agent = $userdata['agent'] ?? 'all';
     $typeservice = $userdata['typeservice'];
-    $typeusermessage = $userdata['typeusermessage'];
-    $text = $userdata['message'];
+    $typeusermessage = $userdata['typeusermessage'] ?? 'all';
+    // only the users of the language tab this was started on
+    $bm_lang = in_array($userdata['lang'] ?? '', panel_langs(), true) ? $userdata['lang'] : um_tab($user);
     $cancelmessage = json_encode([
         'inline_keyboard' => [
             [
@@ -9791,179 +9958,44 @@ elseif ($datain == "systemsms") {
             ],
         ]
     ]);
-
     if ($typeservice == "unpinmessage") {
-        $userlist = json_encode(select("user", "id", null, null, "fetchAll"));
-        $message_id = Editmessagetext($from_id, $message_id, $textbotlang['Admin']['messageBulk']['started'], $cancelmessage);
-        $dataunpin = json_encode(array(
-            "id_admin" => $from_id,
-            'type' => "unpinmessage",
-            "id_message" => $message_id['result']['message_id']
-        ));
-        file_put_contents("cronbot/users.json", $userlist);
-        file_put_contents('cronbot/info', $dataunpin);
-    } elseif ($typeservice == "sendmessage") {
-        if ($agent == "all") {
-            if ($typeusermessage == "all") {
-                $userslist = json_encode(select("user", "id", "User_Status", "Active", "fetchAll"));
-            } elseif ($typeusermessage == "customer") {
-                if ($userdata['selectpanel'] == "all") {
-                    $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id) AND u.User_Status = 'Active'");
-                } else {
-                    $panel = select("marzban_panel", "*", "code_panel", $userdata['selectpanel'], "select");
-                    $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id AND i.Service_location = :mp1) AND u.User_Status = 'Active'");
-                }
-                $stmt->execute([':mp1' => $panel['name_panel']]);
-                $userslist = json_encode($stmt->fetchAll());
-            } elseif ($typeusermessage == "nonecustomer") {
-                $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE NOT EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id) AND u.User_Status = 'Active'");
-                $stmt->execute();
-                $userslist = json_encode($stmt->fetchAll());
-            }
-        } else {
-            if ($typeusermessage == "all") {
-                $userslist = json_encode(select("user", "id", "agent", $agent, "fetchAll"));
-            } elseif ($typeusermessage == "customer") {
-                if ($userdata['selectpanel'] == "all") {
-                    $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE u.agent =  :agent AND EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id) AND u.User_Status = 'Active'");
-                } else {
-                    $panel = select("marzban_panel", "*", "code_panel", $userdata['selectpanel'], "select");
-                    $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE  u.agent =  :agent AND EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id AND i.Service_location = :location) AND u.User_Status = 'Active'");
-                }
-                $stmt->bindParam(':agent', $agent, PDO::PARAM_STR);
-                $stmt->bindParam(':location', $panel['name_panel'], PDO::PARAM_STR);
-                $stmt->execute();
-                $userslist = json_encode($stmt->fetchAll());
-            } elseif ($typeusermessage == "nonecustomer") {
-                $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE u.agent =  :agent AND NOT EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id) AND u.User_Status = 'Active'");
-                $stmt->bindParam(':agent', $agent, PDO::PARAM_STR);
-                $stmt->execute();
-                $userslist = json_encode($stmt->fetchAll());
-            }
+        [$bm_where, $bm_params] = user_lang_where($bm_lang, 'u');
+    } else {
+        // one query for every kind of message, where there used to be fifteen
+        // copies - some of which dropped the user group or the buyers filter
+        $bm_panel = null;
+        if ($typeusermessage === 'customer' && ($userdata['selectpanel'] ?? 'all') !== 'all') {
+            $bm_panelRow = select("marzban_panel", "*", "code_panel", $userdata['selectpanel'], "select");
+            $bm_panel = is_array($bm_panelRow) ? $bm_panelRow['name_panel'] : null;
         }
-        $message_id = Editmessagetext($from_id, $message_id, $textbotlang['Admin']['messageBulk']['started'], $cancelmessage);
-        $data = json_encode(array(
-            "id_admin" => $from_id,
-            'type' => "sendmessage",
-            "id_message" => $message_id['result']['message_id'],
-            "message" => $userdata['message'],
-            "pingmessage" => $userdata['typepinmessage'],
-            "btnmessage" => $userdata['btntypemessage']
-        ));
-        file_put_contents("cronbot/users.json", $userslist);
-        file_put_contents('cronbot/info', $data);
-    } elseif ($typeservice == "forwardmessage") {
-        if ($agent == "all") {
-            if ($typeusermessage == "all") {
-                $userslist = json_encode(select("user", "id", "User_Status", "Active", "fetchAll"));
-            } elseif ($typeusermessage == "customer") {
-                if ($userdata['selectpanel'] == "all") {
-                    $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id) AND u.User_Status = 'Active'");
-                } else {
-                    $panel = select("marzban_panel", "*", "code_panel", $userdata['selectpanel'], "select");
-                    $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id AND i.Service_location = :mp3) AND u.User_Status = 'Active'");
-                }
-                $stmt->execute([':mp3' => $panel['name_panel']]);
-                $userslist = json_encode($stmt->fetchAll());
-            } elseif ($typeusermessage == "nonecustomer") {
-                $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE NOT EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id) AND u.User_Status = 'Active'");
-                $stmt->execute();
-                $userslist = json_encode($stmt->fetchAll());
-            }
+        [$bm_where, $bm_params] = um_group_where($bm_lang, $agent, $typeusermessage, $bm_panel);
+        if ($typeservice == "xdaynotmessage") {
+            $bm_where .= " AND u.last_message_time < ?";
+            $bm_params[] = (string) (time() - intval($userdata['daynoyuse'] ?? 0) * 86400);
         } else {
-            if ($typeusermessage == "all") {
-                $userslist = json_encode(select("user", "id", "agent", $agent, "fetchAll"));
-            } elseif ($typeusermessage == "customer") {
-                if ($userdata['selectpanel'] == "all") {
-                    $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE u.agent =  :agent AND EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id) AND u.User_Status = 'Active'");
-                } else {
-                    $panel = select("marzban_panel", "*", "code_panel", $userdata['selectpanel'], "select");
-                    $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE u.agent =  :agent AND EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id AND i.Service_location = :location) AND u.User_Status = 'Active'");
-                }
-                $stmt->bindParam(':agent', $agent, PDO::PARAM_STR);
-                $stmt->bindParam(':location', $panel['name_panel'], PDO::PARAM_STR);
-                $stmt->execute();
-                $userslist = json_encode($stmt->fetchAll());
-            } elseif ($typeusermessage == "nonecustomer") {
-                $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE u.agent =  :agent AND NOT EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id) AND u.User_Status = 'Active'");
-                $stmt->bindParam(':agent', $agent, PDO::PARAM_STR);
-                $stmt->execute();
-                $userslist = json_encode($stmt->fetchAll());
-            }
+            $bm_where .= " AND u.User_Status = 'Active'";
         }
-        $message_id = Editmessagetext($from_id, $message_id, $textbotlang['Admin']['messageBulk']['started'], $cancelmessage);
-        $data = json_encode(array(
-            "id_admin" => $from_id,
-            'type' => "forwardmessage",
-            "id_message" => $message_id['result']['message_id'],
-            "message" => $userdata['message'],
-            "pingmessage" => $userdata['typepinmessage'],
-        ));
-        file_put_contents("cronbot/users.json", $userslist);
-        file_put_contents('cronbot/info', $data);
-    } elseif ($typeservice == "xdaynotmessage") {
-        $timedaystamp = intval($userdata['daynoyuse']) * 86400;
-        $timenouser = time() - $timedaystamp;
-        if ($agent == "all") {
-            $stmt = $pdo->prepare("SELECT id FROM user  WHERE last_message_time < $timenouser");
-            $stmt->execute();
-            $userslist = json_encode($stmt->fetchAll());
-        } else {
-            if ($typeusermessage == "all") {
-                if ($typeusermessage == "all") {
-                    $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE u.last_message_time < :time");
-                    $stmt->bindParam(':time', $timenouser, PDO::PARAM_STR);
-                    $stmt->execute();
-                    $userslist = json_encode($stmt->fetchAll());
-                } elseif ($typeusermessage == "customer") {
-                    if ($userdata['selectpanel'] == "all") {
-                        $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE u.last_message_time < :time AND EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id);");
-                    } else {
-                        $panel = select("marzban_panel", "*", "code_panel", $userdata['selectpanel'], "select");
-                        $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE u.last_message_time < :time AND EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id AND i.Service_location = :location);");
-                        $stmt->bindParam(':location', $panel['name_panel'], PDO::PARAM_STR);
-                    }
-                    $stmt->bindParam(':time', $timenouser, PDO::PARAM_STR);
-                    $stmt->execute();
-                    $userslist = json_encode($stmt->fetchAll());
-                } elseif ($typeusermessage == "nonecustomer") {
-                    $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE u.last_message_time < :time AND NOT EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id);");
-                    $stmt->bindParam(':time', $timenouser, PDO::PARAM_STR);
-                    $stmt->execute();
-                    $userslist = json_encode($stmt->fetchAll());
-                }
-            } elseif ($typeusermessage == "customer") {
-                if ($userdata['selectpanel'] == "all") {
-                    $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE u.agent =  :agent AND u.last_message_time < :time AND EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id);");
-                } else {
-                    $panel = select("marzban_panel", "*", "code_panel", $userdata['selectpanel'], "select");
-                    $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE u.agent =  :agent AND u.last_message_time < :time AND EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id AND i.Service_location = :location);");
-                    $stmt->bindParam(':location', $panel['name_panel'], PDO::PARAM_STR);
-                }
-                $stmt->bindParam(':agent', $agent, PDO::PARAM_STR);
-                $stmt->bindParam(':time', $timenouser, PDO::PARAM_STR);
-                $stmt->execute();
-                $userslist = json_encode($stmt->fetchAll());
-            } elseif ($typeusermessage == "nonecustomer") {
-                $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE u.agent =  :agent AND u.last_message_time < :time AND NOT EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id);");
-                $stmt->bindParam(':agent', $agent, PDO::PARAM_STR);
-                $stmt->bindParam(':time', $timenouser, PDO::PARAM_STR);
-                $stmt->execute();
-                $userslist = json_encode($stmt->fetchAll());
-            }
-        }
-        $message_id = Editmessagetext($from_id, $message_id, $textbotlang['Admin']['messageBulk']['started'], $cancelmessage);
-        $data = json_encode(array(
-            "id_admin" => $from_id,
-            'type' => "xdaynotmessage",
-            "id_message" => $message_id['result']['message_id'],
-            "message" => $userdata['message'],
-            "pingmessage" => $userdata['typepinmessage'],
-            "btnmessage" => $userdata['btntypemessage']
-        ));
-        file_put_contents("cronbot/users.json", $userslist);
-        file_put_contents('cronbot/info', $data);
     }
+    $bm_stmt = $pdo->prepare("SELECT u.id FROM user u WHERE {$bm_where}");
+    $bm_stmt->execute($bm_params);
+    $userslist = json_encode($bm_stmt->fetchAll(PDO::FETCH_ASSOC));
+    $message_id = Editmessagetext($from_id, $message_id, $textbotlang['Admin']['messageBulk']['started'], $cancelmessage);
+    $bm_info = [
+        "id_admin" => $from_id,
+        'type' => $typeservice,
+        "id_message" => $message_id['result']['message_id'],
+        // the buttons under it are built in its readers' language
+        "lang" => $bm_lang,
+    ];
+    if ($typeservice != "unpinmessage") {
+        $bm_info["message"] = $userdata['message'];
+        $bm_info["pingmessage"] = $userdata['typepinmessage'] ?? 'no';
+    }
+    if ($typeservice == "sendmessage" || $typeservice == "xdaynotmessage") {
+        $bm_info["btnmessage"] = $userdata['btntypemessage'] ?? 'none';
+    }
+    file_put_contents("cronbot/users.json", $userslist);
+    file_put_contents('cronbot/info', json_encode($bm_info));
 } elseif ($datain == "cancel_sendmessage") {
     file_put_contents('users.json', json_encode(array()));
     unlink('cronbot/users.json');
@@ -9993,12 +10025,14 @@ elseif ($datain == "systemsms") {
         sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
         return;
     }
-    $textsendadmin = sprintf($textbotlang['users']['support']['messageFromAdminAlt'], $userdata['text']);
+    // in the words of the user it goes to
+    $sm_texts = payer_texts($userdata['iduser']);
+    $textsendadmin = sprintf($sm_texts['users']['support']['messageFromAdminAlt'], $userdata['text']);
     if (intval($text) == "1") {
         $Response = json_encode([
             'inline_keyboard' => [
                 [
-                    ['text' => $textbotlang['users']['support']['answermessage'], 'callback_data' => 'Responseuser'],
+                    ['text' => $sm_texts['users']['support']['answermessage'], 'callback_data' => 'Responseuser'],
                 ],
             ]
         ]);
@@ -13409,15 +13443,21 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     sendmessage($from_id, $textbotlang['Admin']['Product']['timeUpdated'] . ($__pcaption !== null ? "\n\n" . $__pcaption : ""), product_edit_hub_payload($textbotlang), 'HTML');
     step('home', $from_id);
 } elseif ($datain == "balanceaddall") {
-    sendmessage($from_id, $textbotlang['Admin']['Balance']['addAllBalance'], $backadmin, 'HTML');
+    // for the users of the tab the admin is on, in that language's currency
+    $ga_lang = um_tab($user);
+    savedata("clear", "lang", $ga_lang);
+    sendmessage($from_id, um_amount_ask($textbotlang['Admin']['UserMgmt']['groupAsk'], $ga_lang, currency_for_lang($ga_lang), '', $textbotlang), $backadmin, 'HTML');
     step('add_Balance_all', $from_id);
 } elseif ($user['step'] == "add_Balance_all") {
-    if (!ctype_digit($text)) {
+    $ga_data = json_decode((string) $user['Processing_value'], true);
+    $ga_lang = in_array($ga_data['lang'] ?? '', panel_langs(), true) ? $ga_data['lang'] : um_tab($user);
+    $ga_amount = um_amount_read($text, currency_for_lang($ga_lang));
+    if ($ga_amount === null) {
         sendmessage($from_id, $textbotlang['Admin']['Balance']['invalidPrice'], $backadmin, 'HTML');
         return;
     }
     step("home", $from_id);
-    savedata("clear", "price", $text);
+    savedata("save", "price", $ga_amount);
     $keyboardagent = json_encode([
         'inline_keyboard' => [
             [
@@ -13461,31 +13501,30 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     step("getmeesagestatus", $from_id);
 } elseif ($user['step'] == "getmeesagestatus") {
     $userdata = json_decode($user['Processing_value'], true);
-    sendmessage($from_id, $textbotlang['Admin']['Balance']['addBalanceUsers'], $keyboardadmin, 'HTML');
-    $query_where = "";
-    if ($userdata['agent'] == "all") {
-        if ($userdata['typecustomer'] == "all") {
-            $query_where = "";
-        } elseif ($userdata['typecustomer'] == "customer") {
-            $query_where = "WHERE EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id);";
-        } elseif ($userdata['typecustomer'] == "notcustomer") {
-            $query_where = "WHERE  NOT EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id);";
-        }
-    } else {
-        if ($userdata['typecustomer'] == "all") {
-            $query_where = null;
-            ;
-        } elseif ($userdata['typecustomer'] == "customer") {
-            $query_where = " WHERE u.agent =  '{$userdata['agent']}' AND EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id);";
-        } elseif ($userdata['typecustomer'] == "notcustomer") {
-            $query_where = " WHERE u.agent =  '{$userdata['agent']}' AND NOT EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id);";
-        }
+    $ga_lang = in_array($userdata['lang'] ?? '', panel_langs(), true) ? $userdata['lang'] : um_tab($user);
+    $ga_cur = currency_for_lang($ga_lang);
+    if (um_amount_read($userdata['price'] ?? '', $ga_cur) === null) {
+        sendmessage($from_id, $textbotlang['Admin']['errorRestart'] ?? $textbotlang['Admin']['Balance']['invalidPrice'], $keyboardadmin, 'HTML');
+        step('home', $from_id);
+        return;
     }
-    $stmt = $pdo->prepare("SELECT u.id FROM user u " . $query_where);
-    $stmt->execute();
-    $Balance_user = $stmt->fetchAll();
-    $stmt = $pdo->prepare("UPDATE user as u SET  Balance = Balance + {$userdata['price']} " . $query_where);
-    $stmt->execute();
+    // this language's users of the chosen group - the group used to be dropped
+    // whenever "every user" was picked second, topping up the whole bot
+    [$ga_where, $ga_params] = um_group_where($ga_lang, $userdata['agent'] ?? 'all', $userdata['typecustomer'] ?? 'all');
+    // a user of this language is on this currency's wallet
+    $ga_where .= " AND (u.currency = ? OR u.currency IS NULL OR u.currency = '')";
+    $ga_params[] = $ga_cur;
+    $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE {$ga_where}");
+    $stmt->execute($ga_params);
+    $Balance_user = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $stmt = $pdo->prepare("UPDATE user u SET u.Balance = u.Balance + ? WHERE {$ga_where}");
+    $stmt->execute(array_merge([$userdata['price']], $ga_params));
+    clearSelectCache('user');
+    sendmessage($from_id, strtr($textbotlang['Admin']['UserMgmt']['groupDone'], [
+        '{amount}' => money($userdata['price'], $ga_cur),
+        '{n}' => number_format(count($Balance_user)),
+        '{lang}' => um_lang_name($ga_lang, $textbotlang),
+    ]), $keyboardadmin, 'HTML');
     step('home', $from_id);
     if ($text == "1") {
         $cancelmessage = json_encode([
@@ -13495,7 +13534,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
                 ],
             ]
         ]);
-        $textgift = sprintf($textbotlang['users']['Balance']['giftFromManagement'], $userdata['price']);
+        $textgift = sprintf(lang_tab_texts($ga_lang)['users']['Balance']['giftFromManagement'], money($userdata['price'], $ga_cur, false));
         $message_id = sendmessage($from_id, $textbotlang['Admin']['Balance']['operationStarted'], $cancelmessage, "html");
         $data = json_encode(array(
             "id_admin" => $from_id,
@@ -13503,7 +13542,8 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
             "id_message" => $message_id['result']['message_id'],
             "message" => $textgift,
             "pingmessage" => "no",
-            "btnmessage" => "start"
+            "btnmessage" => "start",
+            "lang" => $ga_lang
         ));
         file_put_contents("cronbot/users.json", json_encode($Balance_user));
         file_put_contents('cronbot/info', $data);
@@ -13520,22 +13560,22 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     update("user", "Processing_value", $text, "id", $from_id);
     step('get_price_Negative', $from_id);
 } elseif ($user['step'] == "get_price_Negative") {
-    if (!ctype_digit($text)) {
+    $Balance_usersa = select("user", "*", "id", $user['Processing_value'], "select");
+    $nb_cur = currency_for_user($Balance_usersa);
+    $nb_amount = um_amount_read($text, $nb_cur);
+    if ($nb_amount === null) {
         sendmessage($from_id, $textbotlang['Admin']['Balance']['invalidPrice'], $backadmin, 'HTML');
         return;
     }
-    if (intval($text) >= 100000000) {
-        sendmessage($from_id, $textbotlang['Admin']['Balance']['maxAmountRial'], $backadmin, 'HTML');
+    if ((float) $nb_amount >= 100000000) {
+        sendmessage($from_id, $textbotlang['Admin']['UserMgmt']['maxAmount'], $backadmin, 'HTML');
         return;
     }
     sendmessage($from_id, $textbotlang['Admin']['Balance']['negativeBalanceUser'], $keyboardadmin, 'HTML');
-    $Balance_usersa = select("user", "*", "id", $user['Processing_value'], "select");
-    $Balance_Low_userkam = $Balance_usersa['Balance'] - $text;
-    update("user", "Balance", $Balance_Low_userkam, "id", $user['Processing_value']);
-    $balances1 = number_format($text, 0);
-    $Balance_user_afters = number_format(select("user", "*", "id", $user['Processing_value'], "select")['Balance']);
-    $textkam = sprintf($textbotlang['users']['Balance']['deductedNotice'], $balances1);
-    sendmessage($user['Processing_value'], $textkam, null, 'HTML');
+    // from the wallet the user is on, told in their own words and currency
+    $Balance_user_afters = money(wallet_credit($user['Processing_value'], -(float) $nb_amount, $nb_cur), $nb_cur);
+    $text = money($nb_amount, $nb_cur);
+    sendmessage($user['Processing_value'], sprintf(payer_texts($user['Processing_value'])['users']['Balance']['deductedNotice'], money($nb_amount, $nb_cur, false)), null, 'HTML');
     step('home', $from_id);
     if (strlen($setting['Channel_Report']) > 0) {
         $textaddbalance = sprintf($textbotlang['Admin']['reportgroup']['balanceDecreased'], $username, $from_id, $user['Processing_value'], $text, $Balance_user_afters);
@@ -13596,6 +13636,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     $keyboardmanage = [
         'inline_keyboard' => [
             [['text' => $textbotlang['keyboard']['refreshInfoAlt'], 'callback_data' => "updateinfouser_" . $id_user],],
+            [['text' => strtr($textbotlang['Admin']['UserMgmt']['langBtn'], ['{lang}' => um_lang_name(in_array($user['lang'] ?? '', panel_langs(), true) ? $user['lang'] : 'fa', $textbotlang)]), 'callback_data' => "umsetlang_" . $id_user]],
             [['text' => $textbotlang['Admin']['manageUser']['addBalanceUser'], 'callback_data' => "addbalanceuser_" . $id_user], ['text' => $textbotlang['Admin']['manageUser']['lowBalanceUser'], 'callback_data' => "lowbalanceuser_" . $id_user],],
             [['text' => $textbotlang['Admin']['manageUser']['banUserList'], 'callback_data' => "banuserlist_" . $id_user], ['text' => $textbotlang['Admin']['manageUser']['unbanUserList'], 'callback_data' => "unbanuserr_" . $id_user]],
             [['text' => $textbotlang['Admin']['manageUser']['addagent'], 'callback_data' => "addagent_" . $id_user], ['text' => $textbotlang['Admin']['manageUser']['removeagent'], 'callback_data' => "removeagent_" . $id_user]],
@@ -13643,7 +13684,28 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
         ];
     }
     $keyboardmanage = json_encode($keyboardmanage, JSON_UNESCAPED_UNICODE);
-    $user['Balance'] = number_format($user['Balance']);
+    // the wallet the user is on, and any other one with money waiting in it -
+    // each in its own currency, never added together
+    $ui_cur = currency_for_user($user);
+    $ui_lang = in_array($user['lang'] ?? '', panel_langs(), true) ? $user['lang'] : 'fa';
+    $ui_bal = money($user['Balance'], $ui_cur);
+    foreach (wallet_balances($user) as $ui_c => $ui_amount) {
+        if ($ui_c === $ui_cur) {
+            continue;
+        }
+        $ui_forLang = $ui_c;
+        foreach (panel_langs() as $ui_l) {
+            if (currency_for_lang($ui_l) === $ui_c) {
+                $ui_forLang = um_lang_name($ui_l, $textbotlang);
+            }
+        }
+        $ui_bal .= strtr($textbotlang['Admin']['UserMgmt']['infoOtherWallet'], [
+            '{currency}' => currency_get($ui_c)['title'] ?? $ui_c,
+            '{lang}' => $ui_forLang,
+            '{amount}' => money($ui_amount, $ui_c),
+        ]);
+    }
+    $user['Balance'] = $ui_bal;
     if ($user['register'] != "none") {
         if ($user['register'] == null)
             return;
@@ -13702,7 +13764,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     } else {
         $text_expie_agent = "";
     }
-    $textinfouser = sprintf($textbotlang['Admin']['manageUser']['infoSummary'], $user['User_Status'], $user['username'], $id_user, $id_user, $user['codeInvitation'], $userjoin, $lastmessage, $user['limit_usertest'], $roll_Status, $user['number'], $user['agent'], $user['affiliatescount'], $user['affiliates'], $userverify, $showcart, $user['score'], $sumvolume['SUM(Volume)'], $text_expie_agent, $user['Balance'], $dayListSell['COUNT(*)'], $balanceall['SUM(price)'], $subbuyuser['SUM(price_product)'], $user['pricediscount'], $listhours, $suminvoicehours, $listmonth, $suminvoicemonth);
+    $textinfouser = sprintf($textbotlang['Admin']['manageUser']['infoSummary'], $user['User_Status'], $user['username'], $id_user, $id_user, $user['codeInvitation'], $userjoin, $lastmessage, $user['limit_usertest'], $roll_Status, $user['number'], $user['agent'], um_lang_name($ui_lang, $textbotlang), $user['affiliatescount'], $user['affiliates'], $userverify, $showcart, $user['score'], $sumvolume['SUM(Volume)'], $text_expie_agent, $user['Balance'], $dayListSell['COUNT(*)'], money($balanceall['SUM(price)'] ?? 0, $ui_cur), money($subbuyuser['SUM(price_product)'], $ui_cur), $user['pricediscount'], $listhours, money($suminvoicehours, $ui_cur), $listmonth, money($suminvoicemonth, $ui_cur));
     if ($datain[0] == "u") {
         telegram('answerCallbackQuery', array(
             'callback_query_id' => $callback_query_id,
@@ -14355,796 +14417,178 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     outtypepanel($dupCols['type'], $textbotlang['Admin']['managepanel']['duplicatedPanel']);
     update("user", "Processing_value", $text, "id", $from_id);
     step('home', $from_id);
-} elseif ($text == $textbotlang['Admin']['btnKeyboard']['manageUser'] || $datain == "backlistuser") {
-    $keyboardtypelistuser = json_encode([
-        'inline_keyboard' => [
-            [
-                ['text' => $textbotlang['keyboard']['usersWithBalance'], 'callback_data' => "balanceuserlist"],
-            ],
-            [
-                ['text' => $textbotlang['keyboard']['usersWithAffiliates'], 'callback_data' => "listrefral"],
-            ],
-            [
-                ['text' => $textbotlang['keyboard']['activeCardUserList'], 'callback_data' => "cartuserlist"],
-            ],
-            [
-                ['text' => $textbotlang['keyboard']['usersWithNegativeBalance'], 'callback_data' => "zerobalance"],
-            ],
-            [
-                ['text' => $textbotlang['keyboard']['agentList'], 'callback_data' => "agentlistusers"],
-                ['text' => $textbotlang['keyboard']['allUserList'], 'callback_data' => "alllistusers"],
-            ],
-            [
-                ['text' => $textbotlang['keyboard']['searchOrder'], 'callback_data' => "searchorder"],
-                ['text' => $textbotlang['keyboard']['groupCharge'], 'callback_data' => "balanceaddall"],
-            ],
-            [
-                ['text' => $textbotlang['keyboard']['searchUserBtn'], 'callback_data' => "searchuser"],
-                ['text' => $textbotlang['keyboard']['messagingSection'], 'callback_data' => "systemsms"],
-            ],
-            [
-                ['text' => $textbotlang['keyboard']['groupVolumeOrTime'], 'callback_data' => "voloume_or_day_all"],
-            ]
-        ]
-    ]);
-    $text_list_users = $textbotlang['Admin']['selectOption3'];
-    if ($datain == "backlistuser") {
-        Editmessagetext($from_id, $message_id, $text_list_users, $keyboardtypelistuser);
+} elseif ($text == $textbotlang['Admin']['btnKeyboard']['manageUser'] || $datain == "backlistuser" || preg_match('/^umlang:([a-z]{2})$/', $datain, $um_m)) {
+    if (isset($um_m[1]) && in_array($um_m[1], panel_langs(), true)) {
+        update("user", "um_lang", $um_m[1], "id", $from_id);
+        $user['um_lang'] = $um_m[1];
+    }
+    $um_lang = um_tab($user);
+    if ($datain != '') {
+        Editmessagetext($from_id, $message_id, um_hub_caption($um_lang, $textbotlang), um_hub_payload($um_lang, $textbotlang), 'HTML');
     } else {
-        sendmessage($from_id, $text_list_users, $keyboardtypelistuser, 'html');
+        sendmessage($from_id, um_hub_caption($um_lang, $textbotlang), um_hub_payload($um_lang, $textbotlang), 'HTML');
     }
-} elseif ($datain == "alllistusers") {
-    update("user", "pagenumber", "1", "id", $from_id);
-    $page = 1;
-    $items_per_page = 10;
-    $start_index = ($page - 1) * $items_per_page;
-    $result = $pdo->prepare("SELECT * FROM user  LIMIT ?, ?");
-    $result->bindValue(1, $start_index, PDO::PARAM_INT);
-    $result->bindValue(2, $items_per_page, PDO::PARAM_INT);
-    $result->execute();
-    $keyboardlists = [
-        'inline_keyboard' => [],
-    ];
-    $keyboardlists['inline_keyboard'][] = [
-        ['text' => $textbotlang['keyboard']['operation'], 'callback_data' => "action"],
-        ['text' => $textbotlang['keyboard']['username'], 'callback_data' => "username"],
-        ['text' => $textbotlang['keyboard']['userId'], 'callback_data' => "iduser"]
-    ];
-    while ($row = ($result)->fetch(PDO::FETCH_ASSOC)) {
-        $keyboardlists['inline_keyboard'][] = [
-            [
-                'text' => $textbotlang['Admin']['manageUser']['manageUserBtn'],
-                'callback_data' => "manageuser_" . $row['id']
-            ],
-            [
-                'text' => $row['username'],
-                'callback_data' => "username"
-            ],
-            [
-                'text' => $row['id'],
-                'callback_data' => $row['id']
-            ],
-        ];
-    }
-    $pagination_buttons = [
-        [
-            'text' => $textbotlang['users']['page']['next'],
-            'callback_data' => 'next_pageuser'
-        ],
-        [
-            'text' => $textbotlang['users']['page']['previous'],
-            'callback_data' => 'previous_pageuser'
-        ]
-    ];
-    $backbtn = [
-        [
-            'text' => $textbotlang['keyboard']['backToPrev'],
-            'callback_data' => 'backlistuser'
-        ]
-    ];
-    $keyboardlists['inline_keyboard'][] = $backbtn;
-    $keyboardlists['inline_keyboard'][] = $pagination_buttons;
-    $keyboard_json = json_encode($keyboardlists);
-    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['manageUser']['manageUserBtnDesc'], $keyboard_json);
-} elseif ($datain == 'next_pageuser') {
-    $numpage = select("user", "*", null, null, "count");
-    $page = $user['pagenumber'];
-    $items_per_page = 10;
-    $sum = $user['pagenumber'] * $items_per_page;
-    if ($sum > $numpage) {
-        $next_page = 1;
-    } else {
-        $next_page = $page + 1;
-    }
-    $start_index = ($next_page - 1) * $items_per_page;
-    $result = $pdo->prepare("SELECT * FROM user LIMIT ?, ?");
-    $result->bindValue(1, $start_index, PDO::PARAM_INT);
-    $result->bindValue(2, $items_per_page, PDO::PARAM_INT);
-    $result->execute();
-    $keyboardlists = [
-        'inline_keyboard' => [],
-    ];
-    $keyboardlists['inline_keyboard'][] = [
-        ['text' => $textbotlang['keyboard']['operation'], 'callback_data' => "action"],
-        ['text' => $textbotlang['keyboard']['username'], 'callback_data' => "username"],
-        ['text' => $textbotlang['keyboard']['userId'], 'callback_data' => "iduser"]
-    ];
-    while ($row = ($result)->fetch(PDO::FETCH_ASSOC)) {
-        $keyboardlists['inline_keyboard'][] = [
-            [
-                'text' => $textbotlang['Admin']['manageUser']['manageUserBtn'],
-                'callback_data' => "manageuser_" . $row['id']
-            ],
-            [
-                'text' => $row['username'],
-                'callback_data' => "username"
-            ],
-            [
-                'text' => $row['id'],
-                'callback_data' => $row['id']
-            ],
-        ];
-    }
-    $pagination_buttons = [
-        [
-            'text' => $textbotlang['users']['page']['next'],
-            'callback_data' => 'next_pageuser'
-        ],
-        [
-            'text' => $textbotlang['users']['page']['previous'],
-            'callback_data' => 'previous_pageuser'
-        ]
-    ];
-    $keyboardlists['inline_keyboard'][] = $pagination_buttons;
-    $keyboard_json = json_encode($keyboardlists);
-    update("user", "pagenumber", $next_page, "id", $from_id);
-    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['manageUser']['manageUserBtnDesc'], $keyboard_json);
-} elseif ($datain == 'previous_pageuser') {
-    $page = $user['pagenumber'];
-    $items_per_page = 10;
-    if ($user['pagenumber'] <= 1) {
-        $next_page = 1;
-    } else {
-        $next_page = $page - 1;
-    }
-    $start_index = ($next_page - 1) * $items_per_page;
-    $result = $pdo->prepare("SELECT * FROM user LIMIT ?, ?");
-    $result->bindValue(1, $start_index, PDO::PARAM_INT);
-    $result->bindValue(2, $items_per_page, PDO::PARAM_INT);
-    $result->execute();
-    $keyboardlists = [
-        'inline_keyboard' => [],
-    ];
-    $keyboardlists['inline_keyboard'][] = [
-        ['text' => $textbotlang['keyboard']['operation'], 'callback_data' => "action"],
-        ['text' => $textbotlang['keyboard']['username'], 'callback_data' => "username"],
-        ['text' => $textbotlang['keyboard']['userId'], 'callback_data' => "iduser"]
-    ];
-    while ($row = ($result)->fetch(PDO::FETCH_ASSOC)) {
-        $keyboardlists['inline_keyboard'][] = [
-            [
-                'text' => $textbotlang['Admin']['manageUser']['manageUserBtn'],
-                'callback_data' => "manageuser_" . $row['id']
-            ],
-            [
-                'text' => $row['username'],
-                'callback_data' => "username"
-            ],
-            [
-                'text' => $row['id'],
-                'callback_data' => $row['id']
-            ],
-        ];
-    }
-    $pagination_buttons = [
-        [
-            'text' => $textbotlang['users']['page']['next'],
-            'callback_data' => 'next_pageuser'
-        ],
-        [
-            'text' => $textbotlang['users']['page']['previous'],
-            'callback_data' => 'previous_pageuser'
-        ]
-    ];
-    $keyboardlists['inline_keyboard'][] = $pagination_buttons;
-    $keyboard_json = json_encode($keyboardlists);
-    update("user", "pagenumber", $next_page, "id", $from_id);
-    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['manageUser']['manageUserBtnDesc'], $keyboard_json);
+} elseif (preg_match('/^uml:([a-z_0-9]+):(\d+)$/', $datain, $um_m)) {
+    [$um_cap, $um_kb] = um_list_payload($um_m[1], um_tab($user), (int) $um_m[2], $textbotlang);
+    Editmessagetext($from_id, $message_id, $um_cap, $um_kb, 'HTML');
+} elseif (in_array($datain, ['alllistusers', 'next_pageuser', 'previous_pageuser', 'balanceuserlist', 'next_pageuserbalance', 'previous_pageuserbalance', 'listrefral', 'next_pageuserrefral', 'previous_pageuserrefral', 'cartuserlist', 'next_pageusercart', 'previous_pageusercart', 'zerobalance', 'next_pageuserzero', 'previous_pageuserzero'], true)
+    || preg_match('/^(?:agenttypshowlist|next_pageuseragent|previous_pageuseragent)_(all|n|n2)$/', $datain, $um_m)) {
+    // a button of a list shown before the lists had tabs: the same list, now
+    // for the tab the admin is on
+    $um_old = ['alllistusers' => 'all', 'next_pageuser' => 'all', 'previous_pageuser' => 'all', 'balanceuserlist' => 'balance', 'next_pageuserbalance' => 'balance', 'previous_pageuserbalance' => 'balance', 'listrefral' => 'ref', 'next_pageuserrefral' => 'ref', 'previous_pageuserrefral' => 'ref', 'cartuserlist' => 'card', 'next_pageusercart' => 'card', 'previous_pageusercart' => 'card', 'zerobalance' => 'neg', 'next_pageuserzero' => 'neg', 'previous_pageuserzero' => 'neg'];
+    $um_kind = isset($um_m[1]) ? ($um_m[1] === 'all' ? 'agent' : 'agent_' . $um_m[1]) : $um_old[$datain];
+    [$um_cap, $um_kb] = um_list_payload($um_kind, um_tab($user), 1, $textbotlang);
+    Editmessagetext($from_id, $message_id, $um_cap, $um_kb, 'HTML');
 } elseif ($datain == "agentlistusers") {
     $keyboardtypelistuser = json_encode([
         'inline_keyboard' => [
             [
-                ['text' => "n", 'callback_data' => "agenttypshowlist_n"],
-                ['text' => "n2", 'callback_data' => "agenttypshowlist_n2"],
+                ['text' => "n", 'callback_data' => "uml:agent_n:1"],
+                ['text' => "n2", 'callback_data' => "uml:agent_n2:1"],
             ],
             [
-                ['text' => $textbotlang['keyboard']['allAgents'], 'callback_data' => "agenttypshowlist_all"],
+                ['text' => $textbotlang['keyboard']['allAgents'], 'callback_data' => "uml:agent:1"],
+            ],
+            [
+                ['text' => $textbotlang['keyboard']['backToPrev'], 'callback_data' => "backlistuser"],
             ]
         ]
     ]);
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['agent']['selectGroup'], $keyboardtypelistuser);
-} elseif (preg_match('/agenttypshowlist_(\w+)/', $datain, $datagetr)) {
-    $typeagent = $datagetr[1];
-    update("user", "pagenumber", "1", "id", $from_id);
-    $page = 1;
-    $items_per_page = 10;
-    $start_index = ($page - 1) * $items_per_page;
-    if ($typeagent == "all") {
-        $result = $pdo->prepare("SELECT * FROM user WHERE agent != 'f'  LIMIT ?, ?");
-        $result->bindValue(1, $start_index, PDO::PARAM_INT);
-        $result->bindValue(2, $items_per_page, PDO::PARAM_INT);
-        $result->execute();
-    } else {
-        $result = $pdo->prepare("SELECT * FROM user WHERE agent = ?  LIMIT ?, ?");
-        $result->bindValue(1, $typeagent, PDO::PARAM_STR);
-        $result->bindValue(2, $start_index, PDO::PARAM_INT);
-        $result->bindValue(3, $items_per_page, PDO::PARAM_INT);
-        $result->execute();
+} elseif (preg_match('/^umsetlang(?:_(\w+)|:(\w+):([a-z]{2}))$/', $datain, $dataget)) {
+    // 🌐 زبان کاربر: the language picks the wallet too, so a switch here moves
+    // the user onto that language's wallet exactly as their own switch would
+    $ul_id = $dataget[1] !== '' ? $dataget[1] : $dataget[2];
+    $ul_row = select("user", "*", "id", $ul_id, "select", ['cache' => false]);
+    if (!is_array($ul_row)) {
+        return;
     }
-    $keyboardlists = [
-        'inline_keyboard' => [],
-    ];
-    $keyboardlists['inline_keyboard'][] = [
-        ['text' => $textbotlang['keyboard']['operation'], 'callback_data' => "action"],
-        ['text' => $textbotlang['keyboard']['username'], 'callback_data' => "username"],
-        ['text' => $textbotlang['keyboard']['userId'], 'callback_data' => "iduser"]
-    ];
-    while ($row = ($result)->fetch(PDO::FETCH_ASSOC)) {
-        $keyboardlists['inline_keyboard'][] = [
-            [
-                'text' => $textbotlang['Admin']['manageUser']['manageUserBtn'],
-                'callback_data' => "manageuser_" . $row['id']
-            ],
-            [
-                'text' => $row['username'],
-                'callback_data' => "username"
-            ],
-            [
-                'text' => $row['id'],
-                'callback_data' => $row['id']
-            ],
-        ];
+    $ul_t = $textbotlang['Admin']['UserMgmt'];
+    $ul_now = in_array($ul_row['lang'] ?? '', panel_langs(), true) ? $ul_row['lang'] : 'fa';
+    if (!empty($dataget[3])) {
+        if (!in_array($dataget[3], panel_langs(), true)) {
+            return;
+        }
+        if ($dataget[3] === $ul_now) {
+            telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $ul_t['langSame'], 'show_alert' => false]);
+            return;
+        }
+        wallet_switch_lang($ul_id, $dataget[3]);
+        $ul_row = select("user", "*", "id", $ul_id, "select", ['cache' => false]);
+        $ul_now = $dataget[3];
+        telegram('answerCallbackQuery', [
+            'callback_query_id' => $callback_query_id,
+            'text' => strtr($ul_t['langChanged'], [
+                '{lang}' => um_lang_name($ul_now, $textbotlang),
+                '{currency}' => currency_get(currency_for_user($ul_row))['title'] ?? currency_for_user($ul_row),
+                '{amount}' => money($ul_row['Balance'], currency_for_user($ul_row)),
+            ]),
+            'show_alert' => true,
+        ]);
     }
-    $pagination_buttons = [
-        [
-            'text' => $textbotlang['users']['page']['next'],
-            'callback_data' => "next_pageuseragent_$typeagent"
-        ]
-    ];
-    $backbtn = [
-        [
-            'text' => $textbotlang['keyboard']['backToPrev'],
-            'callback_data' => 'backlistuser'
-        ]
-    ];
-    $keyboardlists['inline_keyboard'][] = $backbtn;
-    $keyboardlists['inline_keyboard'][] = $pagination_buttons;
-    $keyboard_json = json_encode($keyboardlists);
-    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['manageUser']['manageUserBtnDesc'], $keyboard_json);
-} elseif (preg_match('/next_pageuseragent_(\w+)/', $datain, $datagetr)) {
-    $typeagent = $datagetr[1];
-    $numpage = select("user", "*", null, null, "count");
-    $page = $user['pagenumber'];
-    $items_per_page = 10;
-    $sum = $user['pagenumber'] * $items_per_page;
-    if ($sum > $numpage) {
-        $next_page = 1;
-    } else {
-        $next_page = $page + 1;
+    $ul_wallets = [];
+    foreach (wallet_balances($ul_row) as $ul_c => $ul_a) {
+        $ul_wallets[] = money($ul_a, $ul_c);
     }
-    $start_index = ($next_page - 1) * $items_per_page;
-    if ($typeagent == "all") {
-        $result = $pdo->prepare("SELECT * FROM user WHERE agent != 'f'  LIMIT ?, ?");
-        $result->bindValue(1, $start_index, PDO::PARAM_INT);
-        $result->bindValue(2, $items_per_page, PDO::PARAM_INT);
-        $result->execute();
-    } else {
-        $result = $pdo->prepare("SELECT * FROM user WHERE agent = ?  LIMIT ?, ?");
-        $result->bindValue(1, $typeagent, PDO::PARAM_STR);
-        $result->bindValue(2, $start_index, PDO::PARAM_INT);
-        $result->bindValue(3, $items_per_page, PDO::PARAM_INT);
-        $result->execute();
+    $ul_pick = [];
+    foreach (panel_langs() as $ul_l) {
+        $ul_pick[] = ['text' => ($ul_l === $ul_now ? '✅ ' : '') . um_lang_name($ul_l, $textbotlang), 'callback_data' => "umsetlang:{$ul_id}:{$ul_l}", 'style' => $ul_l === $ul_now ? 'success' : 'primary'];
     }
-    $keyboardlists = [
-        'inline_keyboard' => [],
-    ];
-    $keyboardlists['inline_keyboard'][] = [
-        ['text' => $textbotlang['keyboard']['operation'], 'callback_data' => "action"],
-        ['text' => $textbotlang['keyboard']['username'], 'callback_data' => "username"],
-        ['text' => $textbotlang['keyboard']['userId'], 'callback_data' => "iduser"]
-    ];
-    while ($row = ($result)->fetch(PDO::FETCH_ASSOC)) {
-        $keyboardlists['inline_keyboard'][] = [
-            [
-                'text' => $textbotlang['Admin']['manageUser']['manageUserBtn'],
-                'callback_data' => "manageuser_" . $row['id']
-            ],
-            [
-                'text' => $row['username'],
-                'callback_data' => "username"
-            ],
-            [
-                'text' => $row['id'],
-                'callback_data' => $row['id']
-            ],
-        ];
-    }
-    $pagination_buttons = [
-        [
-            'text' => $textbotlang['users']['page']['next'],
-            'callback_data' => "next_pageuseragent_$typeagent"
-        ],
-        [
-            'text' => $textbotlang['users']['page']['previous'],
-            'callback_data' => "previous_pageuseragent_$typeagent"
-        ]
-    ];
-    $keyboardlists['inline_keyboard'][] = $pagination_buttons;
-    $keyboard_json = json_encode($keyboardlists);
-    update("user", "pagenumber", $next_page, "id", $from_id);
-    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['manageUser']['manageUserBtnDesc'], $keyboard_json);
-} elseif (preg_match('/previous_pageuseragent_(\w+)/', $datain, $datagetr)) {
-    $typeagent = $datagetr[1];
-    $page = $user['pagenumber'];
-    $items_per_page = 10;
-    if ($user['pagenumber'] <= 1) {
-        $next_page = 1;
-    } else {
-        $next_page = $page - 1;
-    }
-    $start_index = ($next_page - 1) * $items_per_page;
-    if ($typeagent == "all") {
-        $result = $pdo->prepare("SELECT * FROM user WHERE agent != 'f'  LIMIT ?, ?");
-        $result->bindValue(1, $start_index, PDO::PARAM_INT);
-        $result->bindValue(2, $items_per_page, PDO::PARAM_INT);
-        $result->execute();
-    } else {
-        $result = $pdo->prepare("SELECT * FROM user WHERE agent = ?  LIMIT ?, ?");
-        $result->bindValue(1, $typeagent, PDO::PARAM_STR);
-        $result->bindValue(2, $start_index, PDO::PARAM_INT);
-        $result->bindValue(3, $items_per_page, PDO::PARAM_INT);
-        $result->execute();
-    }
-    $keyboardlists = [
-        'inline_keyboard' => [],
-    ];
-    $keyboardlists['inline_keyboard'][] = [
-        ['text' => $textbotlang['keyboard']['operation'], 'callback_data' => "action"],
-        ['text' => $textbotlang['keyboard']['username'], 'callback_data' => "username"],
-        ['text' => $textbotlang['keyboard']['userId'], 'callback_data' => "iduser"]
-    ];
-    while ($row = ($result)->fetch(PDO::FETCH_ASSOC)) {
-        $keyboardlists['inline_keyboard'][] = [
-            [
-                'text' => $textbotlang['Admin']['manageUser']['manageUserBtn'],
-                'callback_data' => "manageuser_" . $row['id']
-            ],
-            [
-                'text' => $row['username'],
-                'callback_data' => "username"
-            ],
-            [
-                'text' => $row['id'],
-                'callback_data' => $row['id']
-            ],
-        ];
-    }
-    $pagination_buttons = [
-        [
-            'text' => $textbotlang['users']['page']['next'],
-            'callback_data' => "next_pageuseragent_$typeagent"
-        ],
-        [
-            'text' => $textbotlang['users']['page']['previous'],
-            'callback_data' => "previous_pageuseragent_$typeagent"
-        ]
-    ];
-    $keyboardlists['inline_keyboard'][] = $pagination_buttons;
-    $keyboard_json = json_encode($keyboardlists);
-    update("user", "pagenumber", $next_page, "id", $from_id);
-    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['manageUser']['manageUserBtnDesc'], $keyboard_json);
-} elseif ($datain == "balanceuserlist") {
-    update("user", "pagenumber", "1", "id", $from_id);
-    $page = 1;
-    $items_per_page = 10;
-    $start_index = ($page - 1) * $items_per_page;
-    $result = $pdo->prepare("SELECT * FROM user WHERE Balance != '0'  LIMIT ?, ?");
-    $result->bindValue(1, $start_index, PDO::PARAM_INT);
-    $result->bindValue(2, $items_per_page, PDO::PARAM_INT);
-    $result->execute();
-    $keyboardlists = [
-        'inline_keyboard' => [],
-    ];
-    $keyboardlists['inline_keyboard'][] = [
-        ['text' => $textbotlang['keyboard']['operation'], 'callback_data' => "action"],
-        ['text' => $textbotlang['keyboard']['username'], 'callback_data' => "username"],
-        ['text' => $textbotlang['keyboard']['userId'], 'callback_data' => "iduser"]
-    ];
-    while ($row = ($result)->fetch(PDO::FETCH_ASSOC)) {
-        $keyboardlists['inline_keyboard'][] = [
-            [
-                'text' => $textbotlang['Admin']['manageUser']['manageUserBtn'],
-                'callback_data' => "manageuser_" . $row['id']
-            ],
-            [
-                'text' => $row['username'],
-                'callback_data' => "username"
-            ],
-            [
-                'text' => $row['id'],
-                'callback_data' => $row['id']
-            ],
-        ];
-    }
-    $pagination_buttons = [
-        [
-            'text' => $textbotlang['users']['page']['next'],
-            'callback_data' => 'next_pageuserbalance'
-        ],
-        [
-            'text' => $textbotlang['users']['page']['previous'],
-            'callback_data' => 'previous_pageuserbalance'
-        ]
-    ];
-    $backbtn = [
-        [
-            'text' => $textbotlang['keyboard']['backToPrev'],
-            'callback_data' => 'backlistuser'
-        ]
-    ];
-    $keyboardlists['inline_keyboard'][] = $backbtn;
-    $keyboardlists['inline_keyboard'][] = $pagination_buttons;
-    $keyboard_json = json_encode($keyboardlists);
-    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['manageUser']['manageUserBtnDesc'], $keyboard_json);
-} elseif ($datain == 'next_pageuserbalance') {
-    $numpage = select("user", "*", null, null, "count");
-    $page = $user['pagenumber'];
-    $items_per_page = 10;
-    $sum = $user['pagenumber'] * $items_per_page;
-    if ($sum > $numpage) {
-        $next_page = 1;
-    } else {
-        $next_page = $page + 1;
-    }
-    $start_index = ($next_page - 1) * $items_per_page;
-    $result = $pdo->prepare("SELECT * FROM user WHERE Balance != '0'  LIMIT ?, ?");
-    $result->bindValue(1, $start_index, PDO::PARAM_INT);
-    $result->bindValue(2, $items_per_page, PDO::PARAM_INT);
-    $result->execute();
-    $keyboardlists = [
-        'inline_keyboard' => [],
-    ];
-    $keyboardlists['inline_keyboard'][] = [
-        ['text' => $textbotlang['keyboard']['operation'], 'callback_data' => "action"],
-        ['text' => $textbotlang['keyboard']['username'], 'callback_data' => "username"],
-        ['text' => $textbotlang['keyboard']['userId'], 'callback_data' => "iduser"]
-    ];
-    while ($row = ($result)->fetch(PDO::FETCH_ASSOC)) {
-        $keyboardlists['inline_keyboard'][] = [
-            [
-                'text' => $textbotlang['Admin']['manageUser']['manageUserBtn'],
-                'callback_data' => "manageuser_" . $row['id']
-            ],
-            [
-                'text' => $row['username'],
-                'callback_data' => "username"
-            ],
-            [
-                'text' => $row['id'],
-                'callback_data' => $row['id']
-            ],
-        ];
-    }
-    $pagination_buttons = [
-        [
-            'text' => $textbotlang['users']['page']['next'],
-            'callback_data' => 'next_pageuserbalance'
-        ],
-        [
-            'text' => $textbotlang['users']['page']['previous'],
-            'callback_data' => 'previous_pageuserbalance'
-        ]
-    ];
-    $keyboardlists['inline_keyboard'][] = $pagination_buttons;
-    $keyboard_json = json_encode($keyboardlists);
-    update("user", "pagenumber", $next_page, "id", $from_id);
-    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['manageUser']['manageUserBtnDesc'], $keyboard_json);
-} elseif ($datain == 'previous_pageuserbalance') {
-    $page = $user['pagenumber'];
-    $items_per_page = 10;
-    if ($user['pagenumber'] <= 1) {
-        $next_page = 1;
-    } else {
-        $next_page = $page - 1;
-    }
-    $start_index = ($next_page - 1) * $items_per_page;
-    $result = $pdo->prepare("SELECT * FROM user WHERE Balance != '0'  LIMIT ?, ?");
-    $result->bindValue(1, $start_index, PDO::PARAM_INT);
-    $result->bindValue(2, $items_per_page, PDO::PARAM_INT);
-    $result->execute();
-    $keyboardlists = [
-        'inline_keyboard' => [],
-    ];
-    $keyboardlists['inline_keyboard'][] = [
-        ['text' => $textbotlang['keyboard']['operation'], 'callback_data' => "action"],
-        ['text' => $textbotlang['keyboard']['username'], 'callback_data' => "username"],
-        ['text' => $textbotlang['keyboard']['userId'], 'callback_data' => "iduser"]
-    ];
-    while ($row = ($result)->fetch(PDO::FETCH_ASSOC)) {
-        $keyboardlists['inline_keyboard'][] = [
-            [
-                'text' => $textbotlang['Admin']['manageUser']['manageUserBtn'],
-                'callback_data' => "manageuser_" . $row['id']
-            ],
-            [
-                'text' => $row['username'],
-                'callback_data' => "username"
-            ],
-            [
-                'text' => $row['id'],
-                'callback_data' => $row['id']
-            ],
-        ];
-    }
-    $pagination_buttons = [
-        [
-            'text' => $textbotlang['users']['page']['next'],
-            'callback_data' => 'next_pageuserbalance'
-        ],
-        [
-            'text' => $textbotlang['users']['page']['previous'],
-            'callback_data' => 'previous_pageuserbalance'
-        ]
-    ];
-    $keyboardlists['inline_keyboard'][] = $pagination_buttons;
-    $keyboard_json = json_encode($keyboardlists);
-    update("user", "pagenumber", $next_page, "id", $from_id);
-    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['manageUser']['manageUserBtnDesc'], $keyboard_json);
-} elseif ($datain == "listrefral") {
-    update("user", "pagenumber", "1", "id", $from_id);
-    $page = 1;
-    $items_per_page = 10;
-    $start_index = ($page - 1) * $items_per_page;
-    $result = $pdo->prepare("SELECT * FROM user WHERE affiliatescount != '0'  LIMIT ?, ?");
-    $result->bindValue(1, $start_index, PDO::PARAM_INT);
-    $result->bindValue(2, $items_per_page, PDO::PARAM_INT);
-    $result->execute();
-    $keyboardlists = [
-        'inline_keyboard' => [],
-    ];
-    $keyboardlists['inline_keyboard'][] = [
-        ['text' => $textbotlang['keyboard']['operation'], 'callback_data' => "action"],
-        ['text' => $textbotlang['keyboard']['username'], 'callback_data' => "username"],
-        ['text' => $textbotlang['keyboard']['userId'], 'callback_data' => "iduser"]
-    ];
-    while ($row = ($result)->fetch(PDO::FETCH_ASSOC)) {
-        $keyboardlists['inline_keyboard'][] = [
-            [
-                'text' => $textbotlang['Admin']['manageUser']['manageUserBtn'],
-                'callback_data' => "manageuser_" . $row['id']
-            ],
-            [
-                'text' => $row['username'],
-                'callback_data' => "username"
-            ],
-            [
-                'text' => $row['id'],
-                'callback_data' => $row['id']
-            ],
-        ];
-    }
-    $pagination_buttons = [
-        [
-            'text' => $textbotlang['users']['page']['next'],
-            'callback_data' => 'next_pageuserrefral'
-        ],
-        [
-            'text' => $textbotlang['users']['page']['previous'],
-            'callback_data' => 'previous_pageuserrefral'
-        ]
-    ];
-    $backbtn = [
-        [
-            'text' => $textbotlang['keyboard']['backToPrev'],
-            'callback_data' => 'backlistuser'
-        ]
-    ];
-    $keyboardlists['inline_keyboard'][] = $backbtn;
-    $keyboardlists['inline_keyboard'][] = $pagination_buttons;
-    $keyboard_json = json_encode($keyboardlists);
-    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['manageUser']['manageUserBtnDesc'], $keyboard_json);
-} elseif ($datain == 'next_pageuserrefral') {
-    $numpage = select("user", "*", null, null, "count");
-    $page = $user['pagenumber'];
-    $items_per_page = 10;
-    $sum = $user['pagenumber'] * $items_per_page;
-    if ($sum > $numpage) {
-        $next_page = 1;
-    } else {
-        $next_page = $page + 1;
-    }
-    $start_index = ($next_page - 1) * $items_per_page;
-    $result = $pdo->prepare("SELECT * FROM user WHERE affiliatescount != '0'  LIMIT ?, ?");
-    $result->bindValue(1, $start_index, PDO::PARAM_INT);
-    $result->bindValue(2, $items_per_page, PDO::PARAM_INT);
-    $result->execute();
-    $keyboardlists = [
-        'inline_keyboard' => [],
-    ];
-    $keyboardlists['inline_keyboard'][] = [
-        ['text' => $textbotlang['keyboard']['operation'], 'callback_data' => "action"],
-        ['text' => $textbotlang['keyboard']['username'], 'callback_data' => "username"],
-        ['text' => $textbotlang['keyboard']['userId'], 'callback_data' => "iduser"]
-    ];
-    while ($row = ($result)->fetch(PDO::FETCH_ASSOC)) {
-        $keyboardlists['inline_keyboard'][] = [
-            [
-                'text' => $textbotlang['Admin']['manageUser']['manageUserBtn'],
-                'callback_data' => "manageuser_" . $row['id']
-            ],
-            [
-                'text' => $row['username'],
-                'callback_data' => "username"
-            ],
-            [
-                'text' => $row['id'],
-                'callback_data' => $row['id']
-            ],
-        ];
-    }
-    $pagination_buttons = [
-        [
-            'text' => $textbotlang['users']['page']['next'],
-            'callback_data' => 'next_pageuserrefral'
-        ],
-        [
-            'text' => $textbotlang['users']['page']['previous'],
-            'callback_data' => 'previous_pageuserrefral'
-        ]
-    ];
-    $keyboardlists['inline_keyboard'][] = $pagination_buttons;
-    $keyboard_json = json_encode($keyboardlists);
-    update("user", "pagenumber", $next_page, "id", $from_id);
-    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['manageUser']['manageUserBtnDesc'], $keyboard_json);
-} elseif ($datain == 'previous_pageuserrefral') {
-    $page = $user['pagenumber'];
-    $items_per_page = 10;
-    if ($user['pagenumber'] <= 1) {
-        $next_page = 1;
-    } else {
-        $next_page = $page - 1;
-    }
-    $start_index = ($next_page - 1) * $items_per_page;
-    $result = $pdo->prepare("SELECT * FROM user WHERE affiliatescount != '0'  LIMIT ?, ?");
-    $result->bindValue(1, $start_index, PDO::PARAM_INT);
-    $result->bindValue(2, $items_per_page, PDO::PARAM_INT);
-    $result->execute();
-    $keyboardlists = [
-        'inline_keyboard' => [],
-    ];
-    $keyboardlists['inline_keyboard'][] = [
-        ['text' => $textbotlang['keyboard']['operation'], 'callback_data' => "action"],
-        ['text' => $textbotlang['keyboard']['username'], 'callback_data' => "username"],
-        ['text' => $textbotlang['keyboard']['userId'], 'callback_data' => "iduser"]
-    ];
-    while ($row = ($result)->fetch(PDO::FETCH_ASSOC)) {
-        $keyboardlists['inline_keyboard'][] = [
-            [
-                'text' => $textbotlang['Admin']['manageUser']['manageUserBtn'],
-                'callback_data' => "manageuser_" . $row['id']
-            ],
-            [
-                'text' => $row['username'],
-                'callback_data' => "username"
-            ],
-            [
-                'text' => $row['id'],
-                'callback_data' => $row['id']
-            ],
-        ];
-    }
-    $pagination_buttons = [
-        [
-            'text' => $textbotlang['users']['page']['next'],
-            'callback_data' => 'next_pageuserrefral'
-        ],
-        [
-            'text' => $textbotlang['users']['page']['previous'],
-            'callback_data' => 'previous_pageuserrefral'
-        ]
-    ];
-    $keyboardlists['inline_keyboard'][] = $pagination_buttons;
-    $keyboard_json = json_encode($keyboardlists);
-    update("user", "pagenumber", $next_page, "id", $from_id);
-    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['manageUser']['manageUserBtnDesc'], $keyboard_json);
+    Editmessagetext($from_id, $message_id, strtr($ul_t['langPickCaption'], ['{wallets}' => implode(' · ', $ul_wallets)]), json_encode(['inline_keyboard' => [
+        $ul_pick,
+        [['text' => $textbotlang['keyboard']['backToPrev'], 'callback_data' => "updateinfouser_" . $ul_id]],
+    ]]), 'HTML');
 } elseif (preg_match('/addbalanceuser_(\w+)/', $datain, $dataget)) {
     $iduser = $dataget[1];
     update("user", "Processing_value", $iduser, "id", $from_id);
+    $ab_row = select("user", "*", "id", $iduser, "select");
     telegram('sendmessage', [
         'chat_id' => $from_id,
-        'text' => $textbotlang['Admin']['manageUser']['addBalanceUserDesc'],
+        'text' => um_amount_ask($textbotlang['Admin']['UserMgmt']['addAsk'], in_array($ab_row['lang'] ?? '', panel_langs(), true) ? $ab_row['lang'] : 'fa', currency_for_user($ab_row), money($ab_row['Balance'] ?? 0, currency_for_user($ab_row)), $textbotlang),
         'reply_markup' => $backadmin,
         'parse_mode' => "HTML",
         'reply_to_message_id' => $message_id,
     ]);
     step('addbalanceusercurrent', $from_id);
 } elseif ($user['step'] == "addbalanceusercurrent") {
-    if (!ctype_digit($text)) {
+    // in the user's own wallet: its currency, its decimals
+    $ab_id = $user['Processing_value'];
+    $ab_row = select("user", "*", "id", $ab_id, "select", ['cache' => false]);
+    if (!is_array($ab_row)) {
+        sendmessage($from_id, $textbotlang['Admin']['notUser'], $keyboardadmin, 'HTML');
+        step('home', $from_id);
+        return;
+    }
+    $ab_cur = currency_for_user($ab_row);
+    $ab_amount = um_amount_read($text, $ab_cur);
+    if ($ab_amount === null) {
         sendmessage($from_id, $textbotlang['Admin']['Balance']['invalidPrice'], $backadmin, 'HTML');
         return;
     }
-    if ($text > 100000000) {
-        sendmessage($from_id, $textbotlang['Admin']['Balance']['maxAmountToman'], $backadmin, 'HTML');
+    if ((float) $ab_amount > 100000000) {
+        sendmessage($from_id, $textbotlang['Admin']['UserMgmt']['maxAmount'], $backadmin, 'HTML');
         return;
     }
-    $dateacc = date('Y/m/d H:i:s');
-    $randomString = bin2hex(random_bytes(5));
-    $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice) VALUES (?,?,?,?,?,?,?)");
-    $payment_Status = "paid";
-    $Payment_Method = "add balance by admin";
-    $invoice = null;
-    $stmt->execute([$user['Processing_value'], $randomString, $dateacc, $text, $payment_Status, $Payment_Method, $invoice]);
+    wallet_ensure_schema();
+    $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice,currency) VALUES (?,?,?,?,?,?,?,?)");
+    $stmt->execute([$ab_id, bin2hex(random_bytes(5)), date('Y/m/d H:i:s'), $ab_amount, "paid", "add balance by admin", null, $ab_cur]);
+    $ab_after = wallet_credit($ab_id, (float) $ab_amount, $ab_cur);
     sendmessage($from_id, $textbotlang['Admin']['manageUser']['addBalanced'], $keyboardadmin, 'html');
-    $Balance_user = select("user", "*", "id", $user['Processing_value'], "select");
-    $Balance_add_user = $Balance_user['Balance'] + $text;
-    update("user", "Balance", $Balance_add_user, "id", $user['Processing_value']);
-    $heibalanceuser = number_format($text, 0);
-    $textadd = sprintf($textbotlang['users']['Balance']['addedNotice'], $heibalanceuser);
-    sendmessage($user['Processing_value'], $textadd, null, 'HTML');
+    // told in their own language, the amount in their own currency
+    sendmessage($ab_id, sprintf(payer_texts($ab_id)['users']['Balance']['addedNotice'], money($ab_amount, $ab_cur, false)), null, 'HTML');
     step('home', $from_id);
-    $Balance_user_after = number_format(select("user", "*", "id", $user['Processing_value'], "select")['Balance']);
-    $pricadd = number_format($text);
     if (strlen($setting['Channel_Report']) > 0) {
-        $textaddbalance = sprintf($textbotlang['Admin']['reportgroup']['balanceIncreased'], $username, $from_id, $user['Processing_value'], $pricadd, $Balance_user_after);
         telegram('sendmessage', [
             'chat_id' => $setting['Channel_Report'],
             'message_thread_id' => $paymentreports,
-            'text' => $textaddbalance,
+            'text' => sprintf($textbotlang['Admin']['reportgroup']['balanceIncreased'], $username, $from_id, $ab_id, money($ab_amount, $ab_cur), money($ab_after, $ab_cur)),
             'parse_mode' => "HTML"
         ]);
     }
 } elseif (preg_match('/lowbalanceuser_(\w+)/', $datain, $dataget)) {
     $iduser = $dataget[1];
     update("user", "Processing_value", $iduser, "id", $from_id);
+    $ab_row = select("user", "*", "id", $iduser, "select");
     telegram('sendmessage', [
         'chat_id' => $from_id,
-        'text' => $textbotlang['Admin']['manageUser']['lowBalanceUserDesc'],
+        'text' => um_amount_ask($textbotlang['Admin']['UserMgmt']['deductAsk'], in_array($ab_row['lang'] ?? '', panel_langs(), true) ? $ab_row['lang'] : 'fa', currency_for_user($ab_row), money($ab_row['Balance'] ?? 0, currency_for_user($ab_row)), $textbotlang),
         'reply_markup' => $backadmin,
         'parse_mode' => "HTML",
         'reply_to_message_id' => $message_id,
     ]);
     step('addbalanceuser', $from_id);
 } elseif ($user['step'] == "addbalanceuser") {
-    if (!ctype_digit($text)) {
+    // in the user's own wallet: its currency, its decimals
+    $ab_id = $user['Processing_value'];
+    $ab_row = select("user", "*", "id", $ab_id, "select", ['cache' => false]);
+    if (!is_array($ab_row)) {
+        sendmessage($from_id, $textbotlang['Admin']['notUser'], $keyboardadmin, 'HTML');
+        step('home', $from_id);
+        return;
+    }
+    $ab_cur = currency_for_user($ab_row);
+    $ab_amount = um_amount_read($text, $ab_cur);
+    if ($ab_amount === null) {
         sendmessage($from_id, $textbotlang['Admin']['Balance']['invalidPrice'], $backadmin, 'HTML');
         return;
     }
-    if ($text > 100000000) {
-        sendmessage($from_id, $textbotlang['Admin']['Balance']['maxAmountToman'], $backadmin, 'HTML');
+    if ((float) $ab_amount > 100000000) {
+        sendmessage($from_id, $textbotlang['Admin']['UserMgmt']['maxAmount'], $backadmin, 'HTML');
         return;
     }
-    $dateacc = date('Y/m/d H:i:s');
-    $randomString = bin2hex(random_bytes(5));
-    $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice) VALUES (?,?,?,?,?,?,?)");
-    $payment_Status = "paid";
-    $Payment_Method = "low balance by admin";
-    $invoice = null;
-    $stmt->execute([$user['Processing_value'], $randomString, $dateacc, $text, $payment_Status, $Payment_Method, $invoice]);
+    wallet_ensure_schema();
+    $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice,currency) VALUES (?,?,?,?,?,?,?,?)");
+    $stmt->execute([$ab_id, bin2hex(random_bytes(5)), date('Y/m/d H:i:s'), $ab_amount, "paid", "low balance by admin", null, $ab_cur]);
+    $ab_after = wallet_credit($ab_id, -(float) $ab_amount, $ab_cur);
     sendmessage($from_id, $textbotlang['Admin']['manageUser']['lowBalanced'], $keyboardadmin, 'html');
-    $Balance_user = select("user", "*", "id", $user['Processing_value'], "select");
-    $Balance_add_user = $Balance_user['Balance'] - $text;
-    update("user", "Balance", $Balance_add_user, "id", $user['Processing_value']);
-    $lowbalanceuser = number_format($text, 0);
-    $textkam = sprintf($textbotlang['users']['Balance']['deductedNotice2'], $lowbalanceuser);
-    sendmessage($user['Processing_value'], $textkam, null, 'HTML');
+    // told in their own language, the amount in their own currency
+    sendmessage($ab_id, sprintf(payer_texts($ab_id)['users']['Balance']['deductedNotice2'], money($ab_amount, $ab_cur, false)), null, 'HTML');
     step('home', $from_id);
-    $Balance_user_afters = number_format(select("user", "*", "id", $user['Processing_value'], "select")['Balance']);
     if (strlen($setting['Channel_Report']) > 0) {
-        $textaddbalance = sprintf($textbotlang['Admin']['reportgroup']['balanceDecreased2'], $username, $from_id, $user['Processing_value'], $text, $Balance_user_afters);
         telegram('sendmessage', [
             'chat_id' => $setting['Channel_Report'],
             'message_thread_id' => $paymentreports,
-            'text' => $textaddbalance,
+            'text' => sprintf($textbotlang['Admin']['reportgroup']['balanceDecreased2'], $username, $from_id, $ab_id, money($ab_amount, $ab_cur), money($ab_after, $ab_cur)),
             'parse_mode' => "HTML"
         ]);
     }
@@ -15196,7 +14640,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     $iduser = $dataget[1];
     update("user", "verify", "1", "id", $iduser);
     sendmessage($from_id, $textbotlang['Admin']['manageUser']['verifiedSuccess'], null, 'HTML');
-    sendmessage($iduser, $textbotlang['users']['account']['verifiedByAdmin'], $keyboard, 'HTML');
+    sendmessage($iduser, payer_texts($iduser)['users']['account']['verifiedByAdmin'], null, 'HTML');
 } elseif (preg_match('/unverify-(\w+)/', $datain, $dataget)) {
     $iduser = $dataget[1];
     update("user", "verify", "0", "id", $iduser);
@@ -15230,7 +14674,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     update("user", "User_Status", "Active", "id", $iduser);
     update("user", "description_blocking", " ", "id", $iduser);
     sendmessage($from_id, $textbotlang['Admin']['manageUser']['userUnblocked'], $keyboardadmin, 'HTML');
-    sendmessage($iduser, $textbotlang['users']['block']['unblockedNotice'], $keyboard, 'HTML');
+    sendmessage($iduser, payer_texts($iduser)['users']['block']['unblockedNotice'], null, 'HTML');
     step('home', $from_id);
 } elseif (preg_match('/confirmnumber_(\w+)/', $datain, $dataget)) {
     $iduser = $dataget[1];
@@ -15306,7 +14750,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     update('invoice', 'status', 'removebyadmin', 'id_invoice', $username);
     // back into the wallet the service was bought from
     wallet_credit($info_product['id_user'], $info_product['price_product'], invoice_currency($info_product));
-    $textadd = sprintf($textbotlang['users']['Balance']['addedNotice2'], $info_product['price_product']);
+    $textadd = sprintf(payer_texts($info_product['id_user'])['users']['Balance']['addedNotice2'], money($info_product['price_product'], invoice_currency($info_product), false));
     sendmessage($info_product['id_user'], $textadd, null, 'HTML');
     sendmessage($from_id, $textbotlang['Admin']['manageUser']['removedService'], $keyboardadmin, 'HTML');
     Editmessagetext($from_id, $message_id, $text_inline, json_encode(['inline_keyboard' => []]));
@@ -16142,7 +15586,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     update("cancel_service", "status", "reject", "username", $user['Processing_value']);
     update("cancel_service", "description", $text, "username", $user['Processing_value']);
     step("home", $from_id);
-    sendmessage($nameloc['id_user'], sprintf($textbotlang['users']['status']['deleteRequestRejected'], $user['Processing_value'], $text), null, 'HTML');
+    sendmessage($nameloc['id_user'], sprintf(payer_texts($nameloc['id_user'])['users']['status']['deleteRequestRejected'], $user['Processing_value'], $text), null, 'HTML');
 } elseif (preg_match('/remoceserviceadmin-(\w+)/', $datain, $dataget)) {
     $id_invoice = $dataget[1];
     $invoice = select("invoice", "*", "id_invoice", $id_invoice, "select");
@@ -16210,13 +15654,13 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     if ($pricelast != 0) {
         // back into the wallet the service was bought from
         wallet_credit($nameloc['id_user'], $pricelast, invoice_currency($nameloc));
-        sendmessage($nameloc['id_user'], sprintf($textbotlang['users']['Balance']['addedNotice4'], $pricelast), null, 'HTML');
+        sendmessage($nameloc['id_user'], sprintf(payer_texts($nameloc['id_user'])['users']['Balance']['addedNotice4'], money($pricelast, invoice_currency($nameloc), false)), null, 'HTML');
     }
     $ManagePanel->RemoveUser($nameloc['Service_location'], $requestcheck['username']);
     update("cancel_service", "status", "accept", "username", $requestcheck['username']);
     update("invoice", "status", "removedbyadmin", "username", $requestcheck['username']);
     sendmessage($from_id, sprintf($textbotlang['Admin']['Balance']['addedToUserNotice'], $pricelast), null, 'HTML');
-    sendmessage($nameloc['id_user'], sprintf($textbotlang['users']['status']['deleteRequestApproved'], $nameloc['username']), null, 'HTML');
+    sendmessage($nameloc['id_user'], sprintf(payer_texts($nameloc['id_user'])['users']['status']['deleteRequestApproved'], $nameloc['username']), null, 'HTML');
     $text_report = sprintf($textbotlang['Admin']['reportgroup']['deleteRequestApproved'], $from_id, $pricelast, $requestcheck['username'], $nameloc['id_user']);
     if (strlen($setting['Channel_Report']) > 0) {
         telegram('sendmessage', [
@@ -16244,7 +15688,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     $ManagePanel->RemoveUser($invoice['Service_location'], $requestcheck['username']);
     update("cancel_service", "status", "accept", "username", $requestcheck['username']);
     update("invoice", "status", "removedbyadmin", "username", $requestcheck['username']);
-    sendmessage($invoice['id_user'], sprintf($textbotlang['users']['status']['deleteRequestApproved2'], $invoice['username']), null, 'HTML');
+    sendmessage($invoice['id_user'], sprintf(payer_texts($invoice['id_user'])['users']['status']['deleteRequestApproved2'], $invoice['username']), null, 'HTML');
     sendmessage($from_id, $textbotlang['Admin']['order']['askRefundAmount'], $backadmin, 'HTML');
     step("getpricebackremove", $from_id);
 } elseif ($user['step'] == "getpricebackremove") {
@@ -16256,7 +15700,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     $invoice = select("invoice", "*", "id_invoice", $user['Processing_value'], "select");
     // back into the wallet the service was bought from
     wallet_credit($invoice['id_user'], $text, invoice_currency($invoice));
-    sendmessage($invoice['id_user'], sprintf($textbotlang['users']['Balance']['addedNotice5'], $text), null, 'HTML');
+    sendmessage($invoice['id_user'], sprintf(payer_texts($invoice['id_user'])['users']['Balance']['addedNotice5'], money($text, invoice_currency($invoice), false)), null, 'HTML');
     sendmessage($from_id, $textbotlang['Admin']['Balance']['addedToUser'], $keyboardadmin, 'HTML');
     $text_report = sprintf($textbotlang['Admin']['reportgroup']['deleteRequestApproved2'], $from_id, $text, $invoice['username'], $invoice['id_user']);
     if (strlen($setting['Channel_Report']) > 0) {
@@ -16556,7 +16000,7 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     step('home', $from_id);
 } elseif (preg_match('/showcarduser-(.*)/', $datain, $dataget)) {
     $id_user = $dataget[1];
-    sendmessage($id_user, $textbotlang['users']['Balance']['cardEnabledNotice'], null, 'HTML');
+    sendmessage($id_user, payer_texts($id_user)['users']['Balance']['cardEnabledNotice'], null, 'HTML');
     sendmessage($from_id, $textbotlang['Admin']['card']['enabled'], null, 'HTML');
     update("user", "cardpayment", "1", "id", $id_user);
 } elseif (preg_match('/carduserhide-(.*)/', $datain, $dataget)) {
@@ -16593,7 +16037,7 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         ]
     ]);
     sendmessage($from_id, $textbotlang['Admin']['agent']['requestRejected'], null, 'HTML');
-    sendmessage($id_user, $textbotlang['users']['agent']['requestRejected'], null, 'HTML');
+    sendmessage($id_user, payer_texts($id_user)['users']['agent']['requestRejected'], null, 'HTML');
     $textrequestagent = sprintf($textbotlang['Admin']['agent']['requestNotice'], $id_user, $request_agent['username'], $request_agent['Description']);
     Editmessagetext($from_id, $message_id, $textrequestagent, $keyboardreject);
 } elseif (preg_match('/addagentrequest_(\w+)/', $datain, $datagetr)) {
@@ -16626,7 +16070,7 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     update("Requestagent", "type", $defaultAgentType, "id", $id_user);
     update("user", "agent", $defaultAgentType, "id", $id_user);
     update("user", "expire", null, "id", $id_user);
-    sendmessage($id_user, $textbotlang['users']['agent']['requestApproved'], null, 'HTML');
+    sendmessage($id_user, payer_texts($id_user)['users']['agent']['requestApproved'], null, 'HTML');
     sendmessage($from_id, $textbotlang['Admin']['agent']['userAgented'], $keyboardadmin, 'HTML');
     $agentTypeButtons = [];
     foreach ($agentTypeLabels as $typeCode => $label) {
@@ -18972,7 +18416,7 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     $iduser = $dataget[1];
     $userdata = select("user", "*", "id", $iduser, "select");
     update("user", "Balance", "0", "id", $iduser);
-    sendmessage($from_id, sprintf($textbotlang['Admin']['Balance']['resetToZero'], $userdata['Balance']), $keyboardadmin, 'HTML');
+    sendmessage($from_id, sprintf($textbotlang['Admin']['Balance']['resetToZero'], money($userdata['Balance'], currency_for_user($userdata))), $keyboardadmin, 'HTML');
 } elseif (preg_match('/removeadmin_(\w+)/', $datain, $dataget) && $adminrulecheck['rule'] == "administrator") {
     $idadmin = trim($dataget[1]);
     $mainAdminId = trim((string) $adminnumber);
@@ -19516,163 +18960,6 @@ if (isset($update["inline_query"])) {
         [
             'text' => $textbotlang['users']['page']['previous'],
             'callback_data' => 'previous_pageinvoice_' . $id_user
-        ]
-    ];
-    $keyboardlists['inline_keyboard'][] = $pagination_buttons;
-    $keyboard_json = json_encode($keyboardlists);
-    update("user", "pagenumber", $next_page, "id", $from_id);
-    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['manageUser']['manageUserBtnDesc'], $keyboard_json);
-} elseif ($datain == "cartuserlist") {
-    update("user", "pagenumber", "1", "id", $from_id);
-    $page = 1;
-    $items_per_page = 10;
-    $start_index = ($page - 1) * $items_per_page;
-    $result = $pdo->prepare("SELECT * FROM user WHERE cardpayment = '1'  LIMIT ?, ?");
-    $result->bindValue(1, $start_index, PDO::PARAM_INT);
-    $result->bindValue(2, $items_per_page, PDO::PARAM_INT);
-    $result->execute();
-    $keyboardlists = [
-        'inline_keyboard' => [],
-    ];
-    $keyboardlists['inline_keyboard'][] = [
-        ['text' => $textbotlang['keyboard']['operation'], 'callback_data' => "action"],
-        ['text' => $textbotlang['keyboard']['username'], 'callback_data' => "username"],
-        ['text' => $textbotlang['keyboard']['userId'], 'callback_data' => "iduser"]
-    ];
-    while ($row = ($result)->fetch(PDO::FETCH_ASSOC)) {
-        $keyboardlists['inline_keyboard'][] = [
-            [
-                'text' => $textbotlang['Admin']['manageUser']['manageUserBtn'],
-                'callback_data' => "manageuser_" . $row['id']
-            ],
-            [
-                'text' => $row['username'],
-                'callback_data' => "username"
-            ],
-            [
-                'text' => $row['id'],
-                'callback_data' => $row['id']
-            ],
-        ];
-    }
-    $pagination_buttons = [
-        [
-            'text' => $textbotlang['users']['page']['next'],
-            'callback_data' => 'next_pageusercart'
-        ],
-        [
-            'text' => $textbotlang['users']['page']['previous'],
-            'callback_data' => 'previous_pageusercart'
-        ]
-    ];
-    $backbtn = [
-        [
-            'text' => $textbotlang['keyboard']['backToPrev'],
-            'callback_data' => 'backlistuser'
-        ]
-    ];
-    $keyboardlists['inline_keyboard'][] = $backbtn;
-    $keyboardlists['inline_keyboard'][] = $pagination_buttons;
-    $keyboard_json = json_encode($keyboardlists);
-    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['manageUser']['manageUserBtnDesc'], $keyboard_json);
-} elseif ($datain == 'next_pageusercart') {
-    $numpage = select("user", "*", null, null, "count");
-    $page = $user['pagenumber'];
-    $items_per_page = 10;
-    $sum = $user['pagenumber'] * $items_per_page;
-    if ($sum > $numpage) {
-        $next_page = 1;
-    } else {
-        $next_page = $page + 1;
-    }
-    $start_index = ($next_page - 1) * $items_per_page;
-    $result = $pdo->prepare("SELECT * FROM user WHERE cardpayment = '1'  LIMIT ?, ?");
-    $result->bindValue(1, $start_index, PDO::PARAM_INT);
-    $result->bindValue(2, $items_per_page, PDO::PARAM_INT);
-    $result->execute();
-    $keyboardlists = [
-        'inline_keyboard' => [],
-    ];
-    $keyboardlists['inline_keyboard'][] = [
-        ['text' => $textbotlang['keyboard']['operation'], 'callback_data' => "action"],
-        ['text' => $textbotlang['keyboard']['username'], 'callback_data' => "username"],
-        ['text' => $textbotlang['keyboard']['userId'], 'callback_data' => "iduser"]
-    ];
-    while ($row = ($result)->fetch(PDO::FETCH_ASSOC)) {
-        $keyboardlists['inline_keyboard'][] = [
-            [
-                'text' => $textbotlang['Admin']['manageUser']['manageUserBtn'],
-                'callback_data' => "manageuser_" . $row['id']
-            ],
-            [
-                'text' => $row['username'],
-                'callback_data' => "username"
-            ],
-            [
-                'text' => $row['id'],
-                'callback_data' => $row['id']
-            ],
-        ];
-    }
-    $pagination_buttons = [
-        [
-            'text' => $textbotlang['users']['page']['next'],
-            'callback_data' => 'next_pageusercart'
-        ],
-        [
-            'text' => $textbotlang['users']['page']['previous'],
-            'callback_data' => 'previous_pageusercart'
-        ]
-    ];
-    $keyboardlists['inline_keyboard'][] = $pagination_buttons;
-    $keyboard_json = json_encode($keyboardlists);
-    update("user", "pagenumber", $next_page, "id", $from_id);
-    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['manageUser']['manageUserBtnDesc'], $keyboard_json);
-} elseif ($datain == 'previous_pageusercart') {
-    $page = $user['pagenumber'];
-    $items_per_page = 10;
-    if ($user['pagenumber'] <= 1) {
-        $next_page = 1;
-    } else {
-        $next_page = $page - 1;
-    }
-    $start_index = ($next_page - 1) * $items_per_page;
-    $result = $pdo->prepare("SELECT * FROM user WHERE cardpayment = '1'  LIMIT ?, ?");
-    $result->bindValue(1, $start_index, PDO::PARAM_INT);
-    $result->bindValue(2, $items_per_page, PDO::PARAM_INT);
-    $result->execute();
-    $keyboardlists = [
-        'inline_keyboard' => [],
-    ];
-    $keyboardlists['inline_keyboard'][] = [
-        ['text' => $textbotlang['keyboard']['operation'], 'callback_data' => "action"],
-        ['text' => $textbotlang['keyboard']['username'], 'callback_data' => "username"],
-        ['text' => $textbotlang['keyboard']['userId'], 'callback_data' => "iduser"]
-    ];
-    while ($row = ($result)->fetch(PDO::FETCH_ASSOC)) {
-        $keyboardlists['inline_keyboard'][] = [
-            [
-                'text' => $textbotlang['Admin']['manageUser']['manageUserBtn'],
-                'callback_data' => "manageuser_" . $row['id']
-            ],
-            [
-                'text' => $row['username'],
-                'callback_data' => "username"
-            ],
-            [
-                'text' => $row['id'],
-                'callback_data' => $row['id']
-            ],
-        ];
-    }
-    $pagination_buttons = [
-        [
-            'text' => $textbotlang['users']['page']['next'],
-            'callback_data' => 'next_pageusercart'
-        ],
-        [
-            'text' => $textbotlang['users']['page']['previous'],
-            'callback_data' => 'previous_pageusercart'
         ]
     ];
     $keyboardlists['inline_keyboard'][] = $pagination_buttons;
@@ -20813,7 +20100,7 @@ if ($datain == "linkappsetting") {
     sendmessage($from_id, $textbotlang['Admin']['managepanel']['panelSelectedRemove'], null, 'HTML');
 } elseif ($datain == "voloume_or_day_all") {
     if (is_file('cronbot/username.json')) {
-        $userslist = json_decode(file_get_contents('cronbot/users.json'), true);
+        $userslist = json_decode(file_get_contents('cronbot/username.json'), true);
         if (is_array($userslist) and count($userslist) != 0) {
             sendmessage($from_id, $textbotlang['Admin']['gift']['busy'], $keyboardadmin, 'HTML');
             return;
@@ -20828,6 +20115,8 @@ if ($datain == "linkappsetting") {
         return;
     }
     savedata("clear", "name_panel", $text);
+    // for the services of the tab's users only
+    savedata("save", "lang", um_tab($user));
     $keyboardstatistics = json_encode([
         'inline_keyboard' => [
             [
@@ -20883,8 +20172,10 @@ if ($datain == "linkappsetting") {
     }
     $message_id = Editmessagetext($from_id, $message_id, $textbotlang['Admin']['gift']['started'], $keyboardstatistics);
     $userdata['id_message'] = $message_id['result']['message_id'];
-    $stmt = $pdo->prepare("SELECT username FROM invoice WHERE  (status = 'active' OR status = 'end_of_time'  OR status = 'end_of_volume' OR status = 'sendedwarn' OR Status = 'send_on_hold') AND Service_location = :mp24 AND name_product != :mp25");
-    $stmt->execute([':mp24' => $userdata['name_panel'], ':mp25' => $textbotlang['common']['labels']['testServiceName']]);
+    [$gf_lw, $gf_params] = user_lang_where(in_array($userdata['lang'] ?? '', panel_langs(), true) ? $userdata['lang'] : um_tab($user), 'u');
+    $gf_where = " AND id_user IN (SELECT u.id FROM user u WHERE {$gf_lw})";
+    $stmt = $pdo->prepare("SELECT username FROM invoice WHERE  (status = 'active' OR status = 'end_of_time'  OR status = 'end_of_volume' OR status = 'sendedwarn' OR Status = 'send_on_hold') AND Service_location = ? AND name_product != ?" . $gf_where);
+    $stmt->execute(array_merge([$userdata['name_panel'], $textbotlang['common']['labels']['testServiceName']], $gf_params));
     $userslist = json_encode($stmt->fetchAll());
     file_put_contents('cronbot/gift', json_encode($userdata));
     file_put_contents('cronbot/username.json', $userslist);
@@ -21135,173 +20426,6 @@ if ($datain == "linkappsetting") {
     step("home", $from_id);
     update("category", "remark", $text, "remark", $userdata['category']);
     update("product", "category", $text, "category", $userdata['category']);
-} elseif ($datain == "zerobalance") {
-    update("user", "pagenumber", "1", "id", $from_id);
-    $page = 1;
-    $items_per_page = 10;
-    $start_index = ($page - 1) * $items_per_page;
-    $result = $pdo->prepare("SELECT * FROM user WHERE Balance < 0  LIMIT ?, ?");
-    $result->bindValue(1, $start_index, PDO::PARAM_INT);
-    $result->bindValue(2, $items_per_page, PDO::PARAM_INT);
-    $result->execute();
-    $keyboardlists = [
-        'inline_keyboard' => [],
-    ];
-    $keyboardlists['inline_keyboard'][] = [
-        ['text' => $textbotlang['keyboard']['operation'], 'callback_data' => "action"],
-        ['text' => $textbotlang['keyboard']['username'], 'callback_data' => "username"],
-        ['text' => $textbotlang['keyboard']['userId'], 'callback_data' => "iduser"]
-    ];
-    while ($row = ($result)->fetch(PDO::FETCH_ASSOC)) {
-        $keyboardlists['inline_keyboard'][] = [
-            [
-                'text' => $textbotlang['Admin']['manageUser']['manageUserBtn'],
-                'callback_data' => "manageuser_" . $row['id']
-            ],
-            [
-                'text' => $row['username'],
-                'callback_data' => "username"
-            ],
-            [
-                'text' => $row['id'],
-                'callback_data' => $row['id']
-            ],
-        ];
-    }
-    $pagination_buttons = [
-        [
-            'text' => $textbotlang['users']['page']['next'],
-            'callback_data' => 'next_pageuserzero'
-        ]
-    ];
-    $backbtn = [
-        [
-            'text' => $textbotlang['keyboard']['backToPrev'],
-            'callback_data' => 'backlistuser'
-        ]
-    ];
-    $keyboardlists['inline_keyboard'][] = $pagination_buttons;
-    $keyboardlists['inline_keyboard'][] = $backbtn;
-    $keyboard_json = json_encode($keyboardlists);
-    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['manageUser']['manageUserBtnDesc'], $keyboard_json);
-} elseif ($datain == 'next_pageuserzero') {
-    $numpage = select("user", "*", null, null, "count");
-    $page = $user['pagenumber'];
-    $items_per_page = 10;
-    $sum = $user['pagenumber'] * $items_per_page;
-    if ($sum > $numpage) {
-        $next_page = 1;
-    } else {
-        $next_page = $page + 1;
-    }
-    $start_index = ($next_page - 1) * $items_per_page;
-    $result = $pdo->prepare("SELECT * FROM user WHERE Balance < 0  LIMIT ?, ?");
-    $result->bindValue(1, $start_index, PDO::PARAM_INT);
-    $result->bindValue(2, $items_per_page, PDO::PARAM_INT);
-    $result->execute();
-    $keyboardlists = [
-        'inline_keyboard' => [],
-    ];
-    $keyboardlists['inline_keyboard'][] = [
-        ['text' => $textbotlang['keyboard']['operation'], 'callback_data' => "action"],
-        ['text' => $textbotlang['keyboard']['username'], 'callback_data' => "username"],
-        ['text' => $textbotlang['keyboard']['userId'], 'callback_data' => "iduser"]
-    ];
-    while ($row = ($result)->fetch(PDO::FETCH_ASSOC)) {
-        $keyboardlists['inline_keyboard'][] = [
-            [
-                'text' => $textbotlang['Admin']['manageUser']['manageUserBtn'],
-                'callback_data' => "manageuser_" . $row['id']
-            ],
-            [
-                'text' => $row['username'],
-                'callback_data' => "username"
-            ],
-            [
-                'text' => $row['id'],
-                'callback_data' => $row['id']
-            ],
-        ];
-    }
-    $pagination_buttons = [
-        [
-            'text' => $textbotlang['users']['page']['next'],
-            'callback_data' => 'next_pageuserzero'
-        ],
-        [
-            'text' => $textbotlang['users']['page']['previous'],
-            'callback_data' => 'previous_pageuserzero'
-        ]
-    ];
-    $backbtn = [
-        [
-            'text' => $textbotlang['keyboard']['backToPrev'],
-            'callback_data' => 'backlistuser'
-        ]
-    ];
-    $keyboardlists['inline_keyboard'][] = $pagination_buttons;
-    $keyboardlists['inline_keyboard'][] = $backbtn;
-    $keyboard_json = json_encode($keyboardlists);
-    update("user", "pagenumber", $next_page, "id", $from_id);
-    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['manageUser']['manageUserBtnDesc'], $keyboard_json);
-} elseif ($datain == 'previous_pageuserzero') {
-    $page = $user['pagenumber'];
-    $items_per_page = 10;
-    if ($user['pagenumber'] <= 1) {
-        $next_page = 1;
-    } else {
-        $next_page = $page - 1;
-    }
-    $start_index = ($next_page - 1) * $items_per_page;
-    $result = $pdo->prepare("SELECT * FROM user WHERE Balance < 0  LIMIT ?, ?");
-    $result->bindValue(1, $start_index, PDO::PARAM_INT);
-    $result->bindValue(2, $items_per_page, PDO::PARAM_INT);
-    $result->execute();
-    $keyboardlists = [
-        'inline_keyboard' => [],
-    ];
-    $keyboardlists['inline_keyboard'][] = [
-        ['text' => $textbotlang['keyboard']['operation'], 'callback_data' => "action"],
-        ['text' => $textbotlang['keyboard']['username'], 'callback_data' => "username"],
-        ['text' => $textbotlang['keyboard']['userId'], 'callback_data' => "iduser"]
-    ];
-    while ($row = ($result)->fetch(PDO::FETCH_ASSOC)) {
-        $keyboardlists['inline_keyboard'][] = [
-            [
-                'text' => $textbotlang['Admin']['manageUser']['manageUserBtn'],
-                'callback_data' => "manageuser_" . $row['id']
-            ],
-            [
-                'text' => $row['username'],
-                'callback_data' => "username"
-            ],
-            [
-                'text' => $row['id'],
-                'callback_data' => $row['id']
-            ],
-        ];
-    }
-    $pagination_buttons = [
-        [
-            'text' => $textbotlang['users']['page']['next'],
-            'callback_data' => 'next_pageuserzero'
-        ],
-        [
-            'text' => $textbotlang['users']['page']['previous'],
-            'callback_data' => 'previous_pageuserzero'
-        ]
-    ];
-    $backbtn = [
-        [
-            'text' => $textbotlang['keyboard']['backToPrev'],
-            'callback_data' => 'backlistuser'
-        ]
-    ];
-    $keyboardlists['inline_keyboard'][] = $pagination_buttons;
-    $keyboardlists['inline_keyboard'][] = $backbtn;
-    $keyboard_json = json_encode($keyboardlists);
-    update("user", "pagenumber", $next_page, "id", $from_id);
-    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['manageUser']['manageUserBtnDesc'], $keyboard_json);
 } elseif ($text == $textbotlang['keyboard']['editApp']) {
     sendmessage($from_id, $textbotlang['Admin']['apps']['selectEdit'], $json_list_remove_helpـlink, 'HTML');
     step("edit_app", $from_id);

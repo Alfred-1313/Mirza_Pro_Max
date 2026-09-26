@@ -7707,15 +7707,56 @@ if (!function_exists('wallet_stash')) {
         return currency_for_user(is_array($u) ? $u : null);
     }
 }
+if (!function_exists('user_lang_where')) {
+    // The users of one language tab, as SQL: that language itself; Persian
+    // also takes everyone with no language yet or one the bot has no tab for.
+    // [condition, positional params]
+    function user_lang_where($lang, $alias = '')
+    {
+        $col = ($alias !== '' ? $alias . '.' : '') . 'lang';
+        if ($lang !== 'fa') {
+            return ["{$col} = ?", [$lang]];
+        }
+        $others = array_values(array_diff(panel_langs(), ['fa']));
+        if (empty($others)) {
+            return ["1 = 1", []];
+        }
+        return ["({$col} IS NULL OR {$col} = '' OR {$col} NOT IN (" . implode(',', array_fill(0, count($others), '?')) . "))", $others];
+    }
+    // how many users each language tab has, and 'total'
+    function um_lang_counts()
+    {
+        global $pdo;
+        $out = array_fill_keys(panel_langs(), 0);
+        $total = 0;
+        foreach ($pdo->query("SELECT lang, COUNT(*) c FROM user GROUP BY lang")->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $l = in_array($r['lang'], panel_langs(), true) ? $r['lang'] : 'fa';
+            $out[$l] += (int) $r['c'];
+            $total += (int) $r['c'];
+        }
+        $out['total'] = $total;
+        return $out;
+    }
+    // what that tab's users hold in the wallet they are on - one currency
+    function um_lang_wallet_sum($lang)
+    {
+        global $pdo;
+        [$w, $p] = user_lang_where($lang);
+        $st = $pdo->prepare("SELECT COALESCE(SUM(Balance),0) FROM user WHERE {$w}");
+        $st->execute($p);
+        return (float) $st->fetchColumn();
+    }
+}
 if (!function_exists('money_normalize')) {
     // Accepts Persian/Arabic digits and both decimal separators, returns a bare
     // canonical numeric string, or null when the input is not a valid amount.
     function money_normalize($raw)
     {
         $s = trim((string) $raw);
-        $fa = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹', '٫', '،'];
+        // '٬' is the Persian thousands separator: "۱۰۰٬۰۰۰" is 100000
+        $fa = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹', '٫', '،', '٬'];
         $ar = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
-        $en = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', ''];
+        $en = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '', ''];
         $s = str_replace($fa, $en, $s);
         $s = str_replace($ar, ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'], $s);
         $s = str_replace([',', ' ', "\xC2\xA0"], '', $s);
@@ -7817,7 +7858,10 @@ if (!function_exists('money')) {
     function money($amount, $code = null, $withSymbol = true)
     {
         $cur = currency_get($code ?? currency_default_code());
-        $n = money_normalize($amount);
+        // a balance can be below zero (an agent buying on credit): the sign is
+        // kept rather than the amount read as invalid and shown as 0
+        $neg = is_numeric($amount) && (float) $amount < 0;
+        $n = money_normalize($neg ? ltrim(trim((string) $amount), '-') : $amount);
         if ($n === null) {
             $n = '0';
         }
@@ -7826,12 +7870,13 @@ if (!function_exists('money')) {
         if ($dec > 0 && strpos($num, '.') !== false) {
             $num = rtrim(rtrim($num, '0'), '.');
         }
+        $sign = ($neg && (float) $n != 0) ? '-' : '';
         if (!$withSymbol || $cur['symbol'] === '') {
-            return $num;
+            return $sign . $num;
         }
         return ($cur['symbol_position'] === 'before')
-            ? $cur['symbol'] . $num
-            : $num . ' ' . $cur['symbol'];
+            ? $sign . $cur['symbol'] . $num
+            : $sign . $num . ' ' . $cur['symbol'];
     }
 }
 function addFieldToTable($tableName, $fieldName, $defaultValue = null, $datatype = "VARCHAR(500)")

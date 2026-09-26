@@ -23,6 +23,9 @@ if(count($userid) == 0){
     return;
     
 }
+// the buttons under the message are in its readers' language (the whole
+// list is one language tab's users); the admin's progress stays Persian
+$bm_tx = lang_tab_texts(in_array($info['lang'] ?? '', panel_langs(), true) ? $info['lang'] : 'fa');
 $count_remein = count($userid);
 $textprocces = sprintf($textbotlang['hardcoded']['bulkMessageProgress'], $count_remein);
 $cancelmessage = json_encode([
@@ -36,42 +39,42 @@ Editmessagetext($info['id_admin'], $info['id_message'],$textprocces, $cancelmess
 $keyboardbuy = json_encode([
         'inline_keyboard' => [
             [
-                ['text' => $textbotlang['textbot']['sell'], 'callback_data' => 'buy'],
+                ['text' => $bm_tx['textbot']['sell'], 'callback_data' => 'buy'],
             ],
         ]
     ]);
 $keyboardstart = json_encode([
         'inline_keyboard' => [
             [
-                ['text' => $textbotlang['keyboard']['start'], 'callback_data' => 'start'],
+                ['text' => $bm_tx['keyboard']['start'], 'callback_data' => 'start'],
             ],
         ]
     ]);
 $keyboardusertest = json_encode([
         'inline_keyboard' => [
             [
-                ['text' => $textbotlang['textbot']['userTest'], 'callback_data' => 'usertestbtn'],
+                ['text' => $bm_tx['textbot']['userTest'], 'callback_data' => 'usertestbtn'],
             ],
         ]
     ]);
 $keyboardhelpbtn = json_encode([
         'inline_keyboard' => [
             [
-                ['text' => $textbotlang['textbot']['help'], 'callback_data' => 'helpbtn'],
+                ['text' => $bm_tx['textbot']['help'], 'callback_data' => 'helpbtn'],
             ],
         ]
     ]);
 $keyboardaffiliates = json_encode([
         'inline_keyboard' => [
             [
-                ['text' => $textbotlang['textbot']['affiliates'], 'callback_data' => 'affiliatesbtn'],
+                ['text' => $bm_tx['textbot']['affiliates'], 'callback_data' => 'affiliatesbtn'],
             ],
         ]
     ]);
 $keyboardaddbalance = json_encode([
         'inline_keyboard' => [
             [
-                ['text' => $textbotlang['textbot']['addBalance'], 'callback_data' => 'Add_Balance'],
+                ['text' => $bm_tx['textbot']['addBalance'], 'callback_data' => 'Add_Balance'],
             ],
         ]
     ]);
