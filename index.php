@@ -5175,7 +5175,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         ]);
     }
     step('home', $from_id);
-} elseif ($text == $textbotlang['textbot']['addBalance'] || $datain == "Add_Balance" || $text == "/topup" || $verify_resume === 'verifytopup') {
+} elseif ($text == $textbotlang['textbot']['addBalance'] || $datain == "Add_Balance" || $datain == "Add_Balance_ac" || $text == "/topup" || $verify_resume === 'verifytopup') {
     update("user", "Processing_value", "0", "id", $from_id);
     update("user", "Processing_value_one", "0", "id", $from_id);
     update("user", "Processing_value_tow", "0", "id", $from_id);
@@ -5191,6 +5191,20 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     // method first, amount second: $step_payment is already filtered to this
     // user's language (and, since 2026-08-08, hard-excludes fa-only gateways)
     if ($step_payment_none) {
+        // from the 👤 account page: the page, its sticker and the
+        // "👤 حساب کاربری" tap that opened it go, and only the notice stays.
+        // keyboard.php has already cleared both ids for the new section, so
+        // they are read from $users, the row as it was before this tap.
+        if ($datain == "Add_Balance_ac") {
+            deletemessage($from_id, $message_id);
+            $ac_tap = explode(':', (string) ($users['menu_tap_id'] ?? ''), 2);
+            if (ctype_digit($ac_tap[0]) && intval($ac_tap[0]) > 0 && ($ac_tap[1] ?? '') === 'accountwallet') {
+                deletemessage($from_id, intval($ac_tap[0]));
+            }
+            if (ctype_digit((string) ($users['menu_sticker_id'] ?? '')) && intval($users['menu_sticker_id']) > 0) {
+                deletemessage($from_id, intval($users['menu_sticker_id']));
+            }
+        }
         sendmessage($from_id, $noCreditText, null, 'HTML');
         return;
     }
@@ -5198,7 +5212,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     // only a callback gives us a bot-authored message to edit; the reply
     // button and /topup must send a fresh one (same shape as accountWallet)
     $tp_methodKb = topup_disc_method_keyboard(topup_method_keyboard($step_payment, $user['lang'] ?? 'fa'), $from_id, $user['lang'] ?? 'fa');
-    if ($datain == "Add_Balance") {
+    if ($datain == "Add_Balance" || $datain == "Add_Balance_ac") {
         Editmessagetext($from_id, $message_id, topup_disc_method_caption($from_id, $user['lang'] ?? 'fa', $textbotlang), $tp_methodKb, 'HTML');
     } else {
         sendmessage($from_id, topup_disc_method_caption($from_id, $user['lang'] ?? 'fa', $textbotlang), $tp_methodKb, 'HTML');

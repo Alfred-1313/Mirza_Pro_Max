@@ -8196,7 +8196,7 @@ if (!function_exists('main_menu_triggers')) {
         ];
         $callbacks = [
             'usertestbtn', 'backorder', 'supportbtns', 'helpbtns', 'account',
-            'Add_Balance', 'buy', 'Tariff_list', 'affiliatesbtn', 'wheel_luck',
+            'Add_Balance', 'Add_Balance_ac', 'buy', 'Tariff_list', 'affiliatesbtn', 'wheel_luck',
             'extendbtn', 'change_language', 'agentpanel', 'requestagent', 'admin',
         ];
         $texts = array_values(array_unique(array_filter($texts, function ($v) {

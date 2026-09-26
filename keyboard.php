@@ -324,7 +324,8 @@ $keyboard = build_main_keyboard();
 
 // SHOP surface: the customer's own account screen.
 $kp_accountRows = [
-    [['text' => $customer_texts['textbot']['addBalance'], 'callback_data' => "Add_Balance"]],
+    // its own callback, so the top-up screen knows it came from this page
+    [['text' => $customer_texts['textbot']['addBalance'], 'callback_data' => "Add_Balance_ac"]],
 ];
 // 🚫 مخفی کردن این دکمه (🎨 شخصی‌سازی) drops the whole row - a row holding
 // nothing is not something Telegram accepts
@@ -2880,6 +2881,7 @@ $sticker_callback_map = [
     'buyfresh' => 'text_sell',
     'account' => 'accountwallet',
     'Add_Balance' => 'addbalance',
+    'Add_Balance_ac' => 'addbalance',
     'Tariff_list' => 'text_Tariff_list',
     'wheel_luck' => 'text_wheel_luck',
     'affiliatesbtn' => 'text_affiliates',
