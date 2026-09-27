@@ -11111,8 +11111,8 @@ if (!function_exists('bt_section_meta')) {
                 'alert' => 'پیام‌هایی که وقتی ادمین موجودی کاربر رو زیاد یا کم می‌کنه (تکی یا همگانی) به خود کاربر می‌رسه - به زبان و با ارز کیف پول خودش.',
             ],
             'um_orders' => [
-                'label' => '⬇️ 🛍 پیام‌های حذف سرویس و بازگشت مبلغ',
-                'alert' => 'پیام‌هایی که بعد از حذف سرویس توسط ادمین یا جواب درخواست حذف سرویس به کاربر می‌رسه.',
+                'label' => '⬇️ 🛍 پیام‌های سرویس‌ها: حذف، بازگشت مبلغ، واگذاری',
+                'alert' => 'پیام‌هایی که بعد از حذف سرویس توسط ادمین، جواب درخواست حذف سرویس، یا واگذاری یه سرویس پنل به کاربر (🔗) بهش می‌رسه.',
             ],
             'um_account' => [
                 'label' => '⬇️ 👤 پیام‌های حساب کاربر',
@@ -17285,6 +17285,8 @@ if (!function_exists('bt_nosticker_keys')) {
             'users.affiliates.rewardStatusPending',
             'users.affiliates.rewardStatusDone',
             'users.affiliates.rewardServiceName',
+            // and the service name 🔗 واگذاری gives a handed-over service
+            'users.status.assignedServiceName',
             // temporary text replaced within seconds - its sticker stayed behind
             'users.sell.creating',
             // temporary too, and reworded per gateway so it rarely even matched
