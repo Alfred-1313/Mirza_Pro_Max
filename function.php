@@ -9772,7 +9772,55 @@ if (!function_exists('mainmenu_layout_get')) {
                 $out[$sw] = $layout[$sw];
             }
         }
+        // the change-language button is shown or hidden in every language at
+        // once, and Persian's menu holds that one answer
+        if ($lang !== 'fa') {
+            $out['keyboard'] = mainmenu_langbtn_mark($out['keyboard'], mainmenu_langbtn_hidden());
+        }
         return $out;
+    }
+    // Is the change-language button hidden? One answer for every language:
+    // hidden in one and shown in another, a customer who switched could never
+    // switch back. No button in Persian's menu counts as hidden.
+    function mainmenu_langbtn_hidden()
+    {
+        foreach (mainmenu_layout_get('fa')['keyboard'] as $row) {
+            foreach ((array) $row as $btn) {
+                if (is_array($btn) && ($btn['text'] ?? '') === 'text_change_language') {
+                    return !empty($btn['hidden']);
+                }
+            }
+        }
+        return true;
+    }
+    // $rows with the change-language button shown or hidden
+    function mainmenu_langbtn_mark($rows, $hidden)
+    {
+        foreach ($rows as $r => $row) {
+            foreach ((array) $row as $c => $btn) {
+                if (is_array($btn) && ($btn['text'] ?? '') === 'text_change_language') {
+                    if ($hidden) {
+                        $rows[$r][$c]['hidden'] = true;
+                    } else {
+                        unset($rows[$r][$c]['hidden']);
+                    }
+                }
+            }
+        }
+        return $rows;
+    }
+    // Shows or hides it for every language (Persian's menu holds it)
+    function mainmenu_langbtn_set_hidden($hidden)
+    {
+        $layout = mainmenu_layout_get('fa');
+        $layout['keyboard'] = mainmenu_langbtn_mark($layout['keyboard'], $hidden);
+        return mainmenu_layout_save('fa', $layout);
+    }
+    // The line every ✏️ نام و نمایش screen carries under its tab line: the
+    // one thing on it that is not "this language only".
+    function mainmenu_langbtn_note()
+    {
+        return "\n🔗 پنهان / نمایش دکمه‌ی «🌏 تغییر زبان» بین همه‌ی زبان‌ها مشترکه: روی هر تب عوضش کنی، روی بقیه هم عوض می‌شه — تا کاربری که زبانش رو عوض کرده، راه برگشت داشته باشه. اسمش ولی برای هر تب جداست.";
     }
     // Writes only the menu fields back, leaving text_stickers/text_reactions in
     // setting.keyboardmain exactly as they were.
@@ -9975,6 +10023,7 @@ if (!function_exists('mainmenu_appearance_reset')) {
         if (!is_array($layout) || !isset($layout['keyboard']) || !is_array($layout['keyboard'])) {
             return false;
         }
+        $mm_langbtn_hidden = mainmenu_langbtn_hidden();
         foreach ($layout['keyboard'] as $mm_r => $mm_row) {
             if (!is_array($mm_row)) {
                 continue;
@@ -10000,6 +10049,8 @@ if (!function_exists('mainmenu_appearance_reset')) {
                     }
                 }
             }
+            // shared by every language - one tab's reset leaves it as it was
+            $layout['keyboard'] = mainmenu_langbtn_mark($layout['keyboard'], $mm_langbtn_hidden);
         }
         if (in_array('emoji', $parts, true)) {
             unset($layout['simple_emoji'], $layout['emoji_pos_global']);

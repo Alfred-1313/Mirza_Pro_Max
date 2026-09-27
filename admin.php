@@ -1448,6 +1448,8 @@ if (!function_exists('lang_switch_settings_payload')) {
             ? ('روشن ✅ — ' . ($ls['mode'] === 'always' ? 'هر بار /start' : 'فقط بار اول'))
             : 'خاموش') . "\n";
         $cap .= "زبان‌های فعال: " . (empty($on) ? '—' : implode('، ', $on)) . "\n";
+        $cap .= "دکمه‌ی «🌏 تغییر زبان» توی منوی اصلی: " . (mainmenu_langbtn_hidden() ? 'پنهان 🚫' : 'نمایش 👁') . "\n";
+        $cap .= "🔗 این دکمه هم بین همه‌ی زبان‌ها مشترکه: از 🔘 تنظیمات دکمه‌های منوی اصلی ← ✏️ نام و نمایش دکمه‌های منو، روی هر تب پنهان/نمایشش کنی، روی بقیه هم اعمال می‌شه.\n";
         // turning a language off for its customers is 📡 وضعیت ربات in
         // 🌐 وضعیت قابلیت‌ها (هر زبان) - one per language
         $cap .= "\nℹ️ برای خاموش کردن ربات برای کاربرای یه زبان: 🌐 وضعیت قابلیت‌ها (هر زبان) ← 📡 وضعیت ربات.\n";
@@ -6905,20 +6907,20 @@ if (preg_match('/^layoutreset-([a-z]{2})$/', $datain, $ly_m) && $adminrulecheck[
 //----------------[  rename & hide manager handlers  ]----------------
 if ($text == "✏️ نام و نمایش دکمه‌ها" && $adminrulecheck['rule'] == "administrator") {
     $rn_kb = rename_editor_payload($textbotlang);
-    sendmessage($from_id, "✏️ <b>نام و نمایش دکمه‌های منو</b>\n\n🔹 روی یه دکمه بزن تا انتخاب بشه 🔵\n🔹 بعد «✏️ تغییر نام» برای عوض کردن اسمش، یا «👁 پنهان / نمایش» برای مخفی/آشکار کردنش رو بزن\n🚫 = دکمه‌ی پنهان", $rn_kb, 'HTML');
+    sendmessage($from_id, "✏️ <b>نام و نمایش دکمه‌های منو</b>" . mainmenu_langbtn_note() . "\n\n🔹 روی یه دکمه بزن تا انتخاب بشه 🔵\n🔹 بعد «✏️ تغییر نام» برای عوض کردن اسمش، یا «👁 پنهان / نمایش» برای مخفی/آشکار کردنش رو بزن\n🚫 = دکمه‌ی پنهان", $rn_kb, 'HTML');
     return;
 }
 if (preg_match('/^renamebtn-([a-z]{2})-(\d+)-(\d+)$/', $datain, $rn_m) && $adminrulecheck['rule'] == "administrator") {
     $rn_lang = $rn_m[1];
     $rn_kb = rename_editor_payload($textbotlang, [$rn_m[2], $rn_m[3]], $rn_lang);
     $rn_name = menu_button_name($rn_m[2], $rn_m[3], $textbotlang, $rn_lang);
-    Editmessagetext($from_id, $message_id, "✏️ <b>نام و نمایش دکمه‌ها</b>" . mainmenu_tab_note($rn_lang) . "\n\nدکمه‌ی <b>{$rn_name}</b> انتخاب شد 🔵\nیکی از گزینه‌های پایین رو بزن 👇", $rn_kb, 'HTML');
+    Editmessagetext($from_id, $message_id, "✏️ <b>نام و نمایش دکمه‌ها</b>" . mainmenu_tab_note($rn_lang) . mainmenu_langbtn_note() . "\n\nدکمه‌ی <b>{$rn_name}</b> انتخاب شد 🔵\nیکی از گزینه‌های پایین رو بزن 👇", $rn_kb, 'HTML');
     return;
 }
 if (preg_match('/^renamecancel-([a-z]{2})$/', $datain, $rn_m) && $adminrulecheck['rule'] == "administrator") {
     $rn_lang = $rn_m[1];
     $rn_kb = rename_editor_payload($textbotlang, null, $rn_lang);
-    Editmessagetext($from_id, $message_id, "✏️ <b>نام و نمایش دکمه‌های منو</b>" . mainmenu_tab_note($rn_lang) . "\n\nروی یه دکمه بزن تا انتخاب بشه 👇\n🚫 = دکمه‌ی پنهان", $rn_kb, 'HTML');
+    Editmessagetext($from_id, $message_id, "✏️ <b>نام و نمایش دکمه‌های منو</b>" . mainmenu_tab_note($rn_lang) . mainmenu_langbtn_note() . "\n\nروی یه دکمه بزن تا انتخاب بشه 👇\n🚫 = دکمه‌ی پنهان", $rn_kb, 'HTML');
     return;
 }
 if (preg_match('/^renamehide-([a-z]{2})-(\d+)-(\d+)$/', $datain, $rn_m) && $adminrulecheck['rule'] == "administrator") {
@@ -6936,9 +6938,13 @@ if (preg_match('/^renamehide-([a-z]{2})-(\d+)-(\d+)$/', $datain, $rn_m) && $admi
             $rn_msg = "✅ دکمه از منو پنهان شد 🚫";
         }
         mainmenu_layout_save($rn_lang, $rn_layout);
+        if (($rn_layout['keyboard'][$rn_r][$rn_c]['text'] ?? '') === 'text_change_language') {
+            mainmenu_langbtn_set_hidden(!empty($rn_layout['keyboard'][$rn_r][$rn_c]['hidden']));
+            $rn_msg .= "\n🔗 روی همه‌ی زبان‌ها.";
+        }
     }
     $rn_kb = rename_editor_payload($textbotlang, null, $rn_lang);
-    Editmessagetext($from_id, $message_id, $rn_msg . mainmenu_tab_note($rn_lang) . "\n\n✏️ <b>نام و نمایش دکمه‌های منو</b> 👇", $rn_kb, 'HTML');
+    Editmessagetext($from_id, $message_id, $rn_msg . mainmenu_tab_note($rn_lang) . mainmenu_langbtn_note() . "\n\n✏️ <b>نام و نمایش دکمه‌های منو</b> 👇", $rn_kb, 'HTML');
     return;
 }
 if (preg_match('/^renametext-([a-z]{2})-(\d+)-(\d+)$/', $datain, $rn_m) && $adminrulecheck['rule'] == "administrator") {
@@ -6970,7 +6976,7 @@ if (preg_match('/^renamebtn-([a-z]{2})-(\d+)-(\d+)$/', $user['step'], $rn_m) && 
     }
     step('renamemanage', $from_id);
     $rn_kb = rename_editor_payload($textbotlang, null, $rn_lang);
-    sendmessage($from_id, $rn_msg . mainmenu_tab_note($rn_lang) . "\n\n✏️ <b>نام و نمایش دکمه‌های منو</b>\nروی دکمه بعدی بزن یا برگرد 👇", $rn_kb, 'HTML');
+    sendmessage($from_id, $rn_msg . mainmenu_tab_note($rn_lang) . mainmenu_langbtn_note() . "\n\n✏️ <b>نام و نمایش دکمه‌های منو</b>\nروی دکمه بعدی بزن یا برگرد 👇", $rn_kb, 'HTML');
     return;
 }
 if (preg_match('/^renamereset-([a-z]{2})$/', $datain, $rn_m) && $adminrulecheck['rule'] == "administrator") {
@@ -6996,10 +7002,12 @@ if (preg_match('/^renamereset-([a-z]{2})$/', $datain, $rn_m) && $adminrulecheck[
                 }
             }
         }
+        // shared by every language - one tab's reset leaves it as it was
+        $rn_layout['keyboard'] = mainmenu_langbtn_mark($rn_layout['keyboard'], mainmenu_langbtn_hidden());
         mainmenu_layout_save($rn_lang, $rn_layout);
     }
     $rn_kb = rename_editor_payload($textbotlang, null, $rn_lang);
-    Editmessagetext($from_id, $message_id, "🔄 نام و نمایش دکمه‌ها به پیش‌فرض برگشت (رنگ و ایموجی و استیکرها حفظ شدن)" . mainmenu_tab_note($rn_lang) . "\n\n✏️ <b>نام و نمایش دکمه‌های منو</b> 👇", $rn_kb, 'HTML');
+    Editmessagetext($from_id, $message_id, "🔄 نام و نمایش دکمه‌ها به پیش‌فرض برگشت (رنگ و ایموجی و استیکرها حفظ شدن)" . mainmenu_tab_note($rn_lang) . mainmenu_langbtn_note() . "\n\n✏️ <b>نام و نمایش دکمه‌های منو</b> 👇", $rn_kb, 'HTML');
     return;
 }
 
@@ -19417,7 +19425,7 @@ if ($datain == "linkappsetting") {
 } elseif (preg_match('/^btnset_open:rename(?::([a-z]{2}))?$/', $datain, $btnset_m) && $adminrulecheck['rule'] == "administrator") {
     $btnset_lang = $btnset_m[1] ?? 'fa';
     $rn_kb = rename_editor_payload($textbotlang, null, $btnset_lang);
-    Editmessagetext($from_id, $message_id, "✏️ <b>نام و نمایش دکمه‌های منو</b>" . mainmenu_tab_note($btnset_lang) . "\n\n🔹 روی یه دکمه بزن تا انتخاب بشه 🔵\n🔹 بعد «✏️ تغییر نام» برای عوض کردن اسمش، یا «👁 پنهان / نمایش» برای مخفی/آشکار کردنش رو بزن\n🚫 = دکمه‌ی پنهان", $rn_kb, 'HTML');
+    Editmessagetext($from_id, $message_id, "✏️ <b>نام و نمایش دکمه‌های منو</b>" . mainmenu_tab_note($btnset_lang) . mainmenu_langbtn_note() . "\n\n🔹 روی یه دکمه بزن تا انتخاب بشه 🔵\n🔹 بعد «✏️ تغییر نام» برای عوض کردن اسمش، یا «👁 پنهان / نمایش» برای مخفی/آشکار کردنش رو بزن\n🚫 = دکمه‌ی پنهان", $rn_kb, 'HTML');
 } elseif ($datain == "btnset_open:langswitch" && $adminrulecheck['rule'] == "administrator") {
     $lsw_kb = lang_switch_settings_payload();
     Editmessagetext($from_id, $message_id, lang_switch_settings_caption($textbotlang), $lsw_kb, 'HTML');
