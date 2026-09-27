@@ -5566,9 +5566,9 @@ if (!function_exists('feature_section_payload')) {
                 ['text' => $clOn ? $on : $off, 'callback_data' => "flstog:{$lang}:aff_classic:{$v['aff_classic']}", 'style' => $clOn ? 'success' : 'danger'],
                 ['text' => $s['affPlanToggle'], 'callback_data' => "none"],
             ];
-            $rows[] = [['text' => strtr($s['affPercentBtn'], ['{percent}' => (string) $v['aff_percent']]), 'callback_data' => "flsask:{$lang}:aff_percent"]];
-            $rows[] = [['text' => strtr($s['affGiftBtn'], ['{gift}' => money($v['aff_giftamount'], $cur)]), 'callback_data' => "flsask:{$lang}:aff_giftamount"]];
-            $rows[] = [['text' => $s['affBannerBtn'], 'callback_data' => "flsask:{$lang}:aff_banner"]];
+            $rows[] = [['text' => strtr($s['affPercentBtn'], ['{percent}' => (string) $v['aff_percent']]), 'callback_data' => "flsask:{$lang}:aff_percent", 'style' => 'primary']];
+            $rows[] = [['text' => strtr($s['affGiftBtn'], ['{gift}' => money($v['aff_giftamount'], $cur)]), 'callback_data' => "flsask:{$lang}:aff_giftamount", 'style' => 'primary']];
+            $rows[] = [['text' => $s['affBannerBtn'], 'callback_data' => "flsask:{$lang}:aff_banner", 'style' => 'primary']];
             $comOn = $v['aff_commission'] === 'oncommission';
             $rows[] = [
                 ['text' => $comOn ? $on : $off, 'callback_data' => "flstog:{$lang}:aff_commission:{$v['aff_commission']}", 'style' => $comOn ? 'success' : 'danger'],
@@ -5592,19 +5592,21 @@ if (!function_exists('feature_section_payload')) {
                 ['text' => $rw['on'] ? $on : $off, 'callback_data' => "flsaffrw:{$lang}:on", 'style' => $rw['on'] ? 'success' : 'danger'],
                 ['text' => $s['affPlanToggle'], 'callback_data' => "none"],
             ];
-            $rows[] = [['text' => strtr($s['affrwNeedBtn'], ['{need}' => $rw['need']]), 'callback_data' => "flsask:{$lang}:affrw_need"]];
+            $rows[] = [['text' => strtr($s['affrwNeedBtn'], ['{need}' => $rw['need']]), 'callback_data' => "flsask:{$lang}:affrw_need", 'style' => 'primary']];
             $rows[] = [
-                ['text' => strtr($s['affrwVolumeBtn'], ['{volume}' => $rw['gb']]), 'callback_data' => "flsask:{$lang}:affrw_gb"],
-                ['text' => strtr($s['affrwDaysBtn'], ['{days}' => $rw['days']]), 'callback_data' => "flsask:{$lang}:affrw_days"],
+                ['text' => strtr($s['affrwVolumeBtn'], ['{volume}' => $rw['gb']]), 'callback_data' => "flsask:{$lang}:affrw_gb", 'style' => 'primary'],
+                ['text' => strtr($s['affrwDaysBtn'], ['{days}' => $rw['days']]), 'callback_data' => "flsask:{$lang}:affrw_days", 'style' => 'primary'],
             ];
-            $rows[] = [['text' => strtr($s['affrwPanelBtn'], ['{panel}' => $rwPanel !== null ? $rwPanel['name_panel'] : $s['affrwNoPanel']]), 'callback_data' => "flsaffrw:{$lang}:panel", 'style' => $rwPanel !== null ? 'primary' : 'danger']];
+            $rows[] = [['text' => strtr($s['affrwPanelBtn'], ['{panel}' => $rwPanel !== null ? $rwPanel['name_panel'] : $s['affrwNoPanel']]), 'callback_data' => "flsaffrw:{$lang}:panel", 'style' => 'primary']];
             $rows[] = [['text' => strtr($s['affrwModeBtn'], ['{mode}' => $rw['mode'] === 'auto' ? $s['affrwModeAuto'] : $s['affrwModeAdmin']]), 'callback_data' => "flsaffrw:{$lang}:mode", 'style' => 'primary']];
         } else {
             $rows[] = [['text' => strtr($s['locAllBtn'], ['{all}' => (string) $v['loc_limit_all']]), 'callback_data' => "flsask:{$lang}:loc_limit_all"]];
             $rows[] = [['text' => strtr($s['locFreeBtn'], ['{free}' => (string) $v['loc_limit_free']]), 'callback_data' => "flsask:{$lang}:loc_limit_free"]];
             $rows[] = [['text' => $s['locResetBtn'], 'callback_data' => "flsloc:{$lang}:ask", 'style' => 'danger']];
         }
-        $rows[] = [['text' => $s['back'], 'callback_data' => "fls_lang:{$lang}"]];
+        // 👥 طرح‌های زیرمجموعه‌گیری: labels white, what changes something
+        // blue, the switches green/red for their state, back red
+        $rows[] = [['text' => $s['back'], 'callback_data' => "fls_lang:{$lang}"] + ($section === 'aff' ? ['style' => 'danger'] : [])];
         return json_encode(['inline_keyboard' => $rows]);
     }
 }
