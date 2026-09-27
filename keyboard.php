@@ -2974,16 +2974,22 @@ if ($sticker_btn_key === 'text_sell') {
     // earlier purchase get mistaken for this run's sticker by KeyboardCategory()
     update("user", "Processing_value_tow", "", "id", $from_id);
 }
-if ($sticker_btn_key !== null && !empty($keyboardRows) && function_exists('telegram')) {
+// 👥 زیرمجموعه‌گیری: its sticker comes first only when one of its two kinds
+// is on for this customer; with neither, the «nothing is active» message
+// goes out alone
+$st_wait = $sticker_btn_key === 'text_affiliates' && function_exists('aff_any_on') && !aff_any_on($users['lang'] ?? 'fa');
+if ($sticker_btn_key !== null && !$st_wait && !empty($keyboardRows) && function_exists('telegram')) {
     foreach ($keyboardRows as $st_row) {
         if (!is_array($st_row)) {
             continue;
         }
         foreach ($st_row as $st_btn) {
-            if (is_array($st_btn) && ($st_btn['text'] ?? '') === $sticker_btn_key && !empty($st_btn['sticker'])) {
+            // its own sticker, or the one it ships with (mainmenu_default_stickers)
+            $st_file = is_array($st_btn) ? mainmenu_btn_sticker($st_btn) : '';
+            if (is_array($st_btn) && ($st_btn['text'] ?? '') === $sticker_btn_key && $st_file !== '') {
                 $st_sent = telegram('sendSticker', [
                     'chat_id' => $from_id,
-                    'sticker' => $st_btn['sticker'],
+                    'sticker' => $st_file,
                 ]);
                 // stashed so the location_ handler in index.php can delete this
                 // sticker once a panel is picked and the next screen replaces the

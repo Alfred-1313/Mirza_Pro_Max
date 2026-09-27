@@ -1887,6 +1887,16 @@ if (!function_exists('aff_classic_on')) {
     {
         return (string) feature_setting_value('aff_classic', $lang, '0') === '1';
     }
+    // anything under 👥 on for this language - the referral button's tap
+    // sticker waits for it, so «nothing is active» does not come after one
+    function aff_any_on($lang)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        if (feature_value('affiliatesstatus', $lang, $setting['affiliatesstatus'] ?? '') == "offaffiliates") {
+            return false;
+        }
+        return aff_classic_on($lang) || affrw_live($lang) !== null;
+    }
 }
 if (!function_exists('feature_aff_banner')) {
     // 🎁 the referral banner of one language: [caption, photo]. Persian falls
@@ -10045,6 +10055,21 @@ if (!function_exists('mainmenu_appearance_reset')) {
     function mainmenu_default_hidden_keys()
     {
         return ['text_extend', 'text_wheel_luck', 'text_Tariff_list', 'text_support', 'text_change_language', 'text_affiliates'];
+    }
+    // The tap sticker a main-menu button ships with, on every tab. The
+    // admin's own (✨ استیکر پریمیوم دکمه‌ها) replaces it; removing that
+    // brings this one back - the same as the messages' own defaults.
+    function mainmenu_default_stickers()
+    {
+        return ['text_affiliates' => 'CAACAgQAAxkBAAJzfGq42xFcv4rWhXGltLOZGa60FqjlAAI1FQAC2GtRUOk5LZoQ702UPQQ'];
+    }
+    // what a tap on $btn sends: its own sticker, or the one it ships with
+    function mainmenu_btn_sticker($btn)
+    {
+        if (!empty($btn['sticker'])) {
+            return (string) $btn['sticker'];
+        }
+        return mainmenu_default_stickers()[$btn['text'] ?? ''] ?? '';
     }
     // $lang: resets ONE language's menu. A reset offered on a language tab has
     // to stop there, or clearing English would wipe the Persian menu too.

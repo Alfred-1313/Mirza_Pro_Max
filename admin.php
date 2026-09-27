@@ -1304,7 +1304,7 @@ if (!function_exists('emoji_sticker_editor_payload')) {
                         $name = $labels[$name];
                     }
                     $kbBtn = [
-                        'text' => (!empty($btn['hidden']) ? '🚫 ' : '') . $name . ' ' . (!empty($btn['sticker']) ? '✅' : '❌'),
+                        'text' => (!empty($btn['hidden']) ? '🚫 ' : '') . $name . ' ' . (!empty($btn['sticker']) ? '✅' : (mainmenu_btn_sticker($btn) !== '' ? '🔹' : '❌')),
                         'callback_data' => "{$prefix}-{$lang}-{$r}-{$c}"
                     ];
                 }
@@ -6822,7 +6822,7 @@ if ($text == "😀 ایموجی دکمه‌ها" && $adminrulecheck['rule'] == "
 }
 if ($text == "✨ استیکر پریمیوم دکمه‌ها" && $adminrulecheck['rule'] == "administrator") {
     $es_kb = emoji_sticker_editor_payload('sticker', $textbotlang);
-    sendmessage($from_id, "✨ <b>استیکر پریمیوم دکمه‌ها</b>\n\nروی هر دکمه بزن و استیکرش رو بفرست 👇\nوقتی کاربر اون دکمه رو بزنه، اول این استیکر ارسال می‌شه\n✅ ست شده | ❌ ست نشده\n🚫 = دکمه پنهان شده\n\n📌 این‌ها فقط برای لحظه‌ی لمس دکمه‌های منوی اصلی‌ان؛ برای استیکر پیام‌های داخل مراحل خرید/سرویس‌های من/اکانت تست، از 🎨 شخصی‌سازی پیام‌های ربات استفاده کن.", $es_kb, 'HTML');
+    sendmessage($from_id, "✨ <b>استیکر پریمیوم دکمه‌ها</b>\n\nروی هر دکمه بزن و استیکرش رو بفرست 👇\nوقتی کاربر اون دکمه رو بزنه، اول این استیکر ارسال می‌شه\n✅ ست شده | 🔹 استیکر پیش‌فرض | ❌ ست نشده\n🚫 = دکمه پنهان شده\n👥 دکمه‌ی زیرمجموعه‌گیری فقط وقتی استیکرش رو می‌فرسته که یکی از دو نوع زیرمجموعه‌گیری برای اون زبان روشن باشه.\n\n📌 این‌ها فقط برای لحظه‌ی لمس دکمه‌های منوی اصلی‌ان؛ برای استیکر پیام‌های داخل مراحل خرید/سرویس‌های من/اکانت تست، از 🎨 شخصی‌سازی پیام‌های ربات استفاده کن.", $es_kb, 'HTML');
     return;
 }
 if (preg_match('/^btnemoji-([a-z]{2})-(\d+)-(\d+)$/', $datain, $es_match) && $adminrulecheck['rule'] == "administrator") {
@@ -6929,7 +6929,9 @@ if (preg_match('/^setemoji-([a-z]{2})-(\d+)-(\d+)(?:-(left|right))?$/', $user['s
 if (preg_match('/^btnsticker-([a-z]{2})-(\d+)-(\d+)$/', $datain, $es_match) && $adminrulecheck['rule'] == "administrator") {
     $es_name = menu_button_name($es_match[2], $es_match[3], $textbotlang, $es_match[1]);
     step("setsticker-{$es_match[1]}-{$es_match[2]}-{$es_match[3]}", $from_id);
-    sendmessage($from_id, "✨ استیکر پریمیوم برای <b>{$es_name}</b> رو بفرست 🎁" . mainmenu_tab_note($es_match[1]) . "\n\n(برای حذف استیکر فعلی، عدد 0 رو بفرست)", $btpromptcancel, 'HTML');
+    $es_btn = mainmenu_layout_get($es_match[1])['keyboard'][(int) $es_match[2]][(int) $es_match[3]] ?? [];
+    $es_hasDefault = (mainmenu_default_stickers()[$es_btn['text'] ?? ''] ?? '') !== '';
+    sendmessage($from_id, "✨ استیکر پریمیوم برای <b>{$es_name}</b> رو بفرست 🎁" . mainmenu_tab_note($es_match[1]) . "\n\n" . ($es_hasDefault ? "(این دکمه یه استیکر پیش‌فرض داره؛ برای برگشت به همون، عدد 0 رو بفرست)" : "(برای حذف استیکر فعلی، عدد 0 رو بفرست)"), $btpromptcancel, 'HTML');
     return;
 }
 if (preg_match('/^setsticker-([a-z]{2})-(\d+)-(\d+)$/', $user['step'], $es_match) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
@@ -6942,7 +6944,7 @@ if (preg_match('/^setsticker-([a-z]{2})-(\d+)-(\d+)$/', $user['step'], $es_match
         if ($text == '0') {
             unset($es_layout['keyboard'][$es_r][$es_c]['sticker']);
             mainmenu_layout_save($es_lang, $es_layout);
-            $es_msg = "✅ استیکر حذف شد.";
+            $es_msg = mainmenu_btn_sticker($es_layout['keyboard'][$es_r][$es_c]) !== '' ? "✅ استیکر خودت حذف شد و استیکر پیش‌فرض این دکمه برگشت 🔹" : "✅ استیکر حذف شد.";
         } elseif ($es_fileid !== '') {
             $es_layout['keyboard'][$es_r][$es_c]['sticker'] = $es_fileid;
             if (($es_layout['keyboard'][$es_r][$es_c]['text'] ?? '') === 'text_usertest') {
@@ -19689,7 +19691,7 @@ if ($datain == "linkappsetting") {
     if ($btnset_m[1] === 'emoji') {
         Editmessagetext($from_id, $message_id, "😀 <b>ایموجی دکمه‌های منو</b>" . mainmenu_tab_note($btnset_lang) . "\n\n👀 این لیست دقیقاً همون چیزیه که کاربر توی منو می‌بینه (پیش‌نمایش زنده با همون رنگ و ایموجی‌ها)\nروی هر دکمه بزن و ایموجی جدیدش رو بفرست 👇\n📍 چپ/راست بودن ایموجی‌های معمولی رو با دکمه‌های ⬅️➡️ پایین لیست تعیین کن\n💎 ایموجی پریمیوم همیشه قبل از متن دکمه‌ست و جاش قابل تغییر نیست (این محدودیت خود تلگرامه، نه ربات)\n🚫 = دکمه پنهان شده", $es_kb, 'HTML');
     } else {
-        Editmessagetext($from_id, $message_id, "✨ <b>استیکر پریمیوم دکمه‌ها</b>" . mainmenu_tab_note($btnset_lang) . "\n\nروی هر دکمه بزن و استیکرش رو بفرست 👇\nوقتی کاربر اون دکمه رو بزنه، اول این استیکر ارسال می‌شه\n✅ ست شده | ❌ ست نشده\n🚫 = دکمه پنهان شده\n\n📌 این‌ها فقط برای لحظه‌ی لمس دکمه‌های منوی اصلی‌ان؛ برای استیکر پیام‌های داخل مراحل خرید/سرویس‌های من/اکانت تست، از 🎨 شخصی‌سازی پیام‌های ربات استفاده کن.", $es_kb, 'HTML');
+        Editmessagetext($from_id, $message_id, "✨ <b>استیکر پریمیوم دکمه‌ها</b>" . mainmenu_tab_note($btnset_lang) . "\n\nروی هر دکمه بزن و استیکرش رو بفرست 👇\nوقتی کاربر اون دکمه رو بزنه، اول این استیکر ارسال می‌شه\n✅ ست شده | 🔹 استیکر پیش‌فرض | ❌ ست نشده\n🚫 = دکمه پنهان شده\n👥 دکمه‌ی زیرمجموعه‌گیری فقط وقتی استیکرش رو می‌فرسته که یکی از دو نوع زیرمجموعه‌گیری برای اون زبان روشن باشه.\n\n📌 این‌ها فقط برای لحظه‌ی لمس دکمه‌های منوی اصلی‌ان؛ برای استیکر پیام‌های داخل مراحل خرید/سرویس‌های من/اکانت تست، از 🎨 شخصی‌سازی پیام‌های ربات استفاده کن.", $es_kb, 'HTML');
     }
 } elseif (preg_match('/^btnset_open:layout(?::([a-z]{2}))?$/', $datain, $btnset_m) && $adminrulecheck['rule'] == "administrator") {
     $btnset_lang = $btnset_m[1] ?? 'fa';
