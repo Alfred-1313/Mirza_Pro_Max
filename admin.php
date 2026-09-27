@@ -770,7 +770,7 @@ if (!function_exists('bottext_item_menu_payload')) {
             $bt_extra_note = "\nℹ️ این پیام وقتی نشون داده می‌شه که کاربر روی یکی از سرویس‌هاش (داخل «🛍 سرویس‌های من») بزنه - وضعیت کامل همون سرویس رو نشون می‌ده.\n🖼 این صفحه حالا با QR سابسکریپشن به‌صورت عکس فرستاده می‌شه، پس متنش کپشن عکسه (سقف ۱۰۲۴ کاراکتر).\n📊 «{location_block}» یعنی «هر لوکیشن چقدر مصرف شده». از بین همه‌ی پنل‌ها فقط <b>rebecca</b> این رو واقعاً می‌ده (زنده تست شده)؛ <b>marzban</b> طبق مستنداتش باید بده ولی تست نشده، و بقیه‌ی پنل‌ها چیزی برای این تیکه ندارن.\n🎯 خودش فیلتر خودشه: «{location_block}» رو <b>تنهایی توی یک خط</b> بذار و تیترش رو خط بالاش بنویس. پنلی که لوکیشن نداشته باشه، هم لیست و هم همون تیتر و هم فاصله‌ش کامل حذف می‌شن - جای خالی نمی‌مونه. پس می‌تونی تیتر رو هرجور خواستی بنویسی یا کل بخش رو جابه‌جا کنی.\n⚠️ اگه «{location_block}» رو وسط یه خط دیگه بذاری (کنار متن)، فقط خودش خالی می‌شه و اون خط سر جاش می‌مونه.\n💡 دکمه‌های زیرش (تا ۱۴ تا، بسته به نوع پنل و تنظیمات فقط بعضی‌هاشون واقعاً نشون داده می‌شن) از دکمه‌ی پایین همین صفحه قابل ویرایشن.\n";
         }
         if ($bt_key === 'users.sell.service_sell') {
-            $bt_extra_note = "\nℹ️ این پیام وقتی نشون داده می‌شه که کاربر داخل «🛍 سرویس‌های من» حداقل یک سرویس فعال داشته باشه - زیرش لیست سرویس‌هاش (که خودکار ساخته می‌شه) و یه دکمه‌ی «بستن» میاد.\n💡 هم متن این پیام، هم دکمه‌ی بستنش (رنگ/اسم/ایموجی) رو می‌تونی از پایین تنظیم کنی.\n";
+            $bt_extra_note = "\nℹ️ این پیام وقتی نشون داده می‌شه که کاربر داخل «🛍 سرویس‌های من» حداقل یک سرویس فعال داشته باشه - زیرش لیست سرویس‌هاش (که خودکار ساخته می‌شه) و دکمه‌ی «بستن» میاد؛ اگه سرویس‌ها از یه صفحه (۲۰ تا) بیشتر باشن، توی همه‌ی صفحه‌ها «جستجو سریع» و دکمه‌های صفحه هم میان.\n💡 هم متن این پیام، هم دکمه‌هاش (رنگ/اسم/ایموجی) رو می‌تونی از پایین تنظیم کنی.\n";
         }
         if ($bt_key === 'users.usertest.selectUsernamePrompt') {
             $bt_extra_note = "\nℹ️ وضعیت بالا فقط مال همین پیامه (درخواست یوزرنیم اکانت تست). پیام‌های زیر خط سفید «سایر پیام‌های اکانت تست» هرکدوم پیام و وضعیت جدا خودشونو دارن.\n";
@@ -936,7 +936,7 @@ if (!function_exists('bottext_item_menu_payload')) {
             } elseif ($bt_key === 'textbot.testExpired') {
                 $bt_btn_label = '🔘 دکمه خرید سرویس';
             } elseif ($bt_key === 'users.sell.service_sell') {
-                $bt_btn_label = '🔘 دکمه بستن';
+                $bt_btn_label = '🔘 دکمه‌های لیست (بستن، جستجو، صفحه‌ها)';
             } elseif ($bt_key === 'users.status.infoFull') {
                 $bt_btn_label = '🔘 دکمه‌های صفحه‌ی وضعیت (تا ۱۳ تا)';
             } elseif ($bt_key === 'users.Balance.chargeSuccess') {
@@ -1073,7 +1073,7 @@ if (!function_exists('bottext_item_menu_payload')) {
         } elseif ($bt_key === 'textbot.testExpired') {
             $kb['inline_keyboard'][] = [$bt_live_row(genbtn_row_label($bt_key, $bt_lang), '🔘 ویرایش دکمه خرید سرویس', "gbs|hub|{$bt_lang}|te", $bt_btn_custom)];
         } elseif ($bt_key === 'users.sell.service_sell') {
-            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه بستن', 'callback_data' => "gbs|hub|{$bt_lang}|sc", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های لیست (بستن، جستجو، صفحه‌ها)', 'callback_data' => "gbs|hub|{$bt_lang}|sc", 'style' => 'primary']];
         } elseif ($bt_key === 'users.status.infoFull') {
             $kb['inline_keyboard'][] = [['text' => '🔘 ویرایش دکمه‌های صفحه‌ی وضعیت', 'callback_data' => "statusbtn|list|{$bt_lang}", 'style' => 'primary']];
         } elseif ($bt_key === 'users.Balance.chargeSuccess') {

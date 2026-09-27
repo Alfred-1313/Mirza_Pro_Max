@@ -671,13 +671,10 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     if (feature_value('NotUser', $user['lang'] ?? 'fa', $setting['NotUser']) == "onnotuser") {
         $keyboardlists['inline_keyboard'][] = [['text' => $textbotlang['users']['page']['notusernameme'], 'callback_data' => 'notusernameme']];
     }
-    if ($ms_rowCount >= $items_per_page) {
-        // customizable per language (genbtn 'sc' 1), and never hidden - it is
-        // the only way past page one
-        $keyboardlists['inline_keyboard'][] = [myservices_page_btn($user['lang'] ?? 'fa', $textbotlang, 1)];
-    }
-    if (!bt_button_hidden($user['lang'] ?? 'fa', 'users.sell.service_sell')) {
-        $keyboardlists['inline_keyboard'][] = [myservices_close_btn($user['lang'] ?? 'fa', $textbotlang)];
+    // search and paging when there is more than this page, and ❌ بستن -
+    // the same rows every page gets (genbtn 'sc', per language)
+    foreach (myservices_nav_rows($user['lang'] ?? 'fa', $textbotlang, 1, $ms_rowCount >= $items_per_page) as $ms_row) {
+        $keyboardlists['inline_keyboard'][] = $ms_row;
     }
     $keyboard_json = json_encode($keyboardlists);
     // 🛍 سرویس‌های من might have JUST fired its own sticker on this exact tap -
@@ -886,25 +883,13 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             ];
         }
     }
-    // the paging rows, as this language's admin set them up in 🎨
-    // شخصی‌سازی -> 🛍 سرویس‌های من (genbtn 'sc' 2-5); next/previous can not
-    // be hidden, search and back can
-    $ms_lang = $user['lang'] ?? 'fa';
-    $ms_search = myservices_page_btn($ms_lang, $textbotlang, 2);
-    $pagination_buttons = [
-        myservices_page_btn($ms_lang, $textbotlang, 3),
-        myservices_page_btn($ms_lang, $textbotlang, 4),
-    ];
-    $ms_back = myservices_page_btn($ms_lang, $textbotlang, 5);
-    if ($ms_search !== null) {
-        $keyboardlists['inline_keyboard'][] = [$ms_search];
-    }
     if (feature_value('NotUser', $user['lang'] ?? 'fa', $setting['NotUser']) == "onnotuser") {
         $keyboardlists['inline_keyboard'][] = [['text' => $textbotlang['users']['page']['notusernameme'], 'callback_data' => 'notusernameme']];
     }
-    $keyboardlists['inline_keyboard'][] = $pagination_buttons;
-    if ($ms_back !== null) {
-        $keyboardlists['inline_keyboard'][] = [$ms_back];
+    // the same rows as page one (genbtn 'sc', per language): search, the
+    // paging for the page this is, ❌ بستن
+    foreach (myservices_nav_rows($user['lang'] ?? 'fa', $textbotlang, $next_page, true) as $ms_row) {
+        $keyboardlists['inline_keyboard'][] = $ms_row;
     }
     $keyboard_json = json_encode($keyboardlists);
     update("user", "pagenumber", $next_page, "id", $from_id);
@@ -926,7 +911,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     if ($sum > $numpage) {
         $previous_page = 1;
     } else {
-        $previous_page = $page - 1;
+        $previous_page = max(1, $page - 1);
     }
     $start_index = ($previous_page - 1) * $items_per_page;
     $keyboardlists = [
@@ -977,25 +962,13 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             ];
         }
     }
-    // the paging rows, as this language's admin set them up in 🎨
-    // شخصی‌سازی -> 🛍 سرویس‌های من (genbtn 'sc' 2-5); next/previous can not
-    // be hidden, search and back can
-    $ms_lang = $user['lang'] ?? 'fa';
-    $ms_search = myservices_page_btn($ms_lang, $textbotlang, 2);
-    $pagination_buttons = [
-        myservices_page_btn($ms_lang, $textbotlang, 3),
-        myservices_page_btn($ms_lang, $textbotlang, 4),
-    ];
-    $ms_back = myservices_page_btn($ms_lang, $textbotlang, 5);
-    if ($ms_search !== null) {
-        $keyboardlists['inline_keyboard'][] = [$ms_search];
-    }
     if (feature_value('NotUser', $user['lang'] ?? 'fa', $setting['NotUser']) == "onnotuser") {
         $keyboardlists['inline_keyboard'][] = [['text' => $textbotlang['users']['page']['notusernameme'], 'callback_data' => 'notusernameme']];
     }
-    $keyboardlists['inline_keyboard'][] = $pagination_buttons;
-    if ($ms_back !== null) {
-        $keyboardlists['inline_keyboard'][] = [$ms_back];
+    // the same rows as page one (genbtn 'sc', per language): search, the
+    // paging for the page this is, ❌ بستن
+    foreach (myservices_nav_rows($user['lang'] ?? 'fa', $textbotlang, $previous_page, true) as $ms_row) {
+        $keyboardlists['inline_keyboard'][] = $ms_row;
     }
     $keyboard_json = json_encode($keyboardlists);
     update("user", "pagenumber", $previous_page, "id", $from_id);

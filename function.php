@@ -11275,7 +11275,7 @@ if (!function_exists('genbtn_alias_to_key')) {
         }
         // sc: close, quick search and back can go; next/previous stay - without
         // them the services past page one could not be reached at all
-        $extras = ['ab' => [0], 'ut' => [0], 'rw' => [0], 'bc' => [0], 'ns' => [0], 'te' => [0], 'sc' => [0, 2, 5], 'hb' => [0], 'hv' => [0], 'td' => [0, 1], 'su' => [1]];
+        $extras = ['ab' => [0], 'ut' => [0], 'rw' => [0], 'bc' => [0], 'ns' => [0], 'te' => [0], 'sc' => [0, 2], 'hb' => [0], 'hv' => [0], 'td' => [0, 1], 'su' => [1]];
         return in_array((int) $idx, $extras[$alias] ?? [], true);
     }
 }
@@ -11319,16 +11319,17 @@ if (!function_exists('genbtn_defs')) {
             ];
         }
         if ($alias === 'sc') {
-            // 1-5: the paging row that appears once a customer has more services
-            // than one page holds - page 1 carries only «صفحه بعد», later pages
-            // carry search / next / previous / back
+            // 1-4: once a customer has more services than one page holds, every
+            // page carries search and the paging - «صفحه بعد» on page one,
+            // next / previous after it - above the close button
+            // (myservices_nav_rows). The paging is white: no style. The 5th,
+            // «بازگشت به منوی اصلی», is gone - ❌ بستن took its place.
             return [
                 0 => ['name' => '🔴 دکمه بستن', 'text' => $textbotlang['bottext']['btn_close'], 'style' => 'danger', 'callback_data' => 'servclose'],
-                1 => ['name' => '🟢 دکمه صفحه بعد (صفحه اول)', 'text' => $textbotlang['users']['page']['nextPageBtn'], 'style' => 'success', 'callback_data' => 'next_page'],
+                1 => ['name' => '⚪ دکمه صفحه بعد (صفحه اول)', 'text' => $textbotlang['users']['page']['nextPageBtn'], 'style' => '', 'callback_data' => 'next_page'],
                 2 => ['name' => '🟢 دکمه جستجو سریع', 'text' => $textbotlang['users']['search']['title'], 'style' => 'success', 'callback_data' => 'searchservice'],
-                3 => ['name' => '🟢 دکمه بعدی', 'text' => $textbotlang['users']['page']['next'], 'style' => 'success', 'callback_data' => 'next_page'],
-                4 => ['name' => '🟢 دکمه قبلی', 'text' => $textbotlang['users']['page']['previous'], 'style' => 'success', 'callback_data' => 'previous_page'],
-                5 => ['name' => '🟢 دکمه بازگشت به منوی اصلی', 'text' => $textbotlang['keyboard']['backToMainMenu'], 'style' => 'success', 'callback_data' => 'backuser'],
+                3 => ['name' => '⚪ دکمه بعدی', 'text' => $textbotlang['users']['page']['next'], 'style' => '', 'callback_data' => 'next_page'],
+                4 => ['name' => '⚪ دکمه قبلی', 'text' => $textbotlang['users']['page']['previous'], 'style' => '', 'callback_data' => 'previous_page'],
             ];
         }
         if ($alias === 'td') {
@@ -11716,7 +11717,7 @@ if (!function_exists('myservices_close_btn')) {
         $ov = genbtn_override($lang, 'users.sell.service_sell', 0);
         return genbtn_render($defs[0], $ov, $defs[0]['callback_data']);
     }
-    // One of 🛍 سرویس‌های من's paging buttons (genbtn 'sc' 1-5) as this tab's
+    // One of 🛍 سرویس‌های من's paging buttons (genbtn 'sc' 1-4) as this tab's
     // admin set it up, or null when it is hidden there.
     function myservices_page_btn($lang, $textbotlang, $idx)
     {
@@ -11726,6 +11727,31 @@ if (!function_exists('myservices_close_btn')) {
             return null;
         }
         return genbtn_render($defs[$idx], $ov, $defs[$idx]['callback_data']);
+    }
+}
+if (!function_exists('myservices_nav_rows')) {
+    // The rows under 🛍 سرویس‌های من's list, the same on every page: 🔎
+    // جستجو سریع and the paging when the list runs past one page, then ❌
+    // بستن. Page one has «صفحه بعد» (there is no page before it); later pages
+    // «بعدی / قبلی». Each page used to build its own - page one had no
+    // search, later pages no close, and «قبلی» back onto page one kept a
+    // «قبلی» that led to a page zero.
+    function myservices_nav_rows($lang, $textbotlang, $page, $paged)
+    {
+        $rows = [];
+        if ($paged) {
+            $search = myservices_page_btn($lang, $textbotlang, 2);
+            if ($search !== null) {
+                $rows[] = [$search];
+            }
+            $rows[] = $page <= 1
+                ? [myservices_page_btn($lang, $textbotlang, 1)]
+                : [myservices_page_btn($lang, $textbotlang, 3), myservices_page_btn($lang, $textbotlang, 4)];
+        }
+        if (!bt_button_hidden($lang, 'users.sell.service_sell')) {
+            $rows[] = [myservices_close_btn($lang, $textbotlang)];
+        }
+        return $rows;
     }
 }
 if (!function_exists('afterpay_help_kb')) {
@@ -11935,7 +11961,7 @@ if (!function_exists('genbtn_hub_payload')) {
 
     function genbtn_group_title($alias, $textbotlang)
     {
-        $titles = ['su' => '🔘 دکمه‌های نام‌گذاری سرویس', 'cf' => '🔘 دکمه‌های تأیید خرید', 'ns' => '🔘 دکمه‌ی نداشتن سرویس فعال', 'te' => '🔘 دکمه‌ی پیام اتمام اکانت تست', 'sc' => '🔘 دکمه‌ی بستن (سرویس‌های من)', 'bc' => '🔘 دکمه‌ی تهیه اشتراک (شارژ کیف پول)', 'rn' => '🔘 دکمه‌های فاکتور تمدید سرویس', 'cl' => '🔘 دکمه‌های تغییر لینک اتصال', 'td' => '🔘 دکمه‌های کد تخفیف شارژ', 'hb' => '🔘 دکمه‌ی بازگشت به دسته‌بندی آموزش', 'hv' => '🔘 دکمه‌ی بازگشت (زیر محتوای آموزش)', 'ab' => '📚 دکمه‌ی مشاهده آموزش (پیام بعد از خرید)', 'ut' => '📚 دکمه‌ی مشاهده آموزش (اکانت تست)', 'rw' => '📚 دکمه‌ی مشاهده آموزش (کانفیگ هدیه‌ی دعوت)', 'lc' => '📌 دکمه‌ی عضویت مجدد (پیام خروج از کانال)', 'ma' => '↩️ دکمه‌ی پاسخ به پیام ادمین'];
+        $titles = ['su' => '🔘 دکمه‌های نام‌گذاری سرویس', 'cf' => '🔘 دکمه‌های تأیید خرید', 'ns' => '🔘 دکمه‌ی نداشتن سرویس فعال', 'te' => '🔘 دکمه‌ی پیام اتمام اکانت تست', 'sc' => '🔘 دکمه‌های لیست سرویس‌ها (سرویس‌های من)', 'bc' => '🔘 دکمه‌ی تهیه اشتراک (شارژ کیف پول)', 'rn' => '🔘 دکمه‌های فاکتور تمدید سرویس', 'cl' => '🔘 دکمه‌های تغییر لینک اتصال', 'td' => '🔘 دکمه‌های کد تخفیف شارژ', 'hb' => '🔘 دکمه‌ی بازگشت به دسته‌بندی آموزش', 'hv' => '🔘 دکمه‌ی بازگشت (زیر محتوای آموزش)', 'ab' => '📚 دکمه‌ی مشاهده آموزش (پیام بعد از خرید)', 'ut' => '📚 دکمه‌ی مشاهده آموزش (اکانت تست)', 'rw' => '📚 دکمه‌ی مشاهده آموزش (کانفیگ هدیه‌ی دعوت)', 'lc' => '📌 دکمه‌ی عضویت مجدد (پیام خروج از کانال)', 'ma' => '↩️ دکمه‌ی پاسخ به پیام ادمین'];
         if (isset($titles[$alias])) {
             return $titles[$alias];
         }
@@ -11950,7 +11976,7 @@ if (!function_exists('genbtn_hub_payload')) {
             'cf' => 'این ۲ دکمه، زیر صفحه‌ی تأیید نهایی خرید نشون داده می‌شن - هر سه حالت (عادی/تخفیف‌دار/حجم دلخواه) از این یکی استفاده می‌کنن، پس ویرایششون روی هر سه اثر می‌ذاره.',
             'ns' => 'این ۱ دکمه، زیر پیامِ «سرویس فعالی ندارید» (وقتی 🛍 سرویس‌های من خالیه) به کاربر نشون داده می‌شه.',
             'te' => 'این ۱ دکمه، زیر پیامِ «اکانت تست شما به پایان رسید» به کاربر نشون داده می‌شه (همون پیامی که کرون موقع تموم‌شدن اعتبار اکانت تست می‌فرسته). رنگ، ایموجی و مخفی بودنش برای همه‌ی زبان‌ها یکیه؛ فقط متنش مال هر زبانه.',
-            'sc' => 'این ۱ دکمه، زیر لیست سرویس‌های فعال کاربر (وقتی 🛍 سرویس‌های من حداقل یک سرویس داره) نشون داده می‌شه.',
+            'sc' => 'این دکمه‌ها زیر لیست سرویس‌های کاربر (🛍 سرویس‌های من) میان و توی همه‌ی صفحه‌ها یکی‌ان: ❌ بستن همیشه؛ و وقتی سرویس‌ها از یه صفحه (۲۰ تا) بیشتر باشن، 🔎 جستجو سریع و دکمه‌های صفحه - توی صفحه‌ی اول «صفحه بعد»، توی صفحه‌های بعد «بعدی / قبلی».',
             'bc' => 'این ۱ دکمه، زیر پیام تایید نهاییِ شارژ کیف پول (هر روش پرداختی) نشون داده می‌شه.',
             'rn' => 'دکمه‌ی ۱ و ۲ زیر فاکتور تمدید سرویس نشون داده می‌شن (دکمه‌ی «افزایش موجودی» بینشون از تنظیمات مشترک همون دکمه میاد، جدا نیست). دکمه‌ی ۳ وقتی کاربر روی «افزایش موجودی» بزنه، زیر لیست روش‌های پرداخت میاد و با تپ روش، برمی‌گردونه به همون فاکتور تمدید.',
             'cl' => 'این ۲ دکمه، زیر پیام هشدار «تغییر لینک اتصال» (قبل از تایید نهایی) نشون داده می‌شن.',
