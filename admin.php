@@ -808,6 +808,12 @@ if (!function_exists('bottext_item_menu_payload')) {
         if ($bt_key === 'users.changeLink.warnchange') {
             $bt_extra_note = "\nℹ️ این پیام وقتی نشون داده می‌شه که کاربر روی «⚙️ تغییر لینک» (داخل جزئیات سرویس) بزنه - قبل از تایید نهایی، هشدار می‌ده که کانفیگ‌های قبلی قطع می‌شن.\n";
         }
+        if ($bt_key === 'users.affiliates.rewardAfterPay') {
+            $bt_extra_note = "\nℹ️ پیام کاملی که همراه کانفیگ هدیه‌ی دعوت (و QR، اگه روشن باشه) برای کاربر فرستاده می‌شه - وقتی نحوه‌ی نمایش پنل «حالت ۱» باشه. جدا از پیام بعد از خرید.\n💡 توکن‌ها: <code>{username}</code> <code>{name_service}</code> <code>{location}</code> <code>{day}</code> <code>{volume}</code> <code>{time_human}</code> <code>{volume_human}</code> <code>{config}</code> (لینک اشتراک) <code>{links}</code> (کانفیگ‌ها).\n";
+        }
+        if ($bt_key === 'users.affiliates.rewardConfigHint') {
+            $bt_extra_note = "\nℹ️ کپشن صفحه‌ی کانفیگی که به‌جای پیام کامل فرستاده می‌شه - وقتی نحوه‌ی نمایش پنل «حالت ۲» باشه. دکمه‌های زیرش از «🎨 دکمه‌ها و ترتیب کانفیگ‌ها (هدیه‌ی دعوت)» تنظیم می‌شن.\n";
+        }
         if ($bt_key === 'users.status.getConfigHintBuy') {
             $bt_extra_note = "\nℹ️ این پیام بعد از دریافت کانفیگِ یک سرویسِ خریداری‌شده (نه اکانت تست) نشون داده می‌شه - جدا و مستقل از پیام مشابه اکانت تست.\n💡 توکن‌های قابل استفاده تو متن: <code>{time}</code> (مدت زمان سرویس) و <code>{volume}</code> (حجم سرویس).\n💡 ترتیب و رنگ دکمه‌های زیرش از دکمه‌ی پایین همین صفحه قابل تنظیمه (مستقل از اکانت تست).\n";
         }
@@ -909,7 +915,7 @@ if (!function_exists('bottext_item_menu_payload')) {
         // separate configDisplayBuy/configColOrderBuy pair, so it gets its own
         // forward link straight from the myservices list (keyboard.php) instead
         // of the generic $bt_btn_label/$bt_btn_custom status line below.
-        $bt_has_buttons = in_array($bt_key, ['users.usertest.selectUsernamePrompt', 'users.Balance.insufficientBalanceSimple', 'users.sell.selectUsernamePrompt', 'users.sell.preInvoice', 'users.sell.preInvoice2', 'textbot.preInvoice', 'users.sell.service_not_available', 'textbot.testExpired', 'users.sell.service_sell', 'users.status.infoFull', 'users.Balance.chargeSuccess', 'textbot.channel', 'users.channel.left_channel', 'users.extend.invoiceCreated', 'users.changeLink.warnchange', 'textbot.afterPay', 'textbot.afterText'], true);
+        $bt_has_buttons = in_array($bt_key, ['users.usertest.selectUsernamePrompt', 'users.Balance.insufficientBalanceSimple', 'users.sell.selectUsernamePrompt', 'users.sell.preInvoice', 'users.sell.preInvoice2', 'textbot.preInvoice', 'users.sell.service_not_available', 'textbot.testExpired', 'users.sell.service_sell', 'users.status.infoFull', 'users.Balance.chargeSuccess', 'textbot.channel', 'users.channel.left_channel', 'users.extend.invoiceCreated', 'users.changeLink.warnchange', 'textbot.afterPay', 'textbot.afterText', 'users.affiliates.rewardAfterPay'], true);
         $info = "📝 <b>{$bt_label}</b>\n➖➖➖➖➖➖➖➖➖➖\n{$bt_extra_note}";
         $info .= "✏️ متن: " . ($bt_custom ? "سفارشی ✅" : "پیش‌فرض") . "\n";
         if (!$bt_nosticker) {
@@ -943,7 +949,7 @@ if (!function_exists('bottext_item_menu_payload')) {
                 $bt_btn_label = '🔘 دکمه‌های تأیید تمدید/بازگشت';
             } elseif ($bt_key === 'users.changeLink.warnchange') {
                 $bt_btn_label = '🔘 دکمه‌های تایید/بازگشت';
-            } elseif (in_array($bt_key, ['textbot.afterPay', 'textbot.afterText'], true)) {
+            } elseif (in_array($bt_key, ['textbot.afterPay', 'textbot.afterText', 'users.affiliates.rewardAfterPay'], true)) {
                 $bt_btn_label = '📚 دکمه مشاهده آموزش';
             }
             // 'cf' is shared across three caption screens - checked here so its
@@ -1091,6 +1097,8 @@ if (!function_exists('bottext_item_menu_payload')) {
             $kb['inline_keyboard'][] = [$bt_live_row(genbtn_row_label($bt_key, $bt_lang), '📚 ویرایش دکمه مشاهده آموزش', "gbs|hub|{$bt_lang}|ab", $bt_btn_custom)];
         } elseif ($bt_key === 'textbot.afterText') {
             $kb['inline_keyboard'][] = [$bt_live_row(genbtn_row_label($bt_key, $bt_lang), '📚 ویرایش دکمه مشاهده آموزش', "gbs|hub|{$bt_lang}|ut", $bt_btn_custom)];
+        } elseif ($bt_key === 'users.affiliates.rewardAfterPay') {
+            $kb['inline_keyboard'][] = [$bt_live_row(genbtn_row_label($bt_key, $bt_lang), '📚 ویرایش دکمه مشاهده آموزش', "gbs|hub|{$bt_lang}|rw", $bt_btn_custom)];
         } elseif ($bt_key === 'users.help.listCaption') {
             // the one button under the tutorial list ('hb' alias, own-key trick)
             $kb['inline_keyboard'][] = [$bt_live_row(genbtn_row_label($bt_key, $bt_lang), '🔘 ویرایش دکمه بازگشت به دسته‌بندی', "gbs|hub|{$bt_lang}|hb", is_array($bt_be) && !empty($bt_be[$bt_lang][$bt_key]))];
@@ -1124,6 +1132,8 @@ if (!function_exists('bottext_item_menu_payload')) {
             $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "btact|cfgcol|{$bt_lang}|users.usertest.selectUsernamePrompt", 'style' => 'danger']];
         } elseif (in_array($bt_key, ['textbot.getConfigHintBuy', 'textbot.getConfigHintTest', 'textbot.afterPay'], true)) {
             $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "cfgdeliv|list|{$bt_lang}|b", 'style' => 'danger']];
+        } elseif (in_array($bt_key, ['users.affiliates.rewardAfterPay', 'users.affiliates.rewardConfigHint'], true)) {
+            $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "cfgdeliv|list|{$bt_lang}|r", 'style' => 'danger']];
         } elseif ($bt_key === 'users.status.infoFull') {
             $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "bt_group|{$bt_lang}|myservices", 'style' => 'danger']];
         } elseif ($bt_key === 'bottext.langPickerCaption') {
@@ -6273,24 +6283,64 @@ if (preg_match('/^cfgcolbtbuy-(getfirst|namefirst)-([a-z]{2})$/', $datain, $cc_m
     Editmessagetext($from_id, $message_id, $cc_info, $cc_kb, 'HTML');
     return;
 }
-if (preg_match('/^cfgdeliv\|msg\|([a-z]{2})\|([^|]+)\|([bu])\|(ap|at|cb|ct)$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
-    $cd_keyMap = ['ap' => 'textbot.afterPay', 'at' => 'textbot.afterText', 'cb' => 'textbot.getConfigHintBuy', 'ct' => 'textbot.getConfigHintTest'];
+//----------------[  config column-order manager - 🎁 REFERRAL GIFT variant
+//                   (its own store, configDisplayReward; reached from
+//                   📌 نحوه‌ی نمایش کانفیگ (هدیه‌ی دعوت))  ]----------------
+if (preg_match('/^cfgcolrw\|([a-z]{2})$/', $datain, $cc_m) && $adminrulecheck['rule'] == "administrator") {
+    list($cc_info, $cc_kb) = config_col_order_payload($textbotlang, $cc_m[1], null, "cfgdeliv|list|{$cc_m[1]}|r", 'users.affiliates.rewardConfigHint', 'affrw');
+    Editmessagetext($from_id, $message_id, $cc_info, $cc_kb, 'HTML');
+    return;
+}
+if (preg_match('/^cfgcolelrw-([0123])-([a-z]{2})$/', $datain, $cc_m) && $adminrulecheck['rule'] == "administrator") {
+    list($cc_info, $cc_kb) = configdisplay_element_payload($cc_m[2], (int) $cc_m[1], $textbotlang, 'affrw');
+    Editmessagetext($from_id, $message_id, $cc_info, $cc_kb, 'HTML');
+    return;
+}
+if (preg_match('/^cfgcoltextrw-([0123])-([a-z]{2})$/', $datain, $cc_m) && $adminrulecheck['rule'] == "administrator") {
+    savedata("clear", "bt_msgid", $message_id);
+    step("cfgcoltxtrw-{$cc_m[2]}-{$cc_m[1]}", $from_id);
+    $cc_cancel_kb = json_encode(['inline_keyboard' => [
+        [['text' => '❌ انصراف', 'callback_data' => "cfgcolelrw-{$cc_m[1]}-{$cc_m[2]}"]],
+    ]]);
+    Editmessagetext($from_id, $message_id, "✏️ متن جدید رو بفرست ✍️", $cc_cancel_kb, 'HTML');
+    return;
+}
+if (preg_match('/^cfgcolelstylerw-([0123])-(primary|success|danger)-([a-z]{2})$/', $datain, $cc_m) && $adminrulecheck['rule'] == "administrator") {
+    configdisplay_element_set_style($cc_m[3], (int) $cc_m[1], $cc_m[2], 'affrw');
+    list($cc_info, $cc_kb) = configdisplay_element_payload($cc_m[3], (int) $cc_m[1], $textbotlang, 'affrw');
+    Editmessagetext($from_id, $message_id, $cc_info, $cc_kb, 'HTML');
+    return;
+}
+if (preg_match('/^cfgcolelrstrw-([0123])-([a-z]{2})$/', $datain, $cc_m) && $adminrulecheck['rule'] == "administrator") {
+    configdisplay_element_reset($cc_m[2], (int) $cc_m[1], 'affrw');
+    list($cc_info, $cc_kb) = configdisplay_element_payload($cc_m[2], (int) $cc_m[1], $textbotlang, 'affrw');
+    Editmessagetext($from_id, $message_id, "🔁 این المان به پیش‌فرض برگشت.\n\n" . $cc_info, $cc_kb, 'HTML');
+    return;
+}
+if (preg_match('/^cfgcolbtrw-(getfirst|namefirst)-([a-z]{2})$/', $datain, $cc_m) && $adminrulecheck['rule'] == "administrator") {
+    config_col_set_order($cc_m[2], $cc_m[1] === 'namefirst', 'affrw');
+    list($cc_info, $cc_kb) = config_col_order_payload($textbotlang, $cc_m[2], null, "cfgdeliv|list|{$cc_m[2]}|r", 'users.affiliates.rewardConfigHint', 'affrw');
+    Editmessagetext($from_id, $message_id, $cc_info, $cc_kb, 'HTML');
+    return;
+}
+if (preg_match('/^cfgdeliv\|msg\|([a-z]{2})\|([^|]+)\|([bur])\|(ap|at|cb|ct|ar|cr)$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
+    $cd_keyMap = ['ap' => 'textbot.afterPay', 'at' => 'textbot.afterText', 'cb' => 'textbot.getConfigHintBuy', 'ct' => 'textbot.getConfigHintTest', 'ar' => 'users.affiliates.rewardAfterPay', 'cr' => 'users.affiliates.rewardConfigHint'];
     $cd_back = "cfgdeliv|p|{$cd_m[1]}|{$cd_m[2]}|{$cd_m[3]}";
     list($cd_text, $cd_kb) = bottext_item_menu_payload($cd_keyMap[$cd_m[4]], $cd_m[1], $textbotlang, $cd_back);
     Editmessagetext($from_id, $message_id, $cd_text, $cd_kb, 'HTML');
     return;
 }
-if (preg_match('/^cfgdeliv\|list\|([a-z]{2})\|([bu])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^cfgdeliv\|list\|([a-z]{2})\|([bur])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
     list($cd_text, $cd_kb) = config_delivery_panels_payload($cd_m[1], $cd_m[2]);
     Editmessagetext($from_id, $message_id, $cd_text, $cd_kb, 'HTML');
     return;
 }
-if (preg_match('/^cfgdeliv\|p\|([a-z]{2})\|([^|]+)\|([bu])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^cfgdeliv\|p\|([a-z]{2})\|([^|]+)\|([bur])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
     list($cd_text, $cd_kb) = config_delivery_panel_payload($cd_m[1], $cd_m[2], $cd_m[3]);
     Editmessagetext($from_id, $message_id, $cd_text, $cd_kb, 'HTML');
     return;
 }
-if (preg_match('/^cfgdeliv\|set\|([a-z]{2})\|([^|]+)\|(purchase|usertest)\|(1|2)\|([bu])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^cfgdeliv\|set\|([a-z]{2})\|([^|]+)\|(purchase|usertest|affrw)\|(1|2)\|([bur])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
     config_delivery_set_mode($cd_m[3], $cd_m[2], $cd_m[4], $cd_m[1]);
     list($cd_text, $cd_kb) = config_delivery_panel_payload($cd_m[1], $cd_m[2], $cd_m[5]);
     Editmessagetext($from_id, $message_id, $cd_text, $cd_kb, 'HTML');
@@ -6307,7 +6357,7 @@ if (preg_match('/^admperm\|(open|test|buy)\|([a-z]{2})$/', $datain, $ap_m) && $a
     Editmessagetext($from_id, $message_id, $ap_text, $ap_kb, 'HTML');
     return;
 }
-if (preg_match('/^cfgdeliv\|qr\|([a-z]{2})\|([^|]+)\|(purchase|usertest)\|([bu])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^cfgdeliv\|qr\|([a-z]{2})\|([^|]+)\|(purchase|usertest|affrw)\|([bur])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
     // mode 2 sends the config page only - there is no message for a QR to ride
     // on, so it cannot be switched on there (only off, if an old setting has it)
     if (config_delivery_mode($cd_m[3], $cd_m[2], $cd_m[1]) === '2' && !config_delivery_qr_on($cd_m[3], $cd_m[2], $cd_m[1])) {
@@ -6324,7 +6374,7 @@ if (preg_match('/^cfgdeliv\|qr\|([a-z]{2})\|([^|]+)\|(purchase|usertest)\|([bu])
     Editmessagetext($from_id, $message_id, $cd_text, $cd_kb, 'HTML');
     return;
 }
-if (preg_match('/^cfgdeliv\|rst\|([a-z]{2})\|([^|]+)\|(purchase|usertest)\|([bu])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^cfgdeliv\|rst\|([a-z]{2})\|([^|]+)\|(purchase|usertest|affrw)\|([bur])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
     config_delivery_panel_reset($cd_m[2], $cd_m[3], $cd_m[1]);
     list($cd_text, $cd_kb) = config_delivery_panel_payload($cd_m[1], $cd_m[2], $cd_m[4]);
     // names the mode the reset actually restores - config_delivery_default_mode()
@@ -6333,9 +6383,10 @@ if (preg_match('/^cfgdeliv\|rst\|([a-z]{2})\|([^|]+)\|(purchase|usertest)\|([bu]
     Editmessagetext($from_id, $message_id, "🔁 این پنل به حالت پیش‌فرض (حالت " . config_delivery_mode_fa(config_delivery_default_mode()) . "، QR کد روشن) برگشت.\n\n" . $cd_text, $cd_kb, 'HTML');
     return;
 }
-if (preg_match('/^cfgdeliv\|cfgcol\|([a-z]{2})\|([^|]+)\|([bu])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
-    // the flow this screen belongs to: test account ('u') or purchase
-    list($cd_text, $cd_kb) = config_col_order_payload($textbotlang, $cd_m[1], null, "cfgdeliv|p|{$cd_m[1]}|{$cd_m[2]}|{$cd_m[3]}", null, $cd_m[3] === 'u' ? 'usertest' : 'buy');
+if (preg_match('/^cfgdeliv\|cfgcol\|([a-z]{2})\|([^|]+)\|([bur])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
+    // the flow this screen belongs to: test account ('u'), 🎁 gift ('r') or purchase
+    $cd_colKind = ['u' => 'usertest', 'r' => 'affrw'][$cd_m[3]] ?? 'buy';
+    list($cd_text, $cd_kb) = config_col_order_payload($textbotlang, $cd_m[1], null, "cfgdeliv|p|{$cd_m[1]}|{$cd_m[2]}|{$cd_m[3]}", $cd_colKind === 'affrw' ? 'users.affiliates.rewardConfigHint' : null, $cd_colKind);
     Editmessagetext($from_id, $message_id, $cd_text, $cd_kb, 'HTML');
     return;
 }if (preg_match('/^statusbtn\|list\|([a-z]{2})$/', $datain, $sb_m) && $adminrulecheck['rule'] == "administrator") {
@@ -8951,6 +9002,28 @@ if (preg_match('/^cfgcoltxtbuy-([a-z]{2})-([0123])$/', (string) $user['step'], $
     configdisplay_element_set_text($cc_lang, $cc_idx, $cc_newtext, 'buy');
     step('home', $from_id);
     list($cc_info, $cc_kb) = configdisplay_element_payload($cc_lang, $cc_idx, $textbotlang, 'buy');
+    $cc_msgid = intval(json_decode((string) ($user['Processing_value'] ?? ''), true)['bt_msgid'] ?? 0);
+    $cc_done_msg = "✅ متن ذخیره شد!\n\n" . $cc_info;
+    deletemessage($from_id, $message_id);
+    if ($cc_msgid > 0) {
+        Editmessagetext($from_id, $cc_msgid, $cc_done_msg, $cc_kb, 'HTML');
+    } else {
+        sendmessage($from_id, $cc_done_msg, $cc_kb, 'HTML');
+    }
+    return;
+}
+
+if (preg_match('/^cfgcoltxtrw-([a-z]{2})-([0123])$/', (string) $user['step'], $cc_m) && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+    $cc_lang = $cc_m[1];
+    $cc_idx = (int) $cc_m[2];
+    $cc_newtext = trim((string) $text);
+    if ($cc_newtext === '') {
+        sendmessage($from_id, "⚠️ لطفاً یه متن بفرست 😅", $btpromptcancel, 'HTML');
+        return;
+    }
+    configdisplay_element_set_text($cc_lang, $cc_idx, $cc_newtext, 'affrw');
+    step('home', $from_id);
+    list($cc_info, $cc_kb) = configdisplay_element_payload($cc_lang, $cc_idx, $textbotlang, 'affrw');
     $cc_msgid = intval(json_decode((string) ($user['Processing_value'] ?? ''), true)['bt_msgid'] ?? 0);
     $cc_done_msg = "✅ متن ذخیره شد!\n\n" . $cc_info;
     deletemessage($from_id, $message_id);

@@ -2148,10 +2148,12 @@ $Exception_auto_cart_keyboard = json_encode([
     ],
     'resize_keyboard' => true
 ]);
-function keyboard_config($config_split, $id_invoice, $back_active = true, $kind = 'usertest')
+function keyboard_config($config_split, $id_invoice, $back_active = true, $kind = 'usertest', $lang = null)
 {
     global $textbotlang, $user;
-    $cc_lang = $user['lang'] ?? 'fa';
+    // $lang: whose page it is, when that is not the current user (a service
+    // an admin made or approved for someone)
+    $cc_lang = $lang ?? ($user['lang'] ?? 'fa');
     $cc_nameFirst = config_col_name_first($cc_lang, $kind);
     $cc_get = configdisplay_element_current($cc_lang, 0, $textbotlang, $kind);
     $cc_hConfig = configdisplay_element_current($cc_lang, 1, $textbotlang, $kind);
@@ -2373,7 +2375,7 @@ function keyboard_list_text($lang, $groupFilter = null)
         // 🔑 تنظیم اکانت تست now, and a second row here would give them two ways
         // in and an ambiguous "back" - textbot.afterText's own back button has
         // pointed at that screen all along, while its only row was out here
-        'bottext.btnCloseTest', 'textbot.selectLocationTest', 'textbot.afterText', 'textbot.afterPay', 'textbot.preInvoice', 'textbot.getConfigHintBuy', 'textbot.getConfigHintTest', 'users.status.infoFull', 'users.Balance.sendReceipt', 'users.Balance.chargeSuccess', 'users.Balance.chargeSuccessDiscount',
+        'bottext.btnCloseTest', 'textbot.selectLocationTest', 'textbot.afterText', 'textbot.afterPay', 'textbot.preInvoice', 'textbot.getConfigHintBuy', 'textbot.getConfigHintTest', 'users.affiliates.rewardAfterPay', 'users.affiliates.rewardConfigHint', 'users.status.infoFull', 'users.Balance.sendReceipt', 'users.Balance.chargeSuccess', 'users.Balance.chargeSuccessDiscount',
         // owned by 🌐 تنظیمات تغییر زبان کاربر, which edits them in place - a
         // second row here would make their back button ambiguous
         'bottext.langPickerCaption',
@@ -2535,6 +2537,10 @@ function keyboard_list_text($lang, $groupFilter = null)
                 $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['categoryStyleBtn'], 'callback_data' => "btnstyle_kindhub:category:{$lang}", 'style' => 'primary']];
                 $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['Admin']['LangScope']['productStyleBtn'], 'callback_data' => "btnstyle_kindhub:product:{$lang}", 'style' => 'primary']];
             }
+        }
+        if ($groupFilter === 'referral') {
+            // under 🎁 کانفیگ رایگان با دعوت, the last heading on this screen
+            $keyboard_text['inline_keyboard'][] = [['text' => '📌 نحوه‌ی نمایش کانفیگ (هدیه‌ی دعوت)', 'callback_data' => "cfgdeliv|list|{$lang}|r", 'style' => 'primary']];
         }
         if ($groupFilter === 'buyflow') {
             $keyboard_text['inline_keyboard'][] = [['text' => bt_section_meta('cfgdeliv_link')['label'], 'callback_data' => 'bt_sep|cfgdeliv_link']];

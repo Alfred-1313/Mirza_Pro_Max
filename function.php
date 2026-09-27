@@ -9429,7 +9429,7 @@ if (!function_exists('config_delivery_view_save')) {
                 }
             }
         }
-        foreach (['purchase', 'usertest'] as $k) {
+        foreach (['purchase', 'usertest', 'affrw'] as $k) {
             if (isset($view[$k]) && empty($view[$k])) {
                 unset($view[$k]);
             }
@@ -9503,7 +9503,7 @@ if (!function_exists('config_delivery_panel_reset')) {
     function config_delivery_panel_reset($codePanel, $kind = null, $lang = 'fa')
     {
         $view = config_delivery_view($lang);
-        $kinds = ($kind === null) ? ['purchase', 'usertest'] : [$kind];
+        $kinds = ($kind === null) ? ['purchase', 'usertest', 'affrw'] : [$kind];
         foreach ($kinds as $k) {
             unset($view[$k][$codePanel], $view['qroff'][$k][$codePanel]);
         }
@@ -9517,7 +9517,7 @@ if (!function_exists('config_delivery_touched')) {
         if ($kind !== null) {
             return !empty($view[$kind]);
         }
-        return !empty($view['purchase']) || !empty($view['usertest']);
+        return !empty($view['purchase']) || !empty($view['usertest']) || !empty($view['affrw']);
     }
 }
 if (!function_exists('config_delivery_mode_fa')) {
@@ -9532,23 +9532,43 @@ if (!function_exists('config_delivery_back_cb')) {
     // round-trip cannot lose track of where the admin actually came from.
     function config_delivery_back_cb($lang, $origin)
     {
+        if ($origin === 'r') {
+            return "bt_group|{$lang}|referral";
+        }
         return ($origin === 'u')
             ? "bt_edit|{$lang}|users.usertest.selectUsernamePrompt"
             : "bt_group|{$lang}|buyflow";
     }
 }
+if (!function_exists('config_delivery_origin_kind')) {
+    // which flow a screen belongs to, from its origin letter: 'u' the test
+    // account, 'r' the 🎁 referral gift, anything else a purchase
+    function config_delivery_origin_kind($origin)
+    {
+        return ['u' => 'usertest', 'r' => 'affrw'][$origin] ?? 'purchase';
+    }
+    function config_delivery_kind_label($kind)
+    {
+        return ['usertest' => 'اکانت تست', 'affrw' => 'هدیه‌ی دعوت'][$kind] ?? 'خرید';
+    }
+}
 if (!function_exists('config_delivery_panels_payload')) {
     function config_delivery_panels_payload($lang, $origin = 'b')
     {
-        $kind = ($origin === 'u') ? 'usertest' : 'purchase';
-        $kindLabel = ($kind === 'usertest') ? 'اکانت تست' : 'خرید';
+        $kind = config_delivery_origin_kind($origin);
+        $kindLabel = config_delivery_kind_label($kind);
         $panels = select("marzban_panel", "*", null, null, "fetchAll");
         if (!is_array($panels)) {
             $panels = [];
         }
         $info = "📌 <b>نحوه‌ی نمایش کانفیگ (هنگام {$kindLabel})</b>" . mainmenu_tab_note($lang) . "\n➖➖➖➖➖➖➖➖➖➖\n";
-        $info .= "تعیین می‌کنه وقتی کاربر " . ($kind === 'usertest' ? 'اکانت تست می‌گیره' : 'سرویس می‌خره') . "، بعد از تحویل چی ببینه.\n";
+        $info .= "تعیین می‌کنه وقتی کاربر " . (['usertest' => 'اکانت تست می‌گیره', 'affrw' => 'کانفیگ هدیه‌ی دعوت می‌گیره'][$kind] ?? 'سرویس می‌خره') . "، بعد از تحویل چی ببینه.\n";
         $info .= "برای هر پنل و هر زبان جداست - کاربر، تنظیم زبان خودش رو می‌گیره.\n";
+        if ($kind === 'affrw') {
+            $rwPanel = affrw_panel(affrw_cfg($lang));
+            $info .= "🎁 پنل کانفیگ هدیه‌ی این زبان: <b>" . ($rwPanel !== null ? htmlspecialchars((string) $rwPanel['name_panel'], ENT_QUOTES) : 'انتخاب نشده') . "</b> (🌐 وضعیت قابلیت‌ها ← 🎁 تنظیمات زیرمجموعه‌گیری)\n";
+            $info .= "📌 این تنظیمات برای لحظه‌ی تحویل کانفیگ هدیه‌ست؛ بعدش توی «🛍 سرویس‌های من» مثل سرویس‌های خریده‌شده نشون داده می‌شه.\n";
+        }
         $info .= "➖➖➖➖➖➖➖➖➖➖\n";
         $info .= empty($panels) ? "⚠️ هنوز هیچ پنلی اضافه نشده." : "👇 اول پنل رو انتخاب کن:";
         $kb = ['inline_keyboard' => []];
@@ -9556,6 +9576,9 @@ if (!function_exists('config_delivery_panels_payload')) {
             $code = $p['code_panel'];
             $m = config_delivery_mode($kind, $code, $lang);
             $label = "🖥 {$p['name_panel']}  •  حالت " . config_delivery_mode_fa($m);
+            if ($kind === 'affrw' && (string) $code === affrw_cfg($lang)['panel']) {
+                $label .= '  •  🎁';
+            }
             $kb['inline_keyboard'][] = [['text' => $label, 'callback_data' => "cfgdeliv|p|{$lang}|{$code}|{$origin}", 'style' => 'primary']];
         }
         $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => config_delivery_back_cb($lang, $origin), 'style' => 'danger']];
@@ -9566,8 +9589,8 @@ if (!function_exists('config_delivery_panels_payload')) {
 if (!function_exists('config_delivery_panel_payload')) {
     function config_delivery_panel_payload($lang, $codePanel, $origin = 'b')
     {
-        $kind = ($origin === 'u') ? 'usertest' : 'purchase';
-        $kindLabel = ($kind === 'usertest') ? 'اکانت تست' : 'خرید';
+        $kind = config_delivery_origin_kind($origin);
+        $kindLabel = config_delivery_kind_label($kind);
         $panel = select("marzban_panel", "*", "code_panel", $codePanel, "select");
         $name = is_array($panel) ? ($panel['name_panel'] ?? $codePanel) : $codePanel;
         $cur = config_delivery_mode($kind, $codePanel, $lang);
@@ -9615,6 +9638,9 @@ if (!function_exists('config_delivery_panel_payload')) {
         if ($kind === 'purchase') {
             $kb['inline_keyboard'][] = [['text' => '📝 پیام کامل (حالت ۱)', 'callback_data' => "cfgdeliv|msg|{$lang}|{$codePanel}|{$origin}|ap", 'style' => 'primary']];
             $kb['inline_keyboard'][] = [['text' => '📝 کپشن صفحه‌ی کانفیگ (حالت ۲)', 'callback_data' => "cfgdeliv|msg|{$lang}|{$codePanel}|{$origin}|cb", 'style' => 'primary']];
+        } elseif ($kind === 'affrw') {
+            $kb['inline_keyboard'][] = [['text' => '📝 پیام کامل (حالت ۱)', 'callback_data' => "cfgdeliv|msg|{$lang}|{$codePanel}|{$origin}|ar", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '📝 کپشن صفحه‌ی کانفیگ (حالت ۲)', 'callback_data' => "cfgdeliv|msg|{$lang}|{$codePanel}|{$origin}|cr", 'style' => 'primary']];
         } else {
             $kb['inline_keyboard'][] = [['text' => '📝 پیام کامل (حالت ۱)', 'callback_data' => "cfgdeliv|msg|{$lang}|{$codePanel}|{$origin}|at", 'style' => 'primary']];
             $kb['inline_keyboard'][] = [['text' => '📝 کپشن صفحه‌ی کانفیگ (حالت ۲)', 'callback_data' => "cfgdeliv|msg|{$lang}|{$codePanel}|{$origin}|ct", 'style' => 'primary']];
@@ -9687,6 +9713,10 @@ if (!function_exists('config_delivery_panel_payload')) {
                     // buy-only sibling of the config-column settings above
                     unset($be[$lang]['configDisplayBuy']);
                     $clearColOrderBuy = true;
+                }
+                if ($key === 'users.affiliates.rewardConfigHint') {
+                    // and the 🎁 gift's own
+                    unset($be[$lang]['configDisplayReward']);
                 }
             }
         }
@@ -11140,6 +11170,8 @@ if (!function_exists('genbtn_alias_map')) {
             'ab' => 'textbot.afterPay',
             // and its twin under the test-account message
             'ut' => 'textbot.afterText',
+            // and under the 🎁 referral gift's own service message
+            'rw' => 'users.affiliates.rewardAfterPay',
             // the other four bt_btnitem_keys() buttons - listed there all along
             // but never here, so their style screen opened empty and its 🔙
             // fell through to an unrelated screen
@@ -11192,7 +11224,7 @@ if (!function_exists('genbtn_alias_to_key')) {
         }
         // sc: close, quick search and back can go; next/previous stay - without
         // them the services past page one could not be reached at all
-        $extras = ['ab' => [0], 'ut' => [0], 'bc' => [0], 'ns' => [0], 'te' => [0], 'sc' => [0, 2, 5], 'hb' => [0], 'hv' => [0], 'td' => [0, 1], 'su' => [1]];
+        $extras = ['ab' => [0], 'ut' => [0], 'rw' => [0], 'bc' => [0], 'ns' => [0], 'te' => [0], 'sc' => [0, 2, 5], 'hb' => [0], 'hv' => [0], 'td' => [0, 1], 'su' => [1]];
         return in_array((int) $idx, $extras[$alias] ?? [], true);
     }
 }
@@ -11313,7 +11345,7 @@ if (!function_exists('genbtn_defs')) {
         if ($alias === 'hv') {
             return [0 => ['name' => '🔙 دکمه بازگشت (زیر محتوای آموزش)', 'text' => $textbotlang['users']['help']['backToCategoryListBtn'], 'style' => 'danger', 'callback_data' => 'helpbtns']];
         }
-        if ($alias === 'ab' || $alias === 'ut') {
+        if ($alias === 'ab' || $alias === 'ut' || $alias === 'rw') {
             // no default style: the button has always gone out unstyled.
             // trim(): the lang string ends in a space, and split_leading_emoji()
             // counts that space as emoji length ("📚 م مشاهده...").
@@ -11670,6 +11702,18 @@ if (!function_exists('usertest_help_kb')) {
         return json_encode(['inline_keyboard' => [[genbtn_render($defs[0], $ov, $defs[0]['callback_data'])]]]);
     }
 }
+if (!function_exists('affrw_help_kb')) {
+    // and under the 🎁 referral gift's service message - genbtn alias 'rw'
+    function affrw_help_kb($lang, $textbotlang)
+    {
+        $defs = genbtn_defs('rw', $textbotlang);
+        $ov = genbtn_override($lang, 'users.affiliates.rewardAfterPay', 0);
+        if (genbtn_is_hidden($defs[0], $ov)) {
+            return null;
+        }
+        return json_encode(['inline_keyboard' => [[genbtn_render($defs[0], $ov, $defs[0]['callback_data'])]]]);
+    }
+}
 if (!function_exists('sell_selectUsername_kb')) {
     // renders the buy flow's OWN copy of the cancel/use-default keyboard - the
     // usertest flow keeps using its separate usertest_selectUsername_kb(), so
@@ -11840,7 +11884,7 @@ if (!function_exists('genbtn_hub_payload')) {
 
     function genbtn_group_title($alias, $textbotlang)
     {
-        $titles = ['su' => '🔘 دکمه‌های نام‌گذاری سرویس', 'cf' => '🔘 دکمه‌های تأیید خرید', 'ns' => '🔘 دکمه‌ی نداشتن سرویس فعال', 'te' => '🔘 دکمه‌ی پیام اتمام اکانت تست', 'sc' => '🔘 دکمه‌ی بستن (سرویس‌های من)', 'bc' => '🔘 دکمه‌ی تهیه اشتراک (شارژ کیف پول)', 'rn' => '🔘 دکمه‌های فاکتور تمدید سرویس', 'cl' => '🔘 دکمه‌های تغییر لینک اتصال', 'td' => '🔘 دکمه‌های کد تخفیف شارژ', 'hb' => '🔘 دکمه‌ی بازگشت به دسته‌بندی آموزش', 'hv' => '🔘 دکمه‌ی بازگشت (زیر محتوای آموزش)', 'ab' => '📚 دکمه‌ی مشاهده آموزش (پیام بعد از خرید)', 'ut' => '📚 دکمه‌ی مشاهده آموزش (اکانت تست)', 'lc' => '📌 دکمه‌ی عضویت مجدد (پیام خروج از کانال)', 'ma' => '↩️ دکمه‌ی پاسخ به پیام ادمین'];
+        $titles = ['su' => '🔘 دکمه‌های نام‌گذاری سرویس', 'cf' => '🔘 دکمه‌های تأیید خرید', 'ns' => '🔘 دکمه‌ی نداشتن سرویس فعال', 'te' => '🔘 دکمه‌ی پیام اتمام اکانت تست', 'sc' => '🔘 دکمه‌ی بستن (سرویس‌های من)', 'bc' => '🔘 دکمه‌ی تهیه اشتراک (شارژ کیف پول)', 'rn' => '🔘 دکمه‌های فاکتور تمدید سرویس', 'cl' => '🔘 دکمه‌های تغییر لینک اتصال', 'td' => '🔘 دکمه‌های کد تخفیف شارژ', 'hb' => '🔘 دکمه‌ی بازگشت به دسته‌بندی آموزش', 'hv' => '🔘 دکمه‌ی بازگشت (زیر محتوای آموزش)', 'ab' => '📚 دکمه‌ی مشاهده آموزش (پیام بعد از خرید)', 'ut' => '📚 دکمه‌ی مشاهده آموزش (اکانت تست)', 'rw' => '📚 دکمه‌ی مشاهده آموزش (کانفیگ هدیه‌ی دعوت)', 'lc' => '📌 دکمه‌ی عضویت مجدد (پیام خروج از کانال)', 'ma' => '↩️ دکمه‌ی پاسخ به پیام ادمین'];
         if (isset($titles[$alias])) {
             return $titles[$alias];
         }
@@ -11862,6 +11906,7 @@ if (!function_exists('genbtn_hub_payload')) {
             'td' => 'دکمه‌ی ۱ («کد تخفیف دارم») زیر لیست روش‌های پرداختِ 💰 افزایش موجودی میاد - ولی فقط وقتی که برای این زبان حداقل یک کد تخفیف شارژ ساخته باشی، وگرنه اصلاً نشون داده نمی‌شه. دکمه‌ی ۲ زیر همون صفحه‌ی وارد کردن کد میاد. اگر کاربر یه کد رو فعال کرده باشه، دکمه‌ی ۱ دیگه بهش نشون داده نمی‌شه (چون خود کپشن تخفیف فعال رو نوشته).',
             'ab' => 'این ۱ دکمه، زیر پیام «✅ سرویس با موفقیت ایجاد شد» (بعد از خرید) نشون داده می‌شه - برای همه‌ی نوع پنل‌ها، خرید چندتایی، پرداخت آنلاین و سفارشی که ادمین برای کاربر ثبت می‌کنه. پیش‌فرض مخفیه؛ برای نمایش، «👁 نمایش دادن این دکمه» رو بزن.',
             'ut' => 'این ۱ دکمه، زیر پیام «✅ سرویس با موفقیت ایجاد شد» بعد از گرفتن اکانت تست نشون داده می‌شه. پیش‌فرض مخفیه؛ برای نمایش، «👁 نمایش دادن این دکمه» رو بزن.',
+            'rw' => 'این ۱ دکمه، زیر پیام کامل کانفیگ هدیه‌ی دعوت (حالت ۱) نشون داده می‌شه. پیش‌فرض مخفیه؛ برای نمایش، «👁 نمایش دادن این دکمه» رو بزن.',
             'lc' => 'این ۱ دکمه، زیر پیام «از کانال خارج شدید» میاد و کاربر رو به همون کانالی که ازش خارج شده برمی‌گردونه.',
             'ma' => 'این ۱ دکمه زیر پیام‌هایی میاد که ادمین به کاربر می‌نویسه: پیام از «👀 اطلاعات کاربر ← ارسال پیام» (وقتی اجازه‌ی پاسخ داده باشی)، جواب ادمین به پیام کاربر، و جواب پشتیبانی به تیکت. کاربر با زدنش جواب رو می‌فرسته.',
         ];
@@ -11882,7 +11927,7 @@ if (!function_exists('genbtn_hub_payload')) {
             return bt_btnitem_back_cb($key, $lang);
         }
         // 'cf' points at textbot.preInvoice (the normal-purchase تأیید خرید)
-        $backKeyMap = ['su' => 'users.sell.selectUsernamePrompt', 'cf' => 'textbot.preInvoice', 'ns' => 'users.sell.service_not_available', 'te' => 'textbot.testExpired', 'sc' => 'users.sell.service_sell', 'bc' => 'users.Balance.chargeSuccess', 'rn' => 'users.extend.invoiceCreated', 'cl' => 'users.changeLink.warnchange', 'td' => 'users.Balance.topupDiscPrompt', 'hb' => 'users.help.listCaption', 'hv' => 'users.help.categoryCaption', 'ab' => 'textbot.afterPay', 'ut' => 'textbot.afterText', 'lc' => 'users.channel.left_channel', 'ma' => 'users.support.messageFromAdminAlt'];
+        $backKeyMap = ['su' => 'users.sell.selectUsernamePrompt', 'cf' => 'textbot.preInvoice', 'ns' => 'users.sell.service_not_available', 'te' => 'textbot.testExpired', 'sc' => 'users.sell.service_sell', 'bc' => 'users.Balance.chargeSuccess', 'rn' => 'users.extend.invoiceCreated', 'cl' => 'users.changeLink.warnchange', 'td' => 'users.Balance.topupDiscPrompt', 'hb' => 'users.help.listCaption', 'hv' => 'users.help.categoryCaption', 'ab' => 'textbot.afterPay', 'ut' => 'textbot.afterText', 'rw' => 'users.affiliates.rewardAfterPay', 'lc' => 'users.channel.left_channel', 'ma' => 'users.support.messageFromAdminAlt'];
         $backKey = ($origin === 'u') ? 'users.usertest.selectUsernamePrompt' : ($backKeyMap[$alias] ?? 'users.sell.selectUsernamePrompt');
         return "bt_edit|{$lang}|{$backKey}";
     }
@@ -15543,7 +15588,7 @@ if (!function_exists('config_col_order_payload')) {
         $hName = configdisplay_element_current($lang, 2, $textbotlang, $kind);
         // the buy hub uses its own parallel callback tokens (cfgcolel*buy*-)
         // so it never shares state or routing with the usertest hub below
-        $elPrefix = ($kind === 'buy') ? 'cfgcolelbuy-' : 'cfgcolel-';
+        $elPrefix = ['buy' => 'cfgcolelbuy-', 'affrw' => 'cfgcolelrw-'][$kind] ?? 'cfgcolel-';
         $headerConfig = ['text' => $hConfig['text'], 'callback_data' => "{$elPrefix}1-{$lang}"];
         if ($hConfig['style'] !== '') {
             $headerConfig['style'] = $hConfig['style'];
@@ -15572,14 +15617,19 @@ if (!function_exists('config_col_order_payload')) {
         if ($kind === 'buy') {
             $cbConfigFirst = "cfgcolbtbuy-getfirst-{$lang}";
             $cbNameFirst = "cfgcolbtbuy-namefirst-{$lang}";
+        } elseif ($kind === 'affrw') {
+            $cbConfigFirst = "cfgcolbtrw-getfirst-{$lang}";
+            $cbNameFirst = "cfgcolbtrw-namefirst-{$lang}";
         } else {
             $cbConfigFirst = ($originLang !== null) ? "cfgcolbt-getfirst-{$originLang}" : 'configcolorder-config_first';
             $cbNameFirst = ($originLang !== null) ? "cfgcolbt-namefirst-{$originLang}" : 'configcolorder-name_first';
         }
-        $hubTitle = ($kind === 'buy') ? '🗂 تنظیم نمایش و کپشن کانفیگ (خرید سرویس)' : '🗂 تنظیم نمایش و کپشن کانفیگ';
+        $hubTitle = ['buy' => '🗂 تنظیم نمایش و کپشن کانفیگ (خرید سرویس)', 'affrw' => '🗂 تنظیم نمایش و کپشن کانفیگ (هدیه‌ی دعوت)'][$kind] ?? '🗂 تنظیم نمایش و کپشن کانفیگ';
         $info = "🗂 <b>{$hubTitle}</b>" . ($originLang !== null ? mainmenu_tab_note($lang) : '') . "\n➖➖➖➖➖➖➖➖➖➖\n";
         if ($kind === 'buy') {
             $info .= "این بخش، نمایشِ صفحه‌ی کانفیگِ سرویس‌های خریداری‌شده رو کنترل می‌کنه (جدا از اکانت تست): ترتیب ستون‌ها، و متن/رنگ هرکدوم از دکمه‌ها.\n";
+        } elseif ($kind === 'affrw') {
+            $info .= "این بخش، صفحه‌ی کانفیگی رو کنترل می‌کنه که موقع تحویل کانفیگ هدیه‌ی دعوت (حالت ۲) فرستاده می‌شه - جدا از خرید و اکانت تست: ترتیب ستون‌ها، و متن/رنگ هرکدوم از دکمه‌ها.\n";
         } else {
             $info .= "این بخش، نمایشِ صفحه‌ی کانفیگ‌های هر سرویس رو کنترل می‌کنه: ترتیب ستون‌ها، و متن/رنگ هرکدوم از دکمه‌ها.\n";
         }
@@ -15633,7 +15683,7 @@ if (!function_exists('configdisplay_element_store_key')) {
     // stop sharing settings.
     function configdisplay_element_store_key($kind)
     {
-        return $kind === 'buy' ? 'configDisplayBuy' : 'configDisplay';
+        return ['buy' => 'configDisplayBuy', 'affrw' => 'configDisplayReward'][$kind] ?? 'configDisplay';
     }
 }
 if (!function_exists('config_col_name_first')) {
@@ -15651,6 +15701,10 @@ if (!function_exists('config_col_name_first')) {
         if ($own !== null) {
             return $own === 'name_first';
         }
+        if ($kind === 'affrw') {
+            // the 🎁 gift is newer than the bot-wide column - nothing to inherit
+            return false;
+        }
         $legacy = (string) ($setting[$kind === 'buy' ? 'configColOrderBuy' : 'configColOrder'] ?? '');
         return $lang === 'fa' && $legacy === 'name_first';
     }
@@ -15663,7 +15717,7 @@ if (!function_exists('config_col_name_first')) {
         }
         $be[$lang][configdisplay_element_store_key($kind)]['__order'] = $nameFirst ? 'name_first' : 'config_first';
         update("setting", "button_edit", json_encode($be, JSON_UNESCAPED_UNICODE), null, null);
-        if ($lang === 'fa') {
+        if ($lang === 'fa' && $kind !== 'affrw') {
             // Persian has its own now - the bot-wide value was Persian's
             update("setting", $kind === 'buy' ? 'configColOrderBuy' : 'configColOrder', null, null, null);
         }
@@ -15762,6 +15816,15 @@ if (!function_exists('configdisplay_element_payload')) {
             ];
             $kb['inline_keyboard'][] = [['text' => '🔁 ریست این المان', 'callback_data' => "cfgcolelrstbuy-{$idx}-{$lang}", 'style' => 'danger']];
             $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "btact|cfgcolbuy|{$lang}|users.status.getConfigHintBuy"]];
+        } elseif ($kind === 'affrw') {
+            $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش متن', 'callback_data' => "cfgcoltextrw-{$idx}-{$lang}"]];
+            $kb['inline_keyboard'][] = [
+                ['text' => ($cur['style'] === 'primary' ? '✅ ' : '') . '🔵 آبی', 'callback_data' => "cfgcolelstylerw-{$idx}-primary-{$lang}", 'style' => 'primary'],
+                ['text' => ($cur['style'] === 'success' ? '✅ ' : '') . '🟢 سبز', 'callback_data' => "cfgcolelstylerw-{$idx}-success-{$lang}", 'style' => 'success'],
+                ['text' => ($cur['style'] === 'danger' ? '✅ ' : '') . '🔴 قرمز', 'callback_data' => "cfgcolelstylerw-{$idx}-danger-{$lang}", 'style' => 'danger'],
+            ];
+            $kb['inline_keyboard'][] = [['text' => '🔁 ریست این المان', 'callback_data' => "cfgcolelrstrw-{$idx}-{$lang}", 'style' => 'danger']];
+            $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت', 'callback_data' => "cfgcolrw|{$lang}"]];
         } else {
             $kb['inline_keyboard'][] = [['text' => '✏️ ویرایش متن', 'callback_data' => "cfgcoltext-{$idx}-{$lang}"]];
             $kb['inline_keyboard'][] = [
@@ -17094,7 +17157,7 @@ if (!function_exists('affrw_cfg')) {
                 $links .= "\n" . $link;
             }
         }
-        $tpl = $tx['textbot']['afterPay'];
+        $tpl = $tx['users']['affiliates']['rewardAfterPay'];
         if ($panel['type'] == "WGDashboard") {
             $tpl = $tx['textbot']['wgDashboard'];
         } elseif ($panel['type'] == "ibsng" || $panel['type'] == "mikrotik") {
@@ -17116,7 +17179,7 @@ if (!function_exists('affrw_cfg')) {
         if ($panel['type'] == "ibsng" || $panel['type'] == "mikrotik") {
             update("invoice", "user_info", $out['subscription_url'], "id_invoice", $id_invoice);
         }
-        sendMessageService($panel, $out['configs'] ?? [], $sublink, $out['username'], afterpay_help_kb($lang, $tx), $text, $id_invoice, $uid);
+        sendMessageService($panel, $out['configs'] ?? [], $sublink, $out['username'], affrw_help_kb($lang, $tx), $text, $id_invoice, $uid, 'images.jpg', 'affrw');
         $report('porsantreport', strtr($fa['Admin']['AffReward']['report'], [
             '{id}' => $uid,
             '{username}' => (!empty($u['username']) && $u['username'] !== 'none') ? '@' . htmlspecialchars($u['username']) : '',
@@ -17664,13 +17727,15 @@ function sendMessageService($panel_info, $config, $sub_link, $username_service, 
     // nothing. No QR either way in mode 2.
     if ($panel_info['config'] == "onconfig" && $configCount > 0
         && config_delivery_mode($kind, $panel_info['code_panel'] ?? null, $sms_lang) === "2") {
-        $cd_hintKey = ($kind === 'usertest') ? 'textbot.getConfigHintTest' : 'textbot.getConfigHintBuy';
-        $cd_hintText = bottext_resolve_key($cd_hintKey);
+        $cd_hintKey = ['usertest' => 'textbot.getConfigHintTest', 'affrw' => 'users.affiliates.rewardConfigHint'][$kind] ?? 'textbot.getConfigHintBuy';
+        // an admin can be the one approving a 🎁 gift, so it is worded in the
+        // recipient's language rather than the reader's
+        $cd_hintText = bottext_resolve_key($cd_hintKey, $kind === 'affrw' ? $sms_lang : null);
         // sendMessageService's own $kind is 'purchase'|'usertest' - keyboard_config()'s
         // is 'usertest'|'buy', so normalize rather than let 'purchase' silently
         // fall through to the usertest column/button settings below
-        $cc_kbKind = ($kind === 'usertest') ? 'usertest' : 'buy';
-        $cd_kb = json_decode(keyboard_config($config, $invoice_id, false, $cc_kbKind), true);
+        $cc_kbKind = ['usertest' => 'usertest', 'affrw' => 'affrw'][$kind] ?? 'buy';
+        $cd_kb = json_decode(keyboard_config($config, $invoice_id, false, $cc_kbKind, $sms_lang), true);
         // the 📚 tutorial button the full message carried comes along underneath
         $cd_help = is_string($reply_markup) ? json_decode($reply_markup, true) : null;
         if (is_array($cd_help) && !empty($cd_help['inline_keyboard'])) {

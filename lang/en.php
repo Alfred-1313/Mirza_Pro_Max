@@ -966,6 +966,18 @@ Your free config request was sent to the admin; it will be created once approved
                         'rewardRejected' => '❌ Your free config request was not approved.
 From now on your invites are counted from zero again, and you can try again.',
                         'rewardServiceName' => '🎁 Referral gift',
+                        'rewardAfterPay' => '🎁 Your referral gift config was created successfully
+
+👤 Service username: {username}
+🌿 Service name: {name_service}
+🇺🇳 Location: {location}
+⏳ Duration: {time_human}
+🗜 Service volume: {volume_human}
+
+Connection link:
+{config}
+{links}',
+                        'rewardConfigHint' => '📌 To get your gift config, click the Get config button',
                         'balanceGift' => '🎁 An amount of {addbalancediscount} was added to your balance from your referral with user ID {from_id}.',
                         'pointsEarned2Alt' => '📌You earned 2 new points.',
                         'pointsEarned1Alt' => '📌You earned 1 new point.',

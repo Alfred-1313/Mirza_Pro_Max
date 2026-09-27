@@ -666,6 +666,14 @@ return array (
         'key' => 'textbot.getConfigHintTest',
       ),
       array (
+        'label' => '🎁 پیام کامل کانفیگ هدیه‌ی دعوت (حالت ۱)',
+        'key' => 'users.affiliates.rewardAfterPay',
+      ),
+      array (
+        'label' => '📌 کپشن صفحه‌ی کانفیگ (حالت ۲) — هدیه‌ی دعوت',
+        'key' => 'users.affiliates.rewardConfigHint',
+      ),
+      array (
         'label' => '📊 پیام و دکمه‌های صفحه‌ی وضعیت سرویس',
         'key' => 'users.status.infoFull',
       ),
@@ -1609,6 +1617,18 @@ return array (
       'rewardRejected' => '❌ درخواست کانفیگ رایگانت تایید نشد.
 از الان دعوت‌هات دوباره از صفر شمرده می‌شن و می‌تونی دوباره تلاش کنی.',
       'rewardServiceName' => '🎁 هدیه‌ی دعوت',
+      'rewardAfterPay' => '🎁 کانفیگ هدیه‌ی دعوت با موفقیت ساخته شد
+
+👤 نام کاربری سرویس : {username}
+🌿 نام سرویس:  {name_service}
+‏🇺🇳 لوکیشن: {location}
+⏳ مدت زمان: {day}  روز
+🗜 حجم سرویس:  {volume} گیگابایت
+
+لینک اتصال:
+{config}
+{links}',
+      'rewardConfigHint' => '📌 جهت دریافت کانفیگ هدیه روی دکمه دریافت کانفیگ کلیک کنید',
       'balanceGift' => '🎁 مبلغ {addbalancediscount} به موجودی شما از طرف زیر مجموعه با شناسه کاربری {from_id} اضافه گردید.',
       'pointsEarned2Alt' => '📌شما 2 امتیاز جدید کسب کردید.',
       'pointsEarned1Alt' => '📌شما 1 امتیاز جدید کسب کردید.',
