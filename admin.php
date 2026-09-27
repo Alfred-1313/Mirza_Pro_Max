@@ -5641,14 +5641,14 @@ if (!function_exists('svcgive_panels_payload')) {
         $d = $ManagePanel->DataUser($panelRow['name_panel'], $username);
         return (is_array($d) && ($d['status'] ?? '') !== 'Unsuccessful' && !empty($d['username'])) ? $d : null;
     }
-    // who already has it in the bot (a listed service), or null
-    function svcgive_owner($panelName, $username)
+    // who already has it in the bot (a listed service) - an account can be
+    // shared, so this is a list
+    function svcgive_owners($panelName, $username)
     {
         global $pdo;
-        $st = $pdo->prepare("SELECT id_user FROM invoice WHERE username = ? AND Service_location = ? AND Status IN ('active', 'end_of_time', 'end_of_volume', 'sendedwarn', 'send_on_hold') LIMIT 1");
+        $st = $pdo->prepare("SELECT DISTINCT id_user FROM invoice WHERE username = ? AND Service_location = ? AND Status IN ('active', 'end_of_time', 'end_of_volume', 'sendedwarn', 'send_on_hold')");
         $st->execute([(string) $username, (string) $panelName]);
-        $o = $st->fetchColumn();
-        return $o === false ? null : (string) $o;
+        return array_map('strval', $st->fetchAll(PDO::FETCH_COLUMN));
     }
     // a bot user by numeric id or @username, or null
     function svcgive_find_user($text)
@@ -5662,6 +5662,61 @@ if (!function_exists('svcgive_panels_payload')) {
             $u = false;
         }
         return is_array($u) ? $u : null;
+    }
+    // several at once - ids or @usernames, one a line or split by spaces or
+    // commas: [found user rows by id, what was not found]
+    function svcgive_find_users($text)
+    {
+        $found = [];
+        $missing = [];
+        foreach (preg_split('/[\s,،]+/u', trim((string) $text), -1, PREG_SPLIT_NO_EMPTY) as $tok) {
+            $u = svcgive_find_user($tok);
+            if ($u === null) {
+                $missing[] = $tok;
+            } else {
+                $found[(string) $u['id']] = $u;
+            }
+        }
+        return [$found, $missing];
+    }
+    // «all users» is this 👤 tab's users, like every other action there
+    function svcgive_tab_user_ids($lang)
+    {
+        global $pdo;
+        [$lw, $lp] = user_lang_where($lang);
+        $st = $pdo->prepare("SELECT id FROM user WHERE {$lw}");
+        $st->execute($lp);
+        return array_map('strval', $st->fetchAll(PDO::FETCH_COLUMN));
+    }
+    // the ✅ screen: who gets it, and - once it is anyone's but one person's -
+    // what sharing it means
+    function svcgive_confirm_text($d, $panelRow, $count, $sharedWith, $textbotlang)
+    {
+        $t = $textbotlang['Admin']['UserMgmt'];
+        $vars = [
+            '{username}' => htmlspecialchars((string) ($d['sg_user'] ?? '')),
+            '{panel}' => htmlspecialchars((string) $panelRow['name_panel']),
+            '{n}' => $count,
+            '{lang}' => $textbotlang['bottext']['langs'][$d['sg_lang'] ?? 'fa'] ?? '',
+        ];
+        if (($d['sg_to'] ?? null) === 'all') {
+            $out = strtr($t['assignConfirmAll'], $vars);
+        } elseif (count((array) ($d['sg_to'] ?? [])) === 1) {
+            $u = select("user", "*", "id", (string) $d['sg_to'][0], "select");
+            $out = strtr($t['assignConfirm'], $vars + [
+                '{id}' => $d['sg_to'][0],
+                '{name}' => (is_array($u) && !empty($u['username']) && $u['username'] !== 'none') ? '@' . htmlspecialchars($u['username']) : '',
+            ]);
+        } else {
+            $out = strtr($t['assignConfirmMany'], $vars + ['{ids}' => implode(' ', array_map(fn($i) => "<code>{$i}</code>", array_slice((array) $d['sg_to'], 0, 20))) . ($count > 20 ? ' …' : '')]);
+        }
+        if ($sharedWith > 0) {
+            $out .= strtr($t['assignAlready'], ['{n}' => $sharedWith]);
+        }
+        if ($count + $sharedWith > 1) {
+            $out .= $t['assignShared'];
+        }
+        return $out;
     }
     // what the admin is shown about the account before handing it over
     function svcgive_account_text($acc, $textbotlang)
@@ -5677,9 +5732,10 @@ if (!function_exists('svcgive_panels_payload')) {
             '{expire}' => $exp > 0 ? jdate('Y/m/d', $exp) : $t['assignUnlimited'],
         ]);
     }
-    // Hands it over: one invoice row, as the panel has the account now. Returns
-    // its id_invoice.
-    function svcgive_assign($panelRow, $acc, $userRow)
+    // Hands it over: one invoice row per customer, as the panel has the
+    // account now, named in each one's language. $users: [id => lang].
+    // Returns how many rows it made.
+    function svcgive_assign_many($panelRow, $acc, array $users)
     {
         global $pdo;
         $limit = (float) ($acc['data_limit'] ?? 0);
@@ -5687,14 +5743,18 @@ if (!function_exists('svcgive_panels_payload')) {
         $volume = $limit > 0 ? rtrim(rtrim(number_format($limit / 1073741824, 2, '.', ''), '0'), '.') : '0';
         $days = $exp > 0 ? (string) max(0, (int) ceil(($exp - time()) / 86400)) : '0';
         $status = ['limited' => 'end_of_volume', 'expired' => 'end_of_time', 'on_hold' => 'send_on_hold'][$acc['status'] ?? ''] ?? 'active';
-        $id = bin2hex(random_bytes(4));
+        $notif = json_encode(['volume' => false, 'time' => false]);
+        $names = [];
         $stmt = $pdo->prepare("INSERT INTO invoice (id_user, id_invoice, username, time_sell, Service_location, name_product, price_product, Volume, Service_time, Status, notifctions) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([
-            (string) $userRow['id'], $id, (string) $acc['username'], time(), (string) $panelRow['name_panel'],
-            payer_texts($userRow['id'])['users']['status']['assignedServiceName'], '0', $volume, $days, $status,
-            json_encode(['volume' => false, 'time' => false]),
-        ]);
-        return $id;
+        // one transaction: «all users» can be thousands of rows
+        $pdo->beginTransaction();
+        foreach ($users as $uid => $lang) {
+            $lang = in_array($lang, panel_langs(), true) ? $lang : 'fa';
+            $names[$lang] = $names[$lang] ?? lang_tab_texts($lang)['users']['status']['assignedServiceName'];
+            $stmt->execute([(string) $uid, bin2hex(random_bytes(4)), (string) $acc['username'], time(), (string) $panelRow['name_panel'], $names[$lang], '0', $volume, $days, $status, $notif]);
+        }
+        $pdo->commit();
+        return count($users);
     }
 }
 if (!function_exists('affrw_panel_payload')) {
@@ -7283,11 +7343,17 @@ if (preg_match('/^renamereset-([a-z]{2})$/', $datain, $rn_m) && $adminrulecheck[
 }
 
 //----------------[  👤 🔗 واگذاری سرویس پنل به کاربر  ]----------------
-// panel -> the account's username (checked on the panel) -> the customer ->
-// confirm. Each step checks again, so nothing stale is ever handed over.
-if (preg_match('/^svcgive\|(start|p|ok|no)(?:\|(\d+))?$/', $datain, $sg_m) && $adminrulecheck['rule'] == "administrator") {
+// panel -> the account's username (checked on the panel) -> who gets it: one
+// customer, several, or every customer of this 👤 tab -> confirm. An account
+// can be shared: those who already have it keep it, the new ones join them.
+// Each step checks again, so nothing stale is ever handed over.
+if (preg_match('/^svcgive\|(start|p|all|ok|no)(?:\|(\d+))?$/', $datain, $sg_m) && $adminrulecheck['rule'] == "administrator") {
     $sg_t = $textbotlang['Admin']['UserMgmt'];
     $sg_back = json_encode(['inline_keyboard' => [[['text' => $sg_t['assignBackBtn'], 'callback_data' => 'backlistuser', 'style' => 'danger']]]]);
+    $sg_yesno = json_encode(['inline_keyboard' => [[
+        ['text' => $sg_t['assignYes'], 'callback_data' => 'svcgive|ok', 'style' => 'success'],
+        ['text' => $sg_t['assignCancel'], 'callback_data' => 'svcgive|no', 'style' => 'danger'],
+    ]]]);
     if ($sg_m[1] === 'start') {
         step('home', $from_id);
         Editmessagetext($from_id, $message_id, $sg_t['assignPickPanel'], svcgive_panels_payload($textbotlang), 'HTML');
@@ -7308,25 +7374,83 @@ if (preg_match('/^svcgive\|(start|p|ok|no)(?:\|(\d+))?$/', $datain, $sg_m) && $a
         Editmessagetext($from_id, $message_id, strtr($sg_t['assignAskUsername'], ['{panel}' => htmlspecialchars((string) $sg_panel['name_panel'])]), json_encode(['inline_keyboard' => [[['text' => $sg_t['assignCancel'], 'callback_data' => 'svcgive|no', 'style' => 'danger']]]]), 'HTML');
         return;
     }
-    // ✅: everything checked once more, then handed over
     $sg_d = json_decode((string) $user['Processing_value'], true) ?: [];
     $sg_panel = select("marzban_panel", "*", "id", (int) ($sg_d['sg_panel'] ?? 0), "select");
-    $sg_to = select("user", "*", "id", (string) ($sg_d['sg_to'] ?? ''), "select");
+    if ($sg_m[1] === 'all') {
+        // 👥 every customer of this 👤 tab
+        if ($user['step'] !== 'svcgive_to' || !is_array($sg_panel) || !isset($sg_d['sg_user'])) {
+            telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $sg_t['assignStale'], 'show_alert' => true]);
+            return;
+        }
+        $sg_lang = um_tab($user);
+        $sg_owners = svcgive_owners($sg_panel['name_panel'], $sg_d['sg_user']);
+        $sg_n = count(array_diff(svcgive_tab_user_ids($sg_lang), $sg_owners));
+        savedata("save", "sg_to", 'all');
+        savedata("save", "sg_lang", $sg_lang);
+        $sg_d['sg_to'] = 'all';
+        $sg_d['sg_lang'] = $sg_lang;
+        step('svcgive_confirm', $from_id);
+        Editmessagetext($from_id, $message_id, svcgive_confirm_text($sg_d, $sg_panel, $sg_n, count($sg_owners), $textbotlang), $sg_yesno, 'HTML');
+        return;
+    }
+    // ✅: everything checked once more, then handed over
     $sg_acc = (is_array($sg_panel) && isset($sg_d['sg_user'])) ? svcgive_account($sg_panel, $sg_d['sg_user']) : null;
     step('home', $from_id);
-    if ($user['step'] !== 'svcgive_confirm' || $sg_acc === null || !is_array($sg_to)) {
+    if ($user['step'] !== 'svcgive_confirm' || $sg_acc === null || empty($sg_d['sg_to'])) {
         telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $sg_t['assignStale'], 'show_alert' => true]);
         return;
     }
-    $sg_owner = svcgive_owner($sg_panel['name_panel'], $sg_acc['username']);
-    if ($sg_owner !== null) {
-        Editmessagetext($from_id, $message_id, strtr($sg_t['assignOwned'], ['{username}' => htmlspecialchars($sg_acc['username']), '{owner}' => $sg_owner]), $sg_back, 'HTML');
+    $sg_owners = svcgive_owners($sg_panel['name_panel'], $sg_acc['username']);
+    $sg_all = $sg_d['sg_to'] === 'all';
+    $sg_targets = [];
+    if ($sg_all) {
+        foreach (array_diff(svcgive_tab_user_ids($sg_d['sg_lang'] ?? 'fa'), $sg_owners) as $sg_id) {
+            $sg_targets[$sg_id] = $sg_d['sg_lang'] ?? 'fa';
+        }
+    } else {
+        foreach (array_diff(array_map('strval', (array) $sg_d['sg_to']), $sg_owners) as $sg_id) {
+            $sg_row = select("user", "*", "id", $sg_id, "select");
+            if (is_array($sg_row)) {
+                $sg_targets[$sg_id] = $sg_row['lang'] ?? 'fa';
+            }
+        }
+    }
+    if (empty($sg_targets)) {
+        Editmessagetext($from_id, $message_id, $sg_t['assignAllHave'], $sg_back, 'HTML');
         return;
     }
-    svcgive_assign($sg_panel, $sg_acc, $sg_to);
-    bottext_extras_key_hint('users.status.assignedNotice');
-    sendmessage($sg_to['id'], strtr(payer_texts($sg_to['id'])['users']['status']['assignedNotice'], ['{username}' => htmlspecialchars($sg_acc['username'])]), null, 'HTML');
-    Editmessagetext($from_id, $message_id, strtr($sg_t['assignDone'], ['{username}' => htmlspecialchars($sg_acc['username']), '{id}' => $sg_to['id']]), $sg_back, 'HTML');
+    $sg_count = svcgive_assign_many($sg_panel, $sg_acc, $sg_targets);
+    $sg_uname = htmlspecialchars($sg_acc['username']);
+    if (!$sg_all) {
+        // a few, typed in by hand: told now, each in their own language
+        foreach ($sg_targets as $sg_id => $sg_lang) {
+            bottext_extras_key_hint('users.status.assignedNotice');
+            sendmessage($sg_id, strtr(lang_tab_texts($sg_lang)['users']['status']['assignedNotice'], ['{username}' => $sg_uname]), null, 'HTML');
+        }
+        $sg_note = $sg_t['assignNoteSent'];
+    } else {
+        // a whole tab: through the 👤 broadcast queue, twenty a run - unless
+        // a broadcast is already going out, which it must not overwrite
+        $sg_busy = is_file('cronbot/users.json') && count((array) json_decode((string) file_get_contents('cronbot/users.json'), true)) > 0;
+        if ($sg_busy) {
+            $sg_note = $sg_t['assignNoteBusy'];
+        } else {
+            $sg_progress = sendmessage($from_id, $sg_t['assignQueueStarted'], json_encode(['inline_keyboard' => [[['text' => $textbotlang['keyboard']['cancelOperation'], 'callback_data' => 'cancel_sendmessage', 'style' => 'danger']]]]), 'HTML');
+            file_put_contents('cronbot/users.json', json_encode(array_map(fn($i) => ['id' => (string) $i], array_keys($sg_targets))));
+            file_put_contents('cronbot/info', json_encode([
+                'id_admin' => $from_id,
+                'type' => 'sendmessage',
+                'id_message' => $sg_progress['result']['message_id'] ?? 0,
+                'message' => strtr(lang_tab_texts($sg_d['sg_lang'] ?? 'fa')['users']['status']['assignedNotice'], ['{username}' => $sg_uname]),
+                'pingmessage' => 'no',
+                'btnmessage' => 'none',
+                'lang' => $sg_d['sg_lang'] ?? 'fa',
+                'hint' => 'users.status.assignedNotice',
+            ]));
+            $sg_note = $sg_t['assignNoteQueued'];
+        }
+    }
+    Editmessagetext($from_id, $message_id, strtr($sg_t['assignDone'], ['{username}' => $sg_uname, '{n}' => $sg_count]) . $sg_note, $sg_back, 'HTML');
     return;
 }
 if (in_array($user['step'], ['svcgive_user', 'svcgive_to'], true) && $datain === '' && $adminrulecheck['rule'] == "administrator"
@@ -7347,36 +7471,39 @@ if (in_array($user['step'], ['svcgive_user', 'svcgive_to'], true) && $datain ===
             sendmessage($from_id, strtr($sg_t['assignNotFound'], ['{username}' => htmlspecialchars($sg_name), '{panel}' => htmlspecialchars((string) $sg_panel['name_panel'])]), $sg_cancel, 'HTML');
             return;
         }
-        $sg_owner = svcgive_owner($sg_panel['name_panel'], $sg_acc['username']);
-        if ($sg_owner !== null) {
-            step('home', $from_id);
-            sendmessage($from_id, strtr($sg_t['assignOwned'], ['{username}' => htmlspecialchars($sg_acc['username']), '{owner}' => $sg_owner]), null, 'HTML');
-            return;
-        }
+        $sg_owners = svcgive_owners($sg_panel['name_panel'], $sg_acc['username']);
         savedata("save", "sg_user", $sg_acc['username']);
         step('svcgive_to', $from_id);
+        $sg_lang = um_tab($user);
         sendmessage($from_id, strtr($sg_t['assignAskUser'], [
             '{username}' => htmlspecialchars($sg_acc['username']),
             '{panel}' => htmlspecialchars((string) $sg_panel['name_panel']),
             '{account}' => svcgive_account_text($sg_acc, $textbotlang),
-        ]), $sg_cancel, 'HTML');
+            '{owned}' => $sg_owners ? strtr($sg_t['assignOwnedNote'], ['{n}' => count($sg_owners)]) : '',
+            '{lang}' => um_lang_name($sg_lang, $textbotlang),
+        ]), json_encode(['inline_keyboard' => [
+            [['text' => strtr($sg_t['assignAllBtn'], ['{lang}' => um_lang_name($sg_lang, $textbotlang)]), 'callback_data' => 'svcgive|all', 'style' => 'primary']],
+            [['text' => $sg_t['assignCancel'], 'callback_data' => 'svcgive|no', 'style' => 'danger']],
+        ]]), 'HTML');
         return;
     }
-    // the customer it becomes
-    $sg_to = svcgive_find_user($text);
-    if ($sg_to === null) {
-        sendmessage($from_id, strtr($sg_t['assignNoUser'], ['{id}' => htmlspecialchars(trim((string) $text))]), $sg_cancel, 'HTML');
+    // who it goes to: one or more ids / @usernames
+    [$sg_found, $sg_missing] = svcgive_find_users($text);
+    if (empty($sg_found)) {
+        sendmessage($from_id, strtr($sg_t['assignNoUser'], ['{id}' => htmlspecialchars(implode(' ', $sg_missing))]), $sg_cancel, 'HTML');
         return;
     }
-    savedata("save", "sg_to", (string) $sg_to['id']);
+    $sg_owners = svcgive_owners($sg_panel['name_panel'], (string) ($sg_d['sg_user'] ?? ''));
+    $sg_new = array_values(array_diff(array_keys($sg_found), $sg_owners));
+    if (empty($sg_new)) {
+        sendmessage($from_id, $sg_t['assignAllHave'], $sg_cancel, 'HTML');
+        return;
+    }
+    savedata("save", "sg_to", $sg_new);
+    $sg_d['sg_to'] = $sg_new;
     step('svcgive_confirm', $from_id);
-    $sg_uname = (!empty($sg_to['username']) && $sg_to['username'] !== 'none') ? '@' . htmlspecialchars($sg_to['username']) : '';
-    sendmessage($from_id, strtr($sg_t['assignConfirm'], [
-        '{username}' => htmlspecialchars((string) ($sg_d['sg_user'] ?? '')),
-        '{panel}' => htmlspecialchars((string) $sg_panel['name_panel']),
-        '{id}' => $sg_to['id'],
-        '{name}' => $sg_uname,
-    ]), json_encode(['inline_keyboard' => [[
+    $sg_missingNote = $sg_missing ? strtr($sg_t['assignMissing'], ['{list}' => htmlspecialchars(implode(' ', $sg_missing))]) : '';
+    sendmessage($from_id, svcgive_confirm_text($sg_d, $sg_panel, count($sg_new), count($sg_owners), $textbotlang) . $sg_missingNote, json_encode(['inline_keyboard' => [[
         ['text' => $sg_t['assignYes'], 'callback_data' => 'svcgive|ok', 'style' => 'success'],
         ['text' => $sg_t['assignCancel'], 'callback_data' => 'svcgive|no', 'style' => 'danger'],
     ]]]), 'HTML');
