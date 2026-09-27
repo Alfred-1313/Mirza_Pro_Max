@@ -5038,12 +5038,6 @@ if (!function_exists('feature_status_global_payload')) {
                     ['text' => $name_status_notifnewuser, 'callback_data' => "editstsuts-notifnew-{$setting['statusnewuser']}"],
                     ['text' => $textbotlang['Admin']['Status']['statusNotifNewUser'], 'callback_data' => "statusnewuser"],
                 ],
-                // 💱 converting a balance on a language switch - bot-wide
-                [
-                    ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "wcv|open"],
-                    ['text' => wallet_convert_on() ? $textbotlang['Admin']['Status']['statuson'] : $textbotlang['Admin']['Status']['statusoff'], 'callback_data' => "wcv|tog"],
-                    ['text' => $textbotlang['Admin']['WalletConvert']['rowLabel'], 'callback_data' => "wcv|info"],
-                ],
                 [
                     ['text' => $cronteststatustext, 'callback_data' => "editstsuts-crontest-{$status_cron['test']}"],
                     ['text' => $textbotlang['keyboard']['cronTest'], 'callback_data' => "none"],
@@ -5055,6 +5049,12 @@ if (!function_exists('feature_status_global_payload')) {
                 [
                     ['text' => $cronuptime_panelstatustext, 'callback_data' => "editstsuts-uptime_panel-{$status_cron['uptime_panel']}"],
                     ['text' => $textbotlang['keyboard']['panelUptime'], 'callback_data' => "none"],
+                ],
+                // 💱 converting a balance on a language switch - bot-wide
+                [
+                    ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "wcv|open"],
+                    ['text' => wallet_convert_on() ? $textbotlang['Admin']['Status']['statuson'] : $textbotlang['Admin']['Status']['statusoff'], 'callback_data' => "wcv|tog"],
+                    ['text' => $textbotlang['Admin']['WalletConvert']['rowLabel'], 'callback_data' => "wcv|info"],
                 ],
                 [
                     ['text' => $textbotlang['keyboard']['firstConnectTime'], 'callback_data' => "setting_on_holdcron"],
