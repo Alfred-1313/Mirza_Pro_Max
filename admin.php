@@ -4865,6 +4865,69 @@ if (!function_exists('product_edit_hub_payload')) {
         return json_encode($kb);
     }
 }
+if (!function_exists('product_pick_payload')) {
+    // ✏️ ویرایش محصول / ❌ حذف محصول: a panel's products one language tab at
+    // a time - exactly the ones that tab's customers are shown - so it is
+    // plain which product is on in which language. $panelRow null means the
+    // «همه پنل ها» products. 'edit' lists one user type ($agent); 'delete'
+    // lists every type and names the agent ones.
+    function product_pick_payload($mode, $lang, $panelRow, $agent, $textbotlang, $note = '')
+    {
+        global $pdo;
+        $t = $textbotlang['Admin']['Product'];
+        $langName = $textbotlang['bottext']['langs'][$lang] ?? $lang;
+        $sql = "SELECT * FROM product WHERE (Location = ? OR Location = '/all') AND (FIND_IN_SET(?, lang) OR lang = 'all' OR lang IS NULL OR lang = '')";
+        $args = [is_array($panelRow) ? (string) $panelRow['name_panel'] : '/all', $lang];
+        if ($mode === 'edit') {
+            $sql .= " AND agent = ?";
+            $args[] = (string) $agent;
+        }
+        $stmt = $pdo->prepare($sql . " ORDER BY id");
+        $stmt->execute($args);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $pid = is_array($panelRow) ? (int) $panelRow['id'] : 0;
+        $kb = ['inline_keyboard' => [panel_lang_tabs($lang, $mode === 'edit' ? 'pedit|%s' : "pdel|l|%s|{$pid}")]];
+        $agentNames = ['n' => $textbotlang['keyboard']['normalAgent'], 'n2' => $textbotlang['keyboard']['advancedAgent']];
+        foreach ($rows as $row) {
+            $label = (string) $row['name_product'];
+            if (in_array(trim((string) ($row['lang'] ?? '')), ['', 'all'], true)) {
+                $label .= ' 🌍';
+            }
+            if ($mode === 'delete' && isset($agentNames[$row['agent']])) {
+                $label .= ' · ' . $agentNames[$row['agent']];
+            }
+            $kb['inline_keyboard'][] = [['text' => $label, 'callback_data' => $mode === 'edit' ? "productedit_{$row['id']}" : "pdel|a|{$lang}|{$pid}|{$row['id']}"]];
+        }
+        if ($mode === 'edit') {
+            $code = is_array($panelRow) ? (string) $panelRow['code_panel'] : 'all';
+            $kb['inline_keyboard'][] = [['text' => $textbotlang['keyboard']['backToPrevMenu2'], 'callback_data' => "locationedit_{$code}"]];
+        } else {
+            $kb['inline_keyboard'][] = [['text' => $textbotlang['keyboard']['backToPreviousMenu'], 'callback_data' => 'pdel|p']];
+        }
+        $caption = ($mode === 'edit' ? $t['selectEditProduct'] : $t['selectRemoveProduct']) . "\n\n" . strtr($t['pickTabNote'], [
+            '{panel}' => htmlspecialchars(is_array($panelRow) ? (string) $panelRow['name_panel'] : $textbotlang['keyboard']['allPanels']),
+            '{lang}' => $langName,
+        ]);
+        if (is_array($panelRow) && !in_array($lang, app_row_langs($panelRow), true)) {
+            $caption .= "\n\n" . strtr($t['pickPanelHidden'], ['{lang}' => $langName]);
+        }
+        if (empty($rows)) {
+            $caption .= "\n\n" . $t['pickEmpty'];
+        }
+        return [$note . $caption, json_encode($kb)];
+    }
+    // ❌ حذف محصول's first step: which panel
+    function product_delete_panels_payload($textbotlang)
+    {
+        $kb = ['inline_keyboard' => []];
+        foreach (select("marzban_panel", "*", null, null, "fetchAll") ?: [] as $p) {
+            $kb['inline_keyboard'][] = [['text' => (string) $p['name_panel'], 'callback_data' => "pdel|l|fa|{$p['id']}"]];
+        }
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['keyboard']['allPanels'], 'callback_data' => 'pdel|l|fa|0']];
+        $kb['inline_keyboard'][] = [['text' => $textbotlang['keyboard']['backToPreviousMenu'], 'callback_data' => 'backproductadmin']];
+        return json_encode($kb);
+    }
+}
 if (!function_exists('product_currency_of')) {
     function product_currency_of($productId)
     {
@@ -9081,7 +9144,7 @@ if (in_array($text, $textadmin) || $datain == "admin") {    if ($datain == "admi
     if (in_array($user['step'], ["updatetime", "val_usertest", "del_usertest", "getlimitnew", "GetusernameNew", "GeturlNew", "protocolset", "updatemethodusername", "GetNameNew", "getprotocol", "getprotocolremove", "GetpaawordNew", "updateextendmethod", "setpricechangelocation"])) {
         $typepanel = select("marzban_panel", "*", "name_panel", $user['Processing_value'], "select");
         outtypepanel($typepanel['type'], $textbotlang['Admin']['backMenu']);
-    } elseif (in_array($user['step'], ["selectloc", "get_limit", "selectlocedite", "GetPriceExtra", "GetPriceexstratime", "GetPricecustomtime", "GetPricecustomvolume", "get_code", "get_codesell", "minbalancebulk", "bulkadd_lines", "bulkadd_agent", "bulkadd_location", "bulkadd_category", "bulkadd_reset", "bulkadd_note", "addprod_changecur"])) {
+    } elseif (in_array($user['step'], ["get_limit", "selectlocedite", "GetPriceExtra", "GetPriceexstratime", "GetPricecustomtime", "GetPricecustomvolume", "get_code", "get_codesell", "minbalancebulk", "bulkadd_lines", "bulkadd_agent", "bulkadd_location", "bulkadd_category", "bulkadd_reset", "bulkadd_note", "addprod_changecur"])) {
         sendmessage($from_id, $textbotlang['Admin']['backMenu'], $shopkeyboard, 'HTML');
     } elseif (in_array($user['step'], ["addchannel", "removechannel"])) {
         sendmessage($from_id, $textbotlang['Admin']['backMenu'], $channelkeyboard, 'HTML');
@@ -13430,23 +13493,31 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
         ]);
     }
 } elseif ($text == $textbotlang['keyboard']['deleteProduct'] && $adminrulecheck['rule'] == "administrator") {
-    sendmessage($from_id, $textbotlang['Admin']['Product']['removeLocation'], $json_list_marzban_panel, 'HTML');
-    step('selectloc', $from_id);
-} elseif ($user['step'] == "selectloc") {
-    update("user", "Processing_value", $text, "id", $from_id);
-    step('remove-product', $from_id);
-    sendmessage($from_id, $textbotlang['Admin']['Product']['selectRemoveProduct'], $json_list_product_list_admin, 'HTML');
-} elseif ($user['step'] == "remove-product") {
-    if (!in_array($text, $name_product)) {
-        sendmessage($from_id, $textbotlang['users']['sell']['errorProduct'], null, 'HTML');
+    sendmessage($from_id, $textbotlang['Admin']['Product']['removeLocation'], product_delete_panels_payload($textbotlang), 'HTML');
+} elseif ($datain == "pdel|p" && $adminrulecheck['rule'] == "administrator") {
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Product']['removeLocation'], product_delete_panels_payload($textbotlang));
+} elseif (preg_match('/^pdel\|([lay])\|([a-z]{2})\|(\d+)(?:\|(\d+))?$/', $datain, $pd_m) && $adminrulecheck['rule'] == "administrator") {
+    $pd_lang = $pd_m[2];
+    $pd_panel = $pd_m[3] === '0' ? null : select("marzban_panel", "*", "id", (int) $pd_m[3], "select");
+    $pd_panel = is_array($pd_panel) ? $pd_panel : null;
+    $pd_row = isset($pd_m[4]) ? select("product", "*", "id", (int) $pd_m[4], "select") : null;
+    $pd_t = $textbotlang['Admin']['Product'];
+    if ($pd_m[1] === 'a' && is_array($pd_row)) {
+        $pd_shared = in_array(trim((string) ($pd_row['lang'] ?? '')), ['', 'all'], true);
+        Editmessagetext($from_id, $message_id, strtr($pd_t['deleteConfirm'], ['{name}' => htmlspecialchars((string) $pd_row['name_product'])]) . ($pd_shared ? $pd_t['deleteShared'] : ''), json_encode(['inline_keyboard' => [[
+            ['text' => $pd_t['deleteYes'], 'callback_data' => "pdel|y|{$pd_lang}|{$pd_m[3]}|{$pd_row['id']}", 'style' => 'danger'],
+            ['text' => $pd_t['deleteNo'], 'callback_data' => "pdel|l|{$pd_lang}|{$pd_m[3]}"],
+        ]]]));
         return;
     }
-    $stmt = $pdo->prepare("DELETE FROM product WHERE name_product =:name_product AND (Location= :Location or Location= '/all')");
-    $stmt->bindParam(':name_product', $text, PDO::PARAM_STR);
-    $stmt->bindParam(':Location', $user['Processing_value'], PDO::PARAM_STR);
-    $stmt->execute();
-    sendmessage($from_id, $textbotlang['Admin']['Product']['removedProduct'], $shopkeyboard, 'HTML');
-    step('home', $from_id);
+    $pd_note = '';
+    if ($pd_m[1] === 'y' && is_array($pd_row)) {
+        $pd_stmt = $pdo->prepare("DELETE FROM product WHERE id = ?");
+        $pd_stmt->execute([(int) $pd_row['id']]);
+        $pd_note = strtr($pd_t['deletedNote'], ['{name}' => htmlspecialchars((string) $pd_row['name_product'])]);
+    }
+    [$pd_cap, $pd_kb] = product_pick_payload('delete', $pd_lang, $pd_panel, null, $textbotlang, $pd_note);
+    Editmessagetext($from_id, $message_id, $pd_cap, $pd_kb);
 } elseif ($text == $textbotlang['keyboard']['editProduct'] && $adminrulecheck['rule'] == "administrator") {
     sendmessage($from_id, $textbotlang['Admin']['Product']['removeLocation'], $list_marzban_panel_edit_product, 'HTML');
 } elseif (preg_match('/locationedit_(\w+)/', $datain, $dataget)) {
@@ -13471,28 +13542,14 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
 } elseif (preg_match('/^typeagenteditproduct_(\w+)/', $datain, $dataget)) {
     $typeagent = $dataget[1];
     update("user", "Processing_value_tow", $typeagent, "id", $from_id);
-    $product = [];
     $panel = select("marzban_panel", "*", "code_panel", $user['Processing_value_one'], "select");
-    $getdataproduct = $pdo->prepare("SELECT * FROM product WHERE (Location = ? or Location = '/all') AND agent = ?");
-    $getdataproduct->bindValue(1, $panel['name_panel'], PDO::PARAM_STR);
-    $getdataproduct->bindValue(2, $typeagent, PDO::PARAM_STR);
-    $getdataproduct->execute();
-    $list_product = [
-        'inline_keyboard' => [],
-    ];
-    if (isset($getdataproduct)) {
-        while ($row = ($getdataproduct)->fetch(PDO::FETCH_ASSOC)) {
-            $list_product['inline_keyboard'][] = [
-                ['text' => $row['name_product'], 'callback_data' => "productedit_" . $row['id']]
-            ];
-        }
-        $list_product['inline_keyboard'][] = [
-            ['text' => $textbotlang['keyboard']['backToPrevMenu2'], 'callback_data' => "locationedit_" . $user['Processing_value_one']],
-        ];
-
-        $json_list_product_list_admin = json_encode($list_product);
-    }
-    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Product']['selectEditProduct'], $json_list_product_list_admin);
+    [$pe_cap, $pe_kb] = product_pick_payload('edit', 'fa', is_array($panel) ? $panel : null, $typeagent, $textbotlang);
+    Editmessagetext($from_id, $message_id, $pe_cap, $pe_kb);
+} elseif (preg_match('/^pedit\|([a-z]{2})$/', $datain, $pe_m) && $adminrulecheck['rule'] == "administrator") {
+    // its language tabs; the panel and user type picked on the way here
+    $panel = select("marzban_panel", "*", "code_panel", $user['Processing_value_one'], "select");
+    [$pe_cap, $pe_kb] = product_pick_payload('edit', $pe_m[1], is_array($panel) ? $panel : null, $user['Processing_value_tow'], $textbotlang);
+    Editmessagetext($from_id, $message_id, $pe_cap, $pe_kb);
 } elseif (preg_match('/^productedit_(\w+)/', $datain, $dataget)) {
     $id_product = $dataget[1];
     deletemessage($from_id, $message_id);
