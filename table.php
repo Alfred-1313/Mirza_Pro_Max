@@ -1248,6 +1248,12 @@ try {
 } catch (Exception $e) {
     file_put_contents('error_log manualsell', $e->getMessage());
 }
+// 🎁 کانفیگ رایگان با دعوت
+try {
+    affrw_ensure_table();
+} catch (Exception $e) {
+    file_put_contents('error_log affiliate_reward', $e->getMessage());
+}
 //-----------------------------------------------------------------
 try {
 

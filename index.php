@@ -295,11 +295,13 @@ if (strpos($text, "/start ") !== false && $user['step'] != "gettextSystemMessage
                 return;
             }
             $user = select("user", "*", "id", $from_id, "select");
-            update("user", "affiliates", $affiliatesid, "id", $from_id);
+            // checked BEFORE writing: writing first moved someone else's
+            // referral over to whoever's link was opened last
             if (intval($user['affiliates']) != 0) {
                 sendmessage($from_id, $textbotlang['users']['affiliates']['affiliateedago'], null, 'html');
                 return;
             }
+            update("user", "affiliates", $affiliatesid, "id", $from_id);
             $useraffiliates = select("user", "*", 'id', $affiliatesid, "select");
             sendmessage($from_id, sprintf($textbotlang['users']['affiliates']['welcomeInvited'], $useraffiliates['username']), $keyboard, 'html');
             sendmessage($affiliatesid, sprintf($textbotlang['users']['affiliates']['newReferralJoined'], $username), $keyboard, 'html');
@@ -309,6 +311,8 @@ if (strpos($text, "/start ") !== false && $user['step'] != "gettextSystemMessage
             $dateacc = date('Y/m/d H:i:s');
             $type_gift = false;
             $stmt->execute([$from_id, $type_gift, $dateacc, $affiliatesid]);
+            // 🎁 کانفیگ رایگان با دعوت: this may have been the invite it needed
+            affrw_check($affiliatesid);
         } else {
             sendmessage($from_id, strtr($textbotlang['users']['text_start'], bottext_user_placeholders($user, $from_id)), $keyboard, 'html');
             update("user", "Processing_value", "0", "id", $from_id);
@@ -435,6 +439,7 @@ if ($user['joinchannel'] != "active") {
                 update("user", "affiliates", $affiliatesid, "id", $from_id);
                 update("user", "Processing_value_four", "none", "id", $from_id);
                 update("user", "affiliatescount", $addcountaffiliates, "id", $affiliatesid);
+                affrw_check($affiliatesid);
             }
             return;
         }
@@ -6274,6 +6279,13 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     $textaffiliates = sprintf($textbotlang['users']['affiliates']['welcomeGiftInfo'], $text_start, $text_porsant, $user['affiliatescount'], $inforefral['orders'], $sum_order);
 
     sendmessage($from_id, $textaffiliates, $keyboard_share, 'HTML');
+    // 🎁 کانفیگ رایگان با دعوت, when this customer's language has it
+    affrw_check($from_id);
+    $affrw_text = affrw_info_text($user, $textbotlang, "https://t.me/$usernamebot?start=$from_id");
+    if ($affrw_text !== null) {
+        bottext_extras_key_hint('users.affiliates.rewardInfo');
+        sendmessage($from_id, $affrw_text, null, 'HTML');
+    }
 } elseif ($datain == "get_gift_start") {
     $gift_status = select("affiliates", "*", null, null, "select");
     if (feature_setting_value('aff_startgift', $user['lang'] ?? 'fa', $gift_status['Discount']) == "offDiscountaffiliates") {

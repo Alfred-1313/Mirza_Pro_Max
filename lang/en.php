@@ -945,6 +945,27 @@ Wallet balance: %s
                         'affiliatesidyou' => '❌ It is not possible to become a referral with this user ID.',
                         'invalidaffiliates' => '❌ You cannot be your own referral',
                         'offaffiliates' => '❌ The referral section is turned off',
+                        // 🎁 free config for invites
+                        'rewardInfo' => '<blockquote>🎁 Free config</blockquote>
+
+Send the link below to <b>{need}</b> of your friends
+and get a free <b>{volume} GB · {days}-day</b> subscription!
+
+{link}
+
+☑️ Your valid invites so far: <b>{count} / {need}</b>
+{status}
+💎 The config is exactly the same quality as the paid ones.',
+                        'rewardStatusAuto' => '☑️ Once complete, the config is created automatically and shows up in «🛍 My services».',
+                        'rewardStatusAdmin' => '☑️ Once complete and approved by the admin, the config is created and shows up in «🛍 My services».',
+                        'rewardStatusPending' => '⏳ Your invites are complete! Your request is waiting for the admin\'s approval.',
+                        'rewardStatusDone' => '✅ You got your free config; it is in «🛍 My services».',
+                        'rewardSentToAdmin' => '🎉 Your invites reached {need}!
+Your free config request was sent to the admin; it will be created once approved.',
+                        'rewardGiven' => '🎁 Congratulations! For inviting {need} people, a free <b>{volume} GB · {days}-day</b> config was created for you 👇',
+                        'rewardRejected' => '❌ Your free config request was not approved.
+From now on your invites are counted from zero again, and you can try again.',
+                        'rewardServiceName' => '🎁 Referral gift',
                         'balanceGift' => '🎁 An amount of {addbalancediscount} was added to your balance from your referral with user ID {from_id}.',
                         'pointsEarned2Alt' => '📌You earned 2 new points.',
                         'pointsEarned1Alt' => '📌You earned 1 new point.',

@@ -858,6 +858,15 @@ return array (
         'key' => 'keyboard.shareLink',
         'group' => 'referral',
       ),
+      'affrw_1' => array ('label' => '🎁 پیام کانفیگ رایگان (زیر صفحه‌ی زیرمجموعه‌گیری)', 'key' => 'users.affiliates.rewardInfo', 'group' => 'referral', 'section' => 'referral_reward'),
+      'affrw_2' => array ('label' => '☑️ خط وضعیت: تحویل خودکار', 'key' => 'users.affiliates.rewardStatusAuto', 'group' => 'referral'),
+      'affrw_3' => array ('label' => '☑️ خط وضعیت: با تایید ادمین', 'key' => 'users.affiliates.rewardStatusAdmin', 'group' => 'referral'),
+      'affrw_4' => array ('label' => '⏳ خط وضعیت: منتظر تایید', 'key' => 'users.affiliates.rewardStatusPending', 'group' => 'referral'),
+      'affrw_5' => array ('label' => '✅ خط وضعیت: گرفته شده', 'key' => 'users.affiliates.rewardStatusDone', 'group' => 'referral'),
+      'affrw_6' => array ('label' => '📨 اعلان ارسال درخواست برای ادمین', 'key' => 'users.affiliates.rewardSentToAdmin', 'group' => 'referral'),
+      'affrw_7' => array ('label' => '🎉 اعلان ساخته شدن کانفیگ رایگان', 'key' => 'users.affiliates.rewardGiven', 'group' => 'referral'),
+      'affrw_8' => array ('label' => '❌ اعلان رد درخواست', 'key' => 'users.affiliates.rewardRejected', 'group' => 'referral'),
+      'affrw_9' => array ('label' => '🏷 اسم سرویس توی «سرویس‌های من»', 'key' => 'users.affiliates.rewardServiceName', 'group' => 'referral'),
       // ---- 👤 مدیریت کاربر ----
       'um_1' => array ('label' => '🎁 هدیه‌ی شارژ همگانی', 'key' => 'users.Balance.giftFromManagement', 'group' => 'usermgmt', 'section' => 'um_balance'),
       'um_2' => array ('label' => '➕ افزایش موجودی توسط ادمین', 'key' => 'users.Balance.addedNotice', 'group' => 'usermgmt', 'section' => 'um_balance'),
@@ -1579,6 +1588,27 @@ return array (
       'affiliatesidyou' => '❌امکان زیرمجموعه شدن با این شناسه کاربری وجود ندارد.',
       'invalidaffiliates' => '❌ شما نمی توانید زیر مجموعه خودتان باشید',
       'offaffiliates' => '❌ بخش زیرمجموعه گیری خاموش می باشد',
+      // 🎁 کانفیگ رایگان با دعوت
+      'rewardInfo' => '<blockquote>🎁 کانفیگ رایگان</blockquote>
+
+با فرستادن لینک زیر برای <b>{need}</b> نفر از دوستانت،
+یه اشتراک <b>{volume} گیگ · {days} روزه</b> رایگان می‌گیری!
+
+{link}
+
+☑️ دعوت‌های معتبر تو تا الان: <b>{count} / {need}</b>
+{status}
+💎 کیفیت کانفیگ دقیقاً مثل سرویس‌های پولیه.',
+      'rewardStatusAuto' => '☑️ بعد از تکمیل، کانفیگ خودکار ساخته می‌شه و توی «🛍 سرویس های من» میاد.',
+      'rewardStatusAdmin' => '☑️ بعد از تکمیل و تایید ادمین، کانفیگ ساخته می‌شه و توی «🛍 سرویس های من» میاد.',
+      'rewardStatusPending' => '⏳ دعوت‌هات کامل شد! درخواستت منتظر تایید ادمینه.',
+      'rewardStatusDone' => '✅ کانفیگ رایگانت رو گرفتی؛ توی «🛍 سرویس های من» هست.',
+      'rewardSentToAdmin' => '🎉 دعوت‌هات به {need} نفر رسید!
+درخواست کانفیگ رایگانت برای ادمین فرستاده شد؛ بعد از تایید برات ساخته می‌شه.',
+      'rewardGiven' => '🎁 تبریک! به خاطر دعوت {need} نفر، یه کانفیگ رایگان <b>{volume} گیگ · {days} روزه</b> برات ساخته شد 👇',
+      'rewardRejected' => '❌ درخواست کانفیگ رایگانت تایید نشد.
+از الان دعوت‌هات دوباره از صفر شمرده می‌شن و می‌تونی دوباره تلاش کنی.',
+      'rewardServiceName' => '🎁 هدیه‌ی دعوت',
       'balanceGift' => '🎁 مبلغ {addbalancediscount} به موجودی شما از طرف زیر مجموعه با شناسه کاربری {from_id} اضافه گردید.',
       'pointsEarned2Alt' => '📌شما 2 امتیاز جدید کسب کردید.',
       'pointsEarned1Alt' => '📌شما 1 امتیاز جدید کسب کردید.',
@@ -2843,6 +2873,27 @@ n2',
       'affCommissionBtn' => '💵 پورسانت خرید',
       'affStartGiftBtn' => '🎉 هدیه عضویت',
       'affFirstBuyBtn' => '1️⃣ پورسانت فقط اولین خرید',
+      'affrwBtn' => '🎁 کانفیگ رایگان با دعوت',
+      'affrwTitle' => "🎁 <b>کانفیگ رایگان با دعوت</b> — {lang}\n\nکاربری که <b>{need}</b> نفر رو با لینک خودش به ربات بیاره، یه کانفیگ رایگان <b>{volume} گیگ · {days} روزه</b> می‌گیره — هر کاربر فقط یک بار.\n\nوضعیت: <b>{state}</b>\n🖥 پنل: <b>{panel}</b>\n📨 تحویل: <b>{mode}</b>\n\n📌 فقط کسایی حساب می‌شن که بعد از روشن کردن این قابلیت عضو ربات شدن.\n📌 با تایید ادمین: وقتی دعوت‌های کاربر کامل بشه، درخواستش با لیست دعوت‌شده‌ها برای ادمین‌ها میاد و با «✅ تایید» کانفیگ ساخته می‌شه. اگه رد بشه، دعوت‌هاش دوباره از صفر شمرده می‌شن.\n📌 خودکار: همون لحظه ساخته می‌شه (اگه ساختنش روی پنل خطا بده، برای تایید ادمین میاد).\n📌 این تنظیمات فقط برای همین زبانه: کاربری که زبانش {lang} نیست، این پیشنهاد رو نمی‌بینه.\n🎨 متن پیام‌هاش: 🎨 شخصی‌سازی پیام‌های ربات ← 🎁 زیرمجموعه‌گیری ← 🎁 کانفیگ رایگان با دعوت.",
+      'affrwStateOn' => 'روشن ✅',
+      'affrwStateOff' => 'خاموش',
+      'affrwNoPanel' => 'انتخاب نشده ❌',
+      'affrwModeAdmin' => '👮 با تایید ادمین',
+      'affrwModeAuto' => '⚡️ خودکار',
+      'affrwNeedBtn' => '👥 تعداد دعوت لازم: {need}',
+      'affrwVolumeBtn' => '📦 حجم: {volume} گیگ',
+      'affrwDaysBtn' => '⏳ مدت: {days} روز',
+      'affrwPanelBtn' => '🖥 پنل: {panel}',
+      'affrwModeBtn' => '📨 تحویل: {mode}',
+      'affrwPanelFirst' => 'اول پنلی که کانفیگ روش ساخته بشه رو انتخاب کن 🖥',
+      'affrwPanelTitle' => "🖥 <b>پنل کانفیگ رایگان</b> — {lang}\n\nکانفیگ هدیه روی کدوم پنل ساخته بشه؟\n⛔️ = پنل غیرفعال",
+      'affrwPanelNone' => '— هیچ پنلی ثبت نشده —',
+      'affrwBack' => '🔙 بازگشت به تنظیمات زیرمجموعه‌گیری',
+      'affrwBackToIt' => '🔙 بازگشت به کانفیگ رایگان',
+      'affrwAffOff' => "\n\n⚠️ زیرمجموعه‌گیری برای زبان {lang} خاموشه؛ تا روشنش نکنی (🌐 وضعیت قابلیت‌ها)، این پیشنهاد به کسی نشون داده نمی‌شه.",
+      'ask_affrw_need' => "👥 چند نفر دعوت لازمه تا کاربر زبان <b>{lang}</b> کانفیگ رایگان بگیره؟\n\n(فقط عدد، حداقل ۱)",
+      'ask_affrw_gb' => "📦 حجم کانفیگ رایگان زبان <b>{lang}</b> چند گیگ باشه؟\n\n(فقط عدد، حداقل ۱)",
+      'ask_affrw_days' => "⏳ کانفیگ رایگان زبان <b>{lang}</b> چند روزه باشه؟\n\n(فقط عدد، حداقل ۱)",
       'locTitle' => "🌍 <b>محدودیت تغییر لوکیشن</b> — {lang}\n\nمحدودیت کل: <b>{all}</b>\nتغییر رایگان: <b>{free}</b>\n\nاین مقادیر فقط برای همین زبان اعمال می‌شه.",
       'locAllBtn' => '🔢 محدودیت کل: {all}',
       'locFreeBtn' => '🆓 تغییر رایگان: {free}',
@@ -6290,6 +6341,21 @@ nowpayments.io
 <code>https://%s/app/</code>',
     ),
     // 💱 تبدیل ارز با تغییر زبان, in ⚙️ وضعیت قابلیت ها
+    // 🎁 کانفیگ رایگان با دعوت: what the admins get to approve
+    'AffReward' =>
+    array (
+      'request' => "🎁 <b>درخواست کانفیگ رایگان دعوت</b>\n\n👤 کاربر: <code>{id}</code> {username}\n🌐 زبان: {lang}\n👥 دعوت‌های معتبر: <b>{count}</b> از {need}\n📦 جایزه: {volume} گیگ · {days} روز — پنل {panel}\n\n📋 دعوت‌شده‌ها (جدیدترها اول):\n{list}",
+      'listMore' => '… و {n} نفر دیگه',
+      'autoFailed' => "\n\n⚠️ تحویل روی «خودکار» بود ولی ساختن کانفیگ روی پنل خطا داد؛ برای همین برای تایید اومده.",
+      'approveBtn' => '✅ تایید و ساخت کانفیگ',
+      'rejectBtn' => '❌ رد',
+      'approved' => "\n\n✅ تایید شد و کانفیگ ساخته شد.",
+      'rejected' => "\n\n❌ رد شد؛ دعوت‌های این کاربر از الان دوباره از صفر شمرده می‌شن.",
+      'handled' => 'این درخواست قبلاً بررسی شده.',
+      'failed' => '⚠️ ساخت کانفیگ روی پنل انجام نشد؛ جزئیاتش توی گروه گزارش خطاهاست. درخواست هنوز منتظره و می‌تونی دوباره «✅ تایید» رو بزنی.',
+      'report' => "🎁 <b>کانفیگ رایگان دعوت ساخته شد</b>\n\n👤 کاربر: <code>{id}</code> {username}\n👥 دعوت‌ها: {count}\n📦 {volume} گیگ · {days} روز\n🖥 پنل: {panel}\n🔑 نام کاربری سرویس: <code>{service}</code>",
+      'error' => "❌ <b>خطا در ساخت کانفیگ رایگان دعوت</b>\n\n👤 کاربر: <code>{id}</code>\n🖥 پنل: {panel}\nخطا: {msg}",
+    ),
     'WalletConvert' =>
     array (
       'rowLabel' => '💱 تبدیل ارز',

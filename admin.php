@@ -5338,6 +5338,9 @@ if (!function_exists('feature_section_of_key')) {
             'lottery_1' => 'lottery',
             'lottery_2' => 'lottery',
             'lottery_3' => 'lottery',
+            'affrw_need' => 'affrw',
+            'affrw_gb' => 'affrw',
+            'affrw_days' => 'affrw',
         ];
         return $map[$key] ?? null;
     }
@@ -5402,6 +5405,20 @@ if (!function_exists('feature_section_caption')) {
         }
         if ($section === 'wheel') {
             return strtr($s['wheelTitle'], ['{lang}' => $langName, '{price}' => money($v['wheel_price'], $cur)]);
+        }
+        if ($section === 'affrw') {
+            $rw = affrw_cfg($lang);
+            $rwPanel = affrw_panel($rw);
+            $rwSetting = select("setting", "*", null, null, "select");
+            return strtr($s['affrwTitle'], [
+                '{lang}' => $langName,
+                '{need}' => $rw['need'],
+                '{volume}' => $rw['gb'],
+                '{days}' => $rw['days'],
+                '{state}' => $rw['on'] ? $s['affrwStateOn'] : $s['affrwStateOff'],
+                '{panel}' => $rwPanel !== null ? htmlspecialchars($rwPanel['name_panel']) : $s['affrwNoPanel'],
+                '{mode}' => $rw['mode'] === 'auto' ? $s['affrwModeAuto'] : $s['affrwModeAdmin'],
+            ]) . (feature_value('affiliatesstatus', $lang, $rwSetting['affiliatesstatus']) == "offaffiliates" ? strtr($s['affrwAffOff'], ['{lang}' => $langName]) : '');
         }
         if ($section === 'aff') {
             return strtr($s['affTitle'], [
@@ -5488,6 +5505,24 @@ if (!function_exists('feature_section_payload')) {
                 ['text' => $firstOn ? $on : $off, 'callback_data' => "flstog:{$lang}:aff_firstbuy:{$v['aff_firstbuy']}", 'style' => $firstOn ? 'success' : 'danger'],
                 ['text' => $s['affFirstBuyBtn'], 'callback_data' => "none"],
             ];
+            $rows[] = [['text' => $s['affrwBtn'], 'callback_data' => "flsec:{$lang}:affrw", 'style' => 'primary']];
+        } elseif ($section === 'affrw') {
+            // 🎁 کانفیگ رایگان با دعوت - a screen of its own under 🎁, and back to it
+            $rw = affrw_cfg($lang);
+            $rwPanel = affrw_panel($rw);
+            $rows[] = [
+                ['text' => $rw['on'] ? $on : $off, 'callback_data' => "flsaffrw:{$lang}:on", 'style' => $rw['on'] ? 'success' : 'danger'],
+                ['text' => $s['affrwBtn'], 'callback_data' => "none"],
+            ];
+            $rows[] = [['text' => strtr($s['affrwNeedBtn'], ['{need}' => $rw['need']]), 'callback_data' => "flsask:{$lang}:affrw_need"]];
+            $rows[] = [
+                ['text' => strtr($s['affrwVolumeBtn'], ['{volume}' => $rw['gb']]), 'callback_data' => "flsask:{$lang}:affrw_gb"],
+                ['text' => strtr($s['affrwDaysBtn'], ['{days}' => $rw['days']]), 'callback_data' => "flsask:{$lang}:affrw_days"],
+            ];
+            $rows[] = [['text' => strtr($s['affrwPanelBtn'], ['{panel}' => $rwPanel !== null ? $rwPanel['name_panel'] : $s['affrwNoPanel']]), 'callback_data' => "flsaffrw:{$lang}:panel", 'style' => $rwPanel !== null ? 'primary' : 'danger']];
+            $rows[] = [['text' => strtr($s['affrwModeBtn'], ['{mode}' => $rw['mode'] === 'auto' ? $s['affrwModeAuto'] : $s['affrwModeAdmin']]), 'callback_data' => "flsaffrw:{$lang}:mode", 'style' => 'primary']];
+            $rows[] = [['text' => $s['affrwBack'], 'callback_data' => "flsec:{$lang}:aff"]];
+            return json_encode(['inline_keyboard' => $rows]);
         } else {
             $rows[] = [['text' => strtr($s['locAllBtn'], ['{all}' => (string) $v['loc_limit_all']]), 'callback_data' => "flsask:{$lang}:loc_limit_all"]];
             $rows[] = [['text' => strtr($s['locFreeBtn'], ['{free}' => (string) $v['loc_limit_free']]), 'callback_data' => "flsask:{$lang}:loc_limit_free"]];
@@ -5495,6 +5530,34 @@ if (!function_exists('feature_section_payload')) {
         }
         $rows[] = [['text' => $s['back'], 'callback_data' => "fls_lang:{$lang}"]];
         return json_encode(['inline_keyboard' => $rows]);
+    }
+}
+if (!function_exists('affrw_panel_payload')) {
+    // 🖥 which panel the gift is made on: every panel but the manual-sale ones,
+    // which hand out stock instead of making an account
+    function affrw_panel_payload($lang)
+    {
+        global $pdo;
+        $tx = lang_tab_texts('fa');
+        $s = $tx['Admin']['FeatureSection'];
+        $cur = affrw_cfg($lang)['panel'];
+        $rows = [];
+        $stmt = $pdo->prepare("SELECT id, code_panel, name_panel, status, type FROM marzban_panel");
+        $stmt->execute();
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $p) {
+            if ($p['type'] === 'Manualsale') {
+                continue;
+            }
+            $sel = (string) $p['code_panel'] === $cur;
+            $rows[] = [[
+                'text' => ($sel ? '✅ ' : '') . ($p['status'] !== 'active' ? '⛔️ ' : '') . $p['name_panel'],
+                'callback_data' => "flsaffrw:{$lang}:p:{$p['id']}",
+                'style' => $sel ? 'success' : 'primary',
+            ]];
+        }
+        $caption = strtr($s['affrwPanelTitle'], ['{lang}' => $tx['bottext']['langs'][$lang] ?? $lang]) . (empty($rows) ? "\n\n" . $s['affrwPanelNone'] : '');
+        $rows[] = [['text' => $s['affrwBackToIt'], 'callback_data' => "flsec:{$lang}:affrw", 'style' => 'danger']];
+        return [$caption, json_encode(['inline_keyboard' => $rows])];
     }
 }
 if (!function_exists('displayhub_payload')) {
@@ -7008,6 +7071,67 @@ if (preg_match('/^renamereset-([a-z]{2})$/', $datain, $rn_m) && $adminrulecheck[
     }
     $rn_kb = rename_editor_payload($textbotlang, null, $rn_lang);
     Editmessagetext($from_id, $message_id, "🔄 نام و نمایش دکمه‌ها به پیش‌فرض برگشت (رنگ و ایموجی و استیکرها حفظ شدن)" . mainmenu_tab_note($rn_lang) . mainmenu_langbtn_note() . "\n\n✏️ <b>نام و نمایش دکمه‌های منو</b> 👇", $rn_kb, 'HTML');
+    return;
+}
+
+//----------------[  🎁 کانفیگ رایگان با دعوت  ]----------------
+if (preg_match('/^flsaffrw:([a-z]{2}):(on|mode|panel|p:(\d+))$/', $datain, $rw_m) && $adminrulecheck['rule'] == "administrator") {
+    $rw_lang = $rw_m[1];
+    $rw = affrw_cfg($rw_lang);
+    if ($rw_m[2] === 'on') {
+        if (!$rw['on'] && affrw_panel($rw) === null) {
+            telegram('answerCallbackQuery', [
+                'callback_query_id' => $callback_query_id,
+                'text' => lang_tab_texts('fa')['Admin']['FeatureSection']['affrwPanelFirst'],
+                'show_alert' => true,
+            ]);
+            return;
+        }
+        // switched on: only people who join from now count
+        if (!$rw['on']) {
+            feature_setting_set('affrw_since', $rw_lang, (string) time());
+        }
+        feature_setting_set('affrw_on', $rw_lang, $rw['on'] ? '0' : '1');
+    } elseif ($rw_m[2] === 'mode') {
+        feature_setting_set('affrw_mode', $rw_lang, $rw['mode'] === 'auto' ? 'admin' : 'auto');
+    } elseif ($rw_m[2] === 'panel') {
+        [$rw_cap, $rw_kb] = affrw_panel_payload($rw_lang);
+        Editmessagetext($from_id, $message_id, $rw_cap, $rw_kb);
+        return;
+    } else {
+        $rw_p = select("marzban_panel", "*", "id", (int) $rw_m[3], "select");
+        if (is_array($rw_p)) {
+            feature_setting_set('affrw_panel', $rw_lang, (string) $rw_p['code_panel']);
+        }
+    }
+    Editmessagetext($from_id, $message_id, feature_section_caption($textbotlang, $rw_lang, 'affrw'), feature_section_payload($textbotlang, $rw_lang, 'affrw'));
+    return;
+}
+if (preg_match('/^affrw\|(ok|no)\|(\d+)$/', $datain, $rw_m)) {
+    $rw_t = lang_tab_texts('fa')['Admin']['AffReward'];
+    $rw_uid = $rw_m[2];
+    if ($rw_m[1] === 'ok') {
+        // one config however many admins tap: only the tap that moves the
+        // request on makes it
+        if (!affrw_move($rw_uid, 'pending', 'giving')) {
+            telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $rw_t['handled'], 'show_alert' => true]);
+            return;
+        }
+        if (!affrw_give($rw_uid)) {
+            affrw_move($rw_uid, 'giving', 'pending');
+            telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $rw_t['failed'], 'show_alert' => true]);
+            return;
+        }
+        Editmessagetext($from_id, $message_id, affrw_request_text($rw_uid) . $rw_t['approved'], null);
+    } else {
+        if (!affrw_move($rw_uid, 'pending', 'rejected')) {
+            telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $rw_t['handled'], 'show_alert' => true]);
+            return;
+        }
+        bottext_extras_key_hint('users.affiliates.rewardRejected');
+        sendmessage($rw_uid, payer_texts($rw_uid)['users']['affiliates']['rewardRejected'], null, 'HTML');
+        Editmessagetext($from_id, $message_id, affrw_request_text($rw_uid) . $rw_t['rejected'], null);
+    }
     return;
 }
 
@@ -10775,7 +10899,7 @@ elseif ($datain == "systemsms") {
     feature_set($featureKey, $fls_lang, $valuenew);
     $Bot_Status = feature_status_lang_payload($textbotlang, $fls_lang);
     Editmessagetext($from_id, $message_id, feature_status_lang_caption($textbotlang, $fls_lang), $Bot_Status);
-} elseif (preg_match('/^flsec:([a-z]{2}):(linkapp|wheel|aff|loc|phone|lottery)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^flsec:([a-z]{2}):(linkapp|wheel|aff|affrw|loc|phone|lottery)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
     // ⚙️ تنظیمات - opens the section inline, in the same message, in the same
     // language, instead of the old reply-keyboard screen
     $fs_lang = $fs_m[1];
@@ -10843,7 +10967,7 @@ elseif ($datain == "systemsms") {
         phone_prefixes_set($ph_lang, in_array($ph_code, $ph_cur, true) ? array_diff($ph_cur, [$ph_code]) : array_merge($ph_cur, [$ph_code]));
     }
     Editmessagetext($from_id, $message_id, feature_section_caption($textbotlang, $ph_lang, 'phone'), feature_section_payload($textbotlang, $ph_lang, 'phone'));
-} elseif (preg_match('/^flscan:([a-z]{2}):(linkapp|wheel|aff|loc|phone|lottery)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^flscan:([a-z]{2}):(linkapp|wheel|aff|affrw|loc|phone|lottery)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
     $fs_lang = $fs_m[1];
     $fs_sec = $fs_m[2];
     step("home", $from_id);
@@ -10918,6 +11042,13 @@ elseif ($datain == "systemsms") {
             return;
         }
         lottery_prize_set($fs_lang, (int) substr($fs_key, -1), money_normalize($text));
+    } elseif (in_array($fs_key, ['affrw_need', 'affrw_gb', 'affrw_days'], true)) {
+        // 🎁 کانفیگ رایگان: a count, gigabytes, days - none of them can be 0
+        if (!ctype_digit((string) $text) || intval($text) < 1) {
+            sendmessage($from_id, $fs_tx['common']['invalidInput'], null, 'HTML');
+            return;
+        }
+        feature_setting_set($fs_key, $fs_lang, (string) intval($text));
     } elseif ($fs_key === 'wheel_price' || $fs_key === 'aff_giftamount') {
         // an amount in this language's currency - USD/CNY/RUB/TMT carry
         // decimals, so "12.5" has to be accepted, not just whole numbers

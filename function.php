@@ -11065,6 +11065,10 @@ if (!function_exists('bt_section_meta')) {
                 'label' => '🎁 زیرمجموعه‌گیری',
                 'alert' => 'پیام‌های زیرمجموعه‌گیری: صفحه‌ی اصلی، هدیه عضویت، پورسانت خرید، و دکمه‌های «دریافت هدیه» و «اشتراک لینک».',
             ],
+            'referral_reward' => [
+                'label' => '🎁 کانفیگ رایگان با دعوت',
+                'alert' => 'پیام‌های کانفیگ رایگان با دعوت: پیامی که زیر صفحه‌ی زیرمجموعه‌گیری میاد، خط‌های وضعیتش، و اعلان‌های درخواست، ساخته شدن و رد شدن. روشن کردن و حجم و مدت و پنلش: 🌐 وضعیت قابلیت‌ها (هر زبان) ← 🎁 تنظیمات زیرمجموعه‌گیری.',
+            ],
             'home_other' => [
                 'label' => '💬 سایر پیام‌ها',
                 'alert' => 'پیام‌هایی که هنوز به هیچ بخشی تعلق ندارن و جای مشخصی براشون تعریف نشده. اگه اینجا چیزی دیدی که فکر می‌کنی باید توی یکی از بخش‌های بالا باشه، بگو تا منتقلش کنم.',
@@ -16797,6 +16801,334 @@ if (!function_exists('help_layout_chunk_rows')) {
     }
 }
 
+if (!function_exists('affrw_cfg')) {
+    // 🎁 کانفیگ رایگان با دعوت. One set of settings per language (🌐 وضعیت
+    // قابلیت‌ها (هر زبان) ← 🎁 تنظیمات زیرمجموعه‌گیری), and the INVITER's
+    // language decides: switched on for English, it never reaches a Persian
+    // customer. 'since' is when it was switched on - only people who joined
+    // after that count.
+    function affrw_cfg($lang)
+    {
+        return [
+            'on' => feature_setting_value('affrw_on', $lang, '0') === '1',
+            'need' => max(1, (int) feature_setting_value('affrw_need', $lang, '3')),
+            'gb' => max(1, (int) feature_setting_value('affrw_gb', $lang, '10')),
+            'days' => max(1, (int) feature_setting_value('affrw_days', $lang, '1')),
+            'panel' => (string) feature_setting_value('affrw_panel', $lang, ''),
+            'mode' => feature_setting_value('affrw_mode', $lang, 'admin') === 'auto' ? 'auto' : 'admin',
+            'since' => (int) feature_setting_value('affrw_since', $lang, '0'),
+        ];
+    }
+    // the panel the gift is made on; null when none is picked or it was deleted
+    function affrw_panel($cfg)
+    {
+        if ($cfg['panel'] === '') {
+            return null;
+        }
+        $p = select("marzban_panel", "*", "code_panel", $cfg['panel'], "select");
+        return is_array($p) ? $p : null;
+    }
+    // on for this language: switched on, a panel to make it on, and the
+    // referral section itself on
+    function affrw_live($lang)
+    {
+        $cfg = affrw_cfg($lang);
+        $setting = select("setting", "*", null, null, "select");
+        if (!$cfg['on'] || affrw_panel($cfg) === null
+            || feature_value('affiliatesstatus', $lang, $setting['affiliatesstatus'] ?? '') == "offaffiliates") {
+            return null;
+        }
+        return $cfg;
+    }
+    // One row per customer who reached the count, and it is what makes the
+    // gift once only: status pending (waiting for an admin), giving (being
+    // made), done, or rejected. Also made here for a bot whose table.php has
+    // not run since.
+    function affrw_ensure_table()
+    {
+        static $done = false;
+        global $pdo;
+        if ($done) {
+            return;
+        }
+        $done = true;
+        $pdo->query("CREATE TABLE IF NOT EXISTS affiliate_reward (
+            user_id VARCHAR(200) NOT NULL PRIMARY KEY,
+            lang VARCHAR(10) NOT NULL,
+            status VARCHAR(20) NOT NULL,
+            invites INT NOT NULL DEFAULT 0,
+            since INT NOT NULL DEFAULT 0,
+            time INT NOT NULL DEFAULT 0,
+            id_invoice VARCHAR(200) NULL)
+            ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_unicode_ci");
+    }
+    // Read straight from the table - select()'s cache would miss the
+    // conditional updates below.
+    function affrw_row($uid)
+    {
+        global $pdo;
+        affrw_ensure_table();
+        $stmt = $pdo->prepare("SELECT * FROM affiliate_reward WHERE user_id = ?");
+        $stmt->execute([(string) $uid]);
+        $r = $stmt->fetch(PDO::FETCH_ASSOC);
+        return is_array($r) ? $r : null;
+    }
+    // counting starts when the offer was switched on - or, after a refusal,
+    // at the refusal
+    function affrw_since($cfg, $row)
+    {
+        return max($cfg['since'], is_array($row) ? (int) $row['since'] : 0);
+    }
+    // valid invites: people who joined the bot through this customer's link
+    // since then
+    function affrw_count($uid, $since)
+    {
+        global $pdo;
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM user WHERE affiliates = ? AND id != ? AND CAST(register AS UNSIGNED) > ?");
+        $stmt->execute([(string) $uid, (string) $uid, (int) $since]);
+        return (int) $stmt->fetchColumn();
+    }
+    // Takes this customer's one slot: a new row, or a refused one opened
+    // again. False when another request got there first.
+    function affrw_claim($uid, $lang, $status, $count, $since)
+    {
+        global $pdo;
+        affrw_ensure_table();
+        $stmt = $pdo->prepare("INSERT IGNORE INTO affiliate_reward (user_id, lang, status, invites, since, time) VALUES (?, ?, ?, ?, ?, ?)");
+        $stmt->execute([(string) $uid, $lang, $status, $count, $since, time()]);
+        if ($stmt->rowCount() > 0) {
+            return true;
+        }
+        $stmt = $pdo->prepare("UPDATE affiliate_reward SET lang = ?, status = ?, invites = ?, time = ? WHERE user_id = ? AND status = 'rejected'");
+        $stmt->execute([$lang, $status, $count, time(), (string) $uid]);
+        return $stmt->rowCount() > 0;
+    }
+    // moves the row on only from the status it is expected to be in, so two
+    // admins tapping at once cannot both make a config
+    function affrw_move($uid, $from, $to)
+    {
+        global $pdo;
+        affrw_ensure_table();
+        $extra = $to === 'rejected' ? ', since = ' . time() : '';
+        $stmt = $pdo->prepare("UPDATE affiliate_reward SET status = ?, time = ?{$extra} WHERE user_id = ? AND status = ?");
+        $stmt->execute([$to, time(), (string) $uid, $from]);
+        return $stmt->rowCount() > 0;
+    }
+    function affrw_vars($cfg, $count)
+    {
+        return ['{need}' => $cfg['need'], '{volume}' => $cfg['gb'], '{days}' => $cfg['days'], '{count}' => min($count, $cfg['need'])];
+    }
+    // Called when someone joins through $uid's link, and when $uid opens 👥.
+    function affrw_check($uid)
+    {
+        $u = select("user", "*", "id", $uid, "select");
+        if (!is_array($u)) {
+            return;
+        }
+        $lang = $u['lang'] ?? 'fa';
+        $cfg = affrw_live($lang);
+        if ($cfg === null) {
+            return;
+        }
+        $row = affrw_row($uid);
+        if ($row !== null && $row['status'] !== 'rejected') {
+            return;
+        }
+        $count = affrw_count($uid, affrw_since($cfg, $row));
+        if ($count < $cfg['need']) {
+            return;
+        }
+        if ($cfg['mode'] === 'auto') {
+            if (!affrw_claim($uid, $lang, 'giving', $count, affrw_since($cfg, $row))) {
+                return;
+            }
+            if (affrw_give($uid)) {
+                return;
+            }
+            // the panel refused - an admin gets it instead of nobody
+            affrw_move($uid, 'giving', 'pending');
+            affrw_ask_admins($uid, true);
+        } else {
+            if (!affrw_claim($uid, $lang, 'pending', $count, affrw_since($cfg, $row))) {
+                return;
+            }
+            affrw_ask_admins($uid, false);
+        }
+        $tx = payer_texts($uid);
+        bottext_extras_key_hint('users.affiliates.rewardSentToAdmin');
+        sendmessage($uid, strtr($tx['users']['affiliates']['rewardSentToAdmin'], affrw_vars($cfg, $count)), null, 'HTML');
+    }
+    // the message under 👥 زیرمجموعه‌گیری, or null when this language has none
+    function affrw_info_text($user, $tx, $link)
+    {
+        $cfg = affrw_live($user['lang'] ?? 'fa');
+        if ($cfg === null) {
+            return null;
+        }
+        $a = $tx['users']['affiliates'];
+        $row = affrw_row($user['id']);
+        if ($row !== null && $row['status'] === 'done') {
+            $status = $a['rewardStatusDone'];
+            $count = $cfg['need'];
+        } elseif ($row !== null && $row['status'] !== 'rejected') {
+            $status = $a['rewardStatusPending'];
+            $count = $cfg['need'];
+        } else {
+            $status = $cfg['mode'] === 'auto' ? $a['rewardStatusAuto'] : $a['rewardStatusAdmin'];
+            $count = affrw_count($user['id'], affrw_since($cfg, $row));
+        }
+        return strtr($a['rewardInfo'], affrw_vars($cfg, $count) + ['{link}' => $link, '{status}' => $status]);
+    }
+    // what the admins get: who, how many, and who they invited
+    function affrw_request_text($uid)
+    {
+        global $pdo;
+        $row = affrw_row($uid);
+        $u = select("user", "*", "id", $uid, "select");
+        $lang = $row['lang'] ?? 'fa';
+        $cfg = affrw_cfg($lang);
+        $panel = affrw_panel($cfg);
+        $fa = lang_tab_texts('fa');
+        $t = $fa['Admin']['AffReward'];
+        $since = affrw_since($cfg, $row);
+        $total = affrw_count($uid, $since);
+        $stmt = $pdo->prepare("SELECT id, username, register FROM user WHERE affiliates = ? AND id != ? AND CAST(register AS UNSIGNED) > ? ORDER BY CAST(register AS UNSIGNED) DESC LIMIT 15");
+        $stmt->execute([(string) $uid, (string) $uid, (int) $since]);
+        $list = '';
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $name = (!empty($r['username']) && $r['username'] !== 'none') ? ' @' . htmlspecialchars($r['username']) : '';
+            $list .= "• <code>{$r['id']}</code>{$name} — " . jdate('Y/m/d H:i', (int) $r['register']) . "\n";
+        }
+        if ($total > 15) {
+            $list .= strtr($t['listMore'], ['{n}' => $total - 15]) . "\n";
+        }
+        $username = (is_array($u) && !empty($u['username']) && $u['username'] !== 'none') ? '@' . htmlspecialchars($u['username']) : '';
+        return strtr($t['request'], [
+            '{id}' => $uid,
+            '{username}' => $username,
+            '{lang}' => $fa['bottext']['langs'][$lang] ?? $lang,
+            '{count}' => $total,
+            '{need}' => $cfg['need'],
+            '{volume}' => $cfg['gb'],
+            '{days}' => $cfg['days'],
+            '{panel}' => is_array($panel) ? $panel['name_panel'] : $fa['Admin']['FeatureSection']['affrwNoPanel'],
+            '{list}' => rtrim($list),
+        ]);
+    }
+    function affrw_ask_admins($uid, $autoFailed = false)
+    {
+        $fa = lang_tab_texts('fa');
+        $t = $fa['Admin']['AffReward'];
+        $kb = json_encode(['inline_keyboard' => [
+            [
+                ['text' => $t['approveBtn'], 'callback_data' => "affrw|ok|{$uid}", 'style' => 'success'],
+                ['text' => $t['rejectBtn'], 'callback_data' => "affrw|no|{$uid}", 'style' => 'danger'],
+            ],
+            [['text' => $fa['Admin']['manageUser']['manageUserBtn'], 'callback_data' => "manageuser_{$uid}"]],
+        ]]);
+        $text = affrw_request_text($uid) . ($autoFailed ? $t['autoFailed'] : '');
+        foreach (select("admin", "id_admin", null, null, "FETCH_COLUMN") as $aid) {
+            sendmessage($aid, $text, $kb, 'HTML');
+        }
+    }
+    // Makes the config on the chosen panel - the same way a paid one is made -
+    // and sends it to the customer in their own language. The row has to be
+    // 'giving' already; it ends 'done' on success and is left for the caller
+    // otherwise.
+    function affrw_give($uid)
+    {
+        global $pdo, $ManagePanel;
+        $setting = select("setting", "*", null, null, "select");
+        $fa = lang_tab_texts('fa');
+        $row = affrw_row($uid);
+        $u = select("user", "*", "id", $uid, "select");
+        if ($row === null || !is_array($u)) {
+            return false;
+        }
+        $cfg = affrw_cfg($row['lang']);
+        $panel = affrw_panel($cfg);
+        $report = static function ($topic, $text) use ($setting) {
+            if (strlen((string) $setting['Channel_Report']) > 0) {
+                telegram('sendmessage', [
+                    'chat_id' => $setting['Channel_Report'],
+                    'message_thread_id' => select("topicid", "idreport", "report", $topic, "select")['idreport'],
+                    'text' => $text,
+                    'parse_mode' => "HTML",
+                ]);
+            }
+        };
+        $out = null;
+        if ($panel !== null) {
+            $username_ac = strtolower($uid . "_" . bin2hex(random_bytes(3)));
+            $datac = [
+                'expire' => strtotime("+" . $cfg['days'] . " days"),
+                'data_limit' => $cfg['gb'] * pow(1024, 3),
+                'from_id' => $uid,
+                'username' => $u['username'] ?? '',
+                'type' => 'buy',
+            ];
+            $out = $ManagePanel->createUser($panel['name_panel'], "customvolume", $username_ac, $datac);
+        }
+        if (!is_array($out) || empty($out['username'])) {
+            $report('errorreport', strtr($fa['Admin']['AffReward']['error'], [
+                '{id}' => $uid,
+                '{panel}' => $panel['name_panel'] ?? '—',
+                '{msg}' => htmlspecialchars(json_encode($out['msg'] ?? ($panel === null ? 'panel not found' : ''), JSON_UNESCAPED_UNICODE)),
+            ]));
+            return false;
+        }
+        $tx = payer_texts($uid);
+        $lang = $u['lang'] ?? 'fa';
+        $id_invoice = bin2hex(random_bytes(4));
+        $stmt = $pdo->prepare("INSERT IGNORE INTO invoice (id_user, id_invoice, username, time_sell, Service_location, name_product, price_product, Volume, Service_time, Status, notifctions) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$uid, $id_invoice, $out['username'], time(), $panel['name_panel'], $tx['users']['affiliates']['rewardServiceName'], '0', $cfg['gb'], $cfg['days'], 'active', json_encode(['volume' => false, 'time' => false])]);
+        $stmt = $pdo->prepare("UPDATE affiliate_reward SET status = 'done', id_invoice = ?, time = ? WHERE user_id = ?");
+        $stmt->execute([$id_invoice, time(), (string) $uid]);
+        bottext_extras_key_hint('users.affiliates.rewardGiven');
+        sendmessage($uid, strtr($tx['users']['affiliates']['rewardGiven'], affrw_vars($cfg, (int) $row['invites'])), null, 'HTML');
+        // then the service itself, worded like a bought one
+        $sublink = $panel['sublink'] == "onsublink" ? $out['subscription_url'] : "";
+        $links = "";
+        if ($panel['config'] == "onconfig" && is_array($out['configs'] ?? null)) {
+            foreach ($out['configs'] as $link) {
+                $links .= "\n" . $link;
+            }
+        }
+        $tpl = $tx['textbot']['afterPay'];
+        if ($panel['type'] == "WGDashboard") {
+            $tpl = $tx['textbot']['wgDashboard'];
+        } elseif ($panel['type'] == "ibsng" || $panel['type'] == "mikrotik") {
+            $tpl = $tx['textbot']['afterPayIbsng'];
+        }
+        $text = strtr($tpl, [
+            '{username}' => "<code>{$out['username']}</code>",
+            '{name_service}' => $tx['users']['affiliates']['rewardServiceName'],
+            '{location}' => $panel['name_panel'],
+            '{day}' => $cfg['days'],
+            '{volume}' => $cfg['gb'],
+            '{time_human}' => service_days_text($cfg['days'], $tx),
+            '{volume_human}' => service_volume_text($cfg['gb'] * 1024, $tx),
+            '{config}' => "<code>{$sublink}</code>",
+            '{links}' => $links,
+            '{links2}' => $sublink,
+            '{password}' => (string) ($out['subscription_url'] ?? ''),
+        ]);
+        if ($panel['type'] == "ibsng" || $panel['type'] == "mikrotik") {
+            update("invoice", "user_info", $out['subscription_url'], "id_invoice", $id_invoice);
+        }
+        sendMessageService($panel, $out['configs'] ?? [], $sublink, $out['username'], afterpay_help_kb($lang, $tx), $text, $id_invoice, $uid);
+        $report('porsantreport', strtr($fa['Admin']['AffReward']['report'], [
+            '{id}' => $uid,
+            '{username}' => (!empty($u['username']) && $u['username'] !== 'none') ? '@' . htmlspecialchars($u['username']) : '',
+            '{count}' => $row['invites'],
+            '{volume}' => $cfg['gb'],
+            '{days}' => $cfg['days'],
+            '{panel}' => $panel['name_panel'],
+            '{service}' => $out['username'],
+        ]));
+        return true;
+    }
+}
 if (!function_exists('bt_nosticker_keys')) {
     // Messages whose 🖼 استیکر can never do anything useful - hidden on their
     // editing screen and skipped when stickers are sent. A sticker stored on
@@ -16807,6 +17139,12 @@ if (!function_exists('bt_nosticker_keys')) {
             // blocks pasted into the referral screen, never a message of their own
             'users.affiliates.membershipGiftInfo',
             'users.affiliates.purchaseCommissionInfo',
+            // 🎁 کانفیگ رایگان's status lines and service name, the same
+            'users.affiliates.rewardStatusAuto',
+            'users.affiliates.rewardStatusAdmin',
+            'users.affiliates.rewardStatusPending',
+            'users.affiliates.rewardStatusDone',
+            'users.affiliates.rewardServiceName',
             // temporary text replaced within seconds - its sticker stayed behind
             'users.sell.creating',
             // temporary too, and reworded per gateway so it rarely even matched
