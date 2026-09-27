@@ -989,7 +989,7 @@ function DirectPayment_settle($order_id, $image = 'images.jpg')
         // 🎨 could not edit, in whatever language the request ran in.
         $dp_refId = ($Balance_id['affiliates'] != null && intval($Balance_id['affiliates']) != 0) ? $Balance_id['affiliates'] : null;
         $dp_refLang = $dp_refId !== null ? (select("user", "*", "id", $dp_refId, "select")['lang'] ?? 'fa') : 'fa';
-        if ($dp_refId !== null && feature_setting_value('aff_commission', $dp_refLang, $affiliatescommission['status_commission']) == "oncommission") {
+        if ($dp_refId !== null && aff_classic_on($dp_refLang) && feature_setting_value('aff_commission', $dp_refLang, $affiliatescommission['status_commission']) == "oncommission") {
             $dp_firstOnly = feature_setting_value('aff_firstbuy', $dp_refLang, $marzbanporsant_one_buy['porsant_one_buy']) == "on_buy_porsant";
             if (!$dp_firstOnly || $countinvoice <= 1) {
                 $dp_refTexts = payer_texts($dp_refId);
@@ -1864,6 +1864,28 @@ if (!function_exists('app_row_langs')) {
             return panel_langs();
         }
         return array_values(array_filter(array_map('trim', explode(',', $l)), 'strlen'));
+    }
+}
+if (!function_exists('text_fill_s')) {
+    // sprintf() for a text an admin can edit: fills each %s in order and
+    // leaves every other % alone. sprintf read English «50% for you» as a
+    // number placeholder and threw, taking the whole referral page down.
+    function text_fill_s($tpl, ...$args)
+    {
+        $i = 0;
+        return preg_replace_callback('/%s/', function () use (&$i, $args) {
+            return (string) ($args[$i++] ?? '');
+        }, (string) $tpl);
+    }
+}
+if (!function_exists('aff_classic_on')) {
+    // The first of the two kinds of referral: 💼 زیرمجموعه‌گیری و هدیه خوش‌آمد
+    // (the join gift and the purchase commission, and their page under 👥).
+    // Per language, off until a tab turns it on. The other kind is 🎁 کانفیگ
+    // رایگان با دعوت (affrw_cfg), with a switch of its own.
+    function aff_classic_on($lang)
+    {
+        return (string) feature_setting_value('aff_classic', $lang, '0') === '1';
     }
 }
 if (!function_exists('feature_aff_banner')) {
@@ -11092,8 +11114,12 @@ if (!function_exists('bt_section_meta')) {
                 'alert' => 'پیام‌های گردونه شانس: برنده شدن، نبردن، شرکت تکراری در ۲۴ ساعت، و خطای دریافت نتیجه.',
             ],
             'referral_flow' => [
-                'label' => '🎁 زیرمجموعه‌گیری',
-                'alert' => 'پیام‌های زیرمجموعه‌گیری: صفحه‌ی اصلی، هدیه عضویت، پورسانت خرید، و دکمه‌های «دریافت هدیه» و «اشتراک لینک».',
+                'label' => '💼 زیرمجموعه‌گیری و هدیه خوش‌آمد',
+                'alert' => 'پیام‌های نوع ۱ زیرمجموعه‌گیری: صفحه‌ی اصلی، هدیه عضویت، پورسانت خرید، و دکمه‌های «دریافت هدیه» و «اشتراک لینک». روشن/خاموشش: 🌐 وضعیت قابلیت‌ها (هر زبان) ← ⚙️ تنظیمات زیرمجموعه‌گیری.',
+            ],
+            'referral_none' => [
+                'label' => '🚫 وقتی هیچ طرحی فعال نیست',
+                'alert' => 'پیامی که کاربر می‌گیره وقتی دکمه‌ی زیرمجموعه‌گیری رو بزنه ولی برای زبانش نه نوع ۱ (💼 زیرمجموعه‌گیری و هدیه خوش‌آمد) روشنه نه نوع ۲ (🎁 کانفیگ رایگان با دعوت).',
             ],
             'referral_reward' => [
                 'label' => '🎁 کانفیگ رایگان با دعوت',

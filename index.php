@@ -428,7 +428,7 @@ if ($user['joinchannel'] != "active") {
                 // language's amount that applies - the same one they were shown
                 // on their own 👥 زیرمجموعه‌گیری screen
                 $aff_reflang = $useraffiliates['lang'] ?? 'fa';
-                if (feature_setting_value('aff_startgift', $aff_reflang, $marzbanDiscountaffiliates['Discount']) == "onDiscountaffiliates") {
+                if (aff_classic_on($aff_reflang) && feature_setting_value('aff_startgift', $aff_reflang, $marzbanDiscountaffiliates['Discount']) == "onDiscountaffiliates") {
                     $aff_giftamount = feature_setting_value('aff_giftamount', $aff_reflang, $marzbanDiscountaffiliates['price_Discount']);
                     wallet_credit($affiliatesid, $aff_giftamount, currency_for_lang($aff_reflang));
                     $addbalancediscount = money($aff_giftamount, currency_for_user($useraffiliates));
@@ -4741,7 +4741,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     $aff_reflang = ($user['affiliates'] != null && intval($user['affiliates']) != 0)
         ? (select("user", "*", "id", $user['affiliates'], "select")['lang'] ?? 'fa')
         : 'fa';
-    if (feature_setting_value('aff_commission', $aff_reflang, $affiliatescommission['status_commission']) == "oncommission" && ($user['affiliates'] != null && intval($user['affiliates']) != 0)) {
+    if (aff_classic_on($aff_reflang) && feature_setting_value('aff_commission', $aff_reflang, $affiliatescommission['status_commission']) == "oncommission" && ($user['affiliates'] != null && intval($user['affiliates']) != 0)) {
         if (feature_setting_value('aff_firstbuy', $aff_reflang, $marzbanporsant_one_buy['porsant_one_buy']) == "on_buy_porsant") {
             if ($countinvoice == 1) {
                 $result = ($priceproduct * feature_setting_value('aff_percent', $aff_reflang, $setting['affiliatespercentage'])) / 100;
@@ -6239,56 +6239,65 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     // banner, percentages and gift amounts are all per-language now (🌐 وضعیت
     // قابلیت‌ها (هر زبان) -> ⚙️ تنظیمات), falling back to the shared value
     $aff_lang = $user['lang'] ?? 'fa';
-    list($aff_banner_text, $aff_banner_media) = feature_aff_banner($aff_lang, $affiliates);
-    $textaffiliates = "{$aff_banner_text}\n\n🔗 https://t.me/$usernamebot?start=$from_id";
-    if (strlen($aff_banner_media) >= 5) {
-        telegram('sendphoto', [
-            'chat_id' => $from_id,
-            'photo' => $aff_banner_media,
-            'caption' => $textaffiliates,
-            'parse_mode' => "HTML",
-        ]);
-    }
-    $affiliatescommission = select("affiliates", "*", null, null, "select");
-    $sqlPanel = sprintf("SELECT COUNT(*) AS orders, SUM(price_product) AS total_price\n                 FROM invoice \n                 WHERE Status IN ('active', 'end_of_time', 'sendedwarn', 'send_on_hold') \n                 AND refral = '%s'\n                 AND name_product != '{$textbotlang['common']['labels']['testServiceName']}'", $from_id);
-    $stmt = $pdo->prepare($sqlPanel);
-    $stmt->execute();
-    $inforefral = $stmt->fetch(PDO::FETCH_ASSOC);
-    $inforefral['total_price'] = ($inforefral['total_price'] * feature_setting_value('aff_percent', $aff_lang, $setting['affiliatespercentage'])) / 100;
-    $share_url = "https://t.me/share/url?url=https://t.me/$usernamebot?start=$from_id";
-    $share_row = [];
-    if (!bt_button_hidden($aff_lang, 'keyboard.receiveMembershipGift')) {
-        $share_row[] = bt_button($aff_lang, 'keyboard.receiveMembershipGift', $textbotlang['keyboard']['receiveMembershipGift'], "get_gift_start", 'success');
-    }
-    if (!bt_button_hidden($aff_lang, 'keyboard.shareLink')) {
-        // a url button carries no callback_data, so only its label is overridden
-        $share_row[] = ['text' => bt_reply_label($aff_lang, 'keyboard.shareLink', $textbotlang['keyboard']['shareLink']), 'url' => $share_url];
-    }
-    $keyboard_share = json_encode(['inline_keyboard' => $share_row ? [$share_row] : []]);
-    $text_start = "";
-    $text_porsant = "";
-    $Percent_porsant = feature_setting_value('aff_percent', $aff_lang, $setting['affiliatespercentage']);
-    $aff_cur = currency_for_user($user);
-    $sum_order = money($inforefral['total_price'], $aff_cur);
-    if (feature_setting_value('aff_startgift', $aff_lang, $affiliatescommission['Discount']) == "onDiscountaffiliates") {
-        $text_start = sprintf($textbotlang['users']['affiliates']['membershipGiftInfo'], money(feature_setting_value('aff_giftamount', $aff_lang, $affiliatescommission['price_Discount']), $aff_cur));
-    }
-    if (feature_setting_value('aff_commission', $aff_lang, $affiliatescommission['status_commission']) == "oncommission") {
-        $text_porsant = sprintf($textbotlang['users']['affiliates']['purchaseCommissionInfo'], $Percent_porsant);
-    }
-    $textaffiliates = sprintf($textbotlang['users']['affiliates']['welcomeGiftInfo'], $text_start, $text_porsant, $user['affiliatescount'], $inforefral['orders'], $sum_order);
+    // 1️⃣ 💼 زیرمجموعه‌گیری و هدیه خوش‌آمد - its banner and page, when on
+    $aff_classic = aff_classic_on($aff_lang);
+    if ($aff_classic) {
+        list($aff_banner_text, $aff_banner_media) = feature_aff_banner($aff_lang, $affiliates);
+        $textaffiliates = "{$aff_banner_text}\n\n🔗 https://t.me/$usernamebot?start=$from_id";
+        if (strlen($aff_banner_media) >= 5) {
+            telegram('sendphoto', [
+                'chat_id' => $from_id,
+                'photo' => $aff_banner_media,
+                'caption' => $textaffiliates,
+                'parse_mode' => "HTML",
+            ]);
+        }
+        $affiliatescommission = select("affiliates", "*", null, null, "select");
+        $sqlPanel = sprintf("SELECT COUNT(*) AS orders, SUM(price_product) AS total_price\n                 FROM invoice \n                 WHERE Status IN ('active', 'end_of_time', 'sendedwarn', 'send_on_hold') \n                 AND refral = '%s'\n                 AND name_product != '{$textbotlang['common']['labels']['testServiceName']}'", $from_id);
+        $stmt = $pdo->prepare($sqlPanel);
+        $stmt->execute();
+        $inforefral = $stmt->fetch(PDO::FETCH_ASSOC);
+        $inforefral['total_price'] = ($inforefral['total_price'] * feature_setting_value('aff_percent', $aff_lang, $setting['affiliatespercentage'])) / 100;
+        $share_url = "https://t.me/share/url?url=https://t.me/$usernamebot?start=$from_id";
+        $share_row = [];
+        if (!bt_button_hidden($aff_lang, 'keyboard.receiveMembershipGift')) {
+            $share_row[] = bt_button($aff_lang, 'keyboard.receiveMembershipGift', $textbotlang['keyboard']['receiveMembershipGift'], "get_gift_start", 'success');
+        }
+        if (!bt_button_hidden($aff_lang, 'keyboard.shareLink')) {
+            // a url button carries no callback_data, so only its label is overridden
+            $share_row[] = ['text' => bt_reply_label($aff_lang, 'keyboard.shareLink', $textbotlang['keyboard']['shareLink']), 'url' => $share_url];
+        }
+        $keyboard_share = json_encode(['inline_keyboard' => $share_row ? [$share_row] : []]);
+        $text_start = "";
+        $text_porsant = "";
+        $Percent_porsant = feature_setting_value('aff_percent', $aff_lang, $setting['affiliatespercentage']);
+        $aff_cur = currency_for_user($user);
+        $sum_order = money($inforefral['total_price'], $aff_cur);
+        if (feature_setting_value('aff_startgift', $aff_lang, $affiliatescommission['Discount']) == "onDiscountaffiliates") {
+            $text_start = text_fill_s($textbotlang['users']['affiliates']['membershipGiftInfo'], money(feature_setting_value('aff_giftamount', $aff_lang, $affiliatescommission['price_Discount']), $aff_cur));
+        }
+        if (feature_setting_value('aff_commission', $aff_lang, $affiliatescommission['status_commission']) == "oncommission") {
+            $text_porsant = text_fill_s($textbotlang['users']['affiliates']['purchaseCommissionInfo'], $Percent_porsant);
+        }
+        $textaffiliates = text_fill_s($textbotlang['users']['affiliates']['welcomeGiftInfo'], $text_start, $text_porsant, $user['affiliatescount'], $inforefral['orders'], $sum_order);
 
-    sendmessage($from_id, $textaffiliates, $keyboard_share, 'HTML');
-    // 🎁 کانفیگ رایگان با دعوت, when this customer's language has it
+        sendmessage($from_id, $textaffiliates, $keyboard_share, 'HTML');
+    }
+    // 2️⃣ 🎁 کانفیگ رایگان با دعوت, when this customer's language has it
     affrw_check($from_id);
     $affrw_text = affrw_info_text($user, $textbotlang, "https://t.me/$usernamebot?start=$from_id");
     if ($affrw_text !== null) {
         bottext_extras_key_hint('users.affiliates.rewardInfo');
         sendmessage($from_id, $affrw_text, null, 'HTML');
     }
+    // neither: say so, instead of a tap that answers nothing
+    if (!$aff_classic && $affrw_text === null) {
+        bottext_extras_key_hint('users.affiliates.nothingActive');
+        sendmessage($from_id, $textbotlang['users']['affiliates']['nothingActive'], null, 'HTML');
+    }
 } elseif ($datain == "get_gift_start") {
     $gift_status = select("affiliates", "*", null, null, "select");
-    if (feature_setting_value('aff_startgift', $user['lang'] ?? 'fa', $gift_status['Discount']) == "offDiscountaffiliates") {
+    if (!aff_classic_on($user['lang'] ?? 'fa') || feature_setting_value('aff_startgift', $user['lang'] ?? 'fa', $gift_status['Discount']) == "offDiscountaffiliates") {
         sendmessage($from_id, $textbotlang['users']['sectionDisabled'], $keyboard, 'HTML');
         return;
     }

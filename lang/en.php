@@ -945,6 +945,9 @@ Wallet balance: %s
                         'affiliatesidyou' => '❌ It is not possible to become a referral with this user ID.',
                         'invalidaffiliates' => '❌ You cannot be your own referral',
                         'offaffiliates' => '❌ The referral section is turned off',
+                        'nothingActive' => '🎁 There is no active referral program right now.
+
+New invite-your-friends programs are coming soon; you can find them right here 🌱',
                         // 🎁 free config for invites
                         'rewardInfo' => '<blockquote>🎁 Free config</blockquote>
 

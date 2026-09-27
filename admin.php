@@ -5383,6 +5383,7 @@ if (!function_exists('feature_section_effective')) {
             'aff_commission' => feature_setting_value('aff_commission', $lang, (string) $aff['status_commission']),
             'aff_startgift' => feature_setting_value('aff_startgift', $lang, (string) $aff['Discount']),
             'aff_firstbuy' => feature_setting_value('aff_firstbuy', $lang, (string) $aff['porsant_one_buy']),
+            'aff_classic' => aff_classic_on($lang) ? '1' : '0',
             'aff_banner_text' => feature_aff_banner($lang, $aff)[0],
             'aff_banner_media' => feature_aff_banner($lang, $aff)[1],
             'wheel_price' => feature_setting_value('wheel_price', $lang, (string) $setting['wheelـluck_price']),
@@ -5498,7 +5499,11 @@ if (!function_exists('feature_section_caption')) {
                 '{lang}' => $langName,
                 '{percent}' => (string) $v['aff_percent'],
                 '{gift}' => money($v['aff_giftamount'], $cur),
-            ]) . "\n🏞 بنر: " . (strlen((string) $v['aff_banner_media']) >= 5 ? '✅ تنظیم شده' : '❌ برای این زبان تنظیم نشده');
+            ]) . "\n🏞 بنر: " . (strlen((string) $v['aff_banner_media']) >= 5 ? '✅ تنظیم شده' : '❌ برای این زبان تنظیم نشده')
+                . strtr($s['affKinds'], [
+                    '{classic}' => $v['aff_classic'] === '1' ? $tx['Admin']['Status']['statuson'] : $tx['Admin']['Status']['statusoff'],
+                    '{reward}' => affrw_cfg($lang)['on'] ? $tx['Admin']['Status']['statuson'] : $tx['Admin']['Status']['statusoff'],
+                ]);
         }
         return strtr($s['locTitle'], [
             '{lang}' => $langName,
@@ -5560,6 +5565,11 @@ if (!function_exists('feature_section_payload')) {
         } elseif ($section === 'wheel') {
             $rows[] = [['text' => strtr($s['wheelPriceBtn'], ['{price}' => money($v['wheel_price'], $cur)]), 'callback_data' => "flsask:{$lang}:wheel_price"]];
         } elseif ($section === 'aff') {
+            $clOn = $v['aff_classic'] === '1';
+            $rows[] = [
+                ['text' => $clOn ? $on : $off, 'callback_data' => "flstog:{$lang}:aff_classic:{$v['aff_classic']}", 'style' => $clOn ? 'success' : 'danger'],
+                ['text' => $s['affClassicBtn'], 'callback_data' => "none"],
+            ];
             $rows[] = [['text' => strtr($s['affPercentBtn'], ['{percent}' => (string) $v['aff_percent']]), 'callback_data' => "flsask:{$lang}:aff_percent"]];
             $rows[] = [['text' => strtr($s['affGiftBtn'], ['{gift}' => money($v['aff_giftamount'], $cur)]), 'callback_data' => "flsask:{$lang}:aff_giftamount"]];
             $rows[] = [['text' => $s['affBannerBtn'], 'callback_data' => "flsask:{$lang}:aff_banner"]];
@@ -11045,11 +11055,13 @@ elseif ($datain == "systemsms") {
     // agents in this language's nightly lottery
     feature_set('Lotteryagent', $fs_m[1], $fs_m[2] === '1' ? '0' : '1');
     Editmessagetext($from_id, $message_id, feature_section_caption($textbotlang, $fs_m[1], 'lottery'), feature_section_payload($textbotlang, $fs_m[1], 'lottery'));
-} elseif (preg_match('/^flstog:([a-z]{2}):(aff_commission|aff_startgift|aff_firstbuy):([a-zA-Z_]+)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^flstog:([a-z]{2}):(aff_classic|aff_commission|aff_startgift|aff_firstbuy):([a-zA-Z0-9_]+)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
     $fs_lang = $fs_m[1];
     $fs_key = $fs_m[2];
     $fs_val = $fs_m[3];
-    if ($fs_key === 'aff_commission') {
+    if ($fs_key === 'aff_classic') {
+        $fs_new = ($fs_val === '1') ? '0' : '1';
+    } elseif ($fs_key === 'aff_commission') {
         $fs_new = ($fs_val === 'oncommission') ? 'offcommission' : 'oncommission';
     } elseif ($fs_key === 'aff_startgift') {
         $fs_new = ($fs_val === 'onDiscountaffiliates') ? 'offDiscountaffiliates' : 'onDiscountaffiliates';
