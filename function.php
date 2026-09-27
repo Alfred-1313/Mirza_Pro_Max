@@ -10862,10 +10862,6 @@ if (!function_exists('bt_section_meta')) {
                 'label' => '🎨 ظاهر صفحه‌ی انتخاب زبان',
                 'alert' => 'متن بالای صفحه‌ی انتخاب زبان و ظاهر خود دکمه‌ها (چیدمان، رنگ، ایموجی، تغییر نام) - همون چهار ابزاری که بقیه‌ی دکمه‌های ربات هم دارن.',
             ],
-            'langsw_access' => [
-                'label' => '🚦 چه کسانی سرویس بگیرن',
-                'alert' => 'با روشن کردن این گزینه، هر کاربری که زبانش جزو زبان‌های فروشگاه نباشه یه پیام رد می‌گیره و هیچ بخشی از ربات براش کار نمی‌کنه. مدیرها هیچ‌وقت بسته نمی‌شن تا کسی خودشو بیرون ربات جا نذاره.',
-            ],
             'topupdisc_code' => [
                 'label' => '🎟 کد تخفیف',
                 'alert' => 'این سه پیام، مسیر وارد کردن کد تخفیف‌ان: صفحه‌ای که ازش کد می‌خواد، جوابش وقتی کد غلط باشه، و جوابش وقتی کد درست باشه.',
@@ -16436,9 +16432,9 @@ if (!function_exists('close_sticker_play')) {
     }
 }
 if (!function_exists('lang_switch_settings')) {
-    // One reader for setting.lang_switch, so the admin screen, the picker and
-    // the "who may use this bot" rule can never disagree about what is on.
-    // Shape: {enabled, mode: once|always, langs: [..], blockOthers: '0'|'1'}
+    // One reader for setting.lang_switch, so the admin screen and the picker
+    // can never disagree about what is on.
+    // Shape: {enabled, mode: once|always, langs: [..]}
     function lang_switch_settings($fresh = false)
     {
         static $cache = null;
@@ -16461,7 +16457,6 @@ if (!function_exists('lang_switch_settings')) {
             'enabled' => (($ls['enabled'] ?? '0') === '1'),
             'mode' => (($ls['mode'] ?? 'once') === 'always') ? 'always' : 'once',
             'langs' => $langs,
-            'blockOthers' => (($ls['blockOthers'] ?? '0') === '1'),
         ];
         return $cache;
     }
@@ -16477,48 +16472,8 @@ if (!function_exists('lang_switch_settings')) {
             'enabled' => $next['enabled'] ? '1' : '0',
             'mode' => $next['mode'] === 'always' ? 'always' : 'once',
             'langs' => array_values($next['langs']),
-            'blockOthers' => $next['blockOthers'] ? '1' : '0',
         ], JSON_UNESCAPED_UNICODE), null, null);
         lang_switch_settings(true);
-    }
-}
-if (!function_exists('lang_switch_blocked_count')) {
-    // How many of the bot's real users the rule refuses as configured right
-    // now. One grouped count, only ever called from the admin screen.
-    function lang_switch_blocked_count()
-    {
-        global $pdo;
-        $blocked = 0;
-        $total = 0;
-        foreach ($pdo->query("SELECT lang, COUNT(*) c FROM user GROUP BY lang")->fetchAll(PDO::FETCH_ASSOC) as $r) {
-            $c = (int) $r['c'];
-            $total += $c;
-            if (!lang_is_served($r['lang'] ?? '')) {
-                $blocked += $c;
-            }
-        }
-        return ['blocked' => $blocked, 'total' => $total];
-    }
-}
-if (!function_exists('lang_is_served')) {
-    // "May this user use the bot at all?" - false only when the shop has turned
-    // the rule on AND the user's language is not one it serves. Admins are never
-    // refused: locking the owner out of their own bot over a language setting is
-    // not a state anyone could recover from inside Telegram.
-    function lang_is_served($userLang, $isAdmin = false)
-    {
-        if ($isAdmin) {
-            return true;
-        }
-        $ls = lang_switch_settings();
-        if (!$ls['blockOthers']) {
-            return true;
-        }
-        $l = trim((string) $userLang);
-        if ($l === '') {
-            return true;
-        }
-        return in_array($l, $ls['langs'], true);
     }
 }
 if (!function_exists('help_layout_section')) {

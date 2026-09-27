@@ -25,9 +25,6 @@ Current language: <b>{lang}</b>',
 
 ━━━━━━━━━━━━━━━━━━━━━━━
 👇 Tap to continue:',
-                'langBlockedMsg' => '⛔️ No service in this language right now
-
-👇 Please choose one of the languages below',
                 'reset_hint' => '♻️ To restore this text to its default, send <b>0</b>.',
                 'msg_reset_done' => '✅ This text has been restored to its default.',
                 'msg_session' => '⛔️ Session expired. Please open it again.',

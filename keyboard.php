@@ -2376,7 +2376,7 @@ function keyboard_list_text($lang, $groupFilter = null)
         'bottext.btnCloseTest', 'textbot.selectLocationTest', 'textbot.afterText', 'textbot.afterPay', 'textbot.preInvoice', 'textbot.getConfigHintBuy', 'textbot.getConfigHintTest', 'users.status.infoFull', 'users.Balance.sendReceipt', 'users.Balance.chargeSuccess', 'users.Balance.chargeSuccessDiscount',
         // owned by 🌐 تنظیمات تغییر زبان کاربر, which edits them in place - a
         // second row here would make their back button ambiguous
-        'bottext.langPickerCaption', 'bottext.langBlockedMsg',
+        'bottext.langPickerCaption',
         // opened from inside 📯 پیام عضویت اجباری کانال, whose back it uses
         'users.channel.left_channel'];
     $bt_can_react_keys = ['users.text_start', 'textbot.faqDesc', 'textbot.tariffListDesc', 'textbot.rules', 'users.unknownMsg'];

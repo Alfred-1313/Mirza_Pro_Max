@@ -237,25 +237,6 @@ if ($user['register'] == "none") {
 }
 if (!in_array($user['agent'], ["n", "n2", "f"]))
     update("user", "agent", "f", "id", $from_id);
-#-----------language gate------------#
-// The shop can choose to serve only the languages it has enabled. Placed with
-// the block check, before any feature runs, so a refused user gets one message
-// and nothing else - and placed AFTER the language picker's own setlang
-// handler stays reachable, so switching to a served language is the way out.
-if (!lang_is_served($user['lang'] ?? '', in_array($from_id, $admin_ids))
-    && strpos((string) $datain, 'setlang:') !== 0) {
-    // the copy 🌐 تنظیمات تغییر زبان edits - this user's own language is the
-    // one that is not served, so there is no tab of theirs to read it from
-    $langBlockText = bottext_resolve_key('bottext.langBlockedMsg', 'fa');
-    if (trim((string) $langBlockText) === '') {
-        $langBlockText = $textbotlang['bottext']['langBlockedMsg'] ?? '⛔️';
-    }
-    // the picker comes with it, so the user can move to a language that is
-    // served instead of being told "no" with no way forward
-    list(, $langBlockKb) = language_picker_payload();
-    sendmessage($from_id, $langBlockText, $langBlockKb, 'HTML');
-    return;
-}
 #-----------User_Status------------#
 if ($user['User_Status'] == "block" && !in_array($from_id, $admin_ids)) {
     $textblock = sprintf($textbotlang['users']['block']['descriptions'], $user['description_blocking']);

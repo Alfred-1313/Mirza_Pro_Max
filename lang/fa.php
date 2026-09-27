@@ -28,11 +28,6 @@ return array (
 
 ━━━━━━━━━━━━━━━━━━━━━━━
 👇 Tap to continue:',
-    'langBlockedMsg' => '⛔️ فعلاً به این زبان سرویس داده نمی‌شود
-⛔️ No service in this language right now
-
-👇 یکی از زبان‌های زیر را انتخاب کنید
-👇 Please choose one of the languages below',
     'groupServicesCaption' => '🛍 <b>پیام‌ها و ظاهر سرویس‌های من</b>
 
 کدوم مورد رو می‌خوای تنظیم کنی؟
@@ -513,10 +508,6 @@ return array (
       array (
         'label' => '🌍 کپشن صفحه‌ی انتخاب زبان',
         'key' => 'bottext.langPickerCaption',
-      ),
-      array (
-        'label' => '⛔️ پیام رد کاربر با زبان پشتیبانی‌نشده',
-        'key' => 'bottext.langBlockedMsg',
       ),
       array (
         'label' => '🎁 صفحه‌ی ورود کد تخفیف + دکمه‌هایش',

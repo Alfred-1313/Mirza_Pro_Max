@@ -1126,8 +1126,8 @@ if (!function_exists('bottext_item_menu_payload')) {
             $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "cfgdeliv|list|{$bt_lang}|b", 'style' => 'danger']];
         } elseif ($bt_key === 'users.status.infoFull') {
             $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "bt_group|{$bt_lang}|myservices", 'style' => 'danger']];
-        } elseif (in_array($bt_key, ['bottext.langPickerCaption', 'bottext.langBlockedMsg'], true)) {
-            // both belong to the language screen and are only reachable from it
+        } elseif ($bt_key === 'bottext.langPickerCaption') {
+            // it belongs to the language screen and is only reachable from it
             $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => 'bt_langswitch', 'style' => 'danger']];
         } elseif ($bt_key === 'users.Balance.chargeSuccessDiscount') {
             $kb['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "bt_edit|{$bt_lang}|users.Balance.chargeSuccess", 'style' => 'danger']];
@@ -1428,19 +1428,6 @@ if (!function_exists('lang_switch_settings_payload')) {
         // own buttons - they were hardcoded two-per-row with no styling at all
         $kb['inline_keyboard'][] = [['text' => '🔘 ظاهر دکمه‌های انتخاب زبان', 'callback_data' => 'btnstyle_kindhub:langpick:fa', 'style' => 'primary']];
 
-        $kb['inline_keyboard'][] = [['text' => bt_section_meta('langsw_access')['label'], 'callback_data' => 'bt_sep|langsw_access']];
-        $kb['inline_keyboard'][] = [[
-            'text' => ($ls['blockOthers'] ? '✅ ' : '❌ ') . '🚫 فقط زبان‌های انتخاب‌شده سرویس بگیرن',
-            'callback_data' => 'lsw_blockothers',
-            'style' => $ls['blockOthers'] ? 'success' : 'danger',
-        ]];
-        if ($ls['blockOthers']) {
-            $kb['inline_keyboard'][] = [
-                ['text' => '📋 پیش‌فرض', 'callback_data' => 'btact|rsttext|fa|bottext.langBlockedMsg'],
-                ['text' => '✏️ ویرایش پیام رد', 'callback_data' => 'btact|text|fa|bottext.langBlockedMsg', 'style' => 'primary'],
-            ];
-        }
-
         $kb['inline_keyboard'][] = [['text' => '🔙 برگشت به لیست', 'callback_data' => 'btact|back|fa', 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
         return json_encode($kb);
@@ -1461,20 +1448,9 @@ if (!function_exists('lang_switch_settings_payload')) {
             ? ('روشن ✅ — ' . ($ls['mode'] === 'always' ? 'هر بار /start' : 'فقط بار اول'))
             : 'خاموش') . "\n";
         $cap .= "زبان‌های فعال: " . (empty($on) ? '—' : implode('، ', $on)) . "\n";
-        $cap .= "سرویس‌دهی به بقیه‌ی زبان‌ها: " . ($ls['blockOthers'] ? '<b>بسته</b> ⛔️' : 'باز') . "\n";
-        if ($ls['blockOthers']) {
-            $cap .= "\n⚠️ کاربری که زبانش جزو لیست بالا نباشه، پیام رد می‌گیره و هیچ بخشی از ربات براش کار نمی‌کنه. مدیرها هیچ‌وقت بسته نمی‌شن.\n";
-        }
-        // How many real users this refuses, right now. Without it an admin can
-        // untick their own shop's language and lock out every customer with no
-        // signal at all - which is exactly what happened once.
-        $lsw_blocked = lang_switch_blocked_count();
-        if ($lsw_blocked['blocked'] > 0) {
-            $cap .= "\n🚨 <b>همین الان " . number_format($lsw_blocked['blocked']) . " کاربر از "
-                . number_format($lsw_blocked['total']) . " کاربر ربات مسدودن</b> — زبانشون توی لیست بالا نیست.\n";
-        } elseif ($ls['blockOthers']) {
-            $cap .= "\n✅ همه‌ی " . number_format($lsw_blocked['total']) . " کاربر فعلی ربات، زبانشون توی لیست هست.\n";
-        }
+        // turning a language off for its customers is 📡 وضعیت ربات in
+        // 🌐 وضعیت قابلیت‌ها (هر زبان) - one per language
+        $cap .= "\nℹ️ برای خاموش کردن ربات برای کاربرای یه زبان: 🌐 وضعیت قابلیت‌ها (هر زبان) ← 📡 وضعیت ربات.\n";
         if (!$ls['enabled']) {
             $cap .= "\nℹ️ منوی انتخاب زبان خودکار نشون داده نمی‌شه؛ کاربر فقط از دکمه‌ی «🌏 تغییر زبان» توی منوی اصلی می‌تونه عوضش کنه (اگه اون دکمه روشن باشه).\n";
         }
@@ -6495,11 +6471,6 @@ if (preg_match('/^lsw_mode-(once|always)$/', $datain, $lsw_match) && $adminrulec
     Editmessagetext($from_id, $message_id, lang_switch_settings_caption($textbotlang), lang_switch_settings_payload(), 'HTML');
     return;
 }
-if ($datain == "lsw_blockothers" && $adminrulecheck['rule'] == "administrator") {
-    lang_switch_save(['blockOthers' => !lang_switch_settings()['blockOthers']]);
-    Editmessagetext($from_id, $message_id, lang_switch_settings_caption($textbotlang), lang_switch_settings_payload(), 'HTML');
-    return;
-}
 if (preg_match('/^lsw_lang-(fa|en|ru|zh|tk)$/', $datain, $lsw_match) && $adminrulecheck['rule'] == "administrator") {
     $lsw_langs = lang_switch_settings()['langs'];
     $lsw_code = $lsw_match[1];
@@ -7390,9 +7361,6 @@ if (preg_match('/^btact\|text\|([a-z]{2})\|(.+)$/', $datain, $btm) && $adminrule
             . "• سوم: تعداد سرویس‌های فعال\n"
             . "• چهارم: موجودی کیف پول\n"
             . "\n⚠️ تعداد و ترتیب <code>%s</code>ها را عوض نکنید، وگرنه مقدارها جابه‌جا نمایش داده می‌شوند.",
-        'bottext.langBlockedMsg' => "این پیام متغیری نداره.\n"
-            . "\n💡 فقط وقتی فرستاده می‌شه که «🚫 فقط زبان‌های انتخاب‌شده سرویس بگیرن» روشن باشه و زبان کاربر جزو زبان‌های فروشگاه نباشه.\n"
-            . "💡 همراهش دکمه‌های انتخاب زبان هم فرستاده می‌شه تا کاربر بتونه به یه زبان پشتیبانی‌شده سوییچ کنه؛ متن رو طوری بنویس که این رو بهش بگه.",
         'users.Balance.amountRangeError' => "این پیام با <code>%s</code> کار می‌کند نه با نام متغیر:\n"
             . "• اولین <code>%s</code> حداقل مبلغ است\n"
             . "• دومین <code>%s</code> حداکثر مبلغ\n"
