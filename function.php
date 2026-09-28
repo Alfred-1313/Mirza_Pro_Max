@@ -17688,13 +17688,79 @@ if (!function_exists('affrw_cfg')) {
             sendmessage($aid, $text, $kb, 'HTML');
         }
     }
-    // Makes the config on the chosen panel - the same way a paid one is made -
-    // and sends it to the customer in their own language. The row has to be
-    // 'giving' already; it ends 'done' on success and is left for the caller
+    // the config message, worded like a bought one's; [text, its sub link]
+    function affrw_service_text($panel, $cfg, $tx, $out)
+    {
+        $sublink = $panel['sublink'] == "onsublink" ? (string) ($out['subscription_url'] ?? '') : "";
+        $links = "";
+        if ($panel['config'] == "onconfig" && is_array($out['configs'] ?? null)) {
+            foreach ($out['configs'] as $link) {
+                $links .= "\n" . $link;
+            }
+        }
+        $tpl = $tx['users']['affiliates']['rewardAfterPay'];
+        if ($panel['type'] == "WGDashboard") {
+            $tpl = $tx['textbot']['wgDashboard'];
+        } elseif ($panel['type'] == "ibsng" || $panel['type'] == "mikrotik") {
+            $tpl = $tx['textbot']['afterPayIbsng'];
+        }
+        return [strtr($tpl, [
+            '{username}' => "<code>{$out['username']}</code>",
+            '{name_service}' => $tx['users']['affiliates']['rewardServiceName'],
+            '{location}' => $panel['name_panel'],
+            '{day}' => $cfg['days'],
+            '{volume}' => $cfg['gb'],
+            '{time_human}' => service_days_text($cfg['days'], $tx),
+            '{volume_human}' => service_volume_text($cfg['gb'] * 1024, $tx),
+            '{config}' => "<code>{$sublink}</code>",
+            '{links}' => $links,
+            '{links2}' => $sublink,
+            '{password}' => (string) ($out['subscription_url'] ?? ''),
+        ]), $sublink];
+    }
+    // Makes the config on $panel - the same way a paid one is made - lists it
+    // under $uid's 🛍 سرویس های من and sends it, in $tx's language. The
+    // invoice id and account, or null when the panel refused ($err: why).
+    // Also 🧪 تست واقعی's, which is why it leaves affiliate_reward alone.
+    function affrw_deliver($uid, $cfg, $panel, $u, $tx, $lang, $invites, &$err = null)
+    {
+        global $pdo, $ManagePanel;
+        $out = null;
+        if ($panel !== null) {
+            $username_ac = strtolower($uid . "_" . bin2hex(random_bytes(3)));
+            $datac = [
+                'expire' => strtotime("+" . $cfg['days'] . " days"),
+                'data_limit' => $cfg['gb'] * pow(1024, 3),
+                'from_id' => $uid,
+                'username' => $u['username'] ?? '',
+                'type' => 'buy',
+            ];
+            $out = $ManagePanel->createUser($panel['name_panel'], "customvolume", $username_ac, $datac);
+        }
+        if (!is_array($out) || empty($out['username'])) {
+            $err = $out['msg'] ?? ($panel === null ? 'panel not found' : '');
+            return null;
+        }
+        $id_invoice = bin2hex(random_bytes(4));
+        $stmt = $pdo->prepare("INSERT IGNORE INTO invoice (id_user, id_invoice, username, time_sell, Service_location, name_product, price_product, Volume, Service_time, Status, notifctions) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$uid, $id_invoice, $out['username'], time(), $panel['name_panel'], $tx['users']['affiliates']['rewardServiceName'], '0', $cfg['gb'], $cfg['days'], 'active', json_encode(['volume' => false, 'time' => false])]);
+        bottext_extras_key_hint('users.affiliates.rewardGiven');
+        sendmessage($uid, strtr($tx['users']['affiliates']['rewardGiven'], affrw_vars($cfg, (int) $invites)), null, 'HTML');
+        // then the service itself, worded like a bought one
+        [$text, $sublink] = affrw_service_text($panel, $cfg, $tx, $out);
+        if ($panel['type'] == "ibsng" || $panel['type'] == "mikrotik") {
+            update("invoice", "user_info", $out['subscription_url'], "id_invoice", $id_invoice);
+        }
+        sendMessageService($panel, $out['configs'] ?? [], $sublink, $out['username'], affrw_help_kb($lang, $tx), $text, $id_invoice, $uid, 'images.jpg', 'affrw');
+        return ['id_invoice' => $id_invoice, 'username' => $out['username']];
+    }
+    // Makes the config on the chosen panel and sends it to the customer in
+    // their own language. The row has to be 'giving' already; it ends 'done'
+    // (or open for the next round) on success and is left for the caller
     // otherwise.
     function affrw_give($uid)
     {
-        global $pdo, $ManagePanel;
+        global $pdo;
         $setting = select("setting", "*", null, null, "select");
         $fa = lang_tab_texts('fa');
         $row = affrw_row($uid);
@@ -17714,31 +17780,17 @@ if (!function_exists('affrw_cfg')) {
                 ]);
             }
         };
-        $out = null;
-        if ($panel !== null) {
-            $username_ac = strtolower($uid . "_" . bin2hex(random_bytes(3)));
-            $datac = [
-                'expire' => strtotime("+" . $cfg['days'] . " days"),
-                'data_limit' => $cfg['gb'] * pow(1024, 3),
-                'from_id' => $uid,
-                'username' => $u['username'] ?? '',
-                'type' => 'buy',
-            ];
-            $out = $ManagePanel->createUser($panel['name_panel'], "customvolume", $username_ac, $datac);
-        }
-        if (!is_array($out) || empty($out['username'])) {
+        $err = null;
+        $made = affrw_deliver($uid, $cfg, $panel, $u, payer_texts($uid), $u['lang'] ?? 'fa', (int) $row['invites'], $err);
+        if ($made === null) {
             $report('errorreport', strtr($fa['Admin']['AffReward']['error'], [
                 '{id}' => $uid,
                 '{panel}' => $panel['name_panel'] ?? '—',
-                '{msg}' => htmlspecialchars(json_encode($out['msg'] ?? ($panel === null ? 'panel not found' : ''), JSON_UNESCAPED_UNICODE)),
+                '{msg}' => htmlspecialchars(json_encode($err, JSON_UNESCAPED_UNICODE)),
             ]));
             return false;
         }
-        $tx = payer_texts($uid);
-        $lang = $u['lang'] ?? 'fa';
-        $id_invoice = bin2hex(random_bytes(4));
-        $stmt = $pdo->prepare("INSERT IGNORE INTO invoice (id_user, id_invoice, username, time_sell, Service_location, name_product, price_product, Volume, Service_time, Status, notifctions) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$uid, $id_invoice, $out['username'], time(), $panel['name_panel'], $tx['users']['affiliates']['rewardServiceName'], '0', $cfg['gb'], $cfg['days'], 'active', json_encode(['volume' => false, 'time' => false])]);
+        $id_invoice = $made['id_invoice'];
         // the invitees behind it (for 🚪 a leave), and the next round - or
         // done, once it has been earned as many times as allowed
         $since = affrw_since($cfg, $row);
@@ -17749,39 +17801,6 @@ if (!function_exists('affrw_cfg')) {
         $more = $times < $cfg['max'];
         $stmt = $pdo->prepare("UPDATE affiliate_reward SET status = ?, id_invoice = ?, time = ?, times = ?, since = ?, members = ?, left_ids = '[]', suspended = 0 WHERE user_id = ?");
         $stmt->execute([$more ? 'open' : 'done', $id_invoice, time(), $times, $more ? time() : (int) ($row['since'] ?? 0), json_encode($members), (string) $uid]);
-        bottext_extras_key_hint('users.affiliates.rewardGiven');
-        sendmessage($uid, strtr($tx['users']['affiliates']['rewardGiven'], affrw_vars($cfg, (int) $row['invites'])), null, 'HTML');
-        // then the service itself, worded like a bought one
-        $sublink = $panel['sublink'] == "onsublink" ? $out['subscription_url'] : "";
-        $links = "";
-        if ($panel['config'] == "onconfig" && is_array($out['configs'] ?? null)) {
-            foreach ($out['configs'] as $link) {
-                $links .= "\n" . $link;
-            }
-        }
-        $tpl = $tx['users']['affiliates']['rewardAfterPay'];
-        if ($panel['type'] == "WGDashboard") {
-            $tpl = $tx['textbot']['wgDashboard'];
-        } elseif ($panel['type'] == "ibsng" || $panel['type'] == "mikrotik") {
-            $tpl = $tx['textbot']['afterPayIbsng'];
-        }
-        $text = strtr($tpl, [
-            '{username}' => "<code>{$out['username']}</code>",
-            '{name_service}' => $tx['users']['affiliates']['rewardServiceName'],
-            '{location}' => $panel['name_panel'],
-            '{day}' => $cfg['days'],
-            '{volume}' => $cfg['gb'],
-            '{time_human}' => service_days_text($cfg['days'], $tx),
-            '{volume_human}' => service_volume_text($cfg['gb'] * 1024, $tx),
-            '{config}' => "<code>{$sublink}</code>",
-            '{links}' => $links,
-            '{links2}' => $sublink,
-            '{password}' => (string) ($out['subscription_url'] ?? ''),
-        ]);
-        if ($panel['type'] == "ibsng" || $panel['type'] == "mikrotik") {
-            update("invoice", "user_info", $out['subscription_url'], "id_invoice", $id_invoice);
-        }
-        sendMessageService($panel, $out['configs'] ?? [], $sublink, $out['username'], affrw_help_kb($lang, $tx), $text, $id_invoice, $uid, 'images.jpg', 'affrw');
         $report('porsantreport', strtr($fa['Admin']['AffReward']['report'], [
             '{id}' => $uid,
             '{username}' => (!empty($u['username']) && $u['username'] !== 'none') ? '@' . htmlspecialchars($u['username']) : '',
@@ -17789,7 +17808,7 @@ if (!function_exists('affrw_cfg')) {
             '{volume}' => $cfg['gb'],
             '{days}' => $cfg['days'],
             '{panel}' => $panel['name_panel'],
-            '{service}' => $out['username'],
+            '{service}' => $made['username'],
         ]));
         return true;
     }

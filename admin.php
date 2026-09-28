@@ -5403,9 +5403,9 @@ if (!function_exists('feature_section_of_key')) {
     function feature_section_of_key($key)
     {
         $map = [
-            'aff_percent' => 'aff',
-            'aff_giftamount' => 'aff',
-            'aff_banner' => 'aff',
+            'aff_percent' => 'affc',
+            'aff_giftamount' => 'affc',
+            'aff_banner' => 'affc',
             'wheel_price' => 'wheel',
             'loc_limit_all' => 'loc',
             'loc_limit_free' => 'loc',
@@ -5415,10 +5415,10 @@ if (!function_exists('feature_section_of_key')) {
             'lottery_1' => 'lottery',
             'lottery_2' => 'lottery',
             'lottery_3' => 'lottery',
-            'affrw_need' => 'aff',
-            'affrw_gb' => 'aff',
-            'affrw_days' => 'aff',
-            'affrw_max' => 'aff',
+            'affrw_need' => 'affr',
+            'affrw_gb' => 'affr',
+            'affrw_days' => 'affr',
+            'affrw_max' => 'affr',
         ];
         return $map[$key] ?? null;
     }
@@ -5485,26 +5485,8 @@ if (!function_exists('feature_section_caption')) {
         if ($section === 'wheel') {
             return strtr($s['wheelTitle'], ['{lang}' => $langName, '{price}' => money($v['wheel_price'], $cur)]);
         }
-        if ($section === 'aff') {
-            // 👥 طرح‌های زیرمجموعه‌گیری: both plans on one screen
-            $rw = affrw_cfg($lang);
-            $rwPanel = affrw_panel($rw);
-            $affSetting = select("setting", "*", null, null, "select");
-            return strtr($s['affTitle'], [
-                '{lang}' => $langName,
-                '{classic}' => $v['aff_classic'] === '1' ? $tx['Admin']['Status']['statuson'] : $tx['Admin']['Status']['statusoff'],
-                '{percent}' => (string) $v['aff_percent'],
-                '{gift}' => money($v['aff_giftamount'], $cur),
-                '{banner}' => strlen((string) $v['aff_banner_media']) >= 5 ? '✅' : '❌',
-                '{reward}' => $rw['on'] ? $tx['Admin']['Status']['statuson'] : $tx['Admin']['Status']['statusoff'],
-                '{need}' => $rw['need'],
-                '{volume}' => $rw['gb'],
-                '{days}' => $rw['days'],
-                '{max}' => $rw['max'],
-                '{panel}' => $rwPanel !== null ? htmlspecialchars($rwPanel['name_panel']) : $s['affrwNoPanel'],
-                '{mode}' => $rw['mode'] === 'auto' ? $s['affrwModeAuto'] : $s['affrwModeAdmin'],
-                '{leave}' => feature_setting_value('affrw_leave', $lang, '0') !== '1' ? $tx['Admin']['Status']['statusoff'] : (affrw_leave_channels($lang) ? $tx['Admin']['Status']['statuson'] : $s['affrwLeaveNotReady']),
-            ]) . refv_caption_line($lang, $s) . (feature_value('affiliatesstatus', $lang, $affSetting['affiliatesstatus']) == "offaffiliates" ? strtr($s['affrwAffOff'], ['{lang}' => $langName]) : '');
+        if (in_array($section, ['aff', 'affc', 'affr', 'refvc', 'refvr'], true)) {
+            return aff_section_caption($lang, $section);
         }
         return strtr($s['locTitle'], [
             '{lang}' => $langName,
@@ -5568,81 +5550,15 @@ if (!function_exists('feature_section_payload')) {
             $rows[] = [['text' => strtr($s['phoneDefaultBtn'], ['{def}' => $ph_def ? implode(' / ', array_map(fn($c) => '+' . $c, $ph_def)) : $s['phoneAny']]), 'callback_data' => "flsph:{$lang}:def"]];
         } elseif ($section === 'wheel') {
             $rows[] = [['text' => strtr($s['wheelPriceBtn'], ['{price}' => money($v['wheel_price'], $cur)]), 'callback_data' => "flsask:{$lang}:wheel_price"]];
-        } elseif ($section === 'aff') {
-            // 🛡 راستی‌آزمایی دعوت‌ها - each plan its own, under it
-            $refvRows = function ($plan) use ($lang, $s, $on, $off) {
-                $rv = refv_cfg($lang, $plan);
-                $rvNames = array_map(fn($r) => (string) $r['remark'], refv_channel_rows($rv));
-                return [
-                    [['text' => $s['refvSec'], 'callback_data' => "none"]],
-                    [
-                        ['text' => $rv['phone'] ? $on : $off, 'callback_data' => "flsrefv:{$lang}:{$plan}:phone", 'style' => $rv['phone'] ? 'success' : 'danger'],
-                        ['text' => $s['refvPhoneBtn'], 'callback_data' => "none"],
-                    ],
-                    [
-                        ['text' => $rv['channel'] ? $on : $off, 'callback_data' => "flsrefv:{$lang}:{$plan}:channel", 'style' => $rv['channel'] ? 'success' : 'danger'],
-                        ['text' => $s['refvChannelBtn'], 'callback_data' => "none"],
-                    ],
-                    [['text' => strtr($s['refvChannelsBtn'], ['{list}' => $rvNames ? implode('، ', $rvNames) : $s['refvNone']]), 'callback_data' => "flsrefv:{$lang}:{$plan}:pick", 'style' => 'primary']],
-                    [['text' => strtr($s['refvVipBtn'], ['{n}' => count($rv['vip'])]), 'callback_data' => "flsrefv:{$lang}:{$plan}:vip", 'style' => 'primary']],
-                ];
-            };
-            // 💼 زیرمجموعه‌گیری و هدیه خوش‌آمد
-            $rows[] = [['text' => $s['affSecClassic'], 'callback_data' => "none"]];
-            $clOn = $v['aff_classic'] === '1';
-            $rows[] = [
-                ['text' => $clOn ? $on : $off, 'callback_data' => "flstog:{$lang}:aff_classic:{$v['aff_classic']}", 'style' => $clOn ? 'success' : 'danger'],
-                ['text' => $s['affPlanToggle'], 'callback_data' => "none"],
-            ];
-            $rows[] = [['text' => strtr($s['affPercentBtn'], ['{percent}' => (string) $v['aff_percent']]), 'callback_data' => "flsask:{$lang}:aff_percent", 'style' => 'primary']];
-            $rows[] = [['text' => strtr($s['affGiftBtn'], ['{gift}' => money($v['aff_giftamount'], $cur)]), 'callback_data' => "flsask:{$lang}:aff_giftamount", 'style' => 'primary']];
-            $rows[] = [['text' => $s['affBannerBtn'], 'callback_data' => "flsask:{$lang}:aff_banner", 'style' => 'primary']];
-            $comOn = $v['aff_commission'] === 'oncommission';
-            $rows[] = [
-                ['text' => $comOn ? $on : $off, 'callback_data' => "flstog:{$lang}:aff_commission:{$v['aff_commission']}", 'style' => $comOn ? 'success' : 'danger'],
-                ['text' => $s['affCommissionBtn'], 'callback_data' => "none"],
-            ];
-            $giftOn = $v['aff_startgift'] === 'onDiscountaffiliates';
-            $rows[] = [
-                ['text' => $giftOn ? $on : $off, 'callback_data' => "flstog:{$lang}:aff_startgift:{$v['aff_startgift']}", 'style' => $giftOn ? 'success' : 'danger'],
-                ['text' => $s['affStartGiftBtn'], 'callback_data' => "none"],
-            ];
-            $firstOn = $v['aff_firstbuy'] === 'on_buy_porsant';
-            $rows[] = [
-                ['text' => $firstOn ? $on : $off, 'callback_data' => "flstog:{$lang}:aff_firstbuy:{$v['aff_firstbuy']}", 'style' => $firstOn ? 'success' : 'danger'],
-                ['text' => $s['affFirstBuyBtn'], 'callback_data' => "none"],
-            ];
-            array_push($rows, ...$refvRows('c'));
-            // 🎁 کانفیگ رایگان با دعوت - on this same screen now
-            $rows[] = [['text' => $s['affSecReward'], 'callback_data' => "none"]];
-            $rw = affrw_cfg($lang);
-            $rwPanel = affrw_panel($rw);
-            $rows[] = [
-                ['text' => $rw['on'] ? $on : $off, 'callback_data' => "flsaffrw:{$lang}:on", 'style' => $rw['on'] ? 'success' : 'danger'],
-                ['text' => $s['affPlanToggle'], 'callback_data' => "none"],
-            ];
-            $rows[] = [['text' => strtr($s['affrwNeedBtn'], ['{need}' => $rw['need']]), 'callback_data' => "flsask:{$lang}:affrw_need", 'style' => 'primary']];
-            $rows[] = [
-                ['text' => strtr($s['affrwVolumeBtn'], ['{volume}' => $rw['gb']]), 'callback_data' => "flsask:{$lang}:affrw_gb", 'style' => 'primary'],
-                ['text' => strtr($s['affrwDaysBtn'], ['{days}' => $rw['days']]), 'callback_data' => "flsask:{$lang}:affrw_days", 'style' => 'primary'],
-            ];
-            $rows[] = [['text' => strtr($s['affrwPanelBtn'], ['{panel}' => $rwPanel !== null ? $rwPanel['name_panel'] : $s['affrwNoPanel']]), 'callback_data' => "flsaffrw:{$lang}:panel", 'style' => 'primary']];
-            $rows[] = [['text' => strtr($s['affrwMaxBtn'], ['{max}' => $rw['max']]), 'callback_data' => "flsask:{$lang}:affrw_max", 'style' => 'primary']];
-            $rows[] = [['text' => strtr($s['affrwModeBtn'], ['{mode}' => $rw['mode'] === 'auto' ? $s['affrwModeAuto'] : $s['affrwModeAdmin']]), 'callback_data' => "flsaffrw:{$lang}:mode", 'style' => 'primary']];
-            $lvOn = feature_setting_value('affrw_leave', $lang, '0') === '1';
-            $rows[] = [
-                ['text' => $lvOn ? $on : $off, 'callback_data' => "flsaffrw:{$lang}:leave", 'style' => $lvOn ? 'success' : 'danger'],
-                ['text' => $s['affrwLeaveBtn'], 'callback_data' => "none"],
-            ];
-            array_push($rows, ...$refvRows('r'));
+        } elseif (in_array($section, ['aff', 'affc', 'affr', 'refvc', 'refvr'], true)) {
+            // 👥 طرح‌های زیرمجموعه‌گیری and its pages carry their own back button
+            return json_encode(['inline_keyboard' => aff_section_rows($lang, $section)]);
         } else {
             $rows[] = [['text' => strtr($s['locAllBtn'], ['{all}' => (string) $v['loc_limit_all']]), 'callback_data' => "flsask:{$lang}:loc_limit_all"]];
             $rows[] = [['text' => strtr($s['locFreeBtn'], ['{free}' => (string) $v['loc_limit_free']]), 'callback_data' => "flsask:{$lang}:loc_limit_free"]];
             $rows[] = [['text' => $s['locResetBtn'], 'callback_data' => "flsloc:{$lang}:ask", 'style' => 'danger']];
         }
-        // 👥 طرح‌های زیرمجموعه‌گیری: labels white, what changes something
-        // blue, the switches green/red for their state, back red
-        $rows[] = [['text' => $s['back'], 'callback_data' => "fls_lang:{$lang}"] + ($section === 'aff' ? ['style' => 'danger'] : [])];
+        $rows[] = [['text' => $s['back'], 'callback_data' => "fls_lang:{$lang}"]];
         return json_encode(['inline_keyboard' => $rows]);
     }
 }
@@ -5790,25 +5706,149 @@ if (!function_exists('svcgive_panels_payload')) {
         return count($users);
     }
 }
-if (!function_exists('refv_caption_line')) {
-    // the 🛡 part of 👥 طرح‌های زیرمجموعه‌گیری's caption: one line a plan
-    function refv_caption_line($lang, $s)
+if (!function_exists('aff_section_rows')) {
+    // 👥 طرح‌های زیرمجموعه‌گیری: a short page with the two plans, a page for
+    // each, and one for each plan's 🛡. One colour, one meaning:
+    // 🟢 on · 🔴 off (the state is in the text too) · 🔵 a value to set ·
+    // ⚪️ another page or back.
+    function aff_section_rows($lang, $section)
     {
-        $vars = [];
-        foreach (['c', 'r'] as $plan) {
-            $rv = refv_cfg($lang, $plan);
-            $parts = [];
-            if ($rv['phone']) {
-                $parts[] = $s['refvPhoneBtn'];
-            }
-            if ($rv['channel']) {
-                $names = array_map(fn($r) => htmlspecialchars((string) $r['remark']), refv_channel_rows($rv));
-                $parts[] = $s['refvChannelBtn'] . ($names ? ' (' . implode('، ', $names) . ')' : '');
-            }
-            $vars["{state_{$plan}}"] = $parts ? implode(' + ', $parts) : $s['refvOffState'];
-            $vars["{vip_{$plan}}"] = count($rv['vip']);
+        $tx = lang_tab_texts('fa');
+        $s = $tx['Admin']['FeatureSection'];
+        $st = $tx['Admin']['Status'];
+        $v = feature_section_effective($lang);
+        $cur = currency_for_lang($lang);
+        $tog = fn($isOn, $label, $cb) => ['text' => ($isOn ? '✅ ' : '❌ ') . $label, 'callback_data' => $cb, 'style' => $isOn ? 'success' : 'danger'];
+        $val = fn($label, $cb) => ['text' => $label, 'callback_data' => $cb, 'style' => 'primary'];
+        $go = fn($label, $cb) => ['text' => $label, 'callback_data' => $cb];
+        $plan = fn($isOn, $cb) => ['text' => $isOn ? $s['affPlanIsOn'] : $s['affPlanIsOff'], 'callback_data' => $cb, 'style' => $isOn ? 'success' : 'danger'];
+        $rw = affrw_cfg($lang);
+        if ($section === 'aff') {
+            return [
+                [$go(strtr($s['affPlanBtn'], ['{plan}' => $s['refvPlan_c'], '{state}' => $v['aff_classic'] === '1' ? $st['statuson'] : $st['statusoff']]), "flsec:{$lang}:affc")],
+                [$go(strtr($s['affPlanBtn'], ['{plan}' => $s['refvPlan_r'], '{state}' => $rw['on'] ? $st['statuson'] : $st['statusoff']]), "flsec:{$lang}:affr")],
+                [$go($s['back'], "fls_lang:{$lang}")],
+            ];
         }
-        return strtr($s['refvCaption'], $vars);
+        if ($section === 'affc') {
+            return [
+                [$plan($v['aff_classic'] === '1', "flstog:{$lang}:aff_classic:{$v['aff_classic']}")],
+                [$val(strtr($s['affPercentBtn'], ['{percent}' => (string) $v['aff_percent']]), "flsask:{$lang}:aff_percent")],
+                [$tog($v['aff_commission'] === 'oncommission', $s['affCommissionBtn'], "flstog:{$lang}:aff_commission:{$v['aff_commission']}")],
+                [$tog($v['aff_firstbuy'] === 'on_buy_porsant', $s['affFirstBuyBtn'], "flstog:{$lang}:aff_firstbuy:{$v['aff_firstbuy']}")],
+                [$val(strtr($s['affGiftBtn'], ['{gift}' => money($v['aff_giftamount'], $cur)]), "flsask:{$lang}:aff_giftamount")],
+                [$tog($v['aff_startgift'] === 'onDiscountaffiliates', $s['affStartGiftBtn'], "flstog:{$lang}:aff_startgift:{$v['aff_startgift']}")],
+                [$val($s['affBannerBtn'], "flsask:{$lang}:aff_banner")],
+                [$go(strtr($s['refvOpenBtn'], ['{state}' => refv_state_text($lang, 'c', $s, true)]), "flsec:{$lang}:refvc")],
+                [$go($s['affTestClassicBtn'], "afftest:{$lang}:c")],
+                [$go($s['back'], "flsec:{$lang}:aff")],
+            ];
+        }
+        if ($section === 'affr') {
+            $rwPanel = affrw_panel($rw);
+            return [
+                [$plan($rw['on'], "flsaffrw:{$lang}:on")],
+                [
+                    $val(strtr($s['affrwNeedBtn'], ['{need}' => $rw['need']]), "flsask:{$lang}:affrw_need"),
+                    $val(strtr($s['affrwMaxBtn'], ['{max}' => $rw['max']]), "flsask:{$lang}:affrw_max"),
+                ],
+                [
+                    $val(strtr($s['affrwVolumeBtn'], ['{volume}' => $rw['gb']]), "flsask:{$lang}:affrw_gb"),
+                    $val(strtr($s['affrwDaysBtn'], ['{days}' => $rw['days']]), "flsask:{$lang}:affrw_days"),
+                ],
+                [$val(strtr($s['affrwPanelBtn'], ['{panel}' => $rwPanel !== null ? $rwPanel['name_panel'] : $s['affrwNoPanel']]), "flsaffrw:{$lang}:panel")],
+                [$val(strtr($s['affrwModeBtn'], ['{mode}' => $rw['mode'] === 'auto' ? $s['affrwModeAuto'] : $s['affrwModeAdmin']]), "flsaffrw:{$lang}:mode")],
+                [$tog(feature_setting_value('affrw_leave', $lang, '0') === '1', $s['affrwLeaveBtn'], "flsaffrw:{$lang}:leave")],
+                [$go(strtr($s['refvOpenBtn'], ['{state}' => refv_state_text($lang, 'r', $s, true)]), "flsec:{$lang}:refvr")],
+                [$go($s['affTestRewardBtn'], "afftest:{$lang}:r")],
+                [$go($s['back'], "flsec:{$lang}:aff")],
+            ];
+        }
+        // 🛡 of one plan
+        $p = $section === 'refvr' ? 'r' : 'c';
+        $rv = refv_cfg($lang, $p);
+        $names = array_map(fn($r) => (string) $r['remark'], refv_channel_rows($rv));
+        return [
+            [$tog($rv['phone'], $s['refvPhoneBtn'], "flsrefv:{$lang}:{$p}:phone")],
+            [$tog($rv['channel'], $s['refvChannelBtn'], "flsrefv:{$lang}:{$p}:channel")],
+            [$val(strtr($s['refvChannelsBtn'], ['{list}' => $names ? implode('، ', $names) : $s['refvNone']]), "flsrefv:{$lang}:{$p}:pick")],
+            [$val(strtr($s['refvVipBtn'], ['{n}' => count($rv['vip'])]), "flsrefv:{$lang}:{$p}:vip")],
+            [$go($s['back'], "flsec:{$lang}:aff{$p}")],
+        ];
+    }
+    function aff_section_caption($lang, $section)
+    {
+        $tx = lang_tab_texts('fa');
+        $s = $tx['Admin']['FeatureSection'];
+        $st = $tx['Admin']['Status'];
+        $v = feature_section_effective($lang);
+        $cur = currency_for_lang($lang);
+        $langName = $tx['bottext']['langs'][$lang] ?? $lang;
+        $onOff = fn($b) => $b ? $st['statuson'] : $st['statusoff'];
+        $rw = affrw_cfg($lang);
+        if ($section === 'aff') {
+            $text = strtr($s['affTitle'], ['{lang}' => $langName, '{classic}' => $onOff($v['aff_classic'] === '1'), '{reward}' => $onOff($rw['on'])]);
+        } elseif ($section === 'affc') {
+            $text = strtr($s['affcTitle'], [
+                '{lang}' => $langName,
+                '{state}' => $onOff($v['aff_classic'] === '1'),
+                '{percent}' => (string) $v['aff_percent'],
+                '{commission}' => $onOff($v['aff_commission'] === 'oncommission'),
+                '{firstbuy}' => $onOff($v['aff_firstbuy'] === 'on_buy_porsant'),
+                '{gift}' => money($v['aff_giftamount'], $cur),
+                '{startgift}' => $onOff($v['aff_startgift'] === 'onDiscountaffiliates'),
+                '{banner}' => strlen((string) $v['aff_banner_media']) >= 5 ? '✅' : '❌',
+                '{refv}' => refv_state_text($lang, 'c', $s),
+            ]);
+        } elseif ($section === 'affr') {
+            $rwPanel = affrw_panel($rw);
+            $text = strtr($s['affrTitle'], [
+                '{lang}' => $langName,
+                '{state}' => $onOff($rw['on']),
+                '{need}' => $rw['need'],
+                '{volume}' => $rw['gb'],
+                '{days}' => $rw['days'],
+                '{max}' => $rw['max'],
+                '{panel}' => $rwPanel !== null ? htmlspecialchars($rwPanel['name_panel']) : $s['affrwNoPanel'],
+                '{mode}' => $rw['mode'] === 'auto' ? $s['affrwModeAuto'] : $s['affrwModeAdmin'],
+                '{leave}' => feature_setting_value('affrw_leave', $lang, '0') !== '1' ? $st['statusoff'] : (affrw_leave_channels($lang) ? $st['statuson'] : $s['affrwLeaveNotReady']),
+                '{refv}' => refv_state_text($lang, 'r', $s),
+            ]);
+        } else {
+            $p = $section === 'refvr' ? 'r' : 'c';
+            $text = strtr($s['refvTitle'], [
+                '{lang}' => $langName,
+                '{plan}' => $s['refvPlan_' . $p],
+                '{state}' => refv_state_text($lang, $p, $s),
+                '{vip}' => count(refv_cfg($lang, $p)['vip']),
+                '{what}' => $s['refvWhat_' . $p],
+                '{auto}' => $p === 'r' ? $s['refvVipAuto'] : '',
+            ]);
+        }
+        $affSetting = select("setting", "*", null, null, "select");
+        if (feature_value('affiliatesstatus', $lang, $affSetting['affiliatesstatus']) == "offaffiliates") {
+            $text .= strtr($s['affrwAffOff'], ['{lang}' => $langName]);
+        }
+        return $text;
+    }
+}
+if (!function_exists('refv_state_text')) {
+    // what a plan's 🛡 asks for: in full for a caption, as icons for a button
+    function refv_state_text($lang, $plan, $s, $short = false)
+    {
+        $rv = refv_cfg($lang, $plan);
+        $parts = [];
+        if ($rv['phone']) {
+            $parts[] = $short ? '📞' : $s['refvPhoneBtn'];
+        }
+        if ($rv['channel']) {
+            $names = array_map(fn($r) => htmlspecialchars((string) $r['remark']), refv_channel_rows($rv));
+            $parts[] = $short ? '📯' : $s['refvChannelBtn'] . ($names ? ' (' . implode('، ', $names) . ')' : '');
+        }
+        if (!$parts) {
+            return $short ? $s['refvOffShort'] : $s['refvOffState'];
+        }
+        return implode(' + ', $parts);
     }
     // 📯 which channels a newcomer has to join to count for $plan
     function refv_pick_payload($lang, $plan, $textbotlang)
@@ -5822,9 +5862,9 @@ if (!function_exists('refv_caption_line')) {
                 continue;
             }
             $on = in_array((int) $r['id'], $rv['channels'], true);
-            $rows[] = [['text' => ($on ? '✅ ' : '') . $r['remark'], 'callback_data' => "flsrefv:{$lang}:{$plan}:ch:{$r['id']}", 'style' => $on ? 'success' : 'primary']];
+            $rows[] = [['text' => ($on ? '✅ ' : '❌ ') . $r['remark'], 'callback_data' => "flsrefv:{$lang}:{$plan}:ch:{$r['id']}", 'style' => $on ? 'success' : 'danger']];
         }
-        $rows[] = [['text' => $s['affrwBackToIt'], 'callback_data' => "flsec:{$lang}:aff", 'style' => 'danger']];
+        $rows[] = [['text' => $s['back'], 'callback_data' => "flsec:{$lang}:refv{$plan}"]];
         return [strtr($s['refvPickTitle'], ['{lang}' => $tx['bottext']['langs'][$lang] ?? $lang, '{plan}' => $s['refvPlan_' . $plan]]), json_encode(['inline_keyboard' => $rows])];
     }
     // 👑 inviters whose invites count for $plan with no verification
@@ -5840,8 +5880,8 @@ if (!function_exists('refv_caption_line')) {
             $list .= "• <code>{$id}</code>" . htmlspecialchars($name) . "\n";
             $rows[] = [['text' => "❌ {$id}{$name}", 'callback_data' => "flsrefv:{$lang}:{$plan}:vipdel:{$id}", 'style' => 'danger']];
         }
-        $rows[] = [['text' => $s['refvVipAdd'], 'callback_data' => "flsrefv:{$lang}:{$plan}:vipadd", 'style' => 'success']];
-        $rows[] = [['text' => $s['affrwBackToIt'], 'callback_data' => "flsec:{$lang}:aff", 'style' => 'danger']];
+        $rows[] = [['text' => $s['refvVipAdd'], 'callback_data' => "flsrefv:{$lang}:{$plan}:vipadd", 'style' => 'primary']];
+        $rows[] = [['text' => $s['back'], 'callback_data' => "flsec:{$lang}:refv{$plan}"]];
         return [strtr($s['refvVipTitle'], [
             '{lang}' => $tx['bottext']['langs'][$lang] ?? $lang,
             '{plan}' => $s['refvPlan_' . $plan],
@@ -5872,6 +5912,199 @@ if (!function_exists('chngate_payload')) {
         return [strtr($t['gateTitle'], ['{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang]), json_encode(['inline_keyboard' => $rows])];
     }
 }
+if (!function_exists('afftest_send')) {
+    // 🧪 / 👁 the messages a plan sends, to the admin, as they really go out:
+    // the same text, 🎨 sticker and buttons, in the tab's language, each
+    // topped with who gets it and when. A sticker follows its receiver's
+    // language, so for these the admin reads as the tab.
+    function afftest_as($lang, callable $send)
+    {
+        global $user;
+        $saved = is_array($user) ? ($user['lang'] ?? null) : null;
+        if (is_array($user)) {
+            $user['lang'] = $lang;
+        }
+        $send();
+        if (is_array($user)) {
+            $user['lang'] = $saved;
+        }
+    }
+    function afftest_send($to, $lang, $who, $key, $text, $kb = null)
+    {
+        afftest_as($lang, function () use ($to, $who, $key, $text, $kb) {
+            if ($key !== null) {
+                bottext_extras_key_hint($key);
+            }
+            sendmessage($to, "🧪 <b>{$who}</b>\n➖➖➖➖➖➖➖➖\n" . $text, $kb, 'HTML');
+        });
+    }
+    // 🛡 of $plan, when it asks for anything: what the newcomer is asked
+    function afftest_verify($to, $lang, $plan, $inviter)
+    {
+        $t = lang_tab_texts('fa')['Admin']['AffTest'];
+        $a = lang_tab_texts($lang)['users']['affiliates'];
+        $rv = refv_cfg($lang, $plan);
+        $setting = select("setting", "*", null, null, "select");
+        if ($rv['phone'] && feature_value('get_number', $lang, $setting['get_number'] ?? '') == "onAuthenticationphone") {
+            afftest_send($to, $lang, $t['wVerifyPhone'], 'users.affiliates.verifyPhonePrompt', strtr($a['verifyPhonePrompt'], ['{inviter}' => $inviter]));
+        }
+        $rows = $rv['channel'] ? refv_channel_rows($rv) : [];
+        if ($rows) {
+            $kb = ['inline_keyboard' => []];
+            foreach ($rows as $r) {
+                $r = channel_row_for_lang($r, $lang);
+                if (!empty($r['linkjoin'])) {
+                    [$bt] = channel_button_text($r);
+                    $kb['inline_keyboard'][] = [['text' => $bt, 'url' => $r['linkjoin']]];
+                }
+            }
+            $kb['inline_keyboard'][] = [['text' => $a['verifyChannelBtn'], 'callback_data' => 'none', 'style' => 'success']];
+            afftest_send($to, $lang, $t['wVerifyChannel'], 'users.affiliates.verifyChannelPrompt', strtr($a['verifyChannelPrompt'], ['{inviter}' => $inviter]), json_encode($kb));
+        }
+    }
+    // the inviter in these: the admin, by @username when they have one
+    function afftest_inviter()
+    {
+        global $user;
+        $u = is_array($user) ? (string) ($user['username'] ?? '') : '';
+        return ($u !== '' && $u !== 'none' && $u !== 'NOT_USERNAME') ? $u : 'your_name';
+    }
+    // 👁 💼 زیرمجموعه‌گیری و هدیه خوش‌آمد, in order
+    function afftest_classic($to, $lang)
+    {
+        global $usernamebot;
+        $fa = lang_tab_texts('fa');
+        $t = $fa['Admin']['AffTest'];
+        $tx = lang_tab_texts($lang);
+        $a = $tx['users']['affiliates'];
+        $v = feature_section_effective($lang);
+        $cur = currency_for_lang($lang);
+        $me = afftest_inviter();
+        $new = $t['sampleNew'];
+        $link = "https://t.me/{$usernamebot}?start={$to}";
+        sendmessage($to, strtr($t['introC'], ['{lang}' => $fa['bottext']['langs'][$lang] ?? $lang]) . ($v['aff_classic'] !== '1' ? $t['planOff'] : ''), null, 'HTML');
+        // the page behind the referral button: the banner, then the page
+        [$bText, $bMedia] = feature_aff_banner($lang, select("affiliates", "*", null, null, "select"));
+        if (strlen((string) $bMedia) >= 5) {
+            telegram('sendphoto', ['chat_id' => $to, 'photo' => $bMedia, 'caption' => "🧪 <b>{$t['wBanner']}</b>\n➖➖➖➖➖➖➖➖\n{$bText}\n\n🔗 {$link}", 'parse_mode' => "HTML"]);
+        }
+        $gift = $v['aff_startgift'] === 'onDiscountaffiliates';
+        $commission = $v['aff_commission'] === 'oncommission';
+        $page = text_fill_s($a['welcomeGiftInfo'],
+            $gift ? text_fill_s($a['membershipGiftInfo'], money($v['aff_giftamount'], $cur)) : '',
+            $commission ? text_fill_s($a['purchaseCommissionInfo'], (string) $v['aff_percent']) : '',
+            '0', '0', money(0, $cur));
+        $share = [];
+        if (!bt_button_hidden($lang, 'keyboard.receiveMembershipGift')) {
+            $share[] = bt_button($lang, 'keyboard.receiveMembershipGift', $tx['keyboard']['receiveMembershipGift'], 'none', 'success');
+        }
+        if (!bt_button_hidden($lang, 'keyboard.shareLink')) {
+            $share[] = ['text' => bt_reply_label($lang, 'keyboard.shareLink', $tx['keyboard']['shareLink']), 'url' => "https://t.me/share/url?url={$link}"];
+        }
+        afftest_send($to, $lang, $t['wPage'], 'users.affiliates.welcomeGiftInfo', $page, json_encode(['inline_keyboard' => $share ? [$share] : []]));
+        afftest_verify($to, $lang, 'c', '@' . $me);
+        afftest_send($to, $lang, $t['wWelcome'], 'users.affiliates.welcomeInvited', strtr(text_fill_s($a['welcomeInvited'], $me), ['{inviter}' => '@' . $me]));
+        afftest_send($to, $lang, $t['wNewRef'], 'users.affiliates.newReferralJoined', text_fill_s($a['newReferralJoined'], $new));
+        if ($gift) {
+            afftest_send($to, $lang, $t['wGiftUser'], 'users.affiliates.joinGiftActivated', $a['joinGiftActivated']);
+            afftest_send($to, $lang, $t['wGiftRef'], 'users.affiliates.joinedGift', $a['joinedGift']);
+        }
+        if ($commission) {
+            // a share of a sample purchase, in this tab's currency
+            $sample = currency_get($cur)['decimals'] > 0 ? 10 : 100000;
+            afftest_send($to, $lang, $v['aff_firstbuy'] === 'on_buy_porsant' ? $t['wCommissionFirst'] : $t['wCommission'], 'users.affiliates.commissionPaid', text_fill_s($a['commissionPaid'], money($sample * (float) $v['aff_percent'] / 100, $cur)));
+        }
+        sendmessage($to, $t['done'], json_encode(['inline_keyboard' => [[['text' => $fa['Admin']['FeatureSection']['back'], 'callback_data' => "flsec:{$lang}:affc"]]]]), 'HTML');
+    }
+    // 👁 / 🧪 🎁 کانفیگ رایگان با دعوت, in order - $real: a real config for
+    // the admin (their own 🛍 سرویس های من), not a sample
+    function afftest_reward($to, $lang, $real)
+    {
+        global $usernamebot, $user;
+        $fa = lang_tab_texts('fa');
+        $t = $fa['Admin']['AffTest'];
+        $tx = lang_tab_texts($lang);
+        $a = $tx['users']['affiliates'];
+        $cfg = affrw_cfg($lang);
+        $panel = affrw_panel($cfg);
+        $me = afftest_inviter();
+        $new = $t['sampleNew'];
+        $langName = $fa['bottext']['langs'][$lang] ?? $lang;
+        $vars = ['{lang}' => $langName, '{volume}' => $cfg['gb'], '{days}' => $cfg['days'], '{panel}' => $panel['name_panel'] ?? $fa['Admin']['FeatureSection']['affrwNoPanel']];
+        sendmessage($to, strtr($real ? $t['introRReal'] : $t['introRView'], $vars) . ($cfg['on'] ? '' : $t['planOff']) . ($cfg['mode'] === 'auto' ? $t['modeAuto'] : ''), null, 'HTML');
+        $link = "https://t.me/{$usernamebot}?start={$to}";
+        $status = $cfg['mode'] === 'auto' ? $a['rewardStatusAuto'] : $a['rewardStatusAdmin'];
+        afftest_send($to, $lang, $t['wPageR'], 'users.affiliates.rewardInfo', strtr($a['rewardInfo'], affrw_vars($cfg, 0) + ['{link}' => $link, '{status}' => $status]));
+        afftest_verify($to, $lang, 'r', '@' . $me);
+        afftest_send($to, $lang, $t['wWelcomeR'], 'users.affiliates.welcomeInvitedReward', strtr(text_fill_s($a['welcomeInvitedReward'], $me), ['{inviter}' => '@' . $me]));
+        afftest_send($to, $lang, $t['wNewRef'], 'users.affiliates.newReferralJoinedReward', strtr($a['newReferralJoinedReward'], ['{username}' => '@' . $new, '{count}' => 1, '{need}' => $cfg['need']]));
+        if ($cfg['mode'] !== 'auto') {
+            afftest_send($to, $lang, strtr($t['wReached'], ['{need}' => $cfg['need']]), 'users.affiliates.rewardSentToAdmin', strtr($a['rewardSentToAdmin'], affrw_vars($cfg, $cfg['need'])));
+            $r = $fa['Admin']['AffReward'];
+            $list = '';
+            for ($i = 1; $i <= min(3, $cfg['need']); $i++) {
+                $list .= "• <code>10000000{$i}</code> @{$new}{$i} — " . jdate('Y/m/d H:i', time()) . "\n";
+            }
+            if ($cfg['need'] > 3) {
+                $list .= strtr($r['listMore'], ['{n}' => $cfg['need'] - 3]) . "\n";
+            }
+            $req = strtr($r['request'], [
+                '{id}' => $to,
+                '{username}' => '@' . $me,
+                '{lang}' => $langName,
+                '{count}' => $cfg['need'],
+                '{need}' => $cfg['need'],
+                '{volume}' => $cfg['gb'],
+                '{days}' => $cfg['days'],
+                '{panel}' => $panel['name_panel'] ?? $fa['Admin']['FeatureSection']['affrwNoPanel'],
+                '{list}' => rtrim($list),
+            ]);
+            $kb = json_encode(['inline_keyboard' => [
+                [['text' => $r['approveBtn'], 'callback_data' => 'none', 'style' => 'success'], ['text' => $r['rejectBtn'], 'callback_data' => 'none', 'style' => 'danger']],
+            ]]);
+            sendmessage($to, "🧪 <b>{$t['wAdmins']}</b>\n➖➖➖➖➖➖➖➖\n" . $req, $kb, 'HTML');
+            afftest_send($to, $lang, $t['wRejected'], 'users.affiliates.rewardRejected', $a['rewardRejected']);
+        }
+        if ($real) {
+            sendmessage($to, "🧪 <b>{$t['wGivenReal']}</b>", null, 'HTML');
+            $err = null;
+            $made = null;
+            afftest_as($lang, function () use (&$made, &$err, $to, $cfg, $panel, $user, $tx, $lang) {
+                $made = affrw_deliver($to, $cfg, $panel, is_array($user) ? $user : ['username' => ''], $tx, $lang, $cfg['need'], $err);
+            });
+            if ($made === null) {
+                sendmessage($to, strtr($t['realFailed'], ['{msg}' => htmlspecialchars(json_encode($err, JSON_UNESCAPED_UNICODE))]), null, 'HTML');
+            }
+            $service = $made['username'] ?? 'test_ab12cd';
+        } else {
+            afftest_send($to, $lang, $t['wGiven'], 'users.affiliates.rewardGiven', strtr($a['rewardGiven'], affrw_vars($cfg, $cfg['need'])));
+            $service = strtolower($to . '_ab12cd');
+            // no panel picked yet: a neutral one, so the tab's text stays its own
+            $sample = $panel ?? ['name_panel' => '—', 'sublink' => 'onsublink', 'config' => 'offconfig', 'type' => 'marzban'];
+            [$svcText] = affrw_service_text($sample, $cfg, $tx, ['username' => $service, 'subscription_url' => "https://example.com/sub/{$service}", 'configs' => ["vless://{$service}@example.com:443"]]);
+            afftest_send($to, $lang, $t['wService'], 'users.affiliates.rewardAfterPay', $svcText, affrw_help_kb($lang, $tx));
+        }
+        if (feature_setting_value('affrw_leave', $lang, '0') === '1') {
+            $ch = refv_channel_rows(refv_cfg($lang, 'r'));
+            $pv = ['{name}' => '@' . $new, '{channel}' => htmlspecialchars((string) ($ch[0]['remark'] ?? '—')), '{service}' => htmlspecialchars($service), '{missing}' => 1];
+            afftest_send($to, $lang, $t['wPaused'], 'users.affiliates.rewardPaused', strtr($a['rewardPaused'], $pv));
+            afftest_send($to, $lang, $t['wLocked'], 'users.affiliates.rewardPausedLocked', strtr($a['rewardPausedLocked'], $pv));
+            afftest_send($to, $lang, $t['wResumed'], 'users.affiliates.rewardResumed', strtr($a['rewardResumed'], $pv));
+        }
+        sendmessage($to, $real ? $t['doneReal'] : $t['done'], json_encode(['inline_keyboard' => [[['text' => $fa['Admin']['FeatureSection']['back'], 'callback_data' => "flsec:{$lang}:affr"]]]]), 'HTML');
+    }
+    // 🧪 تست کانفیگ رایگان: preview or a real one
+    function afftest_menu_payload($lang)
+    {
+        $fa = lang_tab_texts('fa');
+        $t = $fa['Admin']['AffTest'];
+        return [strtr($t['menu'], ['{lang}' => $fa['bottext']['langs'][$lang] ?? $lang]), json_encode(['inline_keyboard' => [
+            [['text' => $t['viewBtn'], 'callback_data' => "afftest:{$lang}:r:view"]],
+            [['text' => $t['realBtn'], 'callback_data' => "afftest:{$lang}:r:real"]],
+            [['text' => $fa['Admin']['FeatureSection']['back'], 'callback_data' => "flsec:{$lang}:affr"]],
+        ]])];
+    }
+}
 if (!function_exists('affrw_panel_payload')) {
     // 🖥 which panel the gift is made on: every panel but the manual-sale ones,
     // which hand out stock instead of making an account
@@ -5896,7 +6129,7 @@ if (!function_exists('affrw_panel_payload')) {
             ]];
         }
         $caption = strtr($s['affrwPanelTitle'], ['{lang}' => $tx['bottext']['langs'][$lang] ?? $lang]) . (empty($rows) ? "\n\n" . $s['affrwPanelNone'] : '');
-        $rows[] = [['text' => $s['affrwBackToIt'], 'callback_data' => "flsec:{$lang}:aff", 'style' => 'danger']];
+        $rows[] = [['text' => $s['back'], 'callback_data' => "flsec:{$lang}:affr"]];
         return [$caption, json_encode(['inline_keyboard' => $rows])];
     }
 }
@@ -7683,7 +7916,7 @@ if (preg_match('/^flsrefv:([a-z]{2}):([cr]):(phone|channel|pick|vip|vipadd|ch:(\
         Editmessagetext($from_id, $message_id, $rv_cap, $rv_kb);
         return;
     }
-    Editmessagetext($from_id, $message_id, feature_section_caption($textbotlang, $rv_lang, 'aff'), feature_section_payload($textbotlang, $rv_lang, 'aff'));
+    Editmessagetext($from_id, $message_id, feature_section_caption($textbotlang, $rv_lang, "refv{$rv_plan}"), feature_section_payload($textbotlang, $rv_lang, "refv{$rv_plan}"));
     return;
 }
 if ($user['step'] === 'refvvip' && $datain === '' && $adminrulecheck['rule'] == "administrator"
@@ -7722,6 +7955,42 @@ if (preg_match('/^chngate:([a-z]{2})(?::(\d+))?$/', $datain, $cg_m) && $adminrul
 if (preg_match('/^affrwzero_(\d+)$/', $datain, $rz_m) && $adminrulecheck['rule'] == "administrator") {
     affrw_reset($rz_m[1]);
     telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $textbotlang['Admin']['UserMgmt']['affrwResetDone'], 'show_alert' => true]);
+    return;
+}
+// 🧪 تست / 👁 پیش‌نمایش of a 👥 plan, in one tab's language
+if (preg_match('/^afftest:([a-z]{2}):(c|r|r:view|r:real|r:go)$/', $datain, $at_m) && $adminrulecheck['rule'] == "administrator") {
+    $at_lang = $at_m[1];
+    $at_fa = lang_tab_texts('fa');
+    $at_t = $at_fa['Admin']['AffTest'];
+    if ($at_m[2] === 'r') {
+        [$at_cap, $at_kb] = afftest_menu_payload($at_lang);
+        Editmessagetext($from_id, $message_id, $at_cap, $at_kb);
+        return;
+    }
+    if ($at_m[2] === 'r:real' || $at_m[2] === 'r:go') {
+        $at_cfg = affrw_cfg($at_lang);
+        $at_panel = affrw_panel($at_cfg);
+        if ($at_panel === null) {
+            telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $at_fa['Admin']['FeatureSection']['affrwPanelFirst'], 'show_alert' => true]);
+            return;
+        }
+        if ($at_m[2] === 'r:real') {
+            Editmessagetext($from_id, $message_id, strtr($at_t['confirm'], ['{volume}' => $at_cfg['gb'], '{days}' => $at_cfg['days'], '{panel}' => htmlspecialchars($at_panel['name_panel'])]), json_encode(['inline_keyboard' => [
+                [['text' => $at_t['confirmBtn'], 'callback_data' => "afftest:{$at_lang}:r:go", 'style' => 'success']],
+                [['text' => $at_fa['Admin']['FeatureSection']['back'], 'callback_data' => "afftest:{$at_lang}:r"]],
+            ]]));
+            return;
+        }
+        // one config per tap: the confirm button is gone before it is made
+        [$at_cap, $at_kb] = afftest_menu_payload($at_lang);
+        Editmessagetext($from_id, $message_id, $at_cap, $at_kb);
+    }
+    telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $at_t['sending']]);
+    if ($at_m[2] === 'c') {
+        afftest_classic($from_id, $at_lang);
+    } else {
+        afftest_reward($from_id, $at_lang, $at_m[2] === 'r:go');
+    }
     return;
 }
 if (preg_match('/^flsaffrw:([a-z]{2}):(on|mode|panel|leave|p:(\d+))$/', $datain, $rw_m) && $adminrulecheck['rule'] == "administrator") {
@@ -7766,7 +8035,7 @@ if (preg_match('/^flsaffrw:([a-z]{2}):(on|mode|panel|leave|p:(\d+))$/', $datain,
             feature_setting_set('affrw_panel', $rw_lang, (string) $rw_p['code_panel']);
         }
     }
-    Editmessagetext($from_id, $message_id, feature_section_caption($textbotlang, $rw_lang, 'aff'), feature_section_payload($textbotlang, $rw_lang, 'aff'));
+    Editmessagetext($from_id, $message_id, feature_section_caption($textbotlang, $rw_lang, 'affr'), feature_section_payload($textbotlang, $rw_lang, 'affr'));
     return;
 }
 if (preg_match('/^affrw\|(ok|no)\|(\d+)$/', $datain, $rw_m)) {
@@ -11583,12 +11852,12 @@ elseif ($datain == "systemsms") {
     feature_set($featureKey, $fls_lang, $valuenew);
     $Bot_Status = feature_status_lang_payload($textbotlang, $fls_lang);
     Editmessagetext($from_id, $message_id, feature_status_lang_caption($textbotlang, $fls_lang), $Bot_Status);
-} elseif (preg_match('/^flsec:([a-z]{2}):(linkapp|wheel|aff|affrw|loc|phone|lottery)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^flsec:([a-z]{2}):(linkapp|wheel|aff|affrw|affc|affr|refvc|refvr|loc|phone|lottery)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
     // ⚙️ تنظیمات - opens the section inline, in the same message, in the same
     // language, instead of the old reply-keyboard screen
     $fs_lang = $fs_m[1];
-    // 🎁 کانفیگ رایگان lives on 👥 طرح‌های زیرمجموعه‌گیری now
-    $fs_sec = $fs_m[2] === 'affrw' ? 'aff' : $fs_m[2];
+    // 🎁 کانفیگ رایگان is a page of 👥 طرح‌های زیرمجموعه‌گیری now
+    $fs_sec = $fs_m[2] === 'affrw' ? 'affr' : $fs_m[2];
     Editmessagetext($from_id, $message_id, feature_section_caption($textbotlang, $fs_lang, $fs_sec), feature_section_payload($textbotlang, $fs_lang, $fs_sec));
 } elseif (preg_match('/^flstog:([a-z]{2}):lottery_agent:([01])$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
     // agents in this language's nightly lottery
@@ -11608,7 +11877,7 @@ elseif ($datain == "systemsms") {
         $fs_new = ($fs_val === 'on_buy_porsant') ? 'off_buy_porsant' : 'on_buy_porsant';
     }
     feature_setting_set($fs_key, $fs_lang, $fs_new);
-    Editmessagetext($from_id, $message_id, feature_section_caption($textbotlang, $fs_lang, 'aff'), feature_section_payload($textbotlang, $fs_lang, 'aff'));
+    Editmessagetext($from_id, $message_id, feature_section_caption($textbotlang, $fs_lang, 'affc'), feature_section_payload($textbotlang, $fs_lang, 'affc'));
 } elseif (preg_match('/^flsask:([a-z]{2}):([a-z_]+)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
     $fs_lang = $fs_m[1];
     $fs_key = $fs_m[2];
@@ -11659,9 +11928,9 @@ elseif ($datain == "systemsms") {
         phone_prefixes_set($ph_lang, in_array($ph_code, $ph_cur, true) ? array_diff($ph_cur, [$ph_code]) : array_merge($ph_cur, [$ph_code]));
     }
     Editmessagetext($from_id, $message_id, feature_section_caption($textbotlang, $ph_lang, 'phone'), feature_section_payload($textbotlang, $ph_lang, 'phone'));
-} elseif (preg_match('/^flscan:([a-z]{2}):(linkapp|wheel|aff|affrw|loc|phone|lottery)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^flscan:([a-z]{2}):(linkapp|wheel|aff|affrw|affc|affr|refvc|refvr|loc|phone|lottery)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
     $fs_lang = $fs_m[1];
-    $fs_sec = $fs_m[2] === 'affrw' ? 'aff' : $fs_m[2];
+    $fs_sec = $fs_m[2] === 'affrw' ? 'affr' : $fs_m[2];
     step("home", $from_id);
     Editmessagetext($from_id, $message_id, feature_section_caption($textbotlang, $fs_lang, $fs_sec), feature_section_payload($textbotlang, $fs_lang, $fs_sec));
 } elseif ($user['step'] == "flsval" && $adminrulecheck['rule'] == "administrator") {
