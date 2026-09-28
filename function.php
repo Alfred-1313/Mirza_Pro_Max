@@ -18017,6 +18017,8 @@ if (!function_exists('volume_parse')) {
     // A volume someone typed: «10», «0.2», «1.5 گیگ», «200MB», «۲۰۰ مگ» - in
     // $base's unit ('gb' or 'mb'); a bare number is already in it. null when
     // it is not a volume, or not above zero unless $allowZero (0 = no limit).
+    // A number starting with a zero, like «05», is refused: 0.5 or 5 - the
+    // one who typed it has to say which.
     function volume_parse($text, $base = 'gb', $allowZero = false)
     {
         $s = trim(strtr((string) $text, [
@@ -18024,7 +18026,7 @@ if (!function_exists('volume_parse')) {
             '٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4', '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
             '٫' => '.', ',' => '.', '،' => '.',
         ]));
-        if (!preg_match('/^(\d+(?:\.\d+)?|\.\d+)\s*(mb|m|مگ|مگابایت|مگا\s*بایت|gb|g|گیگ|گیگابایت|گیگا\s*بایت)?$/iu', $s, $m)) {
+        if (preg_match('/^0\d/', $s) || !preg_match('/^(\d+(?:\.\d+)?|\.\d+)\s*(mb|m|مگ|مگابایت|مگا\s*بایت|gb|g|گیگ|گیگابایت|گیگا\s*بایت)?$/iu', $s, $m)) {
             return null;
         }
         $n = (float) $m[1];

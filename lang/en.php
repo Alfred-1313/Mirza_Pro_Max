@@ -354,7 +354,8 @@ Current language: <b>{lang}</b>',
                 'invalidTime' => 'The number of days is invalid',
                 'invalidUsername' => '❌ The username is invalid.
 🔄 Please send your username again',
-                'invalidVolume' => '❌ The volume is invalid. Send a number; less than a gigabyte works too: 0.5 or 200MB',
+                'invalidVolume' => '❌ The volume is invalid. Send a number, like 5 or 0.5 (half a gigabyte) or 200MB.
+A number starting with a zero (like 05) is not accepted - it is unclear whether 0.5 or 5 is meant.',
         ],
         'users' => [
                 'Rules' => '✅ The rules have been accepted. You can now use the bot\'s services.',

@@ -101,7 +101,11 @@ function prod_product_add(array $data, string $method): void
     validateMethod('POST', $method);
     requireFields($data, ['name', 'location']);
     $price = requireInt($data, 'price', 0);
-    $dataLimit = requireInt($data, 'data_limit', 0);
+    $dataLimit = volume_parse($data['data_limit'] ?? '0', 'gb', true);
+    if ($dataLimit === null) {
+        sendJsonResponse(false, "invalid data_limit: a volume in GB (5, 0.5) or MB (200MB); not 05", [], 200);
+    }
+    $dataLimit = volume_store($dataLimit);
     $serviceTime = requireInt($data, 'time', 0);
 
     $prodcut = select("product", "*", "name_product", $data['name'], "count");
@@ -186,11 +190,19 @@ function prod_product_edit(array $data, string $method): void
         }
     }
 
+    $volumeNew = null;
+    if (isset($data['volume']) || isset($data['data_limit'])) {
+        $volumeNew = volume_parse($data['volume'] ?? $data['data_limit'], 'gb', true);
+        if ($volumeNew === null) {
+            sendJsonResponse(false, "invalid volume: a volume in GB (5, 0.5) or MB (200MB); not 05", [], 200);
+        }
+        $volumeNew = volume_store($volumeNew);
+    }
     try {
         $productData = [
             'name_product' => isset($data['name']) ? $data['name'] : $product['name_product'],
             'price_product' => isset($data['price']) ? $data['price'] : $product['price_product'],
-            'Volume_constraint' => $data['volume'] ?? $data['data_limit'] ?? $product['Volume_constraint'],
+            'Volume_constraint' => $volumeNew ?? $product['Volume_constraint'],
             'Service_time' => isset($data['time']) ? $data['time'] : $product['Service_time'],
             'Location' => $location,
             'agent' => isset($data['agent']) ? $data['agent'] : $product['agent'],
