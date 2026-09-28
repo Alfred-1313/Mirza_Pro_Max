@@ -2541,7 +2541,9 @@ function keyboard_list_text($lang, $groupFilter = null)
             }
         }
         if ($groupFilter === 'referral') {
-            // under 🎁 کانفیگ رایگان با دعوت, the last heading on this screen
+            // the gift config itself - how it is shown, and its account's
+            // rules - under a white heading of its own
+            $keyboard_text['inline_keyboard'][] = [['text' => bt_section_meta('referral_cfg')['label'], 'callback_data' => 'bt_sep|referral_cfg']];
             $keyboard_text['inline_keyboard'][] = [['text' => '📌 نحوه‌ی نمایش کانفیگ (هدیه‌ی دعوت)', 'callback_data' => "cfgdeliv|list|{$lang}|r", 'style' => 'primary']];
             $keyboard_text['inline_keyboard'][] = [['text' => '⚙️ قوانین اکانت کانفیگ رایگان', 'callback_data' => "affrwrule|{$lang}|open", 'style' => 'primary']];
         }
