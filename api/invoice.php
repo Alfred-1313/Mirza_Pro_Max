@@ -299,6 +299,7 @@ function inv_extend_service_admin(array $data, string $method): void
     if (!$panel)
         sendJsonResponse(false, "Panel Not Found", [], 200);
     $extend = $ManagePanel->extend($panel['Methodextend'], $volume_service, $time_service, $invoice['username'], "custom_volume", $panel['code_panel']);
+    affrw_mark_renewed($extend, $invoice['username'], $panel['name_panel']);
     if (!is_array($extend) || ($extend['status'] ?? false) == false) {
         $extendError = json_encode(is_array($extend) ? ($extend['msg'] ?? null) : null);
         $textreports = sprintf($textbotlang['hardcoded']['renewServiceErrorApi'], $panel['name_panel'], $invoice['username'], $extendError);

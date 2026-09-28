@@ -507,6 +507,46 @@ if ($datain === 'refverify') {
     }
     return;
 }
+#-----------🎁 کانفیگ رایگان: the customer names its account------------#
+if ($datain === 'affrwname') {
+    if ((affrw_row($from_id)['status'] ?? '') !== 'naming') {
+        telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $textbotlang['users']['affiliates']['rewardNameDone'], 'show_alert' => true]);
+        return;
+    }
+    step('affrwname', $from_id);
+    bottext_extras_key_hint('users.affiliates.rewardNamePrompt');
+    sendmessage($from_id, $textbotlang['users']['affiliates']['rewardNamePrompt'], null, 'HTML');
+    return;
+}
+if ($user['step'] === 'affrwname' && $datain === '' && is_string($text) && $text !== '') {
+    $rwn = strtolower(trim($text));
+    if (!preg_match('/^[a-z][a-z\d_]{2,31}$/', $rwn) || substr($rwn, -1) === '_') {
+        if (preg_match('/[^\x21-\x7e]/', trim($text)) || $text[0] === '/') {
+            // a menu button or a command, not a try at a name: it goes on as
+            // usual, and the ✍️ button still works later
+            step('home', $from_id);
+            $user['step'] = 'home';
+        } else {
+            sendmessage($from_id, $textbotlang['users']['invalidusername'], null, 'HTML');
+            return;
+        }
+    } else {
+        if (affrw_name_taken($from_id, $rwn)) {
+            bottext_extras_key_hint('users.affiliates.rewardNameTaken');
+            sendmessage($from_id, $textbotlang['users']['affiliates']['rewardNameTaken'], null, 'HTML');
+            return;
+        }
+        step('home', $from_id);
+        // made once, however many times it is sent
+        if (affrw_move($from_id, 'naming', 'giving') && !affrw_give($from_id, $rwn)) {
+            affrw_move($from_id, 'giving', 'naming');
+            step('affrwname', $from_id);
+            bottext_extras_key_hint('users.affiliates.rewardNameTaken');
+            sendmessage($from_id, $textbotlang['users']['affiliates']['rewardNameTaken'], null, 'HTML');
+        }
+        return;
+    }
+}
 if ($text == "/start" || $datain == "start" || $text == "start") {
     update("user", "Processing_value", "0", "id", $from_id);
     update("user", "Processing_value_one", "0", "id", $from_id);
@@ -651,7 +691,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
                 $data = " | {$row['note']}";
             $keyboardlists['inline_keyboard'][] = [
                 [
-                    'text' => $row['username'] . $data,
+                    'text' => (affrw_list_label($row, $textbotlang) ?? $row['username']) . $data,
                     'callback_data' => "product_" . $row['id_invoice'],
                     'style' => 'primary'
                 ],
@@ -669,7 +709,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             }
             $keyboardlists['inline_keyboard'][] = [
                 [
-                    'text' => $row['username'],
+                    'text' => affrw_list_label($row, $textbotlang) ?? $row['username'],
                     'callback_data' => "product_" . $row['id_invoice'],
                     'style' => 'primary'
                 ],
@@ -892,7 +932,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
                 $data = " | {$row['note']}";
             $keyboardlists['inline_keyboard'][] = [
                 [
-                    'text' => $row['username'] . $data,
+                    'text' => (affrw_list_label($row, $textbotlang) ?? $row['username']) . $data,
                     'callback_data' => "product_" . $row['id_invoice'],
                     'style' => 'primary'
                 ],
@@ -910,7 +950,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             }
             $keyboardlists['inline_keyboard'][] = [
                 [
-                    'text' => $row['username'],
+                    'text' => affrw_list_label($row, $textbotlang) ?? $row['username'],
                     'callback_data' => "product_" . $row['id_invoice'],
                     'style' => 'primary'
                 ],
@@ -971,7 +1011,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
                 $data = " | {$row['note']}";
             $keyboardlists['inline_keyboard'][] = [
                 [
-                    'text' => $row['username'] . $data,
+                    'text' => (affrw_list_label($row, $textbotlang) ?? $row['username']) . $data,
                     'callback_data' => "product_" . $row['id_invoice'],
                     'style' => 'primary'
                 ],
@@ -989,7 +1029,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             }
             $keyboardlists['inline_keyboard'][] = [
                 [
-                    'text' => $row['username'],
+                    'text' => affrw_list_label($row, $textbotlang) ?? $row['username'],
                     'callback_data' => "product_" . $row['id_invoice'],
                     'style' => 'primary'
                 ],
@@ -1168,7 +1208,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
                     $data = " | {$row['note']}";
                 $keyboardlists['inline_keyboard'][] = [
                     [
-                        'text' => $row['username'] . $data,
+                        'text' => (affrw_list_label($row, $textbotlang) ?? $row['username']) . $data,
                         'callback_data' => "product_" . $row['id_invoice'],
                         'style' => 'primary'
                     ],
@@ -1178,7 +1218,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
                 $keyboardlists['inline_keyboard'][] = [
                     [
-                        'text' => $row['username'],
+                        'text' => affrw_list_label($row, $textbotlang) ?? $row['username'],
                         'callback_data' => "product_" . $row['id_invoice'],
                         'style' => 'primary'
                     ],
@@ -1382,6 +1422,9 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             unset($keyboardsetting['inline_keyboard'][1][1]);
         if ($marzbanstatusextra == "offextra")
             unset($keyboardsetting['inline_keyboard'][0][1]);
+        if (affrw_renew_blocked($nameloc)) {
+            $keyboardsetting['inline_keyboard'] = array_filter(array_map(fn($r) => array_values(array_filter($r, fn($b) => strpos($b['callback_data'] ?? '', 'extend_') !== 0)), $keyboardsetting['inline_keyboard']));
+        }
         $keyboardsetting['inline_keyboard'] = array_values($keyboardsetting['inline_keyboard']);
         $keyboardsetting = json_encode($keyboardsetting);
     } else {
@@ -1477,6 +1520,10 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         if ($marzban['status_extend'] == "off_extend") {
             unset($keyboarddate['Extra_time']);
             unset($keyboarddate['Extra_volume']);
+            unset($keyboarddate['extend']);
+        }
+        // 🎁 a free config its tab does not let be renewed
+        if (affrw_renew_blocked($nameloc)) {
             unset($keyboarddate['extend']);
         }
         if ($statusremoveserveice == "off")
@@ -1859,6 +1906,12 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         sendmessage($from_id, $textbotlang['users']['extend']['error'], null, 'HTML');
         return;
     }
+    // 🎁 a free config its tab does not let be renewed (an old button)
+    if (affrw_renew_blocked($nameloc)) {
+        bottext_extras_key_hint('users.affiliates.rewardNoRenew');
+        sendmessage($from_id, $textbotlang['users']['affiliates']['rewardNoRenew'], null, 'HTML');
+        return;
+    }
     $marzban_list_get = select("marzban_panel", "*", "name_panel", $nameloc['Service_location'], "select");
     if ($marzban_list_get['status_extend'] == "off_extend") {
         sendmessage($from_id, $textbotlang['users']['extend']['notSupportedPanel'], null, 'html');
@@ -2187,6 +2240,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         update("invoice", "price_product", $prodcut['price_product'], "id_invoice", $nameloc['id_invoice']);
     }
     $extend = $ManagePanel->extend($marzban_list_get['Methodextend'], $prodcut['Volume_constraint'], $prodcut['Service_time'], $nameloc['username'], $prodcut['code_product'], $marzban_list_get['code_panel']);
+    affrw_mark_renewed($extend, $nameloc['username'], $marzban_list_get['name_panel']);
     if ($extend['status'] == false) {
         $extend['msg'] = json_encode($extend['msg']);
         $textreports = sprintf($textbotlang['Admin']['reportgroup']['errorRenewService'], $marzban_list_get['name_panel'], $nameloc['username'], $extend['msg']);
@@ -6311,7 +6365,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     $affrw_text = affrw_info_text($user, $textbotlang, "https://t.me/$usernamebot?start=$from_id");
     if ($affrw_text !== null) {
         bottext_extras_key_hint('users.affiliates.rewardInfo');
-        sendmessage($from_id, $affrw_text, null, 'HTML');
+        sendmessage($from_id, $affrw_text, (affrw_row($from_id)['status'] ?? '') === 'naming' ? affrw_name_kb($textbotlang) : null, 'HTML');
     }
     // neither: say so, instead of a tap that answers nothing
     if (!$aff_classic && $affrw_text === null) {
@@ -6787,21 +6841,27 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     ];
     if ($statusnote) {
         while ($row = ($result)->fetch(PDO::FETCH_ASSOC)) {
+            if (affrw_renew_blocked($row)) {
+                continue;
+            }
             $data = "";
             if ($row != null)
                 $data = " | {$row['note']}";
             $keyboardlists['inline_keyboard'][] = [
                 [
-                    'text' => "✨" . $row['username'] . $data . "✨",
+                    'text' => "✨" . (affrw_list_label($row, $textbotlang) ?? $row['username']) . $data . "✨",
                     'callback_data' => "extend_" . $row['id_invoice']
                 ],
             ];
         }
     } else {
         while ($row = ($result)->fetch(PDO::FETCH_ASSOC)) {
+            if (affrw_renew_blocked($row)) {
+                continue;
+            }
             $keyboardlists['inline_keyboard'][] = [
                 [
-                    'text' => "✨" . $row['username'] . "✨",
+                    'text' => "✨" . (affrw_list_label($row, $textbotlang) ?? $row['username']) . "✨",
                     'callback_data' => "extend_" . $row['id_invoice']
                 ],
             ];
@@ -6848,21 +6908,27 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     ];
     if ($statusnote) {
         while ($row = ($result)->fetch(PDO::FETCH_ASSOC)) {
+            if (affrw_renew_blocked($row)) {
+                continue;
+            }
             $data = "";
             if ($row != null)
                 $data = " | {$row['note']}";
             $keyboardlists['inline_keyboard'][] = [
                 [
-                    'text' => "✨" . $row['username'] . $data . "✨",
+                    'text' => "✨" . (affrw_list_label($row, $textbotlang) ?? $row['username']) . $data . "✨",
                     'callback_data' => "extend_" . $row['id_invoice']
                 ],
             ];
         }
     } else {
         while ($row = ($result)->fetch(PDO::FETCH_ASSOC)) {
+            if (affrw_renew_blocked($row)) {
+                continue;
+            }
             $keyboardlists['inline_keyboard'][] = [
                 [
-                    'text' => "✨" . $row['username'] . "✨",
+                    'text' => "✨" . (affrw_list_label($row, $textbotlang) ?? $row['username']) . "✨",
                     'callback_data' => "extend_" . $row['id_invoice']
                 ],
             ];
@@ -6910,21 +6976,27 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     ];
     if ($statusnote) {
         while ($row = ($result)->fetch(PDO::FETCH_ASSOC)) {
+            if (affrw_renew_blocked($row)) {
+                continue;
+            }
             $data = "";
             if ($row != null)
                 $data = " | {$row['note']}";
             $keyboardlists['inline_keyboard'][] = [
                 [
-                    'text' => "✨" . $row['username'] . $data . "✨",
+                    'text' => "✨" . (affrw_list_label($row, $textbotlang) ?? $row['username']) . $data . "✨",
                     'callback_data' => "extend_" . $row['id_invoice']
                 ],
             ];
         }
     } else {
         while ($row = ($result)->fetch(PDO::FETCH_ASSOC)) {
+            if (affrw_renew_blocked($row)) {
+                continue;
+            }
             $keyboardlists['inline_keyboard'][] = [
                 [
-                    'text' => "✨" . $row['username'] . "✨",
+                    'text' => "✨" . (affrw_list_label($row, $textbotlang) ?? $row['username']) . "✨",
                     'callback_data' => "extend_" . $row['id_invoice']
                 ],
             ];
@@ -7048,6 +7120,12 @@ if (isset($update['message']['successful_payment'])) {
     update("Payment_report", "payment_Status", "paid", "id_order", $Payment_report['id_order']);
 } elseif (preg_match('/extends_(\w+)_(.*)/', $datain, $dataget)) {
     $username = $dataget[1];
+    // 🎁 a free config its tab does not let be renewed (an old button)
+    if (affrw_renew_blocked(select("invoice", "*", "id_invoice", $dataget[2], "select"))) {
+        bottext_extras_key_hint('users.affiliates.rewardNoRenew');
+        sendmessage($from_id, $textbotlang['users']['affiliates']['rewardNoRenew'], null, 'HTML');
+        return;
+    }
     $location = select("marzban_panel", "*", "code_panel", $user['Processing_value_four'], "select");
     if ($location == false) {
         sendmessage($from_id, $textbotlang['users']['genericRestart2'], null, 'html');
@@ -7160,6 +7238,7 @@ if (isset($update['message']['successful_payment'])) {
     $Balance_Low_user = $user['Balance'] - $prodcut['price_product'];
     update("user", "Balance", $Balance_Low_user, "id", $from_id);
     $extend = $ManagePanel->extend($marzban_list_get['Methodextend'], $prodcut['Volume_constraint'], $prodcut['Service_time'], $usernamePanelExtends, $prodcut['code_product'], $marzban_list_get['code_panel']);
+    affrw_mark_renewed($extend, $usernamePanelExtends, $marzban_list_get['name_panel']);
     if ($extend['status'] == false) {
         $extend['msg'] = json_encode($extend['msg']);
         $textreports = sprintf($textbotlang['Admin']['reportgroup']['errorRenewService2'], $marzban_list_get['name_panel'], $usernamePanelExtends, $extend['msg']);

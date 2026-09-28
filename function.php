@@ -1107,6 +1107,7 @@ function DirectPayment_settle($order_id, $image = 'images.jpg')
         $Balance_Low_user = 0;
         update("user", "Balance", $Balance_Low_user, "id", $Balance_id['id']);
         $extend = $ManagePanel->extend($marzban_list_get['Methodextend'], $prodcut['Volume_constraint'], $prodcut['Service_time'], $nameloc['username'], $prodcut['code_product'], $marzban_list_get['code_panel']);
+        affrw_mark_renewed($extend, $nameloc['username'], $marzban_list_get['name_panel']);
         if ($extend['status'] == false) {
             $balance = $Balance_id['Balance'] + $Payment_report['price'];
             update("user", "Balance", $balance, "id", $Balance_id['id']);
@@ -11486,7 +11487,7 @@ if (!function_exists('bt_section_meta')) {
             ],
             'referral_reward' => [
                 'label' => '🎁 کانفیگ رایگان با دعوت',
-                'alert' => 'پیام‌های کانفیگ رایگان با دعوت: پیامی که زیر صفحه‌ی زیرمجموعه‌گیری میاد، خط‌های وضعیتش، و اعلان‌های درخواست، ساخته شدن و رد شدن. روشن کردن و حجم و مدت و پنلش: 🌐 وضعیت قابلیت‌ها (هر زبان) ← 👥 طرح‌های زیرمجموعه‌گیری.',
+                'alert' => 'پیام‌های کانفیگ رایگان با دعوت: پیامی که زیر صفحه‌ی زیرمجموعه‌گیری میاد، خط‌های وضعیتش، اعلان‌های درخواست، ساخته شدن و رد شدن، انتخاب نام اکانت و پاک شدنش. قانون‌های خود اکانت (پاک شدن، تمدید، نام): ⚙️ قوانین اکانت کانفیگ رایگان، پایین همین صفحه. روشن کردن و حجم و مدت و پنلش: 🌐 وضعیت قابلیت‌ها (هر زبان) ← 👥 طرح‌های زیرمجموعه‌گیری.',
             ],
             'home_other' => [
                 'label' => '💬 سایر پیام‌ها',
@@ -17361,6 +17362,138 @@ if (!function_exists('affrw_cfg')) {
         } catch (Exception $e) {
             error_log("aff_rw: " . $e->getMessage());
         }
+        // invoice.affrw: 1 = a free config (its own rules - ⚙️ قوانین اکانت),
+        // 2 = one renewed since, a service like any other. affrw_end: when it
+        // ended (for 🗑 X ساعت بعد). The ones made before are found by their
+        // reward row, or by their name and price.
+        try {
+            $has = $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'invoice' AND COLUMN_NAME = 'affrw'")->fetchColumn();
+            if (!$has) {
+                $pdo->exec("ALTER TABLE invoice ADD affrw TINYINT NOT NULL DEFAULT 0");
+                $pdo->exec("UPDATE invoice SET affrw = 1 WHERE id_invoice IN (SELECT id_invoice FROM affiliate_reward WHERE id_invoice IS NOT NULL)");
+                $names = [];
+                foreach (['fa', 'en'] as $l) {
+                    $names[] = (string) (lang_tab_texts($l)['users']['affiliates']['rewardServiceName'] ?? '');
+                }
+                $st = $pdo->prepare("UPDATE invoice SET affrw = 1 WHERE price_product = '0' AND name_product IN (?, ?)");
+                $st->execute($names);
+            }
+            addFieldToTable('invoice', 'affrw_end', null, 'INT NOT NULL DEFAULT 0');
+        } catch (Exception $e) {
+            error_log("invoice.affrw: " . $e->getMessage());
+        }
+    }
+    // 🏷 the account's name on the panel (⚙️ قوانین اکانت, $lang's): ref_ +
+    // id + the next number, or 8 random letters and digits. «کاربر انتخاب
+    // کنه» names come from the customer - anything else asking gets ref_.
+    function affrw_username($uid, $lang)
+    {
+        global $pdo;
+        $taken = function ($name) use ($pdo) {
+            $st = $pdo->prepare("SELECT COUNT(*) FROM invoice WHERE username = ?");
+            $st->execute([$name]);
+            return (int) $st->fetchColumn() > 0;
+        };
+        if ((string) feature_setting_value('affrw_uname', $lang, 'ref') === 'random') {
+            do {
+                $name = chr(random_int(97, 122)) . substr(bin2hex(random_bytes(4)), 0, 7);
+            } while ($taken($name));
+            return $name;
+        }
+        $n = 1;
+        while ($taken("ref_{$uid}_{$n}")) {
+            $n++;
+        }
+        return "ref_{$uid}_{$n}";
+    }
+    // ✍️ a name the customer typed: already an account in the bot, or on the
+    // panel the gift is made on
+    function affrw_name_taken($uid, $name)
+    {
+        global $pdo, $ManagePanel;
+        $st = $pdo->prepare("SELECT COUNT(*) FROM invoice WHERE username = ?");
+        $st->execute([(string) $name]);
+        if ((int) $st->fetchColumn() > 0) {
+            return true;
+        }
+        $row = affrw_row($uid);
+        $panel = affrw_panel(affrw_cfg($row['lang'] ?? 'fa'));
+        if ($panel !== null && is_object($ManagePanel)) {
+            $d = $ManagePanel->DataUser($panel['name_panel'], (string) $name);
+            return is_array($d) && !empty($d['username']);
+        }
+        return false;
+    }
+    function affrw_name_kb($tx)
+    {
+        return json_encode(['inline_keyboard' => [[['text' => $tx['users']['affiliates']['rewardNameBtn'], 'callback_data' => 'affrwname', 'style' => 'success']]]]);
+    }
+    // 🔄 a free config its owner's language does not let be renewed
+    function affrw_renew_blocked($inv)
+    {
+        if (!is_array($inv) || (int) ($inv['affrw'] ?? 0) !== 1) {
+            return false;
+        }
+        $owner = select("user", "*", "id", (string) $inv['id_user'], "select");
+        return (string) feature_setting_value('affrw_renew', is_array($owner) ? ($owner['lang'] ?? 'fa') : 'fa', '0') !== '1';
+    }
+    // renewed: from now on a service like any other
+    function affrw_mark_renewed($extend, $username, $panelName)
+    {
+        global $pdo;
+        if (!is_array($extend) || empty($extend['status'])) {
+            return;
+        }
+        affrw_ensure_table();
+        $pdo->prepare("UPDATE invoice SET affrw = 2 WHERE username = ? AND Service_location = ? AND affrw = 1")->execute([(string) $username, (string) $panelName]);
+    }
+    // 🛍 سرویس های من: a free config not renewed yet is «🎁 رفرال» (numbered
+    // when there are more); null for anything else - its account name then
+    function affrw_list_label($row, $tx)
+    {
+        global $pdo;
+        static $ids = [];
+        if (!is_array($row) || (int) ($row['affrw'] ?? 0) !== 1) {
+            return null;
+        }
+        $uid = (string) $row['id_user'];
+        if (!isset($ids[$uid])) {
+            $st = $pdo->prepare("SELECT id_invoice FROM invoice WHERE id_user = ? AND affrw = 1 AND Status IN ('active', 'end_of_time', 'end_of_volume', 'sendedwarn', 'send_on_hold') ORDER BY CAST(time_sell AS UNSIGNED)");
+            $st->execute([$uid]);
+            $ids[$uid] = array_map('strval', $st->fetchAll(PDO::FETCH_COLUMN));
+        }
+        $label = $tx['users']['affiliates']['rewardListLabel'];
+        $n = array_search((string) $row['id_invoice'], $ids[$uid], true);
+        return (count($ids[$uid]) > 1 && $n !== false) ? $label . ' ' . ($n + 1) : $label;
+    }
+    // 🗑 the cron, for a free config not renewed: its own rule instead of the
+    // bot-wide one - never (the default), as soon as it ended (time or
+    // volume), or some hours after. Its owner is told.
+    function affrw_cron_ended($invoice, $user, $userData, $Panel)
+    {
+        global $pdo;
+        if (!in_array($userData['status'] ?? '', ['limited', 'expired'], true)) {
+            return false;
+        }
+        $lang = is_array($user) ? ($user['lang'] ?? 'fa') : 'fa';
+        $del = (string) feature_setting_value('affrw_del', $lang, 'no');
+        if ($del !== 'end' && $del !== 'hours') {
+            return false;
+        }
+        $hours = $del === 'end' ? 0 : max(1, (int) feature_setting_value('affrw_del_hours', $lang, '24'));
+        $end = (int) ($invoice['affrw_end'] ?? 0);
+        if ($end === 0) {
+            $end = ($userData['status'] === 'expired' && (int) ($userData['expire'] ?? 0) > 0) ? (int) $userData['expire'] : time();
+            $pdo->prepare("UPDATE invoice SET affrw_end = ? WHERE id_invoice = ?")->execute([$end, $invoice['id_invoice']]);
+        }
+        if (time() < $end + $hours * 3600) {
+            return false;
+        }
+        $Panel->RemoveUser($invoice['Service_location'], $invoice['username']);
+        update("invoice", "Status", "removeTime", "id_invoice", $invoice['id_invoice']);
+        bottext_extras_key_hint('users.affiliates.rewardDeleted');
+        sendmessage($invoice['id_user'], strtr(payer_texts($invoice['id_user'])['users']['affiliates']['rewardDeleted'], ['{service}' => htmlspecialchars((string) $invoice['username'])]), null, 'HTML');
+        return true;
     }
     // whether a customer's row lets a new round count: none yet, refused, or
     // a reward earned with more to come
@@ -17627,6 +17760,9 @@ if (!function_exists('affrw_cfg')) {
         if ($row !== null && $row['status'] === 'done') {
             $status = $a['rewardStatusDone'];
             $count = $cfg['need'];
+        } elseif ($row !== null && $row['status'] === 'naming') {
+            $status = $a['rewardStatusNaming'];
+            $count = $cfg['need'];
         } elseif (!affrw_counting($row)) {
             $status = $a['rewardStatusPending'];
             $count = $cfg['need'];
@@ -17722,12 +17858,13 @@ if (!function_exists('affrw_cfg')) {
     // under $uid's 🛍 سرویس های من and sends it, in $tx's language. The
     // invoice id and account, or null when the panel refused ($err: why).
     // Also 🧪 تست واقعی's, which is why it leaves affiliate_reward alone.
-    function affrw_deliver($uid, $cfg, $panel, $u, $tx, $lang, $invites, &$err = null)
+    function affrw_deliver($uid, $cfg, $panel, $u, $tx, $lang, $invites, &$err = null, $name = null)
     {
         global $pdo, $ManagePanel;
+        affrw_ensure_table();
         $out = null;
         if ($panel !== null) {
-            $username_ac = strtolower($uid . "_" . bin2hex(random_bytes(3)));
+            $username_ac = $name !== null ? (string) $name : affrw_username($uid, $lang);
             $datac = [
                 'expire' => strtotime("+" . $cfg['days'] . " days"),
                 'data_limit' => $cfg['gb'] * pow(1024, 3),
@@ -17742,7 +17879,7 @@ if (!function_exists('affrw_cfg')) {
             return null;
         }
         $id_invoice = bin2hex(random_bytes(4));
-        $stmt = $pdo->prepare("INSERT IGNORE INTO invoice (id_user, id_invoice, username, time_sell, Service_location, name_product, price_product, Volume, Service_time, Status, notifctions) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt = $pdo->prepare("INSERT IGNORE INTO invoice (id_user, id_invoice, username, time_sell, Service_location, name_product, price_product, Volume, Service_time, Status, notifctions, affrw) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)");
         $stmt->execute([$uid, $id_invoice, $out['username'], time(), $panel['name_panel'], $tx['users']['affiliates']['rewardServiceName'], '0', $cfg['gb'], $cfg['days'], 'active', json_encode(['volume' => false, 'time' => false])]);
         bottext_extras_key_hint('users.affiliates.rewardGiven');
         sendmessage($uid, strtr($tx['users']['affiliates']['rewardGiven'], affrw_vars($cfg, (int) $invites)), null, 'HTML');
@@ -17757,8 +17894,9 @@ if (!function_exists('affrw_cfg')) {
     // Makes the config on the chosen panel and sends it to the customer in
     // their own language. The row has to be 'giving' already; it ends 'done'
     // (or open for the next round) on success and is left for the caller
-    // otherwise.
-    function affrw_give($uid)
+    // otherwise. With «کاربر انتخاب کنه» and no $name yet, the customer is
+    // asked for one instead ('naming') - made once they send it.
+    function affrw_give($uid, $name = null)
     {
         global $pdo;
         $setting = select("setting", "*", null, null, "select");
@@ -17770,6 +17908,13 @@ if (!function_exists('affrw_cfg')) {
         }
         $cfg = affrw_cfg($row['lang']);
         $panel = affrw_panel($cfg);
+        if ($name === null && (string) feature_setting_value('affrw_uname', $row['lang'], 'ref') === 'user') {
+            affrw_move($uid, 'giving', 'naming');
+            $tx = payer_texts($uid);
+            bottext_extras_key_hint('users.affiliates.rewardNameAsk');
+            sendmessage($uid, strtr($tx['users']['affiliates']['rewardNameAsk'], affrw_vars($cfg, (int) $row['invites'])), affrw_name_kb($tx), 'HTML');
+            return true;
+        }
         $report = static function ($topic, $text) use ($setting) {
             if (strlen((string) $setting['Channel_Report']) > 0) {
                 telegram('sendmessage', [
@@ -17781,7 +17926,7 @@ if (!function_exists('affrw_cfg')) {
             }
         };
         $err = null;
-        $made = affrw_deliver($uid, $cfg, $panel, $u, payer_texts($uid), $u['lang'] ?? 'fa', (int) $row['invites'], $err);
+        $made = affrw_deliver($uid, $cfg, $panel, $u, payer_texts($uid), $u['lang'] ?? 'fa', (int) $row['invites'], $err, $name);
         if ($made === null) {
             $report('errorreport', strtr($fa['Admin']['AffReward']['error'], [
                 '{id}' => $uid,
@@ -17822,6 +17967,11 @@ if (!function_exists('bt_nosticker_keys')) {
         return [
             // blocks pasted into the referral screen, never a message of their own
             'users.affiliates.membershipGiftInfo',
+            // 🎁's: a button, a status line, a list label, a popup
+            'users.affiliates.rewardNameBtn',
+            'users.affiliates.rewardStatusNaming',
+            'users.affiliates.rewardListLabel',
+            'users.affiliates.rewardNameDone',
             'users.affiliates.purchaseCommissionInfo',
             // 🎁 کانفیگ رایگان's status lines and service name, the same
             'users.affiliates.rewardStatusAuto',

@@ -6077,8 +6077,13 @@ if (!function_exists('afftest_send')) {
             }
             $service = $made['username'] ?? 'test_ab12cd';
         } else {
+            $uname = (string) feature_setting_value('affrw_uname', $lang, 'ref');
+            if ($uname === 'user') {
+                afftest_send($to, $lang, $t['wNameAsk'], 'users.affiliates.rewardNameAsk', strtr($a['rewardNameAsk'], affrw_vars($cfg, $cfg['need'])), json_encode(['inline_keyboard' => [[['text' => $a['rewardNameBtn'], 'callback_data' => 'none', 'style' => 'success']]]]));
+                afftest_send($to, $lang, $t['wNamePrompt'], 'users.affiliates.rewardNamePrompt', $a['rewardNamePrompt']);
+            }
             afftest_send($to, $lang, $t['wGiven'], 'users.affiliates.rewardGiven', strtr($a['rewardGiven'], affrw_vars($cfg, $cfg['need'])));
-            $service = strtolower($to . '_ab12cd');
+            $service = $uname === 'random' ? 'k3x9q2mz' : ($uname === 'user' ? 'my_name' : "ref_{$to}_1");
             // no panel picked yet: a neutral one, so the tab's text stays its own
             $sample = $panel ?? ['name_panel' => '—', 'sublink' => 'onsublink', 'config' => 'offconfig', 'type' => 'marzban'];
             [$svcText] = affrw_service_text($sample, $cfg, $tx, ['username' => $service, 'subscription_url' => "https://example.com/sub/{$service}", 'configs' => ["vless://{$service}@example.com:443"]]);
@@ -6090,6 +6095,9 @@ if (!function_exists('afftest_send')) {
             afftest_send($to, $lang, $t['wPaused'], 'users.affiliates.rewardPaused', strtr($a['rewardPaused'], $pv));
             afftest_send($to, $lang, $t['wLocked'], 'users.affiliates.rewardPausedLocked', strtr($a['rewardPausedLocked'], $pv));
             afftest_send($to, $lang, $t['wResumed'], 'users.affiliates.rewardResumed', strtr($a['rewardResumed'], $pv));
+        }
+        if (in_array((string) feature_setting_value('affrw_del', $lang, 'no'), ['end', 'hours'], true)) {
+            afftest_send($to, $lang, $t['wDeleted'], 'users.affiliates.rewardDeleted', strtr($a['rewardDeleted'], ['{service}' => htmlspecialchars($service)]));
         }
         sendmessage($to, $real ? $t['doneReal'] : $t['done'], json_encode(['inline_keyboard' => [[['text' => $fa['Admin']['FeatureSection']['back'], 'callback_data' => "flsec:{$lang}:affr"]]]]), 'HTML');
     }
@@ -6103,6 +6111,36 @@ if (!function_exists('afftest_send')) {
             [['text' => $t['realBtn'], 'callback_data' => "afftest:{$lang}:r:real"]],
             [['text' => $fa['Admin']['FeatureSection']['back'], 'callback_data' => "flsec:{$lang}:affr"]],
         ]])];
+    }
+}
+if (!function_exists('affrw_rules_payload')) {
+    // ⚙️ قوانین اکانت کانفیگ رایگان (🎨 ← 🎁 پیام و دکمه‌های زیرمجموعه‌گیری),
+    // one tab's: when it is deleted after it ends, whether it can be renewed,
+    // how its account is named
+    function affrw_rules_payload($lang)
+    {
+        $fa = lang_tab_texts('fa');
+        $s = $fa['Admin']['AffRules'];
+        $del = (string) feature_setting_value('affrw_del', $lang, 'no');
+        $hours = max(1, (int) feature_setting_value('affrw_del_hours', $lang, '24'));
+        $renew = (string) feature_setting_value('affrw_renew', $lang, '0') === '1';
+        $uname = (string) feature_setting_value('affrw_uname', $lang, 'ref');
+        $uname = in_array($uname, ['ref', 'random', 'user'], true) ? $uname : 'ref';
+        $delText = $del === 'end' ? $s['delEnd'] : ($del === 'hours' ? strtr($s['delHours'], ['{h}' => $hours]) : $s['delNo']);
+        $cap = strtr($s['title'], [
+            '{lang}' => $fa['bottext']['langs'][$lang] ?? $lang,
+            '{del}' => $delText,
+            '{renew}' => $renew ? $fa['Admin']['Status']['statuson'] : $fa['Admin']['Status']['statusoff'],
+            '{uname}' => $s['uname_' . $uname],
+        ]);
+        $rows = [[['text' => strtr($s['delBtn'], ['{v}' => $delText]), 'callback_data' => "affrwrule|{$lang}|del", 'style' => 'primary']]];
+        if ($del === 'hours') {
+            $rows[] = [['text' => strtr($s['hoursBtn'], ['{h}' => $hours]), 'callback_data' => "affrwrule|{$lang}|hours", 'style' => 'primary']];
+        }
+        $rows[] = [['text' => ($renew ? '✅ ' : '❌ ') . $s['renewBtn'], 'callback_data' => "affrwrule|{$lang}|renew", 'style' => $renew ? 'success' : 'danger']];
+        $rows[] = [['text' => strtr($s['unameBtn'], ['{v}' => $s['uname_' . $uname]]), 'callback_data' => "affrwrule|{$lang}|uname", 'style' => 'primary']];
+        $rows[] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "bt_group|{$lang}|referral", 'style' => 'danger']];
+        return [$cap, json_encode(['inline_keyboard' => $rows])];
     }
 }
 if (!function_exists('affrw_panel_payload')) {
@@ -7955,6 +7993,44 @@ if (preg_match('/^chngate:([a-z]{2})(?::(\d+))?$/', $datain, $cg_m) && $adminrul
 if (preg_match('/^affrwzero_(\d+)$/', $datain, $rz_m) && $adminrulecheck['rule'] == "administrator") {
     affrw_reset($rz_m[1]);
     telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $textbotlang['Admin']['UserMgmt']['affrwResetDone'], 'show_alert' => true]);
+    return;
+}
+// ⚙️ قوانین اکانت کانفیگ رایگان, one tab's
+if (preg_match('/^affrwrule\|([a-z]{2})\|(open|del|hours|renew|uname)$/', $datain, $ar_m) && $adminrulecheck['rule'] == "administrator") {
+    $ar_lang = $ar_m[1];
+    if ($ar_m[2] === 'hours') {
+        savedata("clear", "ar_lang", $ar_lang);
+        step('affrwrulehours', $from_id);
+        $ar_s = lang_tab_texts('fa')['Admin']['AffRules'];
+        Editmessagetext($from_id, $message_id, $ar_s['askHours'], json_encode(['inline_keyboard' => [[['text' => $ar_s['cancel'], 'callback_data' => "affrwrule|{$ar_lang}|open", 'style' => 'danger']]]]));
+        return;
+    }
+    if ($ar_m[2] === 'del') {
+        // never -> as soon as it ends -> some hours after -> never
+        feature_setting_set('affrw_del', $ar_lang, ['no' => 'end', 'end' => 'hours', 'hours' => 'no'][(string) feature_setting_value('affrw_del', $ar_lang, 'no')] ?? 'end');
+    } elseif ($ar_m[2] === 'renew') {
+        feature_setting_set('affrw_renew', $ar_lang, (string) feature_setting_value('affrw_renew', $ar_lang, '0') === '1' ? '0' : '1');
+    } elseif ($ar_m[2] === 'uname') {
+        feature_setting_set('affrw_uname', $ar_lang, ['ref' => 'random', 'random' => 'user', 'user' => 'ref'][(string) feature_setting_value('affrw_uname', $ar_lang, 'ref')] ?? 'random');
+    } else {
+        step('home', $from_id);
+    }
+    [$ar_cap, $ar_kb] = affrw_rules_payload($ar_lang);
+    Editmessagetext($from_id, $message_id, $ar_cap, $ar_kb);
+    return;
+}
+if ($user['step'] === 'affrwrulehours' && $datain === '' && $adminrulecheck['rule'] == "administrator"
+    && !in_array($text, [$textbotlang['Admin']['backAdminBtn'], $textbotlang['Admin']['backMenuBtn']], true)) {
+    $ar_lang = json_decode((string) $user['Processing_value'], true)['ar_lang'] ?? 'fa';
+    $ar_h = trim((string) $text);
+    if (!ctype_digit($ar_h) || (int) $ar_h < 1 || (int) $ar_h > 8760) {
+        sendmessage($from_id, lang_tab_texts('fa')['Admin']['AffRules']['invalidHours'], null, 'HTML');
+        return;
+    }
+    feature_setting_set('affrw_del_hours', $ar_lang, (string) (int) $ar_h);
+    step('home', $from_id);
+    [$ar_cap, $ar_kb] = affrw_rules_payload($ar_lang);
+    sendmessage($from_id, $ar_cap, $ar_kb, 'HTML');
     return;
 }
 // 🧪 تست / 👁 پیش‌نمایش of a 👥 plan, in one tab's language
@@ -20047,6 +20123,7 @@ elseif ($text == $textbotlang['keyboard']['hidePanelForUser'] && $adminrulecheck
     }
     deletemessage($from_id, $message_id);
     $extend = $ManagePanel->extend($marzban_list_get['Methodextend'], $prodcut['Volume_constraint'], $prodcut['Service_time'], $nameloc['username'], $prodcut['code_product'], $marzban_list_get['code_panel']);
+    affrw_mark_renewed($extend, $nameloc['username'], $marzban_list_get['name_panel']);
     if ($extend['status'] == false) {
         $extend['msg'] = json_encode($extend['msg']);
         $textreports = sprintf($textbotlang['Admin']['reportgroup']['errorRenewServiceAdmin'], $marzban_list_get['name_panel'], $nameloc['username'], $extend['msg']);

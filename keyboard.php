@@ -2543,6 +2543,7 @@ function keyboard_list_text($lang, $groupFilter = null)
         if ($groupFilter === 'referral') {
             // under 🎁 کانفیگ رایگان با دعوت, the last heading on this screen
             $keyboard_text['inline_keyboard'][] = [['text' => '📌 نحوه‌ی نمایش کانفیگ (هدیه‌ی دعوت)', 'callback_data' => "cfgdeliv|list|{$lang}|r", 'style' => 'primary']];
+            $keyboard_text['inline_keyboard'][] = [['text' => '⚙️ قوانین اکانت کانفیگ رایگان', 'callback_data' => "affrwrule|{$lang}|open", 'style' => 'primary']];
         }
         if ($groupFilter === 'buyflow') {
             $keyboard_text['inline_keyboard'][] = [['text' => bt_section_meta('cfgdeliv_link')['label'], 'callback_data' => 'bt_sep|cfgdeliv_link']];

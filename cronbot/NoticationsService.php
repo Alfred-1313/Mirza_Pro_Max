@@ -48,10 +48,16 @@ class ServiceMonitor
                 continue;
             // every low-volume / low-time / ended warning - 🔋's tiers
             $this->checkCustomNotices($data['invoice'], $data['user'], $data['userData'], $invoice['username']);
-            if ($this->status_cron['remove'])
-                $this->shouldRemoveService($data['invoice'], $data['user'], $data['userData'], $invoice['username']);
-            if ($this->status_cron['remove_volume'])
-                $this->shouldRemoveServiceـvolume($data['invoice'], $data['user'], $data['userData'], $invoice['username']);
+            // 🎁 a free config not renewed has its own 🗑 rule, never the
+            // bot-wide one (⚙️ قوانین اکانت کانفیگ رایگان)
+            if ((int) ($data['invoice']['affrw'] ?? 0) === 1) {
+                affrw_cron_ended($data['invoice'], $data['user'], $data['userData'], $this->Panel);
+            } else {
+                if ($this->status_cron['remove'])
+                    $this->shouldRemoveService($data['invoice'], $data['user'], $data['userData'], $invoice['username']);
+                if ($this->status_cron['remove_volume'])
+                    $this->shouldRemoveServiceـvolume($data['invoice'], $data['user'], $data['userData'], $invoice['username']);
+            }
             if ($data['panel']['inboundstatus'] == "oninbounddisable" && $data['panel']['type'] == "marzban")
                 $this->active_inbound_expire($data['invoice'], $data['userData'], $data['panel']);
         }
@@ -233,7 +239,8 @@ class ServiceMonitor
         // the customer's own language - its defaults and its button label
         $t = lang_tab_texts($lang);
         $caption = volumepct_tier_caption($tierIndex, $lang, $t, $invoice, $user, $userData, (string) round($usedPercent));
-        $keyboard = volumepct_tier_kb($tierIndex, $lang, $t, $invoice['id_invoice']);
+        // its renew button - not on a free config that can't be renewed
+        $keyboard = affrw_renew_blocked($invoice) ? null : volumepct_tier_kb($tierIndex, $lang, $t, $invoice['id_invoice']);
         $sticker = volumepct_tier_sticker($tierIndex, $lang);
         if ($sticker !== '') {
             telegram('sendSticker', ['chat_id' => $invoice['id_user'], 'sticker' => $sticker], $invoice['bottype']);

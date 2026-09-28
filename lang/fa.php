@@ -886,12 +886,21 @@ return array (
       'affrw_6' => array ('label' => '📨 اعلان ارسال درخواست برای ادمین', 'key' => 'users.affiliates.rewardSentToAdmin', 'group' => 'referral'),
       'affrw_7' => array ('label' => '🎉 اعلان ساخته شدن کانفیگ رایگان', 'key' => 'users.affiliates.rewardGiven', 'group' => 'referral'),
       'affrw_8' => array ('label' => '❌ اعلان رد درخواست', 'key' => 'users.affiliates.rewardRejected', 'group' => 'referral'),
-      'affrw_9' => array ('label' => '🏷 اسم سرویس توی «سرویس‌های من»', 'key' => 'users.affiliates.rewardServiceName', 'group' => 'referral'),
+      'affrw_9' => array ('label' => '🏷 اسم سرویس (صفحه‌ی اطلاعات سرویس)', 'key' => 'users.affiliates.rewardServiceName', 'group' => 'referral'),
       'affrw_10' => array ('label' => '👋 خوش‌آمد به کاربر دعوت‌شده (کانفیگ رایگان)', 'key' => 'users.affiliates.welcomeInvitedReward', 'group' => 'referral'),
       'affrw_11' => array ('label' => '🎉 اعلان «زیرمجموعه‌ی جدید» به معرف، با شمارنده‌ی دعوت‌ها', 'key' => 'users.affiliates.newReferralJoinedReward', 'group' => 'referral'),
       'affrw_12' => array ('label' => '🚪 اعلان غیرفعال شدن کانفیگ رایگان (خروج از کانال)', 'key' => 'users.affiliates.rewardPaused', 'group' => 'referral'),
       'affrw_13' => array ('label' => '✅ اعلان فعال شدن دوباره‌ی کانفیگ رایگان', 'key' => 'users.affiliates.rewardResumed', 'group' => 'referral'),
       'affrw_14' => array ('label' => '⏸ وقتی کاربر کانفیگ غیرفعال‌شده رو خودش روشن کنه', 'key' => 'users.affiliates.rewardPausedLocked', 'group' => 'referral'),
+      'affrw_15' => array ('label' => '🏷 اسم دکمه توی «🛍 سرویس های من» (تا تمدید نشده)', 'key' => 'users.affiliates.rewardListLabel', 'group' => 'referral'),
+      'affrw_16' => array ('label' => '✍️ «کانفیگت آماده‌ست، یه نام انتخاب کن» (کاربر انتخاب کنه)', 'key' => 'users.affiliates.rewardNameAsk', 'group' => 'referral'),
+      'affrw_17' => array ('label' => '✍️ متن دکمه‌ی «انتخاب نام»', 'key' => 'users.affiliates.rewardNameBtn', 'group' => 'referral'),
+      'affrw_18' => array ('label' => '✍️ پیام «نام دلخواهت رو بفرست»', 'key' => 'users.affiliates.rewardNamePrompt', 'group' => 'referral'),
+      'affrw_19' => array ('label' => '❌ پیام «این نام گرفته شده»', 'key' => 'users.affiliates.rewardNameTaken', 'group' => 'referral'),
+      'affrw_20' => array ('label' => '✅ پاپ‌آپ «کانفیگت قبلاً ساخته شده»', 'key' => 'users.affiliates.rewardNameDone', 'group' => 'referral'),
+      'affrw_21' => array ('label' => '☑️ خط وضعیت: منتظر انتخاب نام', 'key' => 'users.affiliates.rewardStatusNaming', 'group' => 'referral'),
+      'affrw_22' => array ('label' => '🔄 پیام «این سرویس تمدید نمی‌شه»', 'key' => 'users.affiliates.rewardNoRenew', 'group' => 'referral'),
+      'affrw_23' => array ('label' => '🗑 اعلان پاک شدن کانفیگ تمام‌شده', 'key' => 'users.affiliates.rewardDeleted', 'group' => 'referral'),
       // ---- 👤 مدیریت کاربر ----
       'um_1' => array ('label' => '🎁 هدیه‌ی شارژ همگانی', 'key' => 'users.Balance.giftFromManagement', 'group' => 'usermgmt', 'section' => 'um_balance'),
       'um_2' => array ('label' => '➕ افزایش موجودی توسط ادمین', 'key' => 'users.Balance.addedNotice', 'group' => 'usermgmt', 'section' => 'um_balance'),
@@ -1668,6 +1677,17 @@ return array (
       'rewardResumed' => '✅ دعوت‌هات دوباره کامل شد و کانفیگ رایگانت (<code>{service}</code>) دوباره فعال شد.',
       'rewardPausedLocked' => '⏸ این کانفیگ رایگان به‌خاطر خروج دعوت‌شده‌ها از کانال موقتاً غیرفعاله و از اینجا روشن نمی‌شه.
 👥 با دعوت <b>{missing}</b> نفر دیگه، خودکار دوباره روشن می‌شه.',
+      'rewardNameAsk' => '🎉 کانفیگ رایگانت (<b>{volume} گیگ · {days} روزه</b>) آماده‌ی ساخته شدنه!
+فقط یه نام براش انتخاب کن؛ دکمه‌ی زیر رو بزن.',
+      'rewardNameBtn' => '✍️ انتخاب نام',
+      'rewardNamePrompt' => '✍️ نام دلخواه اکانتت رو بفرست.
+فقط حروف انگلیسی، عدد و _ ؛ بین ۳ تا ۳۲ حرف و با یه حرف شروع بشه (مثل ali_vpn).',
+      'rewardNameTaken' => '❌ این نام قبلاً گرفته شده؛ یه نام دیگه بفرست.',
+      'rewardNameDone' => '✅ کانفیگت قبلاً ساخته شده؛ توی «🛍 سرویس های من» هست.',
+      'rewardStatusNaming' => '✍️ کانفیگت آماده‌ست؛ فقط یه نام براش انتخاب کن.',
+      'rewardListLabel' => '🎁 رفرال',
+      'rewardNoRenew' => '🎁 این سرویس هدیه‌ی دعوته و تمدید نمی‌شه.',
+      'rewardDeleted' => '🗑 کانفیگ رایگانت (<code>{service}</code>) چون تموم شده بود پاک شد.',
       'rewardAfterPay' => '🎁 کانفیگ هدیه‌ی دعوت با موفقیت ساخته شد
 
 👤 نام کاربری سرویس : {username}
@@ -6493,6 +6513,9 @@ nowpayments.io
       'wPaused' => '👤 معرف، اگه یکی از دعوت‌شده‌ها از کانال خارج بشه',
       'wLocked' => '👤 معرف، اگه بخواد کانفیگ غیرفعال رو خودش روشن کنه',
       'wResumed' => '👤 معرف، وقتی دعوت‌هاش دوباره کامل می‌شه',
+      'wNameAsk' => '👤 معرف، وقتی کانفیگش آماده‌ست (نام اکانت: کاربر انتخاب کنه)',
+      'wNamePrompt' => '👤 معرف، بعد از زدن «انتخاب نام»',
+      'wDeleted' => '👤 معرف، وقتی کانفیگ تموم‌شده‌ش پاک می‌شه',
       'sampleNew' => 'new_friend',
       'realFailed' => "❌ پنل کانفیگ رو نساخت:\n<code>{msg}</code>",
       'done' => '✅ پیش‌نمایش تموم شد.',
@@ -6503,6 +6526,24 @@ nowpayments.io
       'realBtn' => '🧪 تست واقعی (یه کانفیگ برای خودم)',
       'confirm' => "🧪 یه کانفیگ واقعی <b>{volume} گیگ · {days} روزه</b> روی پنل <b>{panel}</b> برای خودت ساخته می‌شه. بسازم؟",
       'confirmBtn' => '✅ بساز',
+    ),
+    // ⚙️ قوانین اکانت کانفیگ رایگان (🎨 ← 🎁 پیام و دکمه‌های زیرمجموعه‌گیری)
+    'AffRules' =>
+    array (
+      'title' => "⚙️ <b>قوانین اکانت کانفیگ رایگان</b> — {lang}\n\n🗑 بعد از تموم شدن (زمان یا حجم): <b>{del}</b>\n🔄 تمدید: <b>{renew}</b>\n🏷 نام اکانت: <b>{uname}</b>\n\n• 🗑 «پاک نشه» یعنی حذف خودکار کلی ربات هم کاری بهش نداره. «همون لحظه» یعنی همین که تموم شد پاک می‌شه (حداکثر تا نیم ساعت بعد). «X ساعت بعد» یعنی X ساعت بعد از تموم شدن. کاربر خبردار می‌شه.\n• 🔄 اگه تمدید نشه، دکمه‌ی تمدید براش نمیاد. اگه تمدید کنه، از اون به بعد مثل بقیه‌ی سرویس‌هاشه: توی «🛍 سرویس های من» با نام اکانتش میاد (نه «🎁 رفرال») و قانون‌های کلی ربات روش اجرا می‌شه.\n• 🏷 با تگ رفرال: ref_آیدی_شماره (مثل ref_123456789_1) · رندوم: ۸ حرف و عدد · کاربر انتخاب کنه: وقتی کانفیگش آماده شد، ربات ازش یه نام می‌خواد و با همون ساخته می‌شه.\n• فقط برای زبان {lang}ه؛ زبانِ صاحب سرویس تصمیم می‌گیره.",
+      'delNo' => 'پاک نشه',
+      'delEnd' => 'همون لحظه پاک بشه',
+      'delHours' => '{h} ساعت بعد پاک بشه',
+      'delBtn' => '🗑 بعد از تموم شدن: {v}',
+      'hoursBtn' => '⏱ چند ساعت بعد: {h}',
+      'renewBtn' => '🔄 قابل تمدید',
+      'unameBtn' => '🏷 نام اکانت: {v}',
+      'uname_ref' => 'با تگ رفرال',
+      'uname_random' => 'رندوم',
+      'uname_user' => 'کاربر انتخاب کنه',
+      'askHours' => "⏱ چند ساعت بعد از تموم شدن پاک بشه؟\n\n(فقط عدد، ۱ تا ۸۷۶۰)",
+      'invalidHours' => '❌ فقط یه عدد بین ۱ تا ۸۷۶۰ بفرست.',
+      'cancel' => '❌ لغو',
     ),
     // 🎁 کانفیگ رایگان با دعوت: what the admins get to approve
     'AffReward' =>

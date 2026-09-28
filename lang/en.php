@@ -995,6 +995,17 @@ From now on your invites are counted from zero again, and you can try again.',
                         'rewardResumed' => '✅ Your invites are complete again, and your free config (<code>{service}</code>) is active again.',
                         'rewardPausedLocked' => '⏸ This free config is paused because people you invited left the channel, so it can\'t be switched on from here.
 👥 Invite <b>{missing}</b> more people and it switches back on automatically.',
+                        'rewardNameAsk' => '🎉 Your free config (<b>{volume} GB · {days}-day</b>) is ready to be made!
+Just pick a name for it - tap the button below.',
+                        'rewardNameBtn' => '✍️ Pick a name',
+                        'rewardNamePrompt' => '✍️ Send the name you want for your account.
+English letters, numbers and _ only; 3 to 32 characters, starting with a letter (like ali_vpn).',
+                        'rewardNameTaken' => '❌ That name is already taken; send another one.',
+                        'rewardNameDone' => '✅ Your config was already made; it is in «🛍 My services».',
+                        'rewardStatusNaming' => '✍️ Your config is ready; just pick a name for it.',
+                        'rewardListLabel' => '🎁 Referral',
+                        'rewardNoRenew' => '🎁 This service is a referral gift and can\'t be renewed.',
+                        'rewardDeleted' => '🗑 Your free config (<code>{service}</code>) was deleted because it had ended.',
                         'rewardAfterPay' => '🎁 Your referral gift config was created successfully
 
 👤 Service username: {username}
