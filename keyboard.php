@@ -553,6 +553,21 @@ if ($frenzyex == "onfrenzyex") {
         ['text' => $customer_texts['textbot']['frenzyEx'], 'callback_data' => "frenzyex"]
     ];
 }
+if (getPaySettingValue("statuscubepay") == "oncubepay") {
+    $step_payment['inline_keyboard'][] = [
+        ['text' => $customer_texts['textbot']['cubePay'], 'callback_data' => "cubepay"]
+    ];
+}
+if (getPaySettingValue("statusabangateway") == "onabangateway") {
+    $step_payment['inline_keyboard'][] = [
+        ['text' => $customer_texts['textbot']['abanGateway'], 'callback_data' => "abangateway"]
+    ];
+}
+if (getPaySettingValue("statusvariza") == "onvariza") {
+    $step_payment['inline_keyboard'][] = [
+        ['text' => $customer_texts['textbot']['varizaPay'], 'callback_data' => "variza"]
+    ];
+}
 if ($paymentstatussnotverify == "onverifypay") {
     $step_payment['inline_keyboard'][] = [
         ['text' => $customer_texts['textbot']['paymentNotVerify'], 'callback_data' => "paymentnotverify"]

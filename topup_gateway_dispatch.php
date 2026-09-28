@@ -180,6 +180,122 @@ if (!isset($from_id, $datain)) {
         ]) . topup_disc_caption_block($from_id, $fx_lang, 'frenzyex', $textbotlang, $user['Processing_value'], true);
         topup_linkmsg_help($from_id, 'helpfrenzyex');
         topup_track_invoice_message($randomString, topup_linkmsg_finish($from_id, $textnowpayments, $paymentkeyboard));
+    } elseif ($datain == "cubepay") {
+        [$mainbalance, $maxbalance] = topup_checkout_limits($user['lang'] ?? 'fa', 'cubepay');
+        if (topup_amount_out_of_range($user['Processing_value'], $mainbalance, $maxbalance)) {
+            topup_range_notice($from_id, $user['lang'] ?? 'fa', 'cubepay', $mainbalance, $maxbalance, $textbotlang);
+            return;
+        }
+        deletemessage($from_id, $message_id);
+        topup_linkmsg_show($from_id, $user['lang'] ?? 'fa', 'cubepay', $textbotlang['users']['Balance']['linkpayments']);
+        $randomString = bin2hex(random_bytes(5));
+        $invoice = "{$user['Processing_value_tow']}|{$user['Processing_value_one']}";
+        $Payment_Method = "cubepay";
+        // the order is written before the link is asked for: a confirmation that
+        // arrives while the gateway is still answering finds an order to settle
+        $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice,dec_not_confirmed) VALUES (?,?,?,?,?,?,?,?)");
+        $stmt->execute([$from_id, $randomString, date('Y/m/d H:i:s'), $user['Processing_value'], "Unpaid", $Payment_Method, $invoice, null]);
+        $pay = createPayCubePay($user['Processing_value'], $randomString);
+        if (empty($pay['payment_link'])) {
+            $text_error = htmlspecialchars((string) json_encode($pay, JSON_UNESCAPED_UNICODE));
+            topup_linkmsg_drop($from_id);
+            sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
+            step('home', $from_id);
+            if (strlen($setting['Channel_Report']) > 0) {
+                telegram('sendmessage', [
+                    'chat_id' => $setting['Channel_Report'],
+                    'message_thread_id' => $errorreport,
+                    'text' => sprintf($textbotlang['Admin']['reportgroup']['errorPaymentLink2'], $text_error, $from_id, $Payment_Method, $username),
+                    'parse_mode' => "HTML"
+                ]);
+            }
+            return;
+        }
+        $paymentkeyboard = json_encode(['inline_keyboard' => [[['text' => $textbotlang['users']['Balance']['payments'], 'url' => $pay['payment_link']]]]]);
+        $textnowpayments = sprintf($textbotlang['users']['Balance']['invoiceCreated2'], $randomString, number_format($user['Processing_value'], 0))
+            . topup_disc_caption_block($from_id, $user['lang'] ?? 'fa', 'cubepay', $textbotlang, $user['Processing_value'], true);
+        topup_linkmsg_help($from_id, 'helpcubepay');
+        topup_track_invoice_message($randomString, topup_linkmsg_finish($from_id, $textnowpayments, $paymentkeyboard));
+        // CubePay may want its card shown in the chat too, with the exact amount
+        $cp_card = cubepay_card_details_text($pay, $textbotlang);
+        if ($cp_card !== null) {
+            sendmessage($from_id, $cp_card, null, 'HTML');
+        }
+    } elseif ($datain == "abangateway") {
+        [$mainbalance, $maxbalance] = topup_checkout_limits($user['lang'] ?? 'fa', 'abangateway');
+        if (topup_amount_out_of_range($user['Processing_value'], $mainbalance, $maxbalance)) {
+            topup_range_notice($from_id, $user['lang'] ?? 'fa', 'abangateway', $mainbalance, $maxbalance, $textbotlang);
+            return;
+        }
+        // a day's cap, when the admin set one: busy until tomorrow
+        if (abangateway_over_daily_limit()) {
+            sendmessage($from_id, $textbotlang['users']['Balance']['queueBusy'], null, 'HTML');
+            return;
+        }
+        deletemessage($from_id, $message_id);
+        topup_linkmsg_show($from_id, $user['lang'] ?? 'fa', 'abangateway', $textbotlang['users']['Balance']['linkpayments']);
+        $randomString = bin2hex(random_bytes(5));
+        $invoice = "{$user['Processing_value_tow']}|{$user['Processing_value_one']}";
+        $Payment_Method = "AbanGateway";
+        // the order is written before the link is asked for: a confirmation that
+        // arrives while the gateway is still answering finds an order to settle
+        $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice,dec_not_confirmed) VALUES (?,?,?,?,?,?,?,?)");
+        $stmt->execute([$from_id, $randomString, date('Y/m/d H:i:s'), $user['Processing_value'], "Unpaid", $Payment_Method, $invoice, null]);
+        $pay = createPayAbanGateway($user['Processing_value'], $randomString);
+        if (empty($pay['payment_link'])) {
+            $text_error = htmlspecialchars((string) json_encode($pay, JSON_UNESCAPED_UNICODE));
+            topup_linkmsg_drop($from_id);
+            sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
+            step('home', $from_id);
+            if (strlen($setting['Channel_Report']) > 0) {
+                telegram('sendmessage', [
+                    'chat_id' => $setting['Channel_Report'],
+                    'message_thread_id' => $errorreport,
+                    'text' => sprintf($textbotlang['Admin']['reportgroup']['errorPaymentLink2'], $text_error, $from_id, $Payment_Method, $username),
+                    'parse_mode' => "HTML"
+                ]);
+            }
+            return;
+        }
+        $paymentkeyboard = json_encode(['inline_keyboard' => [[['text' => $textbotlang['users']['Balance']['payments'], 'url' => $pay['payment_link']]]]]);
+        $textnowpayments = sprintf($textbotlang['users']['Balance']['invoiceCreated2'], $randomString, number_format($user['Processing_value'], 0))
+            . topup_disc_caption_block($from_id, $user['lang'] ?? 'fa', 'abangateway', $textbotlang, $user['Processing_value'], true);
+        topup_linkmsg_help($from_id, 'helpabangateway');
+        topup_track_invoice_message($randomString, topup_linkmsg_finish($from_id, $textnowpayments, $paymentkeyboard));
+    } elseif ($datain == "variza") {
+        [$mainbalance, $maxbalance] = topup_checkout_limits($user['lang'] ?? 'fa', 'variza');
+        if (topup_amount_out_of_range($user['Processing_value'], $mainbalance, $maxbalance)) {
+            topup_range_notice($from_id, $user['lang'] ?? 'fa', 'variza', $mainbalance, $maxbalance, $textbotlang);
+            return;
+        }
+        deletemessage($from_id, $message_id);
+        topup_linkmsg_show($from_id, $user['lang'] ?? 'fa', 'variza', $textbotlang['users']['Balance']['linkpayments']);
+        $randomString = bin2hex(random_bytes(5));
+        $invoice = "{$user['Processing_value_tow']}|{$user['Processing_value_one']}";
+        $Payment_Method = "variza";
+        $pay = createPayVariza($user['Processing_value'], $randomString);
+        if (empty($pay['pay_url'])) {
+            $text_error = htmlspecialchars((string) json_encode($pay, JSON_UNESCAPED_UNICODE));
+            topup_linkmsg_drop($from_id);
+            sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
+            step('home', $from_id);
+            if (strlen($setting['Channel_Report']) > 0) {
+                telegram('sendmessage', [
+                    'chat_id' => $setting['Channel_Report'],
+                    'message_thread_id' => $errorreport,
+                    'text' => sprintf($textbotlang['Admin']['reportgroup']['errorPaymentLink2'], $text_error, $from_id, $Payment_Method, $username),
+                    'parse_mode' => "HTML"
+                ]);
+            }
+            return;
+        }
+        $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice,dec_not_confirmed) VALUES (?,?,?,?,?,?,?,?)");
+        $stmt->execute([$from_id, $randomString, date('Y/m/d H:i:s'), $user['Processing_value'], "Unpaid", $Payment_Method, $invoice, (string) ($pay['slug'] ?? '')]);
+        $paymentkeyboard = json_encode(['inline_keyboard' => [[['text' => $textbotlang['users']['Balance']['payments'], 'url' => $pay['pay_url']]]]]);
+        $textnowpayments = sprintf($textbotlang['users']['Balance']['invoiceCreated2'], $randomString, number_format($user['Processing_value'], 0))
+            . topup_disc_caption_block($from_id, $user['lang'] ?? 'fa', 'variza', $textbotlang, $user['Processing_value'], true);
+        topup_linkmsg_help($from_id, 'helpvariza');
+        topup_track_invoice_message($randomString, topup_linkmsg_finish($from_id, $textnowpayments, $paymentkeyboard));
     } elseif ($datain == "plisio") {
         topup_plisio_invoice_generate($from_id, $user, $message_id, $textbotlang, $setting);
     } elseif ($datain == "nowpayment") {

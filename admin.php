@@ -2100,6 +2100,12 @@ if (!function_exists('gateway_globally_on')) {
                 return getPaySettingValue('zarinpalstatus') === 'onzarinpal';
             case 'frenzyex':
                 return getPaySettingValue('frenzyexstatus') === 'onfrenzyex';
+            case 'cubepay':
+                return getPaySettingValue('statuscubepay') === 'oncubepay';
+            case 'abangateway':
+                return getPaySettingValue('statusabangateway') === 'onabangateway';
+            case 'variza':
+                return getPaySettingValue('statusvariza') === 'onvariza';
             case 'paymentnotverify':
                 return getPaySettingValue('paymentstatussnotverify') === 'onverifypay';
             case 'startelegrams':
@@ -2130,6 +2136,9 @@ if (!function_exists('gateway_globally_set')) {
             'aqayepardakht' => ['statusaqayepardakht', 'onaqayepardakht', 'offaqayepardakht'],
             'zarinpal' => ['zarinpalstatus', 'onzarinpal', 'offzarinpal'],
             'frenzyex' => ['frenzyexstatus', 'onfrenzyex', 'offfrenzyex'],
+            'cubepay' => ['statuscubepay', 'oncubepay', 'offcubepay'],
+            'abangateway' => ['statusabangateway', 'onabangateway', 'offabangateway'],
+            'variza' => ['statusvariza', 'onvariza', 'offvariza'],
             'paymentnotverify' => ['paymentstatussnotverify', 'onverifypay', 'offverifypay'],
             'startelegrams' => ['statusstar', '1', '0'],
             'ton' => ['statuston', '1', '0'],
@@ -2939,6 +2948,13 @@ if (!function_exists('gateway_settings_payload')) {
             $kb['inline_keyboard'][] = [[
                 'text' => '📋 کپی آدرس کال‌بک',
                 'copy_text' => ['text' => frenzyex_callback_url()],
+            ]];
+        }
+        if ($key === 'variza') {
+            // pasted into Variza's panel (profile → webhook), never opened here
+            $kb['inline_keyboard'][] = [[
+                'text' => '📋 کپی آدرس وب‌هوک',
+                'copy_text' => ['text' => variza_webhook_url()],
             ]];
         }
         $legacy = gw_legacy_settings_datain($key);
@@ -4208,6 +4224,9 @@ if (!function_exists('gateway_settings_caption')) {
             // panel is where the completion webhook gets registered, so the
             // address belongs on the screen the admin is already looking at
             $cap .= "\n\n" . sprintf($textbotlang['Admin']['gateway']['frenzyExCallbackUrl'], frenzyex_callback_url());
+        }
+        if ($key === 'variza') {
+            $cap .= "\n\n" . sprintf($textbotlang['Admin']['gateway']['varizaWebhookUrl'], variza_webhook_url());
         }
         // every gateway, card included: the numbers that are actually in force
         $cap .= gateway_effective_report($lang, $key, $textbotlang);

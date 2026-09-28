@@ -439,6 +439,12 @@ return array (
         'group' => 'topup',
         'section' => 'topup_flow',
       ),
+      array (
+        'label' => '💳 کارت CubePay (شماره کارت و مبلغ دقیق)',
+        'key' => 'users.Balance.cubepayCardDetails',
+        'group' => 'topup',
+        'section' => 'topup_flow',
+      ),
       // ---- 🎁 پیام‌های تخفیف ----
       // Their own submenu rather than nine more rows in 💰: none of them is
       // per-gateway (the same sentence is produced for every gateway - see
@@ -1472,6 +1478,14 @@ return array (
 ❌ پس از تراکنش 15 تا یک ساعت زمان میبرد تا تراکنش تایید شود
 
 ✅ در صورت مشکل میتوانید با پشتیبانی در ارتباط باشید',
+      'cubepayCardDetails' => '💳 پرداخت کارت‌به‌کارت
+
+🔢 شماره کارت: <code>%s</code>
+👤 به نام: %s
+💰 مبلغ دقیق: <code>%s</code> تومان
+⏳ مهلت پرداخت: %s دقیقه
+
+⚠️ مبلغ را دقیقاً به همین عدد واریز کنید؛ رقم‌های آخر عمدی است و تایید خودکار با همان انجام می‌شود.',
       'transactionCreated3' => '✅ تراکنش شما ایجاد شد
         
 🛒 کد پیگیری:  <code>%s</code> 
@@ -3489,6 +3503,11 @@ nowpayments.io
       'askFrenzyExCallbackSecret' => '🔒 رمز تایید کالبک (Callback Secret) که از FrenzyEx گرفتید رو وارد کنید
 
 رمز فعلی شما : %s',
+      'varizaWebhookUrl' => '🔗 آدرس وب‌هوک شما:
+
+<code>%s</code>
+
+این آدرس رو توی پنل واریزا (پروفایل ← وب‌هوک) ثبت کنید و کلید امضای همون‌جا رو در «🔐 کلید امضای وب‌هوک» بزنید؛ پرداخت‌ها خودکار تایید می‌شن.',
       'frenzyExCallbackUrl' => '🔗 آدرس کال‌بک (Callback URL) شما:
 
 <code>%s</code>
@@ -7151,6 +7170,10 @@ nowpayments.io
       'apiKeyLabel' => '🔑 کلید API',
       'merchantLabel' => '🔑 کد پذیرنده (مرچنت)',
       'callbackSecretLabel' => '🔒 رمز تایید کالبک (Callback Secret)',
+      'endpointLabel' => '🔗 آدرس درگاه (فقط https)',
+      'webhookSecretLabel' => '🔐 کلید امضای وب‌هوک',
+      'feeLabel' => '💸 کارمزد مشتری (تا ۱۰۰ درصد، بیشتر از ۱۰۰ مبلغ ثابت تومان)',
+      'dailyLimitLabel' => '📅 سقف پرداخت روزانه (تومان، ۰ یعنی بی‌سقف)',
       'payUrlLabel' => '🔗 آدرس درگاه',
       'cashbackLabel' => '🎁 درصد بازگشت وجه',
       'globalFieldPrefix' => '🌐 ',
@@ -7771,6 +7794,9 @@ nowpayments.io
     'wheelLuck' => '🎲 گردونه شانس',
     'zarinPal' => 'زرین پال',
     'frenzyEx' => 'درگاه ارزی ریالی FrenzyEx',
+    'cubePay' => 'CubePay',
+    'abanGateway' => 'آبان گیت‌وی',
+    'varizaPay' => 'واریزا (کارت به کارت خودکار)',
   ),
   'keyboard' => 
   array (
@@ -8791,6 +8817,36 @@ nowpayments.io
     'statusFailed' => 'ناموفق',
     'descThanks' => 'از انجام تراکنش متشکریم!',
     'giftReport' => '🎁 کاربر عزیز مبلغ %s تومان به عنوان هدیه واریز به حساب شما واریز گردید.',
+    'reportCubePay' => '💵 پرداخت جدید
+- 👤 نام کاربری کاربر : @%s
+- 🆔 آیدی عددی کاربر : %s
+- 💸 مبلغ تراکنش %s
+- 💳 روش پرداخت : CubePay',
+    'reportAbanGateway' => '💵 پرداخت جدید
+- 👤 نام کاربری کاربر : @%s
+- 🆔 آیدی عددی کاربر : %s
+- 💸 مبلغ تراکنش %s
+- 💳 روش پرداخت : آبان گیت‌وی',
+    'reportVariza' => '💵 پرداخت جدید
+- 👤 نام کاربری کاربر : @%s
+- 🆔 آیدی عددی کاربر : %s
+- 💸 مبلغ تراکنش %s
+- 🧾 شماره سفارش : %s
+- 🔗 شناسه پرداخت واریزا : %s
+- 💳 روش پرداخت : واریزا',
+    'resultSuccessTitle' => 'پرداخت با موفقیت انجام شد',
+    'resultSuccessText' => 'سفارش شما ثبت شد. برای دریافت سرویس به ربات برگردید.',
+    'resultAlreadyTitle' => 'این پرداخت قبلاً تایید شده است',
+    'resultAlreadyText' => 'نیازی به پرداخت دوباره نیست. برای دیدن سرویس به ربات برگردید.',
+    'resultFailedTitle' => 'پرداخت تایید نشد',
+    'resultFailedText' => 'اگر مبلغ از حساب شما کسر شده، تا ساعاتی دیگر برمی‌گردد. در صورت نیاز با پشتیبانی تماس بگیرید.',
+    'resultWaitingTitle' => 'در انتظار تأیید',
+    'resultWaitingText' => 'واریز شما در انتظار تأیید خودکار است. پس از تأیید، حساب شما خودکار شارژ می‌شود و ربات خبر می‌دهد.',
+    'resultNotFoundTitle' => 'این تراکنش پیدا نشد',
+    'resultNotFoundText' => 'شناسه‌ی سفارش معتبر نیست یا مربوط به این ربات نیست.',
+    'resultOrderLabel' => 'شناسه سفارش',
+    'resultAmountLabel' => 'مبلغ',
+    'resultBackToBot' => 'بازگشت به ربات',
     'lowAmount' => '❌ کاربر کمتر از مبلغ تعیین شده واریز کرده است.',
     'reportZarinpal' => '💵 پرداخت جدید
         

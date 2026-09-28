@@ -49,7 +49,7 @@ if ($result->code == "1") {
     $price = $Payment_report;
     $dec_payment_status = $textbotlang['paymentGateway']['descThanks'];
     $Payment_report = select("Payment_report", "*", "id_order", $invoice_id,"select");
-    if($Payment_report['payment_Status'] != "paid"){
+    if($Payment_report['payment_Status'] != "paid" && payment_claim($invoice_id)){
     $textbotlang = payer_texts($Payment_report['id_user']);
     DirectPayment($invoice_id,"../images.jpg");
     $pricecashback = select("PaySetting", "ValuePay", "NamePay", "chashbackaqaypardokht","select")['ValuePay'];

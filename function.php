@@ -2905,6 +2905,22 @@ if (!function_exists('gw_field_registry')) {
                 ['field' => 'frenzyex_callback_secret', 'type' => 'text', 'label' => 'callbackSecretLabel', 'scope' => 'global'],
                 ['field' => 'frenzyexInvoiceExpireMinutes', 'type' => 'number', 'label' => 'invoiceExpireLabel'],
             ],
+            'cubepay' => [
+                ['field' => 'cubepay_api_token', 'type' => 'text', 'label' => 'apiKeyLabel', 'scope' => 'global'],
+                ['field' => 'cubepay_fee', 'type' => 'text', 'label' => 'feeLabel', 'scope' => 'global'],
+                ['field' => 'chashbackcubepay', 'type' => 'text', 'label' => 'cashbackLabel', 'scope' => 'global'],
+            ],
+            'abangateway' => [
+                ['field' => 'abangateway_api_key', 'type' => 'text', 'label' => 'apiKeyLabel', 'scope' => 'global'],
+                ['field' => 'abangateway_endpoint', 'type' => 'text', 'label' => 'endpointLabel', 'scope' => 'global'],
+                ['field' => 'abangateway_dailylimit', 'type' => 'text', 'label' => 'dailyLimitLabel', 'scope' => 'global'],
+                ['field' => 'chashbackabangateway', 'type' => 'text', 'label' => 'cashbackLabel', 'scope' => 'global'],
+            ],
+            'variza' => [
+                ['field' => 'variza_api_token', 'type' => 'text', 'label' => 'apiKeyLabel', 'scope' => 'global'],
+                ['field' => 'variza_webhook_secret', 'type' => 'text', 'label' => 'webhookSecretLabel', 'scope' => 'global'],
+                ['field' => 'chashbackvariza', 'type' => 'text', 'label' => 'cashbackLabel', 'scope' => 'global'],
+            ],
             'paymentnotverify' => [],
             'startelegrams' => [
                 ['field' => 'starInvoiceExpireMinutes', 'type' => 'number', 'label' => 'invoiceExpireLabel'],
@@ -3034,6 +3050,9 @@ if (!function_exists('gateway_registry')) {
             'aqayepardakht' => $textbotlang['textbot']['aqayePardakht'],
             'zarinpal' => $textbotlang['textbot']['zarinPal'],
             'frenzyex' => $textbotlang['textbot']['frenzyEx'],
+            'cubepay' => $textbotlang['textbot']['cubePay'],
+            'abangateway' => $textbotlang['textbot']['abanGateway'],
+            'variza' => $textbotlang['textbot']['varizaPay'],
             'paymentnotverify' => $textbotlang['textbot']['paymentNotVerify'],
             'startelegrams' => $textbotlang['textbot']['starTelegram'],
         ];
@@ -3059,7 +3078,7 @@ if (!function_exists('gateway_groups')) {
             // rial processors - every one of these is fa-only (see
             // gateway_fa_only_keys), so the group simply never appears on the
             // other language tabs
-            'rial' => ['iranpay1', 'iranpay2', 'iranpay3', 'aqayepardakht', 'zarinpal', 'paymentnotverify'],
+            'rial' => ['iranpay1', 'iranpay2', 'iranpay3', 'aqayepardakht', 'zarinpal', 'cubepay', 'abangateway', 'variza', 'paymentnotverify'],
             // rial-priced, but settled through a forex/crypto processor rather
             // than a rial PSP - its own family, directly under the rial one,
             // so it is configured from its own button instead of being mixed
@@ -3199,7 +3218,7 @@ if (!function_exists('gateway_all_keys')) {
     function gateway_all_keys()
     {
         return ['card', 'plisio', 'nowpayment', 'ton', 'trx', 'usdtbep', 'digitaltron', 'iranpay1', 'iranpay2',
-            'iranpay3', 'aqayepardakht', 'zarinpal', 'frenzyex', 'paymentnotverify', 'startelegrams'];
+            'iranpay3', 'aqayepardakht', 'zarinpal', 'frenzyex', 'cubepay', 'abangateway', 'variza', 'paymentnotverify', 'startelegrams'];
     }
 }
 if (!function_exists('gateway_lang_map')) {
@@ -5753,6 +5772,9 @@ if (!function_exists('topup_usd_rate')) {
             'digitaltron' => 'digitaltron',
             'zarinpal' => 'zarinpal',
             'frenzyex' => 'frenzyex',
+            'cubepay' => 'cubepay',
+            'abangateway' => 'abangateway',
+            'variza' => 'variza',
             'aqayepardakht' => 'aqayepardakht',
             'iranpay1' => 'iranpay1',
             'iranpay2' => 'iranpay2',
@@ -6979,6 +7001,9 @@ if (!function_exists('topup_gateway_key_by_method')) {
             'arze digital offline' => 'digitaltron',
             'zarinpal' => 'zarinpal',
             'frenzyex' => 'frenzyex',
+            'cubepay' => 'cubepay',
+            'AbanGateway' => 'abangateway',
+            'variza' => 'variza',
             'aqayepardakht' => 'aqayepardakht',
             'Currency Rial 1' => 'iranpay1',
             'Currency Rial 2' => 'iranpay2',
@@ -7722,7 +7747,7 @@ if (!function_exists('gateway_fa_only_keys')) {
     // where it actually protects the real checkout flow.
     function gateway_fa_only_keys()
     {
-        return ['zarinpal', 'frenzyex', 'aqayepardakht', 'iranpay1', 'iranpay2', 'iranpay3', 'paymentnotverify'];
+        return ['zarinpal', 'frenzyex', 'cubepay', 'abangateway', 'variza', 'aqayepardakht', 'iranpay1', 'iranpay2', 'iranpay3', 'paymentnotverify'];
     }
 }
 if (!function_exists('gateway_applicable_for_lang')) {
@@ -13312,6 +13337,9 @@ if (!function_exists('topup_disc_method_to_gateway')) {
             'nowpayment' => 'nowpayment',
             'aqayepardakht' => 'aqayepardakht',
             'zarinpal' => 'zarinpal',
+            'cubepay' => 'cubepay',
+            'AbanGateway' => 'abangateway',
+            'variza' => 'variza',
             'Currency Rial 1' => 'iranpay1',
             'Currency Rial 2' => 'iranpay2',
             'Currency Rial 3' => 'iranpay3',
@@ -18144,6 +18172,20 @@ if (!function_exists('panelProtocolsConfigured')) {
         return ['error' => $textbotlang['Admin']['managepanel']['protocolsNotConfigured'] ?? 'Protocols and inbounds are not configured for this location.'];
     }
 }
+if (!function_exists('payment_claim')) {
+    // Marks a payment paid, and says true to the ONE request that did it. Every
+    // gateway asks this before crediting: a callback sent twice, or a browser
+    // reload landing at the same moment, went through the «not paid yet?»
+    // check twice and credited twice.
+    function payment_claim($orderId)
+    {
+        global $pdo;
+        $stmt = $pdo->prepare("UPDATE Payment_report SET payment_Status = 'paid' WHERE id_order = ? AND payment_Status <> 'paid'");
+        $stmt->execute([(string) $orderId]);
+        clearSelectCache('Payment_report');
+        return $stmt->rowCount() === 1;
+    }
+}
 if (!function_exists('balance_add')) {
     // A balance moved by an amount in ONE statement. «Read it, then write the
     // sum back» lost whatever landed in between: a top-up approved while a
@@ -18937,6 +18979,224 @@ function createPayZarinpal($price, $order_id)
 // own create endpoint has no idempotency key) - the caller's message-replace
 // ordering (delete-then-show-placeholder, same as every redirect gateway
 // already does) is what keeps a second tap from creating a second request.
+// ---- three rial gateways from the original bot: CubePay, AbanGateway, Variza ----
+// Each one settles through its own callback in payment/, which claims the
+// payment (payment_claim) before crediting it, like every gateway here.
+if (!function_exists('cubepay_payable_amount')) {
+    // CubePay can pass its fee on to the customer: «cubepay_fee» up to 100 is a
+    // percentage, above 100 a fixed amount in toman; 0 or empty is no fee
+    function cubepay_payable_amount($price)
+    {
+        $fee = (float) str_replace([',', '،'], '', (string) getPaySettingValue('cubepay_fee', '0'));
+        $base = (int) round((float) $price);
+        if ($fee <= 0) {
+            return $base;
+        }
+        // rounded first: 50000 × 1.1 is 55000.000000000007 in floating point,
+        // which ceil() would turn into 55001
+        return $fee <= 100 ? (int) ceil(round($base * (1 + $fee / 100), 4)) : $base + (int) round($fee);
+    }
+    function createPayCubePay($price, $order_id)
+    {
+        global $domainhosts;
+        $token = trim((string) getPaySettingValue('cubepay_api_token', ''));
+        if ($token === '' || $token === '0') {
+            return ['success' => false, 'message' => 'cubepay: the API token is not set'];
+        }
+        $curl = curl_init();
+        curl_setopt_array($curl, [
+            CURLOPT_URL => 'https://cubevps.ir/pay/create-order.php',
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_CUSTOMREQUEST => 'POST',
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Authorization: Bearer ' . $token],
+            CURLOPT_POSTFIELDS => json_encode([
+                'price_amount' => cubepay_payable_amount($price),
+                'order_id' => $order_id,
+                'callback_url' => "https://$domainhosts/payment/cubepay.php",
+                'redirect_after_payment' => false,
+            ], JSON_UNESCAPED_UNICODE),
+        ]);
+        $response = curl_exec($curl);
+        curl_close($curl);
+        $decoded = json_decode((string) $response, true);
+        if (!is_array($decoded)) {
+            return ['success' => false, 'message' => 'cubepay: no answer it could read'];
+        }
+        if (empty($decoded['payment_link']) && !empty($decoded['pay_page_url'])) {
+            $decoded['payment_link'] = $decoded['pay_page_url'];
+        }
+        return $decoded;
+    }
+    // CubePay may ask for its card to be shown in the chat as well: the card,
+    // its holder, the EXACT amount (its last digits identify the payment) and
+    // how long it stays open. null when it did not ask.
+    function cubepay_card_details_text($payment, $textbotlang)
+    {
+        if (!is_array($payment) || empty($payment['show_card_in_bot']) || empty($payment['card']['number'])) {
+            return null;
+        }
+        $amount = (int) ($payment['pay_amount_toman'] ?? 0);
+        $minutes = (int) ($payment['expires_in_minutes'] ?? 0);
+        $template = (string) ($textbotlang['users']['Balance']['cubepayCardDetails'] ?? '');
+        if ($amount < 1 || $minutes < 1 || $template === '') {
+            return null;
+        }
+        $holder = trim((string) ($payment['card']['holder'] ?? ''));
+        return sprintf(
+            $template,
+            htmlspecialchars((string) $payment['card']['number'], ENT_QUOTES, 'UTF-8'),
+            htmlspecialchars($holder === '' ? '-' : $holder, ENT_QUOTES, 'UTF-8'),
+            number_format($amount),
+            $minutes
+        );
+    }
+}
+if (!function_exists('abangateway_endpoint')) {
+    // AbanGateway runs on the merchant's own address - https only, never a
+    // plain one the API key would travel over in the clear
+    function abangateway_endpoint()
+    {
+        $endpoint = trim((string) getPaySettingValue('abangateway_endpoint', ''));
+        $parts = parse_url($endpoint);
+        if ($endpoint === '' || $endpoint === '0' || !is_array($parts) || ($parts['scheme'] ?? '') !== 'https' || ($parts['host'] ?? '') === '') {
+            return null;
+        }
+        return rtrim($endpoint, '/');
+    }
+    function createPayAbanGateway($price, $order_id)
+    {
+        global $domainhosts;
+        $key = trim((string) getPaySettingValue('abangateway_api_key', ''));
+        $endpoint = abangateway_endpoint();
+        if ($key === '' || $key === '0' || $endpoint === null) {
+            return ['success' => false, 'message' => 'abangateway: the API key or the https address is not set'];
+        }
+        $curl = curl_init();
+        curl_setopt_array($curl, [
+            CURLOPT_URL => $endpoint . '/create',
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 25,
+            CURLOPT_CUSTOMREQUEST => 'POST',
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Accept: application/json', 'Authorization: Bearer ' . $key],
+            CURLOPT_POSTFIELDS => json_encode([
+                'amount' => (int) round((float) $price),
+                'order_id' => $order_id,
+                'callback_url' => "https://$domainhosts/payment/abangateway.php",
+            ], JSON_UNESCAPED_UNICODE),
+        ]);
+        $response = curl_exec($curl);
+        curl_close($curl);
+        $decoded = json_decode((string) $response, true);
+        return is_array($decoded) ? $decoded : ['success' => false, 'message' => 'abangateway: no answer it could read'];
+    }
+    // «abangateway_dailylimit»: once today's paid total reaches it, the gateway
+    // says it is busy until tomorrow. 0 or empty is no limit.
+    function abangateway_over_daily_limit()
+    {
+        global $pdo;
+        $limit = (int) getPaySettingValue('abangateway_dailylimit', '0');
+        if ($limit <= 0) {
+            return false;
+        }
+        $stmt = $pdo->prepare("SELECT SUM(price) FROM Payment_report WHERE Payment_Method = 'AbanGateway' AND payment_Status = 'paid' AND time LIKE ?");
+        $stmt->execute([date('Y/m/d') . '%']);
+        return (float) $stmt->fetchColumn() >= $limit;
+    }
+}
+if (!function_exists('createPayVariza')) {
+    // Variza's panel asks for this address (profile → webhook); it is shown,
+    // with a copy button, on the gateway's settings screen
+    function variza_webhook_url()
+    {
+        global $domainhosts;
+        return "https://{$domainhosts}/payment/variza_webhook.php";
+    }
+    function createPayVariza($price, $order_id)
+    {
+        global $domainhosts;
+        $token = trim((string) getPaySettingValue('variza_api_token', ''));
+        if ($token === '' || $token === '0') {
+            return ['error' => 'variza: the API token is not set'];
+        }
+        $curl = curl_init();
+        curl_setopt_array($curl, [
+            CURLOPT_URL => 'https://variza.ir/api/v1/pay',
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_CUSTOMREQUEST => 'POST',
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Accept: application/json', 'Authorization: Bearer ' . $token],
+            CURLOPT_POSTFIELDS => json_encode([
+                'amount' => (int) round((float) $price),
+                'return_url' => "https://{$domainhosts}/payment/variza.php?order=" . rawurlencode((string) $order_id),
+                'title' => 'Order ' . $order_id,
+                'expires_in' => '1h',
+            ], JSON_UNESCAPED_UNICODE),
+        ]);
+        $response = curl_exec($curl);
+        if ($response === false) {
+            $err = curl_error($curl);
+            curl_close($curl);
+            return ['error' => 'variza: ' . $err];
+        }
+        $httpCode = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
+        curl_close($curl);
+        $decoded = json_decode((string) $response, true);
+        if (!is_array($decoded) || $httpCode < 200 || $httpCode >= 300) {
+            return ['error' => 'variza: HTTP ' . $httpCode, 'raw' => mb_substr((string) $response, 0, 300)];
+        }
+        return $decoded;
+    }
+}
+if (!function_exists('payment_result_page')) {
+    // The page a customer's browser lands on after paying: ✓ paid, ✓ already
+    // paid, ✕ not confirmed, ⏱ still waiting, ? unknown order - in the
+    // customer's own language, with the order and amount and a way back to the
+    // bot. $state: success, already, failed, waiting, notfound.
+    function payment_result_page($state, $texts, $orderId = null, $price = null, $lang = 'fa')
+    {
+        global $usernamebot;
+        $pg = is_array($texts) && isset($texts['paymentGateway']) ? $texts['paymentGateway'] : [];
+        $pick = function ($key, $fallback) use ($pg) {
+            return isset($pg[$key]) && $pg[$key] !== '' ? $pg[$key] : $fallback;
+        };
+        $map = [
+            'success' => ['✓', '#2ecc71', $pick('resultSuccessTitle', 'Payment completed'), $pick('resultSuccessText', '')],
+            'already' => ['✓', '#2ecc71', $pick('resultAlreadyTitle', 'Already confirmed'), $pick('resultAlreadyText', '')],
+            'failed' => ['✕', '#e74c3c', $pick('resultFailedTitle', 'Payment was not confirmed'), $pick('resultFailedText', '')],
+            'waiting' => ['⏳', '#3498db', $pick('resultWaitingTitle', 'Waiting for confirmation'), $pick('resultWaitingText', '')],
+            'notfound' => ['?', '#e67e22', $pick('resultNotFoundTitle', 'Transaction not found'), $pick('resultNotFoundText', '')],
+        ];
+        [$icon, $colour, $title, $body] = $map[$state] ?? $map['failed'];
+        $h = fn($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+        $dir = $lang === 'fa' ? 'rtl' : 'ltr';
+        $rows = '';
+        if ($orderId !== null && $orderId !== '') {
+            $rows .= '<div class="row"><span>' . $h($pick('resultOrderLabel', 'Order id')) . '</span><b>' . $h($orderId) . '</b></div>';
+        }
+        if ($price !== null && (float) $price > 0) {
+            $rows .= '<div class="row"><span>' . $h($pick('resultAmountLabel', 'Amount')) . '</span><b>' . number_format((float) $price) . '</b></div>';
+        }
+        $bot = ltrim(trim((string) $usernamebot), '@');
+        $back = ($bot !== '' && preg_match('/^[A-Za-z0-9_]+$/', $bot))
+            ? '<a class="btn" href="https://t.me/' . $h($bot) . '">' . $h($pick('resultBackToBot', 'Back to the bot')) . '</a>' : '';
+        if (!headers_sent()) {
+            header('Content-Type: text/html; charset=utf-8');
+        }
+        echo '<!DOCTYPE html><html lang="' . $h($lang) . '" dir="' . $dir . '"><head><meta charset="utf-8">'
+            . '<meta name="viewport" content="width=device-width, initial-scale=1"><title>' . $h($title) . '</title><style>'
+            . 'body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0f1115;color:#e8eaed;font-family:Tahoma,Arial,sans-serif;padding:20px}'
+            . '.card{width:100%;max-width:360px;background:#181b21;border:1px solid #262a33;border-radius:18px;padding:28px 24px;text-align:center}'
+            . '.icon{width:58px;height:58px;line-height:58px;border-radius:50%;margin:0 auto 14px;font-size:28px;color:#fff;background:' . $colour . '}'
+            . 'h1{font-size:17px;margin:0 0 8px}p{color:#9aa0aa;font-size:13px;line-height:2;margin:0}'
+            . '.rows{margin-top:18px}.row{display:flex;justify-content:space-between;gap:12px;font-size:12.5px;border-top:1px solid #262a33;padding:9px 0;color:#9aa0aa}.row b{color:#e8eaed}'
+            . '.btn{display:block;margin-top:18px;padding:11px;border-radius:11px;background:#2b6ef2;color:#fff;text-decoration:none;font-size:13.5px}'
+            . '</style></head><body><div class="card"><div class="icon">' . $icon . '</div><h1>' . $h($title) . '</h1><p>' . $h($body) . '</p>'
+            . ($rows !== '' ? '<div class="rows">' . $rows . '</div>' : '') . $back . '</div></body></html>';
+    }
+}
 if (!function_exists('frenzyex_callback_url')) {
     // the completion-webhook address FrenzyEx's own merchant panel asks for,
     // built from the bot's own domain so the admin never types it by hand.

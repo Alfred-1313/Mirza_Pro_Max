@@ -56,7 +56,7 @@ while ($row = ($list_service)->fetch(PDO::FETCH_ASSOC)) {
             update("Payment_report", "payment_Status", "expire", "id_order", $Payment_report['id_order']);
         }
     }
-    if (isset($StatusPayment['data']['operations'][0]['status']) && $StatusPayment['data']['operations'][0]['status'] == "completed") {
+    if (isset($StatusPayment['data']['operations'][0]['status']) && $StatusPayment['data']['operations'][0]['status'] == "completed" && payment_claim($Payment_report['id_order'])) {
         DirectPayment($Payment_report['id_order'], "../images.jpg");
         $pricecashback = select("PaySetting", "ValuePay", "NamePay", "chashbackplisio", "select")['ValuePay'];
         $__q18 = $pdo->prepare("SELECT * FROM user WHERE id = ? LIMIT 1");

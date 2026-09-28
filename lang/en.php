@@ -754,6 +754,14 @@ Use the button below to pay 👇🏻',
 🔹 This transaction is valid for {minutes} minutes; do not pay after it expires.
 
 ✅ If you have a problem, contact support.',
+                        'cubepayCardDetails' => '💳 Card-to-card payment
+
+🔢 Card number: <code>%s</code>
+👤 Card holder: %s
+💰 Exact amount: <code>%s</code> Toman
+⏳ Payment deadline: %s minutes
+
+⚠️ Transfer exactly this amount; the last digits are intentional and automatic confirmation relies on them.',
                         'frenzyexInvoiceCreated' => '✅ Payment invoice was created.
 
 🔢 Invoice number: {invoice}
@@ -4295,6 +4303,9 @@ Connection link:
                 'trxPayment' => '⚡ Pay with TRX',
                 'usdtbepPayment' => '💵 Pay with Tether (BEP20)',
                 'frenzyEx' => 'FrenzyEx rial crypto gateway',
+                'cubePay' => 'CubePay',
+                'abanGateway' => 'AbanGateway',
+                'varizaPay' => 'Variza (automatic card to card)',
                 'cart' => 'To increase your balance, deposit the amount of <code>{price}</code>  Dollar  to the account number below 👇🏻
         
         ==================== 
@@ -5379,6 +5390,36 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'statusFailed' => 'Failed',
                 'descThanks' => 'Thank you for completing the transaction!',
                 'giftReport' => '🎁 Dear user, the amount of %s Dollar has been deposited into your account as a gift.',
+                'reportCubePay' => '💵 New payment
+- 👤 Username : @%s
+- 🆔 User ID : %s
+- 💸 Amount %s
+- 💳 Method : CubePay',
+                'reportAbanGateway' => '💵 New payment
+- 👤 Username : @%s
+- 🆔 User ID : %s
+- 💸 Amount %s
+- 💳 Method : AbanGateway',
+                'reportVariza' => '💵 New payment
+- 👤 Username : @%s
+- 🆔 User ID : %s
+- 💸 Amount %s
+- 🧾 Order ID : %s
+- 🔗 Variza payment slug : %s
+- 💳 Method : Variza',
+                'resultSuccessTitle' => 'Payment completed',
+                'resultSuccessText' => 'Your order has been recorded. Head back to the bot to get your service.',
+                'resultAlreadyTitle' => 'This payment was already confirmed',
+                'resultAlreadyText' => 'There is no need to pay again. Go back to the bot to see your service.',
+                'resultFailedTitle' => 'Payment was not confirmed',
+                'resultFailedText' => 'If you were charged, the amount will be returned within a few hours. Contact support if you need help.',
+                'resultWaitingTitle' => 'Waiting for confirmation',
+                'resultWaitingText' => 'Your transfer is waiting for automatic confirmation. Once confirmed, your balance is topped up and the bot will let you know.',
+                'resultNotFoundTitle' => 'Transaction not found',
+                'resultNotFoundText' => 'The order id is not valid, or it does not belong to this bot.',
+                'resultOrderLabel' => 'Order id',
+                'resultAmountLabel' => 'Amount',
+                'resultBackToBot' => 'Back to the bot',
                 'lowAmount' => '❌ The user deposited less than the specified amount.',
                 'reportZarinpal' => '💵 New payment
         

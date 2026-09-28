@@ -36,7 +36,7 @@ if ($Payment_report['payment_Status'] != "paid") {
     $order_id = explode('TrndOrderID_', $data['Hash'])[1];
     $response = $req->post(array('id' => $order_id));
     $response = is_string($response['body']) ? json_decode($response['body'], true) : false;
-    if ($response && $response['IsPaid'] && $data['IsPaid'] && $data['TronAmount'] == $response['TronAmount']) {
+    if ($response && $response['IsPaid'] && $data['IsPaid'] && $data['TronAmount'] == $response['TronAmount'] && payment_claim($data['PaymentID'])) {
         echo json_encode(array("status" => true));
         $textbotlang = payer_texts($Payment_report['id_user']);
         DirectPayment($data['PaymentID'], "../images.jpg");

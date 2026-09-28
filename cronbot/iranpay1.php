@@ -26,6 +26,8 @@ while ($Payment_report = ($list_service)->fetch(PDO::FETCH_ASSOC)) {
     if ($StatusPayment['data']['status'] != "approved")
         continue;
     update("Payment_report", "dec_not_confirmed", json_encode($StatusPayment['data']), "id_order", $Payment_report['id_order']);
+    if (!payment_claim($Payment_report['id_order']))
+        continue;
     DirectPayment($Payment_report['id_order']);
     $pricecashback = select("PaySetting", "ValuePay", "NamePay", "chashbackiranpay1", "select")['ValuePay'];
     $Balance_id = select("user", "*", "id", $Payment_report['id_user'], "select");

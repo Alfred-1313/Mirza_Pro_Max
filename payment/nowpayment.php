@@ -21,7 +21,7 @@ if (isset($data['payment_status']) && $data['payment_status'] == "finished") {
         // who paid is only known here, several lines after the Persian default
         // was loaded at the top of this file - so it is settled again, properly
         $textbotlang = payer_texts($Payment_report['id_user']);
-        if ($Payment_report['payment_Status'] == "paid")
+        if ($Payment_report['payment_Status'] == "paid" || !payment_claim($Payment_report['id_order']))
             return;
         DirectPayment($Payment_report['id_order'], "../images.jpg");
         $pricecashback = select("PaySetting", "ValuePay", "NamePay", "cashbacknowpayment", "select")['ValuePay'];
