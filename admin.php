@@ -5503,6 +5503,7 @@ if (!function_exists('feature_section_caption')) {
                 '{max}' => $rw['max'],
                 '{panel}' => $rwPanel !== null ? htmlspecialchars($rwPanel['name_panel']) : $s['affrwNoPanel'],
                 '{mode}' => $rw['mode'] === 'auto' ? $s['affrwModeAuto'] : $s['affrwModeAdmin'],
+                '{leave}' => feature_setting_value('affrw_leave', $lang, '0') !== '1' ? $tx['Admin']['Status']['statusoff'] : (affrw_leave_channels($lang) ? $tx['Admin']['Status']['statuson'] : $s['affrwLeaveNotReady']),
             ]) . refv_caption_line($lang, $s) . (feature_value('affiliatesstatus', $lang, $affSetting['affiliatesstatus']) == "offaffiliates" ? strtr($s['affrwAffOff'], ['{lang}' => $langName]) : '');
         }
         return strtr($s['locTitle'], [
@@ -5623,6 +5624,11 @@ if (!function_exists('feature_section_payload')) {
             $rows[] = [['text' => strtr($s['affrwPanelBtn'], ['{panel}' => $rwPanel !== null ? $rwPanel['name_panel'] : $s['affrwNoPanel']]), 'callback_data' => "flsaffrw:{$lang}:panel", 'style' => 'primary']];
             $rows[] = [['text' => strtr($s['affrwMaxBtn'], ['{max}' => $rw['max']]), 'callback_data' => "flsask:{$lang}:affrw_max", 'style' => 'primary']];
             $rows[] = [['text' => strtr($s['affrwModeBtn'], ['{mode}' => $rw['mode'] === 'auto' ? $s['affrwModeAuto'] : $s['affrwModeAdmin']]), 'callback_data' => "flsaffrw:{$lang}:mode", 'style' => 'primary']];
+            $lvOn = feature_setting_value('affrw_leave', $lang, '0') === '1';
+            $rows[] = [
+                ['text' => $lvOn ? $on : $off, 'callback_data' => "flsaffrw:{$lang}:leave", 'style' => $lvOn ? 'success' : 'danger'],
+                ['text' => $s['affrwLeaveBtn'], 'callback_data' => "none"],
+            ];
         } else {
             $rows[] = [['text' => strtr($s['locAllBtn'], ['{all}' => (string) $v['loc_limit_all']]), 'callback_data' => "flsask:{$lang}:loc_limit_all"]];
             $rows[] = [['text' => strtr($s['locFreeBtn'], ['{free}' => (string) $v['loc_limit_free']]), 'callback_data' => "flsask:{$lang}:loc_limit_free"]];
@@ -7696,7 +7702,7 @@ if (preg_match('/^affrwzero_(\d+)$/', $datain, $rz_m) && $adminrulecheck['rule']
     telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $textbotlang['Admin']['UserMgmt']['affrwResetDone'], 'show_alert' => true]);
     return;
 }
-if (preg_match('/^flsaffrw:([a-z]{2}):(on|mode|panel|p:(\d+))$/', $datain, $rw_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^flsaffrw:([a-z]{2}):(on|mode|panel|leave|p:(\d+))$/', $datain, $rw_m) && $adminrulecheck['rule'] == "administrator") {
     $rw_lang = $rw_m[1];
     $rw = affrw_cfg($rw_lang);
     if ($rw_m[2] === 'on') {
@@ -7715,6 +7721,19 @@ if (preg_match('/^flsaffrw:([a-z]{2}):(on|mode|panel|p:(\d+))$/', $datain, $rw_m
         feature_setting_set('affrw_on', $rw_lang, $rw['on'] ? '0' : '1');
     } elseif ($rw_m[2] === 'mode') {
         feature_setting_set('affrw_mode', $rw_lang, $rw['mode'] === 'auto' ? 'admin' : 'auto');
+    } elseif ($rw_m[2] === 'leave') {
+        $rw_lv = feature_setting_value('affrw_leave', $rw_lang, '0') === '1';
+        // it watches 🛡's channels - without them it could never see a leave
+        $rw_rv = refv_cfg($rw_lang);
+        if (!$rw_lv && (!$rw_rv['channel'] || !refv_channel_rows($rw_rv))) {
+            telegram('answerCallbackQuery', [
+                'callback_query_id' => $callback_query_id,
+                'text' => lang_tab_texts('fa')['Admin']['FeatureSection']['affrwLeaveNeedsChannel'],
+                'show_alert' => true,
+            ]);
+            return;
+        }
+        feature_setting_set('affrw_leave', $rw_lang, $rw_lv ? '0' : '1');
     } elseif ($rw_m[2] === 'panel') {
         [$rw_cap, $rw_kb] = affrw_panel_payload($rw_lang);
         Editmessagetext($from_id, $message_id, $rw_cap, $rw_kb);

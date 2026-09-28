@@ -2067,6 +2067,8 @@ if (!function_exists('refv_cfg')) {
         $invName = (is_array($inv) && !empty($inv['username']) && $inv['username'] !== 'none') ? '@' . $inv['username'] : (string) $inviterId;
         bottext_extras_key_hint("users.affiliates.{$welcome}");
         sendmessage($uid, strtr(text_fill_s($tx['users']['affiliates'][$welcome], (string) ($inv['username'] ?? '')), ['{inviter}' => htmlspecialchars($invName)]), $keyboard, 'html');
+        // 🚪 a free config paused by a leave: this invite fills the gap
+        affrw_refill($inviterId, $uid);
         // 🎉 and the inviter, in theirs
         $u = (string) ($userRow['username'] ?? '');
         $own = ((string) ($from_id ?? '') === $uid && (string) ($first_name ?? '') !== '') ? (string) $first_name : $uid;
@@ -17297,6 +17299,141 @@ if (!function_exists('affrw_cfg')) {
     {
         return $row === null || in_array($row['status'], ['rejected', 'open'], true);
     }
+    // 🚪 the invitees behind the latest reward, and how many more it needs
+    // after some of them left its channel
+    function affrw_members($row)
+    {
+        return is_array($row) ? array_map('strval', json_decode((string) ($row['members'] ?? ''), true) ?: []) : [];
+    }
+    function affrw_missing($row, $cfg)
+    {
+        $left = json_decode((string) ($row['left_ids'] ?? ''), true) ?: [];
+        return max(0, $cfg['need'] - count(array_diff(affrw_members($row), array_map('strval', $left))));
+    }
+    // 🚪 غیرفعال شدن با خروج از کانال, per language: it watches the channels
+    // of 🛡's 📯 check, so with that off there is nothing to watch
+    function affrw_leave_channels($lang)
+    {
+        $rv = refv_cfg($lang);
+        if (feature_setting_value('affrw_leave', $lang, '0') !== '1' || !$rv['channel']) {
+            return [];
+        }
+        return refv_channel_rows($rv);
+    }
+    // the service of the latest reward switched on or off on its panel: its
+    // invoice when it is (now) in that state, null when it is gone or ended
+    // (expired, used up) - then there is nothing to pause
+    function affrw_switch($row, $on)
+    {
+        global $ManagePanel;
+        $inv = select("invoice", "*", "id_invoice", (string) ($row['id_invoice'] ?? ''), "select");
+        if (!is_array($inv)) {
+            return null;
+        }
+        $st = $ManagePanel->DataUser($inv['Service_location'], $inv['username'])['status'] ?? '';
+        if ($st === ($on ? 'disabled' : 'active')) {
+            $ManagePanel->Change_status($inv['username'], $inv['Service_location']);
+            return $inv;
+        }
+        return $st === ($on ? 'active' : 'disabled') ? $inv : null;
+    }
+    // below the count: paused and the customer told; full again: back on
+    function affrw_leave_apply($uid, $row, $name = '', $channel = '')
+    {
+        global $pdo;
+        $missing = affrw_missing($row, affrw_cfg($row['lang']));
+        $paused = (int) ($row['suspended'] ?? 0) === 1;
+        if ($paused === ($missing > 0)) {
+            return;
+        }
+        $inv = affrw_switch($row, $paused);
+        if ($inv === null && !$paused) {
+            return;
+        }
+        $pdo->prepare("UPDATE affiliate_reward SET suspended = ? WHERE user_id = ?")->execute([$paused ? 0 : 1, (string) $uid]);
+        if ($inv === null) {
+            return;
+        }
+        $key = $paused ? 'rewardResumed' : 'rewardPaused';
+        bottext_extras_key_hint("users.affiliates.{$key}");
+        sendmessage($uid, strtr(payer_texts($uid)['users']['affiliates'][$key], [
+            '{name}' => htmlspecialchars($name),
+            '{channel}' => htmlspecialchars($channel),
+            '{service}' => htmlspecialchars((string) $inv['username']),
+            '{missing}' => $missing,
+        ]), null, 'HTML');
+    }
+    // A member left one of those channels, or joined again ($chat: the
+    // update's chat). Only someone behind a customer's latest free config
+    // matters: leaving marks them gone; back in every chosen channel, not.
+    function affrw_member_moved($memberId, array $chat, $joined, $name)
+    {
+        global $pdo;
+        $m = select("user", "*", "id", (string) $memberId, "select");
+        $uid = is_array($m) ? (string) ($m['affiliates'] ?? '0') : '0';
+        if ($uid === '0' || $uid === '') {
+            return;
+        }
+        $row = affrw_row($uid);
+        if ($row === null || !in_array((string) $memberId, affrw_members($row), true)) {
+            return;
+        }
+        $hit = null;
+        foreach (affrw_leave_channels($row['lang']) as $c) {
+            $link = (string) $c['link'];
+            if ($link === (string) ($chat['id'] ?? '') || (!empty($chat['username']) && strcasecmp(ltrim($link, '@'), (string) $chat['username']) === 0)) {
+                $hit = $c;
+                break;
+            }
+        }
+        if ($hit === null) {
+            return;
+        }
+        $left = array_map('strval', json_decode((string) ($row['left_ids'] ?? ''), true) ?: []);
+        $was = in_array((string) $memberId, $left, true);
+        if ($joined) {
+            if (!$was || refv_unjoined($memberId, $uid)) {
+                return;
+            }
+            $left = array_values(array_diff($left, [(string) $memberId]));
+        } else {
+            if ($was) {
+                return;
+            }
+            $left[] = (string) $memberId;
+        }
+        $row['left_ids'] = json_encode($left);
+        $pdo->prepare("UPDATE affiliate_reward SET left_ids = ? WHERE user_id = ?")->execute([$row['left_ids'], $uid]);
+        affrw_leave_apply($uid, $row, $name, (string) $hit['remark']);
+    }
+    // a new invite while paused fills the gap - it goes with that reward, not
+    // toward the next one
+    function affrw_refill($uid, $newId)
+    {
+        global $pdo;
+        $row = affrw_row($uid);
+        if ($row === null || (int) ($row['suspended'] ?? 0) !== 1) {
+            return;
+        }
+        $members = affrw_members($row);
+        $members[] = (string) $newId;
+        $row['members'] = json_encode(array_values(array_unique($members)));
+        $pdo->prepare("UPDATE affiliate_reward SET members = ? WHERE user_id = ?")->execute([$row['members'], (string) $uid]);
+        affrw_leave_apply($uid, $row);
+    }
+    // how many invites a paused free config still waits for, or null when
+    // this service is not one
+    function affrw_paused_missing($inv)
+    {
+        if (!is_array($inv)) {
+            return null;
+        }
+        $row = affrw_row($inv['id_user']);
+        if ($row === null || (int) ($row['suspended'] ?? 0) !== 1 || (string) $row['id_invoice'] !== (string) $inv['id_invoice']) {
+            return null;
+        }
+        return max(1, affrw_missing($row, affrw_cfg($row['lang'])));
+    }
     // 🔄 the admin's reset from a customer's own screen: their count starts
     // from zero (only people who join from now on count) and they can earn it
     // again, as many times as the setting allows; a request waiting for
@@ -17332,9 +17469,10 @@ if (!function_exists('affrw_cfg')) {
     function affrw_count($uid, $since)
     {
         global $pdo;
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM user WHERE affiliates = ? AND id != ? AND CAST(register AS UNSIGNED) > ?");
+        $stmt = $pdo->prepare("SELECT id FROM user WHERE affiliates = ? AND id != ? AND CAST(register AS UNSIGNED) > ?");
         $stmt->execute([(string) $uid, (string) $uid, (int) $since]);
-        return (int) $stmt->fetchColumn();
+        // someone who filled a paused reward's gap is not a new invite too
+        return count(array_diff(array_map('strval', $stmt->fetchAll(PDO::FETCH_COLUMN)), affrw_members(affrw_row($uid))));
     }
     // Takes this customer's one slot: a new row, or a refused one opened
     // again. False when another request got there first.
@@ -17536,7 +17674,7 @@ if (!function_exists('affrw_cfg')) {
         $since = affrw_since($cfg, $row);
         $st = $pdo->prepare("SELECT id FROM user WHERE affiliates = ? AND id != ? AND CAST(register AS UNSIGNED) > ? ORDER BY CAST(register AS UNSIGNED)");
         $st->execute([(string) $uid, (string) $uid, (int) $since]);
-        $members = array_map('strval', $st->fetchAll(PDO::FETCH_COLUMN));
+        $members = array_values(array_diff(array_map('strval', $st->fetchAll(PDO::FETCH_COLUMN)), affrw_members($row)));
         $times = (int) ($row['times'] ?? 0) + 1;
         $more = $times < $cfg['max'];
         $stmt = $pdo->prepare("UPDATE affiliate_reward SET status = ?, id_invoice = ?, time = ?, times = ?, since = ?, members = ?, left_ids = '[]', suspended = 0 WHERE user_id = ?");

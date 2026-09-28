@@ -987,6 +987,14 @@ Your free config request was sent to the admin; it will be created once approved
                         'rewardRejected' => '❌ Your free config request was not approved.
 From now on your invites are counted from zero again, and you can try again.',
                         'rewardServiceName' => '🎁 Referral gift',
+                        'rewardPaused' => '⚠️ <b>{name}</b>, who joined through your invite link, has left <b>{channel}</b>.
+
+⏸ Your free config (<code>{service}</code>) has been paused for now.
+
+👥 To turn it back on, bring <b>{missing}</b> more people with your invite link (or {name} rejoins the channel). As soon as the count is full again, your service switches back on automatically.',
+                        'rewardResumed' => '✅ Your invites are complete again, and your free config (<code>{service}</code>) is active again.',
+                        'rewardPausedLocked' => '⏸ This free config is paused because people you invited left the channel, so it can\'t be switched on from here.
+👥 Invite <b>{missing}</b> more people and it switches back on automatically.',
                         'rewardAfterPay' => '🎁 Your referral gift config was created successfully
 
 👤 Service username: {username}

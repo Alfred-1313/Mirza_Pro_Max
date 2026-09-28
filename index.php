@@ -45,6 +45,11 @@ if (isset($update['chat_member'])) {
         $lc_btn['url'] = $lc_url;
         $keyboard_channel_left = json_encode(['inline_keyboard' => [[$lc_btn]]]);
     }
+    // 🚪 someone behind a free config leaving its channel, or back in it
+    if (in_array($status, ['member', 'administrator', 'creator', 'left', 'kicked'], true)) {
+        $lc_who = $update['chat_member']['new_chat_member']['user'];
+        affrw_member_moved($from_id, $lc_chat, !in_array($status, ['left', 'kicked'], true), !empty($lc_who['username']) ? '@' . $lc_who['username'] : (string) ($lc_who['first_name'] ?? $from_id));
+    }
     if (in_array($status, ['member', 'administrator', 'creator'], true) && is_array($user)) {
         // 🛡 a referral waiting on this channel: counted once all is done
         refv_try($from_id, null, true);
@@ -1775,6 +1780,14 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         sendmessage($from_id, $textbotlang['users']['featureUnavailable'], null, 'html');
         return;
     }
+    // 🚪 a free config paused because invitees left its channel: only
+    // inviting again (or them coming back) turns it on
+    $rw_missing = affrw_paused_missing($nameloc);
+    if ($rw_missing !== null) {
+        bottext_extras_key_hint('users.affiliates.rewardPausedLocked');
+        sendmessage($from_id, strtr($textbotlang['users']['affiliates']['rewardPausedLocked'], ['{missing}' => $rw_missing]), null, 'html');
+        return;
+    }
     $DataUserOut = $ManagePanel->DataUser($nameloc['Service_location'], $nameloc['username']);
     if ($DataUserOut['status'] == "on_hold") {
         sendmessage($from_id, $textbotlang['users']['status']['notConnectedCannotChangeStatus'], null, 'html');
@@ -1812,6 +1825,14 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
 } elseif (preg_match('/confirmaccountdisable_(\w+)/', $datain, $dataget)) {
     $id_invoice = $dataget[1];
     $nameloc = select("invoice", "*", "id_invoice", $id_invoice, "select");
+    // 🚪 a free config paused because invitees left its channel: only
+    // inviting again (or them coming back) turns it on
+    $rw_missing = affrw_paused_missing($nameloc);
+    if ($rw_missing !== null) {
+        bottext_extras_key_hint('users.affiliates.rewardPausedLocked');
+        sendmessage($from_id, strtr($textbotlang['users']['affiliates']['rewardPausedLocked'], ['{missing}' => $rw_missing]), null, 'html');
+        return;
+    }
     $marzban_list_get = select("marzban_panel", "*", "name_panel", $nameloc['Service_location'], "select");
     $bakinfos = json_encode([
         'inline_keyboard' => [
