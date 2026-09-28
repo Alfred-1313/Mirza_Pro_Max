@@ -81,6 +81,8 @@ if (is_array($keyboard_check) && preg_match('/[\x{600}-\x{6FF}\x{FB50}-\x{FDFF}]
 if (!checktelegramip())
     die("Unauthorized access");
 #-----------end telegram_ip_ranges------------#
+if (!webhook_secret_ok())
+    die("Unauthorized access");
 if (intval($from_id) == 0)
     return;
 #-------------Variable----------#
@@ -188,6 +190,16 @@ $text = money_step_text($mm_step, $text);
 $admin_ids = select("admin", "id_admin", null, null, "FETCH_COLUMN");
 if (!is_array($admin_ids)) {
     $admin_ids = [];
+}
+// A service's buttons act only on the tapper's own service: its id travels
+// in the button, and anyone can send any button. Admins manage everyone's.
+if (is_string($datain) && $datain !== '' && !in_array((string) $from_id, array_map('strval', $admin_ids), true)) {
+    $own_id = service_button_invoice_id($datain);
+    $own_inv = $own_id !== null ? select("invoice", "*", "id_invoice", $own_id, "select") : false;
+    if (is_array($own_inv) && (string) $own_inv['id_user'] !== (string) $from_id) {
+        telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $textbotlang['users']['serviceNotYours'], 'show_alert' => true]);
+        return;
+    }
 }
 // 🛡 دسترسی ادمین (🎨 شخصی‌سازی): an admin's own test accounts skip the
 // per-user limit (default on) and their purchases cost nothing (default off)

@@ -1,0 +1,17 @@
+# Nothing in the bot is for browsing, and its logs, data and scripts are not
+# for download: log.txt records every change the bot makes (user ids and what
+# they typed), error_log its errors, storage/ its cache.
+Options -Indexes
+
+<FilesMatch "^error_log|\.(log|txt|sql|zip|gz|tar|bak|sh|json|lock|md)$|\.log\.[0-9]+$">
+    Require all denied
+</FilesMatch>
+
+# run from the command line only (install, update)
+<FilesMatch "^(table|i18n_coverage|i18n_validate)\.php$">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_alias.c>
+    RedirectMatch 404 /(\.git|vendor|storage)(/|$)
+</IfModule>

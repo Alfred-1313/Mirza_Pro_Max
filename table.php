@@ -1340,6 +1340,7 @@ try {
     } else {
         addFieldToTable("botsaz", "hide_panel", "{}", "JSON");
     }
+    addFieldToTable("botsaz", "webhook_secret", null, "VARCHAR(200) NOT NULL DEFAULT ''");
 } catch (Exception $e) {
     file_put_contents('error_log botsaz', $e->getMessage());
 }
@@ -1514,6 +1515,7 @@ addFieldToTable("setting", "svc_node_usage", '{}', "TEXT");
 addFieldToTable("setting", "shop_feature_lang", '{}', "TEXT");
 addFieldToTable("setting", "feature_lang", '{}', "TEXT");
 addFieldToTable("setting", "feature_lang_settings", '{}', "TEXT");
+addFieldToTable("setting", "webhook_secret", null, "VARCHAR(200) NOT NULL DEFAULT ''");
 // per-language app-download rows, same convention marzban_panel.lang already
 // uses: a comma list of language codes, or 'all'/NULL/'' meaning every language
 addFieldToTable("app", "lang", null, "VARCHAR(20)");
@@ -1583,9 +1585,5 @@ try {
 if ($check && $check->rowCount() != 0) {
     $pdo->exec("ALTER TABLE `user` DROP `ref_code`");
 }
-// chat_member is not sent unless asked for: without it a customer joining
-// or leaving a channel never reached the bot (🛡 verification, 🚪 left_channel)
-telegram('setwebhook', [
-    'url' => "https://$domainhosts/index.php",
-    'allowed_updates' => json_encode(['message', 'edited_message', 'callback_query', 'inline_query', 'pre_checkout_query', 'chat_member', 'my_chat_member']),
-]);
+// with its secret, and asking for chat_member too
+webhook_register();

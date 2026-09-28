@@ -2830,6 +2830,7 @@ EOF
             || { show_step_error; install_pause "Initializing database tables"; }
         # table.php ran as root; files it created (log.txt) must stay writable by Apache
         chown -R www-data:www-data "$BOT_DIR" 2>/dev/null
+        secrettoken="$(_bot_webhook_secret "$BOT_DIR")"
         # Only now - Apache is up and the schema is migrated - tell Telegram
         # about the webhook and invite the admin to send /start. Doing this
         # earlier risked a real update arriving before table.php had run.
@@ -3084,6 +3085,7 @@ EOF
         || { show_step_error; echo -e "\033[31mtable.php failed - see the details above.\033[0m"; }
     # table.php ran as root; files it created (log.txt) must stay writable by Apache
     chown -R www-data:www-data "$NEW_BOT_DIR" 2>/dev/null
+    secrettoken="$(_bot_webhook_secret "$NEW_BOT_DIR")"
     run_step "Setting Telegram webhook" \
         "curl -s -F \"url=${proto}://${DOMAIN_NAME}/index.php\" -F \"secret_token=${secrettoken}\" \"https://api.telegram.org/bot${YOUR_BOT_TOKEN}/setWebhook\"" \
         || show_step_error
@@ -3766,6 +3768,17 @@ selfupdate_watch() {
     done <<< "$dirs"
 }
 
+# The bot turns away an update without ITS webhook secret (setting.webhook_secret);
+# a new one made up here would lock it out until it re-registered itself. So
+# use the bot's own; one made up here only when it has none yet (its first update
+# then registers the bot's own).
+_bot_webhook_secret() {
+    local s=""
+    [ -f "$1/config.php" ] && s=$(cd "$1" && php -r 'error_reporting(0); require "config.php"; echo (string) $pdo->query("SELECT webhook_secret FROM setting LIMIT 1")->fetchColumn();' 2>/dev/null | tr -d '[:space:]')
+    printf '%s' "$s" | grep -Eq '^[A-Za-z0-9_-]{1,256}$' || s=$(openssl rand -base64 10 | tr -dc 'a-zA-Z0-9' | cut -c1-8)
+    printf '%s' "$s"
+}
+
 # One crontab line, added once. Matched by its command text rather than the
 # whole line so a hand-edited schedule is never duplicated.
 _ensure_selfupdate_cron() {
@@ -4384,7 +4397,7 @@ EOF
 
     # 7) Telegram: the bot, and every agent bot that came along
     local secret hook
-    secret=$(openssl rand -base64 10 | tr -dc 'a-zA-Z0-9' | cut -c1-8)
+    secret=$(_bot_webhook_secret "$TARGET")
     hook=$(curl -s --max-time 20 -F "url=https://${domain}/index.php" -F "secret_token=${secret}" \
         "https://api.telegram.org/bot${token}/setWebhook" 2>/dev/null)
     local hook_ok=0
@@ -4882,7 +4895,7 @@ bot_start_scoped() {
     systemctl reload apache2 >/dev/null 2>&1 || systemctl restart apache2 >/dev/null 2>&1
     printf "    ${C_OK}✔${CR} ${C_DIM}%s answers on this server again${CR}\n" "$domain"
     # 3) Telegram delivers here again
-    secret=$(openssl rand -base64 10 | tr -dc 'a-zA-Z0-9' | cut -c1-8)
+    secret=$(_bot_webhook_secret "$dir")
     hook=$(curl -s --max-time 20 -F "url=https://${domain}/index.php" -F "secret_token=${secret}" \
         "https://api.telegram.org/bot${token}/setWebhook" 2>/dev/null)
     if printf '%s' "$hook" | grep -q '"ok":true'; then

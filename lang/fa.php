@@ -351,6 +351,12 @@ return array (
         'section' => 'myservices_panelerror',
       ),
       array (
+        'label' => '⛔️ پاپ‌آپ «این سرویس مال شما نیست»',
+        'key' => 'users.serviceNotYours',
+        'group' => 'myservices',
+        'section' => 'myservices_panelerror',
+      ),
+      array (
         'label' => '📊 Alert «این پنل گزارش مصرف ندارد»',
         'key' => 'users.status.svcUsageUnavailable',
         'group' => 'myservices',
@@ -1030,6 +1036,7 @@ return array (
       'unknown' => 'نامشخص',
       'unlimited' => 'نامحدود',
     ),
+    'htmlNotAllowed' => '⛔️ استفاده از تگ HTML در این نام مجاز نیست. لطفاً بدون کاراکتر «&lt;» ارسال کنید.',
     'invalidInput' => '⭕️ ورودی نا معتبر',
     'invalidTime' => 'تعداد روز نامعتبر است',
     'invalidUsername' => '❌ نام کاربری نامعتبر است.
@@ -1050,6 +1057,7 @@ return array (
     'erroroccurred' => '❌ خطایی رخ داده است مراحل را از اول انجام دهید',
     'featureUnavailable' => '❌ این قابلیت درحال حاضر در دسترس نیست',
     'featureUnavailable2' => '❌ این قابلیت درحال حاضر دردسترس نیست.',
+    'serviceNotYours' => '⛔️ این سرویس مال شما نیست.',
     'genericRestart' => '❌ خطایی رخ داده است لطفا مراحل مجددا انجام دهید',
     'genericRestart2' => '❌ خطایی رخ داده است مراحل را از اول طی کنید',
     'infoFetchErrorRestart' => '❌ خطایی در هنگام دریافت اطلاعات رخ داده است لطفا مراحل را از اول انجام دهید',

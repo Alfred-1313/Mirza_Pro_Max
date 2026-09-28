@@ -17978,6 +17978,8 @@ if (!function_exists('bt_nosticker_keys')) {
             'users.affiliates.rewardStatusNaming',
             'users.affiliates.rewardListLabel',
             'users.affiliates.rewardNameDone',
+            // a popup refusing someone else's service
+            'users.serviceNotYours',
             'users.affiliates.purchaseCommissionInfo',
             // 🎁 کانفیگ رایگان's status lines and service name, the same
             'users.affiliates.rewardStatusAuto',
@@ -18011,6 +18013,112 @@ if (!function_exists('bottext_extras_key_hint')) {
         $k = $pending;
         $pending = null;
         return $k;
+    }
+}
+if (!function_exists('containsHtmlMarkup')) {
+    // A panel or product name goes out inside HTML messages: a «<» in it makes
+    // Telegram refuse every message that shows it.
+    function containsHtmlMarkup($value)
+    {
+        return is_string($value) && strpos($value, '<') !== false;
+    }
+}
+if (!function_exists('webhook_register')) {
+    // Telegram sends the bot's secret with every update (the
+    // X-Telegram-Bot-Api-Secret-Token header) and webhook_secret_ok() turns
+    // away an update without it. $bot: an agent bot's botsaz row, or null for
+    // this bot. A new secret is kept only once Telegram has taken it.
+    function webhook_register($bot = null)
+    {
+        global $domainhosts;
+        if ($bot === null) {
+            $row = select("setting", "*", null, null, "select");
+            $token = null;
+            // chat_member is not sent unless asked for: without it a customer joining
+            // or leaving a channel never reached the bot (🛡 verification, 🚪 left_channel)
+            $params = [
+                'url' => "https://$domainhosts/index.php",
+                'allowed_updates' => json_encode(['message', 'edited_message', 'callback_query', 'inline_query', 'pre_checkout_query', 'chat_member', 'my_chat_member']),
+            ];
+        } else {
+            if (!is_array($bot) || empty($bot['bot_token'])) {
+                return false;
+            }
+            $row = $bot;
+            $token = $bot['bot_token'];
+            $params = ['url' => "https://$domainhosts/vpnbot/{$bot['id_user']}{$bot['username']}/index.php"];
+        }
+        // before table.php added the column: as it always was, no secret
+        if (!is_array($row) || !array_key_exists('webhook_secret', $row)) {
+            return telegram('setwebhook', $params, $token);
+        }
+        $stored = (string) $row['webhook_secret'];
+        $secret = $stored !== '' ? $stored : bin2hex(random_bytes(24));
+        $params['secret_token'] = $secret;
+        $res = telegram('setwebhook', $params, $token);
+        if (is_array($res) && !empty($res['ok']) && $secret !== $stored) {
+            if ($bot === null) {
+                update("setting", "webhook_secret", $secret, null, null);
+            } else {
+                update("botsaz", "webhook_secret", $secret, "bot_token", $token);
+            }
+        }
+        return $res;
+    }
+
+    // Is this update really from Telegram's webhook for this bot? No secret yet:
+    // register one and let the update through. A wrong or missing one means
+    // something else re-registered the webhook (the installer, an older copy of
+    // the bot): register ours again - at most once a minute - and answer 403, so
+    // Telegram sends the update again, this time with our secret.
+    function webhook_secret_ok($bot = null)
+    {
+        $row = $bot === null ? select("setting", "*", null, null, "select") : $bot;
+        if (!is_array($row) || !array_key_exists('webhook_secret', $row)) {
+            return true;
+        }
+        $secret = (string) $row['webhook_secret'];
+        $got = $_SERVER['HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN'] ?? '';
+        if ($secret !== '' && is_string($got) && hash_equals($secret, $got)) {
+            return true;
+        }
+        $stamp = sys_get_temp_dir() . '/mirza_webhook_' . md5(__DIR__ . '|' . ($bot === null ? '' : (string) ($bot['bot_token'] ?? '')));
+        if (!is_file($stamp) || time() - (int) @filemtime($stamp) >= 60) {
+            @touch($stamp);
+            webhook_register($bot);
+        }
+        if ($secret === '') {
+            return true;
+        }
+        http_response_code(403);
+        return false;
+    }
+}
+if (!function_exists('service_button_invoice_id')) {
+    // The service a button acts on, from its callback data - or null when it
+    // is not one of a service's own buttons. Matched anywhere in the data,
+    // the way the handlers themselves match them.
+    function service_button_invoice_id($datain)
+    {
+        $datain = (string) $datain;
+        if ($datain === '') {
+            return null;
+        }
+        // configget_{id}_{n} and extends_{username}_{id} carry more than the id
+        if (preg_match('/configget_([A-Za-z0-9]+)_\w+/', $datain, $m)) {
+            return $m[1];
+        }
+        if (preg_match('/extends_\w*_([A-Za-z0-9]+)$/', $datain, $m)) {
+            return $m[1];
+        }
+        foreach (['updateproduct_', 'product_', 'subscriptionurl_', 'config_', 'extend_', 'changelink_', 'confirmchange_',
+            'removeserviceuser_', 'changenote_', 'Extra_volume_', 'Extra_time_', 'changestatus_', 'confirmaccountdisable_',
+            'transfer_', 'changeloc_', 'confirmchangeloccha_', 'disorder-', 'confirmdisorders-', 'usagereport_', 'removeauto-'] as $p) {
+            if (preg_match('/' . preg_quote($p, '/') . '([A-Za-z0-9]+)/', $datain, $m)) {
+                return $m[1];
+            }
+        }
+        return null;
     }
 }
 if (!function_exists('volume_parse')) {

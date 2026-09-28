@@ -10768,6 +10768,10 @@ if (in_array($text, $textadmin) || $datain == "admin") {    if ($datain == "admi
     deletemessage($from_id, $message_id);
     savedata("clear", "type", $typepanel);
 } elseif ($user['step'] == "add_name_panel") {
+    if (containsHtmlMarkup($text)) {
+        sendmessage($from_id, $textbotlang['common']['htmlNotAllowed'], $backadmin, 'HTML');
+        return;
+    }
     if (in_array($text, $marzban_list)) {
         sendmessage($from_id, $textbotlang['Admin']['managepanel']['repeatPanel'], $backadmin, 'HTML');
         return;
@@ -13990,6 +13994,10 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     sendmessage($from_id, $textbotlang['Admin']['Product']['addProductStepOne'] . $textbotlang['Admin']['Product']['premiumEmojiHint'], $backadmin, 'HTML');
     step('get_limit', $from_id);
 } elseif ($user['step'] == "get_limit") {
+    if (containsHtmlMarkup($text)) {
+        sendmessage($from_id, $textbotlang['common']['htmlNotAllowed'], $backadmin, 'HTML');
+        return;
+    }
     if (strlen($text) > 150) {
         sendmessage($from_id, $textbotlang['Admin']['Product']['nameTooLong'], $backadmin, 'HTML');
         return;
@@ -14656,6 +14664,10 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     sendmessage($from_id, $textbotlang['Admin']['Product']['askNewName'] . $textbotlang['Admin']['Product']['premiumEmojiHint'], $backadmin, 'HTML');
     step('change_name', $from_id);
 } elseif ($user['step'] == "change_name") {
+    if (containsHtmlMarkup($text)) {
+        sendmessage($from_id, $textbotlang['common']['htmlNotAllowed'], $backadmin, 'HTML');
+        return;
+    }
     if (strlen($text) > 150) {
         sendmessage($from_id, $textbotlang['Admin']['Product']['nameTooLong'], $backadmin, 'HTML');
         return;
@@ -15579,6 +15591,10 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     sendmessage($from_id, $textbotlang['Admin']['managepanel']['getNameNew'], $backadmin, 'HTML');
     step('GetNameNew', $from_id);
 } elseif ($user['step'] == "GetNameNew") {
+    if (containsHtmlMarkup($text)) {
+        sendmessage($from_id, $textbotlang['common']['htmlNotAllowed'], $backadmin, 'HTML');
+        return;
+    }
     if (in_array($text, $marzban_list)) {
         sendmessage($from_id, $textbotlang['Admin']['managepanel']['repeatPanel'], $backadmin, 'HTML');
         return;
@@ -21873,7 +21889,7 @@ if ($datain == "linkappsetting") {
     }
     sendmessage($from_id, $textbotlang['Admin']['agentbot']['webhookRunning'], null, 'HTML');
     foreach ($bots_agent as $bot) {
-        file_get_contents("https://api.telegram.org/bot{$bot['bot_token']}/setwebhook?url=https://$domainhosts/vpnbot/{$bot['id_user']}{$bot['username']}/index.php");
+        webhook_register($bot);
     }
     sendmessage($from_id, $textbotlang['Admin']['agentbot']['webhookDone'], null, 'HTML');
 } elseif (preg_match('/statuscronuser-(.*)/', $datain, $dataget)) {

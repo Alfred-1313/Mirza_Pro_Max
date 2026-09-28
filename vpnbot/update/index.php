@@ -25,6 +25,8 @@ if (!checktelegramip())
 
 $textbotlang = languagechange();
 $dataBase = select("botsaz", "*", "bot_token", $ApiToken, "select");
+if (!webhook_secret_ok($dataBase))
+    die("Unauthorized access");
 $admin_ids = json_decode($dataBase['admin_ids']);
 $setting = json_decode($dataBase['setting'], true);
 if (!empty($setting['channel'])) {
