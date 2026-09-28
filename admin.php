@@ -10794,7 +10794,10 @@ if (in_array($text, $textadmin) || $datain == "admin") {    if ($datain == "admi
         savedata("save", "username", "null");
         savedata("save", "password", "null");
         return;
-    } elseif ($userdata['type'] == "s_ui" || $userdata['type'] == "WGDashboard" || $userdata['type'] == "x-ui_single" || $userdata['type'] == "mirza_agent" || $userdata['type'] == "rebecca") {
+    } elseif ($userdata['type'] == "s_ui" || $userdata['type'] == "WGDashboard" || $userdata['type'] == "x-ui_single" || $userdata['type'] == "mirza_agent" || $userdata['type'] == "rebecca" || $userdata['type'] == "remnawave") {
+        if ($userdata['type'] == "remnawave") {
+            sendmessage($from_id, $textbotlang['Admin']['managepanel']['rwTokenHint'], null, 'HTML');
+        }
         sendmessage($from_id, $textbotlang['Admin']['agentbot']['askToken'], $backadmin, 'HTML');
         step('add_password_panel', $from_id);
         savedata("save", "username", "null");
@@ -13837,7 +13840,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     }
     savedata("save", "bulk_category", null);
     $bp_panel = select("marzban_panel", "*", "name_panel", $text, "select");
-    if (($bp_panel['type'] ?? '') == "marzban" || ($bp_panel['type'] ?? '') == "marzneshin") {
+    if (in_array($bp_panel['type'] ?? '', ["marzban", "marzneshin", "remnawave"], true)) {
         sendmessage($from_id, $textbotlang['Admin']['Product']['getTimeReset'], $keyboardtimereset, 'HTML');
         step('bulkadd_reset', $from_id);
         return;
@@ -13853,7 +13856,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     savedata("save", "bulk_category", $text);
     $bp_state = bulk_product_state($user);
     $bp_panel = select("marzban_panel", "*", "name_panel", $bp_state['bulk_location'] ?? '', "select");
-    if (($bp_panel['type'] ?? '') == "marzban" || ($bp_panel['type'] ?? '') == "marzneshin") {
+    if (in_array($bp_panel['type'] ?? '', ["marzban", "marzneshin", "remnawave"], true)) {
         sendmessage($from_id, $textbotlang['Admin']['Product']['getTimeReset'], $keyboardtimereset, 'HTML');
         step('bulkadd_reset', $from_id);
         return;
@@ -14091,7 +14094,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     savedata("save", "price_product", money_normalize($text));
     $userdata = json_decode($user['Processing_value'], true);
     $panel = select("marzban_panel", "*", "name_panel", $userdata['Location'], "select");
-    if ($panel['type'] == "marzban" || $panel['type'] == "marzneshin") {
+    if (in_array($panel['type'], ["marzban", "marzneshin", "remnawave"], true)) {
         sendmessage($from_id, $textbotlang['Admin']['Product']['getTimeReset'], $keyboardtimereset, 'HTML');
         step('getnote', $from_id);
         return;
@@ -15299,6 +15302,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     update("user", "panel_submenu", "", "id", $from_id);
     $optionMarzban = $panel_menu_top['marzban'];
     $optionrebecca = $panel_menu_top['rebecca'];
+    $optionremnawave = $panel_menu_top['remnawave'];
     $optionibsng = $panel_menu_top['ibsng'];
     $option_mikrotik = $panel_menu_top['mikrotik'];
     $options_ui = $panel_menu_top['s_ui'];
@@ -15517,6 +15521,41 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
             $text_marzban = $textbotlang['Admin']['managepanel']['errorStatusPanel'] . json_encode($Check_connection);
             sendmessage($from_id, $text_marzban, $optionrebecca, 'HTML');
         }
+    } elseif ($marzban_list_get['type'] == "remnawave") {
+        $Check_connection = Get_System_Stats_remnawave($marzban_list_get);
+        if (rw_ok($Check_connection)) {
+            $ListSell = $pdo->prepare("SELECT COUNT(*) FROM invoice WHERE (status = 'active' OR status = 'end_of_time'  OR status = 'end_of_volume' OR status = 'sendedwarn' OR Status = 'send_on_hold') AND Service_location = ? AND name_product != ?");
+            $ListSell->bindValue(1, $marzban_list_get['name_panel'], PDO::PARAM_STR);
+            $ListSell->bindValue(2, $textbotlang['common']['labels']['testServiceName'], PDO::PARAM_STR);
+            $ListSell->execute();
+            $ListSell = number_format($ListSell->fetch(PDO::FETCH_ASSOC)['COUNT(*)'] ?? 0);
+            $ListSellSum = $pdo->prepare("SELECT SUM(price_product) FROM invoice WHERE (status = 'active' OR status = 'end_of_time'  OR status = 'end_of_volume' OR status = 'sendedwarn' OR Status = 'send_on_hold') AND Service_location = ? AND name_product != ?");
+            $ListSellSum->bindValue(1, $marzban_list_get['name_panel'], PDO::PARAM_STR);
+            $ListSellSum->bindValue(2, $textbotlang['common']['labels']['testServiceName'], PDO::PARAM_STR);
+            $ListSellSum->execute();
+            $ListSellSUM = number_format($ListSellSum->fetch(PDO::FETCH_ASSOC)['SUM(price_product)'] ?? 0);
+            $text_marzban = sprintf($textbotlang['Admin']['stats']['panelSales'], $ListSell, $ListSellSUM, $marzban_list_get['agent']);
+            $rw_stats = json_decode((string) $Check_connection['body'], true)['response'] ?? [];
+            $rw_all = rw_all_squads($marzban_list_get);
+            $rw_set = rw_uuid_list($marzban_list_get['proxies'] ?? null);
+            $rw_names = $rw_set ? implode('، ', array_map(fn($u) => $rw_all[$u] ?? $u, $rw_set)) : strtr($textbotlang['Admin']['managepanel']['rwAllSquads'], ['{list}' => implode('، ', $rw_all)]);
+            $text_marzban .= strtr($textbotlang['Admin']['managepanel']['rwPanelInfo'], [
+                '{version}' => htmlspecialchars(rw_version($marzban_list_get)),
+                '{users}' => number_format((int) ($rw_stats['users']['totalUsers'] ?? 0)),
+                '{squads}' => htmlspecialchars($rw_names),
+            ]);
+            // the token stops on the date it was made with - said ahead
+            $rw_exp = rw_token_expiry($marzban_list_get);
+            if ($rw_exp > 0) {
+                $rw_days = (int) floor(($rw_exp - time()) / 86400);
+                $text_marzban .= strtr($textbotlang['Admin']['managepanel'][$rw_days < 7 ? 'rwTokenSoon' : 'rwTokenExpiry'], ['{date}' => jdate('Y/m/d', $rw_exp), '{days}' => max(0, $rw_days)]);
+            }
+        } elseif ((int) ($Check_connection['status'] ?? 0) === 401) {
+            $text_marzban = strtr($textbotlang['Admin']['managepanel']['rwTokenFailed'], ['{msg}' => htmlspecialchars(rw_error_text($Check_connection))]);
+        } else {
+            $text_marzban = $textbotlang['Admin']['managepanel']['errorStatusPanel'] . htmlspecialchars(rw_error_text($Check_connection));
+        }
+        sendmessage($from_id, $text_marzban, $optionremnawave, 'HTML');
     } else {
         sendmessage($from_id, $textbotlang['Admin']['selectOption2'], $optionMarzban, 'HTML');
     }
@@ -19648,6 +19687,10 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     } else {
         $textsetprotocol = $textbotlang['Admin']['managepanel']['askProtocolSetup'];
     }
+    $rw_panel = select("marzban_panel", "*", "name_panel", $user['Processing_value'], "select");
+    if (is_array($rw_panel) && $rw_panel['type'] === 'remnawave') {
+        $textsetprotocol = strtr($textbotlang['Admin']['managepanel']['rwSquadAsk'], ['{list}' => htmlspecialchars(implode('، ', rw_all_squads($rw_panel)))]);
+    }
     sendmessage($from_id, $textsetprotocol, $backadmin, 'HTML');
     step("setinboundandprotocol", $from_id);
 } elseif ($user['step'] == "setinboundandprotocol") {
@@ -19761,6 +19804,14 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         }
         update("marzban_panel", "proxies", json_encode([$userdata['service_id']]), "name_panel", $user['Processing_value']);
         sendmessage($from_id, $textbotlang['Admin']['managepanel']['protocolSaved'], $optionrebecca, 'HTML');
+    } elseif ($panel['type'] == "remnawave") {
+        $rw_sq = rw_squads_from_text($text, $panel);
+        if ($rw_sq === null) {
+            sendmessage($from_id, strtr($textbotlang['Admin']['managepanel']['rwSquadsNotFound'], ['{list}' => htmlspecialchars(implode('، ', rw_all_squads($panel)))]), null, 'HTML');
+            return;
+        }
+        update("marzban_panel", "proxies", json_encode($rw_sq['uuids']), "name_panel", $user['Processing_value']);
+        sendmessage($from_id, strtr($textbotlang['Admin']['managepanel']['rwSquadsSaved'], ['{list}' => htmlspecialchars(implode('، ', $rw_sq['names']))]), $optionremnawave, 'HTML');
     } else {
         sendmessage($from_id, $textbotlang['Admin']['managepanel']['protocolSaved'], $optionMarzban, 'HTML');
     }
@@ -20022,6 +20073,13 @@ elseif ($text == $textbotlang['keyboard']['hidePanelForUser'] && $adminrulecheck
         $datainbound = json_encode($servies);
     } elseif ($marzban_list_get['type'] == "ibsng" || $marzban_list_get['type'] == "mikrotik") {
         $datainbound = $text;
+    } elseif ($marzban_list_get['type'] == "remnawave") {
+        $rw_sq = rw_squads_from_text($text, $marzban_list_get);
+        if ($rw_sq === null) {
+            sendmessage($from_id, strtr($textbotlang['Admin']['managepanel']['rwSquadsNotFound'], ['{list}' => htmlspecialchars(implode('، ', rw_all_squads($marzban_list_get)))]), null, 'HTML');
+            return;
+        }
+        $datainbound = json_encode($rw_sq['uuids']);
     } else {
         sendmessage($from_id, $textbotlang['Admin']['managepanel']['inboundUnsupported'], $shopkeyboard, 'HTML');
         return;

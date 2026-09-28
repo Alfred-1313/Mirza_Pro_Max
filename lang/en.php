@@ -4654,6 +4654,7 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'quickSetTimePrice' => '⏳ Quick time price setting',
                 'quickSetVolumePrice' => '🔋 Quick volume price setting',
                 'rebecca' => 'Rebecca',
+                'remnawave' => 'Remnawave',
                 'reWebhookAgentBots' => '🔗 Re-webhook agent bots',
                 'updateBotBtn' => '🔄 Update bot',
                 'receiveMembershipGift' => '🎁 Receive membership gift',

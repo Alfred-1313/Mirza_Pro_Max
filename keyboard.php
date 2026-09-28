@@ -1435,6 +1435,31 @@ $optionrebecca = json_encode([
     ],
     'resize_keyboard' => true
 ]);
+// Remnawave: Rebecca's menu (its API token is the password) without «غیرفعال
+// کردن اینباند», a Marzban-only switch
+$optionremnawave = json_encode([
+    'keyboard' => [
+        [['text' => $textbotlang['keyboard']['panelFeatureStatus']]],
+        [['text' => $textbotlang['keyboard']['setProtocolInbound']]],
+        [['text' => $textbotlang['keyboard']['panelName']], ['text' => $textbotlang['keyboard']['deletePanel']]],
+        [['text' => $textbotlang['keyboard']['duplicatePanel']]],
+        [['text' => $textbotlang['keyboard']['editPassword']]],
+        [['text' => $textbotlang['keyboard']['editPanelUrl']]],
+        [['text' => $textbotlang['keyboard']['renewalMethod']], ['text' => $textbotlang['keyboard']['usernameMethod']]],
+        [['text' => $textbotlang['keyboard']['accountCreateLimit']], ['text' => $textbotlang['keyboard']['changeUserGroup']]],
+        [['text' => $textbotlang['keyboard']['testServiceTime']], ['text' => $textbotlang['keyboard']['testAccountVolume']]],
+        [['text' => $textbotlang['keyboard']['testDeleteTime']]],
+        [['text' => $textbotlang['keyboard']['customVolumePrice']], ['text' => $textbotlang['keyboard']['extraVolumePrice']]],
+        [['text' => $textbotlang['keyboard']['extraTimePrice']], ['text' => $textbotlang['keyboard']['customTimePrice']]],
+        [['text' => $textbotlang['keyboard']['changeLocationPrice']]],
+        [['text' => $textbotlang['keyboard']['minCustomVolume']], ['text' => $textbotlang['keyboard']['maxCustomVolume']]],
+        [['text' => $textbotlang['keyboard']['minCustomTime']], ['text' => $textbotlang['keyboard']['maxCustomTime']]],
+        [['text' => $textbotlang['keyboard']['hidePanelForUser']]],
+        [['text' => $textbotlang['keyboard']['removeFromHiddenList']]],
+        [['text' => $textbotlang['Admin']['backAdminBtn']], ['text' => $textbotlang['Admin']['backMenuBtn']]]
+    ],
+    'resize_keyboard' => true
+]);
 $optionibsng = json_encode([
     'keyboard' => [
         [['text' => $textbotlang['keyboard']['panelFeatureStatus']]],
@@ -1739,7 +1764,8 @@ $keyboardtypepanel = json_encode([
             ['text' => $textbotlang['keyboard']['mikrotik'], 'callback_data' => 'typepanel#mikrotik']
         ],
         [
-            ['text' => $textbotlang['keyboard']['rebecca'], 'callback_data' => 'typepanel#rebecca']
+            ['text' => $textbotlang['keyboard']['rebecca'], 'callback_data' => 'typepanel#rebecca'],
+            ['text' => $textbotlang['keyboard']['remnawave'], 'callback_data' => 'typepanel#remnawave']
         ],
         [
             ['text' => $textbotlang['Admin']['backAdminBtn'], 'callback_data' => 'admin']
@@ -3023,6 +3049,7 @@ if ($sticker_btn_key !== null && !$st_wait && !empty($keyboardRows) && function_
 $panel_menu_flat = [
     'marzban' => $optionMarzban,
     'rebecca' => $optionrebecca,
+    'remnawave' => $optionremnawave,
     'ibsng' => $optionibsng,
     'mikrotik' => $option_mikrotik,
     's_ui' => $options_ui,
@@ -3040,6 +3067,7 @@ foreach ($panel_menu_flat as $__pmtype => $__pmflat) {
 }
 $optionMarzban = $panel_menu_top['marzban'];
 $optionrebecca = $panel_menu_top['rebecca'];
+$optionremnawave = $panel_menu_top['remnawave'];
 $optionibsng = $panel_menu_top['ibsng'];
 $option_mikrotik = $panel_menu_top['mikrotik'];
 $options_ui = $panel_menu_top['s_ui'];
@@ -3075,6 +3103,7 @@ if (!empty($user['panel_submenu']) && !empty($user['Processing_value'])) {
             $optionalireza_single = $__pmsub;
             $optionhiddfy = $__pmsub;
             $option_mirza = $__pmsub;
+            $optionremnawave = $__pmsub;
         }
     }
 }

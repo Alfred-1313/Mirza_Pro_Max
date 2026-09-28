@@ -12,6 +12,7 @@ require_once __DIR__ . '/ibsng.php';
 require_once __DIR__ . '/mikrotik.php';
 require_once __DIR__ . '/mirza_agent.php';
 require_once __DIR__ . '/Rebecca.php';
+require_once __DIR__ . '/Remnawave.php';
 
 if (!function_exists('panel_usage_supported')) {
     // ---- which panels can report where the traffic went ----
@@ -571,6 +572,25 @@ class ManagePanel
                 $Output['subscription_url'] = $sub_url;
                 $Output['configs'] = $data_Output['links'];
             }
+        } elseif ($Get_Data_Panel['type'] == "remnawave") {
+            //create user
+            $order_get = select("invoice", "*", "username", $usernameC, "select");
+            $ConnectToPanel = adduser_remnawave($Get_Data_Panel, $data_limit, $usernameC, $expire, $Get_Data_Product['name_product'], $note, $Get_Data_Product['data_limit_reset'], is_array($order_get) ? ($order_get['limit_user'] ?? null) : null);
+            if (!rw_ok($ConnectToPanel)) {
+                return array(
+                    'status' => 'Unsuccessful',
+                    'msg' => rw_error_text($ConnectToPanel)
+                );
+            }
+            $data_Output = json_decode($ConnectToPanel['body'], true)['response'] ?? [];
+            $sub_url = (string) ($data_Output['subscriptionUrl'] ?? '');
+            if ($invoice != false) {
+                $sub_url = "https://$domainhosts/sub/" . $invoice['id_invoice'];
+            }
+            $Output['status'] = 'successful';
+            $Output['username'] = $data_Output['username'] ?? $usernameC;
+            $Output['subscription_url'] = $sub_url;
+            $Output['configs'] = rw_links($Get_Data_Panel, $usernameC);
         } else {
             $Output['status'] = 'Unsuccessful';
             $Output['msg'] = 'Panel Not Found';
@@ -1197,6 +1217,35 @@ class ManagePanel
                     );
                 }
             }
+        } elseif ($Get_Data_Panel['type'] == "remnawave") {
+            $UsernameData = getuser_remnawave($username, $Get_Data_Panel);
+            if (!empty($UsernameData['error'])) {
+                $Output = array(
+                    'status' => 'Unsuccessful',
+                    'msg' => $UsernameData['error']
+                );
+            } elseif ((int) ($UsernameData['status'] ?? 0) === 404) {
+                // the words every caller checks a deleted account by
+                $Output = array(
+                    'status' => 'Unsuccessful',
+                    'msg' => 'User not found'
+                );
+            } elseif (!rw_ok($UsernameData)) {
+                $Output = array(
+                    'status' => 'Unsuccessful',
+                    'msg' => rw_error_text($UsernameData)
+                );
+            } else {
+                $UsernameData = json_decode($UsernameData['body'], true)['response'] ?? null;
+                if (!is_array($UsernameData) || !isset($UsernameData['username'])) {
+                    $Output = array(
+                        'status' => 'Unsuccessful',
+                        'msg' => 'Unsuccessful'
+                    );
+                } else {
+                    $Output = rw_user_output($UsernameData, $Get_Data_Panel, $invoice, $domainhosts);
+                }
+            }
         } else {
             $Output = array(
                 'status' => 'Unsuccessful',
@@ -1429,6 +1478,21 @@ class ManagePanel
                     'subscription_url' => $Data_User['subscription_url']
                 );
             }
+        } elseif ($Get_Data_Panel['type'] == "remnawave") {
+            $revoke_sub = revoke_sub_remnawave($username, $Get_Data_Panel);
+            if (!rw_ok($revoke_sub)) {
+                $Output = array(
+                    'status' => 'Unsuccessful',
+                    'msg' => rw_error_text($revoke_sub)
+                );
+            } else {
+                $Data_User = $this->DataUser($name_panel, $username);
+                $Output = array(
+                    'status' => 'successful',
+                    'configs' => $Data_User['links'] ?? [],
+                    'subscription_url' => $Data_User['subscription_url'] ?? ''
+                );
+            }
         } else {
             $Output = array(
                 'status' => 'Unsuccessful',
@@ -1620,6 +1684,19 @@ class ManagePanel
                 $Output = array(
                     'status' => 'Unsuccessful',
                     'msg' => $body['detail'] ?? ('error code : ' . $UsernameData['status'])
+                );
+            } else {
+                $Output = array(
+                    'status' => 'successful',
+                    'username' => $username,
+                );
+            }
+        } elseif ($Get_Data_Panel['type'] == "remnawave") {
+            $UsernameData = removeuser_remnawave($Get_Data_Panel, $username);
+            if (!rw_ok($UsernameData)) {
+                $Output = array(
+                    'status' => 'Unsuccessful',
+                    'msg' => rw_error_text($UsernameData)
                 );
             } else {
                 $Output = array(
@@ -1892,6 +1969,18 @@ class ManagePanel
                 'status' => true,
                 'data' => $modifycheck
             );
+        } elseif ($Get_Data_Panel['type'] == "remnawave") {
+            $modify = Modifyuser_remnawave($Get_Data_Panel, $username, $config);
+            if (!rw_ok($modify)) {
+                return array(
+                    'status' => false,
+                    'msg' => rw_error_text($modify)
+                );
+            }
+            return array(
+                'status' => true,
+                'data' => json_decode($modify['body'], true)['response'] ?? null
+            );
         } elseif ($Get_Data_Panel['type'] == "s_ui") {
             $clients = GetClientsS_UI($username, $name_panel);
             if (!$clients)
@@ -2012,7 +2101,7 @@ class ManagePanel
                 'status' => 'successful',
                 'msg' => null
             );
-        } elseif ($Get_Data_Panel['type'] == "rebecca") {
+        } elseif (in_array($Get_Data_Panel['type'], ["rebecca", "remnawave"], true)) {
             if ($DataUserOut['status'] == "active") {
                 $status = "disabled";
             } else {
@@ -2163,6 +2252,18 @@ class ManagePanel
                 'status' => true
             );
         } elseif ($panel['type'] == "mirza_agent") {
+            return array(
+                'status' => true,
+                'msg' => 'successful'
+            );
+        } elseif ($panel['type'] == "remnawave") {
+            $reset = ResetUserDataUsage_remnawave($username, $panel);
+            if (!rw_ok($reset)) {
+                return array(
+                    'status' => false,
+                    'msg' => rw_error_text($reset)
+                );
+            }
             return array(
                 'status' => true,
                 'msg' => 'successful'
@@ -2389,7 +2490,7 @@ class ManagePanel
                 'status' => true,
                 'msg' => 'successful'
             );
-        } elseif ($panel['type'] == "rebecca") {
+        } elseif (in_array($panel['type'], ["rebecca", "remnawave"], true)) {
             $data = array(
                 'data_limit' => $data_limit_new,
                 'expire' => $time_new == 0 ? null : $time_new,
@@ -2526,7 +2627,7 @@ class ManagePanel
                 'status' => true,
                 'msg' => 'successful'
             );
-        } elseif ($panel['type'] == "rebecca") {
+        } elseif (in_array($panel['type'], ["rebecca", "remnawave"], true)) {
             $data = array(
                 'data_limit' => $new_limit,
             );
@@ -2667,7 +2768,7 @@ class ManagePanel
                 'status' => true,
                 'msg' => 'successful'
             );
-        } elseif ($panel['type'] == "rebecca") {
+        } elseif (in_array($panel['type'], ["rebecca", "remnawave"], true)) {
             $data = array(
                 'expire' => $new_limit == 0 ? null : $new_limit,
             );
