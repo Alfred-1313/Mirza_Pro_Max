@@ -1278,9 +1278,12 @@ if (!function_exists('panel_menu_split')) {
                 }
             }
         }
-        // these keep their place on the top level and are not grouped
+        // these keep their place on the top level and are not grouped -
+        // تنظیم پروتکل و اینباند too: without it the panel cannot build a
+        // service at all
         $pinned = [
             $textbotlang['keyboard']['panelFeatureStatus'],
+            $textbotlang['keyboard']['setProtocolInbound'],
             $textbotlang['Admin']['backAdminBtn'],
             $textbotlang['Admin']['backMenuBtn'],
         ];
@@ -1348,6 +1351,9 @@ if (!function_exists('panel_menu_top_json')) {
         $rows = [];
         if (in_array($textbotlang['keyboard']['panelFeatureStatus'], $all, true)) {
             $rows[] = [['text' => $textbotlang['keyboard']['panelFeatureStatus']]];
+        }
+        if (in_array($textbotlang['keyboard']['setProtocolInbound'], $all, true)) {
+            $rows[] = [['text' => $textbotlang['keyboard']['setProtocolInbound']]];
         }
         $labels = [];
         foreach (panel_menu_split($flatJson, $textbotlang) as $grp) {
