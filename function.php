@@ -1907,7 +1907,7 @@ if (!function_exists('aff_classic_on')) {
         }
         $cfg = affrw_live($lang);
         $row = $cfg !== null ? affrw_row($refId) : null;
-        if ($cfg !== null && ($row === null || $row['status'] === 'rejected')) {
+        if ($cfg !== null && affrw_counting($row)) {
             bottext_extras_key_hint('users.affiliates.newReferralJoinedReward');
             sendmessage($refId, strtr($a['newReferralJoinedReward'], ['{username}' => $name, '{count}' => min(affrw_count($refId, affrw_since($cfg, $row)), $cfg['need']), '{need}' => $cfg['need']]), null, 'html');
             $sent = true;
@@ -17236,6 +17236,9 @@ if (!function_exists('affrw_cfg')) {
             'panel' => (string) feature_setting_value('affrw_panel', $lang, ''),
             'mode' => feature_setting_value('affrw_mode', $lang, 'admin') === 'auto' ? 'auto' : 'admin',
             'since' => (int) feature_setting_value('affrw_since', $lang, '0'),
+            // how many times one customer can earn it; after each, their
+            // count starts again from zero
+            'max' => max(1, (int) feature_setting_value('affrw_max', $lang, '1')),
         ];
     }
     // the panel the gift is made on; null when none is picked or it was deleted
@@ -17280,6 +17283,32 @@ if (!function_exists('affrw_cfg')) {
             time INT NOT NULL DEFAULT 0,
             id_invoice VARCHAR(200) NULL)
             ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_unicode_ci");
+        // times: rewards earned so far (status 'open' = the next round is
+        // counting); members / left_ids / suspended: the invitees behind the
+        // last one, and which of them left its verification channel
+        addFieldToTable('affiliate_reward', 'times', null, 'INT NOT NULL DEFAULT 0');
+        addFieldToTable('affiliate_reward', 'members', null, 'TEXT NULL');
+        addFieldToTable('affiliate_reward', 'left_ids', null, 'TEXT NULL');
+        addFieldToTable('affiliate_reward', 'suspended', null, 'INT NOT NULL DEFAULT 0');
+    }
+    // whether a customer's row lets a new round count: none yet, refused, or
+    // a reward earned with more to come
+    function affrw_counting($row)
+    {
+        return $row === null || in_array($row['status'], ['rejected', 'open'], true);
+    }
+    // 🔄 the admin's reset from a customer's own screen: their count starts
+    // from zero (only people who join from now on count) and they can earn it
+    // again, as many times as the setting allows; a request waiting for
+    // approval is dropped
+    function affrw_reset($uid)
+    {
+        global $pdo;
+        affrw_ensure_table();
+        $u = select("user", "*", "id", (string) $uid, "select");
+        $stmt = $pdo->prepare("INSERT INTO affiliate_reward (user_id, lang, status, invites, since, time, times) VALUES (?, ?, 'open', 0, ?, ?, 0)
+            ON DUPLICATE KEY UPDATE status = 'open', invites = 0, since = VALUES(since), time = VALUES(time), times = 0");
+        $stmt->execute([(string) $uid, is_array($u) ? ($u['lang'] ?? 'fa') : 'fa', time(), time()]);
     }
     // Read straight from the table - select()'s cache would miss the
     // conditional updates below.
@@ -17318,7 +17347,7 @@ if (!function_exists('affrw_cfg')) {
         if ($stmt->rowCount() > 0) {
             return true;
         }
-        $stmt = $pdo->prepare("UPDATE affiliate_reward SET lang = ?, status = ?, invites = ?, time = ? WHERE user_id = ? AND status = 'rejected'");
+        $stmt = $pdo->prepare("UPDATE affiliate_reward SET lang = ?, status = ?, invites = ?, time = ? WHERE user_id = ? AND status IN ('rejected', 'open')");
         $stmt->execute([$lang, $status, $count, time(), (string) $uid]);
         return $stmt->rowCount() > 0;
     }
@@ -17350,14 +17379,15 @@ if (!function_exists('affrw_cfg')) {
             return;
         }
         $row = affrw_row($uid);
-        if ($row !== null && $row['status'] !== 'rejected') {
+        if (!affrw_counting($row)) {
             return;
         }
         $count = affrw_count($uid, affrw_since($cfg, $row));
         if ($count < $cfg['need']) {
             return;
         }
-        if ($cfg['mode'] === 'auto') {
+        // 👑 inviters (🛡 راستی‌آزمایی دعوت‌ها) never wait for an admin
+        if ($cfg['mode'] === 'auto' || in_array((string) $uid, refv_cfg($lang)['vip'], true)) {
             if (!affrw_claim($uid, $lang, 'giving', $count, affrw_since($cfg, $row))) {
                 return;
             }
@@ -17389,7 +17419,7 @@ if (!function_exists('affrw_cfg')) {
         if ($row !== null && $row['status'] === 'done') {
             $status = $a['rewardStatusDone'];
             $count = $cfg['need'];
-        } elseif ($row !== null && $row['status'] !== 'rejected') {
+        } elseif (!affrw_counting($row)) {
             $status = $a['rewardStatusPending'];
             $count = $cfg['need'];
         } else {
@@ -17501,8 +17531,16 @@ if (!function_exists('affrw_cfg')) {
         $id_invoice = bin2hex(random_bytes(4));
         $stmt = $pdo->prepare("INSERT IGNORE INTO invoice (id_user, id_invoice, username, time_sell, Service_location, name_product, price_product, Volume, Service_time, Status, notifctions) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([$uid, $id_invoice, $out['username'], time(), $panel['name_panel'], $tx['users']['affiliates']['rewardServiceName'], '0', $cfg['gb'], $cfg['days'], 'active', json_encode(['volume' => false, 'time' => false])]);
-        $stmt = $pdo->prepare("UPDATE affiliate_reward SET status = 'done', id_invoice = ?, time = ? WHERE user_id = ?");
-        $stmt->execute([$id_invoice, time(), (string) $uid]);
+        // the invitees behind it (for 🚪 a leave), and the next round - or
+        // done, once it has been earned as many times as allowed
+        $since = affrw_since($cfg, $row);
+        $st = $pdo->prepare("SELECT id FROM user WHERE affiliates = ? AND id != ? AND CAST(register AS UNSIGNED) > ? ORDER BY CAST(register AS UNSIGNED)");
+        $st->execute([(string) $uid, (string) $uid, (int) $since]);
+        $members = array_map('strval', $st->fetchAll(PDO::FETCH_COLUMN));
+        $times = (int) ($row['times'] ?? 0) + 1;
+        $more = $times < $cfg['max'];
+        $stmt = $pdo->prepare("UPDATE affiliate_reward SET status = ?, id_invoice = ?, time = ?, times = ?, since = ?, members = ?, left_ids = '[]', suspended = 0 WHERE user_id = ?");
+        $stmt->execute([$more ? 'open' : 'done', $id_invoice, time(), $times, $more ? time() : (int) ($row['since'] ?? 0), json_encode($members), (string) $uid]);
         bottext_extras_key_hint('users.affiliates.rewardGiven');
         sendmessage($uid, strtr($tx['users']['affiliates']['rewardGiven'], affrw_vars($cfg, (int) $row['invites'])), null, 'HTML');
         // then the service itself, worded like a bought one

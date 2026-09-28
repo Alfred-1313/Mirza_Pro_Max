@@ -5418,6 +5418,7 @@ if (!function_exists('feature_section_of_key')) {
             'affrw_need' => 'aff',
             'affrw_gb' => 'aff',
             'affrw_days' => 'aff',
+            'affrw_max' => 'aff',
         ];
         return $map[$key] ?? null;
     }
@@ -5499,6 +5500,7 @@ if (!function_exists('feature_section_caption')) {
                 '{need}' => $rw['need'],
                 '{volume}' => $rw['gb'],
                 '{days}' => $rw['days'],
+                '{max}' => $rw['max'],
                 '{panel}' => $rwPanel !== null ? htmlspecialchars($rwPanel['name_panel']) : $s['affrwNoPanel'],
                 '{mode}' => $rw['mode'] === 'auto' ? $s['affrwModeAuto'] : $s['affrwModeAdmin'],
             ]) . refv_caption_line($lang, $s) . (feature_value('affiliatesstatus', $lang, $affSetting['affiliatesstatus']) == "offaffiliates" ? strtr($s['affrwAffOff'], ['{lang}' => $langName]) : '');
@@ -5619,6 +5621,7 @@ if (!function_exists('feature_section_payload')) {
                 ['text' => strtr($s['affrwDaysBtn'], ['{days}' => $rw['days']]), 'callback_data' => "flsask:{$lang}:affrw_days", 'style' => 'primary'],
             ];
             $rows[] = [['text' => strtr($s['affrwPanelBtn'], ['{panel}' => $rwPanel !== null ? $rwPanel['name_panel'] : $s['affrwNoPanel']]), 'callback_data' => "flsaffrw:{$lang}:panel", 'style' => 'primary']];
+            $rows[] = [['text' => strtr($s['affrwMaxBtn'], ['{max}' => $rw['max']]), 'callback_data' => "flsask:{$lang}:affrw_max", 'style' => 'primary']];
             $rows[] = [['text' => strtr($s['affrwModeBtn'], ['{mode}' => $rw['mode'] === 'auto' ? $s['affrwModeAuto'] : $s['affrwModeAdmin']]), 'callback_data' => "flsaffrw:{$lang}:mode", 'style' => 'primary']];
         } else {
             $rows[] = [['text' => strtr($s['locAllBtn'], ['{all}' => (string) $v['loc_limit_all']]), 'callback_data' => "flsask:{$lang}:loc_limit_all"]];
@@ -7687,6 +7690,12 @@ if (preg_match('/^chngate:([a-z]{2})(?::(\d+))?$/', $datain, $cg_m) && $adminrul
 }
 
 //----------------[  🎁 کانفیگ رایگان با دعوت  ]----------------
+// 🔄 from a customer's own screen: their free-config count back to zero
+if (preg_match('/^affrwzero_(\d+)$/', $datain, $rz_m) && $adminrulecheck['rule'] == "administrator") {
+    affrw_reset($rz_m[1]);
+    telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $textbotlang['Admin']['UserMgmt']['affrwResetDone'], 'show_alert' => true]);
+    return;
+}
 if (preg_match('/^flsaffrw:([a-z]{2}):(on|mode|panel|p:(\d+))$/', $datain, $rw_m) && $adminrulecheck['rule'] == "administrator") {
     $rw_lang = $rw_m[1];
     $rw = affrw_cfg($rw_lang);
@@ -11684,7 +11693,7 @@ elseif ($datain == "systemsms") {
             return;
         }
         lottery_prize_set($fs_lang, (int) substr($fs_key, -1), money_normalize($text));
-    } elseif (in_array($fs_key, ['affrw_need', 'affrw_gb', 'affrw_days'], true)) {
+    } elseif (in_array($fs_key, ['affrw_need', 'affrw_gb', 'affrw_days', 'affrw_max'], true)) {
         // 🎁 کانفیگ رایگان: a count, gigabytes, days - none of them can be 0
         if (!ctype_digit((string) $text) || intval($text) < 1) {
             sendmessage($from_id, $fs_tx['common']['invalidInput'], null, 'HTML');
@@ -14569,6 +14578,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
             [['text' => $textbotlang['keyboard']['discountPercent'], 'callback_data' => "Percentlow_" . $id_user, 'style' => 'primary'], ['text' => $textbotlang['keyboard']['sendMessageToUser'], 'callback_data' => "sendmessageuser_" . $id_user, 'style' => 'primary']],
             [['text' => $textbotlang['Admin']['manageUser']['viewOrderUser'], 'callback_data' => "vieworderuser_" . $id_user, 'style' => 'primary']],
             [['text' => $textbotlang['keyboard']['userAffiliates'], 'callback_data' => "affiliates-" . $id_user, 'style' => 'primary']],
+            [['text' => $textbotlang['Admin']['UserMgmt']['affrwResetBtn'], 'callback_data' => "affrwzero_" . $id_user, 'style' => 'danger']],
             [['text' => $textbotlang['keyboard']['removeFromAffiliate'], 'callback_data' => "removeaffiliate-" . $id_user, 'style' => 'danger'], ['text' => $textbotlang['keyboard']['deleteUserAffiliates'], 'callback_data' => "removeaffiliateuser-" . $id_user, 'style' => 'danger']],
             [['text' => $textbotlang['keyboard']['activateCard'], 'callback_data' => "showcarduser-" . $id_user, 'style' => 'success']],
             [['text' => $textbotlang['keyboard']['authenticateUser'], 'callback_data' => "verify_" . $id_user, 'style' => 'success'], ['text' => $textbotlang['keyboard']['unauthUser'], 'callback_data' => "unverify-" . $id_user, 'style' => 'danger']],
