@@ -866,7 +866,14 @@ return array (
         'key' => 'keyboard.shareLink',
         'group' => 'referral',
       ),
+      'affcl_1' => array ('label' => '👋 خوش‌آمد به کاربر دعوت‌شده (با هدیه عضویت)', 'key' => 'users.affiliates.welcomeInvited', 'group' => 'referral'),
+      'affcl_2' => array ('label' => '🎉 اعلان «زیرمجموعه‌ی جدید» به معرف (با پورسانت)', 'key' => 'users.affiliates.newReferralJoined', 'group' => 'referral'),
+      'affcl_3' => array ('label' => '💰 اعلان «هدیه‌ی عضویت واریز شد» به معرف', 'key' => 'users.affiliates.joinedGift', 'group' => 'referral'),
       'affnone_1' => array ('label' => '🚫 پیام «هیچ طرحی فعال نیست»', 'key' => 'users.affiliates.nothingActive', 'group' => 'referral', 'section' => 'referral_none'),
+      'affcm_1' => array ('label' => '👋 خوش‌آمد به کاربر دعوت‌شده (وقتی هیچ طرحی روشن نیست)', 'key' => 'users.affiliates.welcomeInvitedPlain', 'group' => 'referral', 'section' => 'referral_common'),
+      'affcm_2' => array ('label' => '🎉 اعلان «زیرمجموعه‌ی جدید» به معرف (وقتی هیچ طرحی روشن نیست)', 'key' => 'users.affiliates.newReferralJoinedPlain', 'group' => 'referral'),
+      'affcm_3' => array ('label' => '❌ وقتی کاربر با لینک دعوت خودش بیاد', 'key' => 'users.affiliates.invalidaffiliates', 'group' => 'referral'),
+      'affcm_4' => array ('label' => '❌ وقتی کاربر قبلاً زیرمجموعه‌ی کس دیگه‌ای بوده', 'key' => 'users.affiliates.affiliateedago', 'group' => 'referral'),
       'affrw_1' => array ('label' => '🎁 پیام کانفیگ رایگان (زیر صفحه‌ی زیرمجموعه‌گیری)', 'key' => 'users.affiliates.rewardInfo', 'group' => 'referral', 'section' => 'referral_reward'),
       'affrw_2' => array ('label' => '☑️ خط وضعیت: تحویل خودکار', 'key' => 'users.affiliates.rewardStatusAuto', 'group' => 'referral'),
       'affrw_3' => array ('label' => '☑️ خط وضعیت: با تایید ادمین', 'key' => 'users.affiliates.rewardStatusAdmin', 'group' => 'referral'),
@@ -876,6 +883,8 @@ return array (
       'affrw_7' => array ('label' => '🎉 اعلان ساخته شدن کانفیگ رایگان', 'key' => 'users.affiliates.rewardGiven', 'group' => 'referral'),
       'affrw_8' => array ('label' => '❌ اعلان رد درخواست', 'key' => 'users.affiliates.rewardRejected', 'group' => 'referral'),
       'affrw_9' => array ('label' => '🏷 اسم سرویس توی «سرویس‌های من»', 'key' => 'users.affiliates.rewardServiceName', 'group' => 'referral'),
+      'affrw_10' => array ('label' => '👋 خوش‌آمد به کاربر دعوت‌شده (کانفیگ رایگان)', 'key' => 'users.affiliates.welcomeInvitedReward', 'group' => 'referral'),
+      'affrw_11' => array ('label' => '🎉 اعلان «زیرمجموعه‌ی جدید» به معرف، با شمارنده‌ی دعوت‌ها', 'key' => 'users.affiliates.newReferralJoinedReward', 'group' => 'referral'),
       // ---- 👤 مدیریت کاربر ----
       'um_1' => array ('label' => '🎁 هدیه‌ی شارژ همگانی', 'key' => 'users.Balance.giftFromManagement', 'group' => 'usermgmt', 'section' => 'um_balance'),
       'um_2' => array ('label' => '➕ افزایش موجودی توسط ادمین', 'key' => 'users.Balance.addedNotice', 'group' => 'usermgmt', 'section' => 'um_balance'),
@@ -1599,6 +1608,22 @@ return array (
       'affiliatesidyou' => '❌امکان زیرمجموعه شدن با این شناسه کاربری وجود ندارد.',
       'invalidaffiliates' => '❌ شما نمی توانید زیر مجموعه خودتان باشید',
       'offaffiliates' => '❌ بخش زیرمجموعه گیری خاموش می باشد',
+      // the invite messages of 🎁 کانفیگ رایگان, and the plain ones for when
+      // no plan is on (💼's own are welcomeInvited / newReferralJoined)
+      'welcomeInvitedReward' => '<b>🎉 خوش آمدی!</b>
+
+شما با دعوت <b>{inviter}</b> وارد ربات شدی ✅
+
+🎁 تو هم می‌تونی با دعوت دوستات <b>کانفیگ رایگان</b> بگیری؛ لینک دعوت خودت توی منوی <b>زیرمجموعه‌گیری</b> هست.',
+      'welcomeInvitedPlain' => '<b>🎉 خوش آمدی!</b>
+
+شما با دعوت <b>{inviter}</b> وارد ربات شدی ✅',
+      'newReferralJoinedReward' => '<b>🎉 یک زیرمجموعه جدید!</b>
+کاربر <b>{username}</b> با لینک دعوت شما وارد ربات شد ✅
+
+🎁 دعوت‌های معتبر تو برای کانفیگ رایگان: <b>{count} / {need}</b>',
+      'newReferralJoinedPlain' => '<b>🎉 یک زیرمجموعه جدید!</b>
+کاربر <b>{username}</b> با لینک دعوت شما وارد ربات شد ✅',
       'nothingActive' => '🎁 فعلاً هیچ طرح زیرمجموعه‌گیری فعالی نداریم.
 
 به‌زودی طرح‌های تازه‌ی دعوت از دوستان اضافه می‌شه؛ همین‌جا می‌تونی ببینیشون 🌱',

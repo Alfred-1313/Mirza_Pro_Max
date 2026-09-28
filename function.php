@@ -1889,6 +1889,34 @@ if (!function_exists('aff_classic_on')) {
     }
     // anything under 👥 on for this language - the referral button's tap
     // sticker waits for it, so «nothing is active» does not come after one
+    // 🎉 someone joined through $refId's link: told in the inviter's own
+    // language, worded for the plan that is on for it - 💼's about the
+    // commission, 🎁's with the free-config count (only while it is still to
+    // be earned), both if both are on, and a plain one with neither.
+    function aff_notify_new_referral($refId, $displayName)
+    {
+        $ref = select("user", "*", "id", $refId, "select");
+        $lang = is_array($ref) ? ($ref['lang'] ?? 'fa') : 'fa';
+        $a = lang_tab_texts(in_array($lang, panel_langs(), true) ? $lang : 'fa')['users']['affiliates'];
+        $name = htmlspecialchars((string) $displayName);
+        $sent = false;
+        if (aff_classic_on($lang)) {
+            bottext_extras_key_hint('users.affiliates.newReferralJoined');
+            sendmessage($refId, text_fill_s($a['newReferralJoined'], htmlspecialchars(ltrim((string) $displayName, '@'))), null, 'html');
+            $sent = true;
+        }
+        $cfg = affrw_live($lang);
+        $row = $cfg !== null ? affrw_row($refId) : null;
+        if ($cfg !== null && ($row === null || $row['status'] === 'rejected')) {
+            bottext_extras_key_hint('users.affiliates.newReferralJoinedReward');
+            sendmessage($refId, strtr($a['newReferralJoinedReward'], ['{username}' => $name, '{count}' => min(affrw_count($refId, affrw_since($cfg, $row)), $cfg['need']), '{need}' => $cfg['need']]), null, 'html');
+            $sent = true;
+        }
+        if (!$sent) {
+            bottext_extras_key_hint('users.affiliates.newReferralJoinedPlain');
+            sendmessage($refId, strtr($a['newReferralJoinedPlain'], ['{username}' => $name]), null, 'html');
+        }
+    }
     function aff_any_on($lang)
     {
         $setting = select("setting", "*", null, null, "select");
@@ -11141,6 +11169,10 @@ if (!function_exists('bt_section_meta')) {
             'referral_flow' => [
                 'label' => '💼 زیرمجموعه‌گیری و هدیه خوش‌آمد',
                 'alert' => 'پیام‌های نوع ۱ زیرمجموعه‌گیری: صفحه‌ی اصلی، هدیه عضویت، پورسانت خرید، و دکمه‌های «دریافت هدیه» و «اشتراک لینک». روشن/خاموشش: 🌐 وضعیت قابلیت‌ها (هر زبان) ← 👥 طرح‌های زیرمجموعه‌گیری.',
+            ],
+            'referral_common' => [
+                'label' => '🔗 پیام‌های لینک دعوت، وقتی هیچ طرحی روشن نیست',
+                'alert' => 'پیام‌های لینک دعوت که به طرح خاصی ربط ندارن: خوش‌آمد و اعلان «زیرمجموعه‌ی جدید» وقتی برای اون زبان هیچ طرحی روشن نیست، و پیام وقتی کسی با لینک خودش یا دوباره با لینک یه نفر دیگه بیاد. خوش‌آمد و اعلانِ هر طرح زیر همون طرحه.',
             ],
             'referral_none' => [
                 'label' => '🚫 وقتی هیچ طرحی فعال نیست',

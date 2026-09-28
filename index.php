@@ -291,6 +291,7 @@ if (strpos($text, "/start ") !== false && $user['step'] != "gettextSystemMessage
         }
         if (is_numeric($affiliatesid) && in_array($affiliatesid, $users_ids)) {
             if ($affiliatesid == $from_id) {
+                bottext_extras_key_hint('users.affiliates.invalidaffiliates');
                 sendmessage($from_id, $textbotlang['users']['affiliates']['invalidaffiliates'], null, 'html');
                 return;
             }
@@ -298,13 +299,23 @@ if (strpos($text, "/start ") !== false && $user['step'] != "gettextSystemMessage
             // checked BEFORE writing: writing first moved someone else's
             // referral over to whoever's link was opened last
             if (intval($user['affiliates']) != 0) {
+                bottext_extras_key_hint('users.affiliates.affiliateedago');
                 sendmessage($from_id, $textbotlang['users']['affiliates']['affiliateedago'], null, 'html');
                 return;
             }
             update("user", "affiliates", $affiliatesid, "id", $from_id);
             $useraffiliates = select("user", "*", 'id', $affiliatesid, "select");
-            sendmessage($from_id, sprintf($textbotlang['users']['affiliates']['welcomeInvited'], $useraffiliates['username']), $keyboard, 'html');
-            sendmessage($affiliatesid, sprintf($textbotlang['users']['affiliates']['newReferralJoined'], $username), $keyboard, 'html');
+            // 👋 the newcomer, in their language: the welcome of the plan on
+            // for it - 💼's tells them about the join gift, 🎁's that they can
+            // earn a free config too, and with neither just a welcome
+            $aff_myLang = $user['lang'] ?? 'fa';
+            $aff_welcome = aff_classic_on($aff_myLang) ? 'welcomeInvited' : (affrw_live($aff_myLang) !== null ? 'welcomeInvitedReward' : 'welcomeInvitedPlain');
+            $aff_inviter = (!empty($useraffiliates['username']) && $useraffiliates['username'] !== 'none') ? '@' . $useraffiliates['username'] : (string) $affiliatesid;
+            bottext_extras_key_hint("users.affiliates.{$aff_welcome}");
+            sendmessage($from_id, strtr(text_fill_s($textbotlang['users']['affiliates'][$aff_welcome], $useraffiliates['username']), ['{inviter}' => htmlspecialchars($aff_inviter)]), $keyboard, 'html');
+            // 🎉 and the inviter, in THEIR language - it used to go in the
+            // newcomer's, with the newcomer's own menu under it
+            aff_notify_new_referral($affiliatesid, ($username !== 'NOT_USERNAME' && $username !== '') ? '@' . $username : (string) $first_name);
             $addcountaffiliates = intval($useraffiliates['affiliatescount']) + 1;
             update("user", "affiliatescount", $addcountaffiliates, "id", $affiliatesid);
             $stmt = $pdo->prepare("INSERT IGNORE INTO reagent_report (user_id, get_gift,time,reagent) VALUES (?, ?,?, ?)");
@@ -6296,7 +6307,9 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     $Balance_add_user = $user['Balance'] + $price_gift_Start;
     update("user", "Balance", $Balance_add_user, "id", $from_id);
     $addbalancediscount = money($price_gift_Start, currency_for_user($user));
-    sendmessage($reagent['reagent'], $textbotlang['users']['affiliates']['joinedGift'], null, 'html');
+    // to the inviter, in their own language
+    bottext_extras_key_hint('users.affiliates.joinedGift');
+    sendmessage($reagent['reagent'], payer_texts($reagent['reagent'])['users']['affiliates']['joinedGift'], null, 'html');
     sendmessage($from_id, $textbotlang['users']['affiliates']['joinGiftActivated'], null, 'html');
     $report_join_gift = sprintf($textbotlang['Admin']['reportgroup']['membershipGiftPaid'], $from_id, $username, $reagent['reagent'], wallet_amount_text($user), $Balance_add_user, wallet_amount_text($useraffiliates), $Balance_add_regent);
     if (strlen($setting['Channel_Report']) > 0) {
@@ -6480,7 +6493,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
         }
     }
     step('home', $from_id);
-} elseif (($text == $textbotlang['textbot']['agentPanel'] || $datain == "agentpanel") && $user['agent'] != "f") {
+} elseif (($text == $textbotlang['textbot']['agentPanel'] || $datain == "agentpanel") && in_array($user['agent'] ?? '', ['n', 'n2'], true)) {
     if (glass_on($user['lang'] ?? 'fa', $setting)) {
         Editmessagetext($from_id, $message_id, $textbotlang['users']['agent']['welcome'], $keyboardagent, 'HTML');
     } else {

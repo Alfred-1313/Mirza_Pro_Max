@@ -170,7 +170,9 @@ if (!function_exists('build_main_keyboard')) {
                 // and admin.php recognises this button by its text
                 $temp_addtional_key[] = ['text' => lang_tab_texts('fa')['Admin']['panelAdmin'], 'callback_data' => "admin"];
             }
-            if ($users['agent'] != "f") {
+            // agents only - a newcomer not in the database yet has no agent
+            // type at all, and "not f" used to show it to them
+            if (in_array($users['agent'] ?? '', ['n', 'n2'], true)) {
                 $temp_addtional_key[] = ['text' => $textbotlang['textbot']['agentPanel'], 'callback_data' => "agentpanel"];
             }
             if ($users['agent'] == "f" && feature_value('statusagentrequest', $users['lang'] ?? 'fa', $setting['statusagentrequest']) == "onrequestagent") {
@@ -244,7 +246,7 @@ if (!function_exists('build_main_keyboard')) {
                 // same reason as the inline variant above
                 $temp_addtional_key[] = ['text' => lang_tab_texts('fa')['Admin']['panelAdmin']];
             }
-            if ($users['agent'] != "f") {
+            if (in_array($users['agent'] ?? '', ['n', 'n2'], true)) {
                 $temp_addtional_key[] = ['text' => $textbotlang['textbot']['agentPanel']];
             }
             if ($users['agent'] == "f" && feature_value('statusagentrequest', $users['lang'] ?? 'fa', $setting['statusagentrequest']) == "onrequestagent") {

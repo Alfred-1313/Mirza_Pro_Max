@@ -945,6 +945,20 @@ Wallet balance: %s
                         'affiliatesidyou' => '❌ It is not possible to become a referral with this user ID.',
                         'invalidaffiliates' => '❌ You cannot be your own referral',
                         'offaffiliates' => '❌ The referral section is turned off',
+                        'welcomeInvitedReward' => '<b>🎉 Welcome!</b>
+
+You joined the bot through <b>{inviter}</b>\'s invitation ✅
+
+🎁 You can get a <b>free config</b> by inviting your friends too; your own invite link is in the <b>Referrals</b> menu.',
+                        'welcomeInvitedPlain' => '<b>🎉 Welcome!</b>
+
+You joined the bot through <b>{inviter}</b>\'s invitation ✅',
+                        'newReferralJoinedReward' => '<b>🎉 A new referral!</b>
+User <b>{username}</b> joined the bot with your invite link ✅
+
+🎁 Your valid invites for the free config: <b>{count} / {need}</b>',
+                        'newReferralJoinedPlain' => '<b>🎉 A new referral!</b>
+User <b>{username}</b> joined the bot with your invite link ✅',
                         'nothingActive' => '🎁 There is no active referral program right now.
 
 New invite-your-friends programs are coming soon; you can find them right here 🌱',
