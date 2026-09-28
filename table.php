@@ -1470,6 +1470,8 @@ addFieldToTable("user", "currency", "IRT", "VARCHAR(10)");
 // once its payer switched language - no default, an old row counts as its
 // owner's current wallet
 addFieldToTable("user", "wallets", null, "TEXT NULL");
+// 🛡 the inviter a newcomer is still being verified for
+addFieldToTable("user", "aff_pending", null, "VARCHAR(50) NULL");
 addFieldToTable("Payment_report", "currency", null, "VARCHAR(10) NULL");
 addFieldToTable("invoice", "currency", null, "VARCHAR(10) NULL");
 addFieldToTable("setting", "wallet_migrated", "0", "VARCHAR(5)");
@@ -1581,6 +1583,9 @@ try {
 if ($check && $check->rowCount() != 0) {
     $pdo->exec("ALTER TABLE `user` DROP `ref_code`");
 }
+// chat_member is not sent unless asked for: without it a customer joining
+// or leaving a channel never reached the bot (🛡 verification, 🚪 left_channel)
 telegram('setwebhook', [
-    'url' => "https://$domainhosts/index.php"
+    'url' => "https://$domainhosts/index.php",
+    'allowed_updates' => json_encode(['message', 'edited_message', 'callback_query', 'inline_query', 'pre_checkout_query', 'chat_member', 'my_chat_member']),
 ]);

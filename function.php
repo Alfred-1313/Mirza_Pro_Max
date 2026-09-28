@@ -1926,6 +1926,249 @@ if (!function_exists('aff_classic_on')) {
         return aff_classic_on($lang) || affrw_live($lang) !== null;
     }
 }
+if (!function_exists('refv_cfg')) {
+    // 🛡 راستی‌آزمایی دعوت‌ها - one setting per language for both plans: an
+    // invite counts (commission, join gift, the free-config count) only once
+    // the newcomer has sent their phone number and/or joined the chosen
+    // channels. Off by default - then an invite counts the moment the link is
+    // opened, as before. The INVITER's language decides, like the plans.
+    function refv_cfg($lang)
+    {
+        $ids = fn($v) => array_values(array_unique(array_filter(array_map('trim', explode(',', (string) $v)), 'strlen')));
+        return [
+            'phone' => (string) feature_setting_value('refv_phone', $lang, '0') === '1',
+            'channel' => (string) feature_setting_value('refv_channel', $lang, '0') === '1',
+            'channels' => array_map('intval', $ids(feature_setting_value('refv_channels', $lang, ''))),
+            'vip' => $ids(feature_setting_value('refv_vip', $lang, '')),
+        ];
+    }
+    // the chosen channels that still exist, as rows
+    function refv_channel_rows($cfg)
+    {
+        $rows = [];
+        foreach ((array) select("channels", "*", null, null, "fetchAll") as $r) {
+            if (is_array($r) && in_array((int) $r['id'], $cfg['channels'], true)) {
+                $rows[] = $r;
+            }
+        }
+        return $rows;
+    }
+    // What an invite to $inviterId has to pass before it counts: a list of
+    // 'phone' / 'channel', empty when nothing (verification off, or a 👑 VIP
+    // inviter). The phone check needs 📞 احراز شماره تماس on for that language
+    // - it is that setting's country codes the number is checked against.
+    function refv_needs($inviterId)
+    {
+        $inv = select("user", "*", "id", (string) $inviterId, "select");
+        $lang = is_array($inv) ? ($inv['lang'] ?? 'fa') : 'fa';
+        $cfg = refv_cfg($lang);
+        if (in_array((string) $inviterId, $cfg['vip'], true)) {
+            return [];
+        }
+        $setting = select("setting", "*", null, null, "select");
+        $needs = [];
+        if ($cfg['phone'] && feature_value('get_number', $lang, $setting['get_number'] ?? '') == "onAuthenticationphone") {
+            $needs[] = 'phone';
+        }
+        if ($cfg['channel'] && refv_channel_rows($cfg)) {
+            $needs[] = 'channel';
+        }
+        return $needs;
+    }
+    // the chosen channels $uid has not joined (rows)
+    function refv_unjoined($uid, $inviterId)
+    {
+        $inv = select("user", "*", "id", (string) $inviterId, "select");
+        $out = [];
+        foreach (refv_channel_rows(refv_cfg(is_array($inv) ? ($inv['lang'] ?? 'fa') : 'fa')) as $r) {
+            $res = telegram('getChatMember', ['chat_id' => $r['link'], 'user_id' => $uid]);
+            if (empty($res['ok']) || !in_array($res['result']['status'] ?? '', ['member', 'creator', 'administrator'], true)) {
+                $out[] = $r;
+            }
+        }
+        return $out;
+    }
+    // of $needs, what the newcomer has not done yet
+    function refv_missing($userRow, $inviterId, array $needs)
+    {
+        $missing = [];
+        if (in_array('phone', $needs, true)) {
+            $num = (string) ($userRow['number'] ?? 'none');
+            if ($num === 'none' || $num === '' || !phone_matches_lang($num, $userRow['lang'] ?? 'fa')) {
+                $missing[] = 'phone';
+            }
+        }
+        if (in_array('channel', $needs, true) && refv_unjoined($userRow['id'], $inviterId)) {
+            $missing[] = 'channel';
+        }
+        return $missing;
+    }
+    // user.aff_pending: the inviter a newcomer is still being verified for.
+    // Made here, empty by default, before anything writes it - update() would
+    // otherwise create it with its first value as every user's default.
+    function refv_ensure_schema()
+    {
+        static $done = false;
+        if (!$done) {
+            $done = true;
+            addFieldToTable('user', 'aff_pending', null, 'VARCHAR(50) NULL');
+        }
+    }
+    // asks the newcomer for the first thing still missing - the phone first
+    function refv_prompt($userRow, $inviterId, array $missing)
+    {
+        global $request_contact;
+        $tx = payer_texts($userRow['id']);
+        $a = $tx['users']['affiliates'];
+        $inv = select("user", "*", "id", (string) $inviterId, "select");
+        $name = (is_array($inv) && !empty($inv['username']) && $inv['username'] !== 'none') ? '@' . $inv['username'] : (string) $inviterId;
+        if (in_array('phone', $missing, true)) {
+            update("user", "Processing_value", "verifyref", "id", $userRow['id']);
+            step('get_number', $userRow['id']);
+            bottext_extras_key_hint('users.affiliates.verifyPhonePrompt');
+            sendmessage($userRow['id'], strtr($a['verifyPhonePrompt'], ['{inviter}' => htmlspecialchars($name)]), $request_contact, 'HTML');
+            return;
+        }
+        $kb = ['inline_keyboard' => []];
+        foreach (refv_unjoined($userRow['id'], $inviterId) as $r) {
+            $r = channel_row_for_lang($r, $userRow['lang'] ?? 'fa');
+            if (empty($r['linkjoin'])) {
+                continue;
+            }
+            [$t, $icon] = channel_button_text($r);
+            $b = ['text' => $t, 'url' => $r['linkjoin']];
+            if ($icon !== '') {
+                $b['icon_custom_emoji_id'] = $icon;
+            }
+            $kb['inline_keyboard'][] = [$b];
+        }
+        $kb['inline_keyboard'][] = [['text' => $a['verifyChannelBtn'], 'callback_data' => 'refverify', 'style' => 'success']];
+        bottext_extras_key_hint('users.affiliates.verifyChannelPrompt');
+        sendmessage($userRow['id'], strtr($a['verifyChannelPrompt'], ['{inviter}' => htmlspecialchars($name)]), json_encode($kb), 'HTML');
+    }
+    // Makes $userRow $inviterId's referral: the link is written, both are told
+    // (each in their own language, for the plan that is on), the inviter's
+    // count goes up and the free config is checked. What /start with a link
+    // always did - now also what a finished verification does.
+    function aff_record_referral($userRow, $inviterId, $keyboard = null)
+    {
+        global $pdo, $from_id, $first_name;
+        refv_ensure_schema();
+        $uid = (string) $userRow['id'];
+        update("user", "affiliates", $inviterId, "id", $uid);
+        update("user", "aff_pending", "", "id", $uid);
+        $inv = select("user", "*", "id", (string) $inviterId, "select");
+        $tx = payer_texts($uid);
+        // 👋 the newcomer: the welcome of the plan on for them - 💼's tells
+        // them about the join gift, 🎁's that they can earn a free config
+        // too, and with neither just a welcome
+        $myLang = $userRow['lang'] ?? 'fa';
+        $welcome = aff_classic_on($myLang) ? 'welcomeInvited' : (affrw_live($myLang) !== null ? 'welcomeInvitedReward' : 'welcomeInvitedPlain');
+        $invName = (is_array($inv) && !empty($inv['username']) && $inv['username'] !== 'none') ? '@' . $inv['username'] : (string) $inviterId;
+        bottext_extras_key_hint("users.affiliates.{$welcome}");
+        sendmessage($uid, strtr(text_fill_s($tx['users']['affiliates'][$welcome], (string) ($inv['username'] ?? '')), ['{inviter}' => htmlspecialchars($invName)]), $keyboard, 'html');
+        // 🎉 and the inviter, in theirs
+        $u = (string) ($userRow['username'] ?? '');
+        $own = ((string) ($from_id ?? '') === $uid && (string) ($first_name ?? '') !== '') ? (string) $first_name : $uid;
+        aff_notify_new_referral($inviterId, ($u !== '' && $u !== 'none' && $u !== 'NOT_USERNAME') ? '@' . $u : $own);
+        update("user", "affiliatescount", intval($inv['affiliatescount'] ?? 0) + 1, "id", (string) $inviterId);
+        $stmt = $pdo->prepare("INSERT IGNORE INTO reagent_report (user_id, get_gift,time,reagent) VALUES (?, ?,?, ?)");
+        $stmt->execute([$uid, false, date('Y/m/d H:i:s'), (string) $inviterId]);
+        // 🎁 کانفیگ رایگان با دعوت: this may have been the invite it needed
+        affrw_check($inviterId);
+    }
+    // /start with $inviterId's link: counted now, or held until the newcomer
+    // is verified - asked for it straight away, and free to use the bot
+    // meanwhile
+    function aff_invite_start($userRow, $inviterId, $keyboard = null)
+    {
+        $needs = refv_needs($inviterId);
+        $missing = $needs ? refv_missing($userRow, $inviterId, $needs) : [];
+        if (!$missing) {
+            aff_record_referral($userRow, $inviterId, $keyboard);
+            return;
+        }
+        refv_ensure_schema();
+        update("user", "aff_pending", (string) $inviterId, "id", (string) $userRow['id']);
+        refv_prompt($userRow, $inviterId, $missing);
+    }
+    // After the newcomer sent a number, tapped «✅ عضو شدم» or joined a
+    // channel: counted if everything is done now (true), otherwise asked for
+    // what is left ($quiet: say nothing - a join event, not a tap).
+    function refv_try($uid, $keyboard = null, $quiet = false)
+    {
+        $u = select("user", "*", "id", (string) $uid, "select", ['cache' => false]);
+        $inviterId = is_array($u) ? (string) ($u['aff_pending'] ?? '') : '';
+        if ($inviterId === '' || intval($u['affiliates'] ?? 0) != 0) {
+            return false;
+        }
+        $missing = refv_missing($u, $inviterId, refv_needs($inviterId));
+        if ($missing) {
+            if (!$quiet) {
+                refv_prompt($u, $inviterId, $missing);
+            }
+            return false;
+        }
+        aff_record_referral($u, $inviterId, $keyboard);
+        return true;
+    }
+}
+if (!function_exists('phone_required_for')) {
+    // 📞 احراز شماره تماس on for this customer's language, and meant for them:
+    // everyone (as before), only customers who joined after it was set to
+    // «new», or only invited ones - the audience set on its ⚙️ screen
+    function phone_required_for($userRow)
+    {
+        $lang = $userRow['lang'] ?? 'fa';
+        $setting = select("setting", "*", null, null, "select");
+        if (feature_value('get_number', $lang, $setting['get_number'] ?? '') != "onAuthenticationphone") {
+            return false;
+        }
+        return audience_includes((string) feature_setting_value('phone_audience', $lang, 'all'), (int) feature_setting_value('phone_audience_since', $lang, '0'), $userRow);
+    }
+    // all / new (joined after $since) / invited (came with a referral link)
+    function audience_includes($aud, $since, $userRow)
+    {
+        if ($aud === 'new') {
+            return (int) ($userRow['register'] ?? 0) > $since;
+        }
+        if ($aud === 'invited') {
+            return intval($userRow['affiliates'] ?? 0) != 0 || (string) ($userRow['aff_pending'] ?? '') !== '';
+        }
+        return $aud !== 'none';
+    }
+}
+if (!function_exists('channel_gate_map')) {
+    // 📯 who has to join each channel for the bot to work, per language:
+    // {channelId: {"aud": all|new|invited|none, "since": ts}}. A channel not
+    // in it is «all» - what every channel was before.
+    function channel_gate_map($lang)
+    {
+        $m = json_decode((string) feature_setting_value('chn_gate', $lang, '{}'), true);
+        return is_array($m) ? $m : [];
+    }
+    function channel_gate_aud($lang, $channelId)
+    {
+        return (string) (channel_gate_map($lang)[(string) $channelId]['aud'] ?? 'all');
+    }
+    // the channel links this customer has to join to use the bot
+    function channel_gate_links_for($userRow)
+    {
+        $lang = $userRow['lang'] ?? 'fa';
+        $map = channel_gate_map($lang);
+        $out = [];
+        foreach ((array) select("channels", "*", null, null, "fetchAll") as $r) {
+            if (!is_array($r)) {
+                continue;
+            }
+            $g = $map[(string) $r['id']] ?? ['aud' => 'all', 'since' => 0];
+            if (audience_includes((string) ($g['aud'] ?? 'all'), (int) ($g['since'] ?? 0), $userRow)) {
+                $out[] = $r['link'];
+            }
+        }
+        return $out;
+    }
+}
 if (!function_exists('feature_aff_banner')) {
     // 🎁 the referral banner of one language: [caption, photo]. Persian falls
     // back to the banner set before the tabs; another language does not - that
@@ -11174,6 +11417,10 @@ if (!function_exists('bt_section_meta')) {
                 'label' => '🔗 پیام‌های لینک دعوت، وقتی هیچ طرحی روشن نیست',
                 'alert' => 'پیام‌های لینک دعوت که به طرح خاصی ربط ندارن: خوش‌آمد و اعلان «زیرمجموعه‌ی جدید» وقتی برای اون زبان هیچ طرحی روشن نیست، و پیام وقتی کسی با لینک خودش یا دوباره با لینک یه نفر دیگه بیاد. خوش‌آمد و اعلانِ هر طرح زیر همون طرحه.',
             ],
+            'referral_verify' => [
+                'label' => '🛡 پیام‌های راستی‌آزمایی دعوت',
+                'alert' => 'پیام‌هایی که کاربر دعوت‌شده می‌گیره وقتی راستی‌آزمایی دعوت‌ها روشنه (👥 طرح‌های زیرمجموعه‌گیری ← 🛡): درخواست شماره، درخواست عضویت در کانال، دکمه‌ی «عضو شدم» و پاپ‌آپ «هنوز عضو نشدی».',
+            ],
             'referral_none' => [
                 'label' => '🚫 وقتی هیچ طرحی فعال نیست',
                 'alert' => 'پیامی که کاربر می‌گیره وقتی دکمه‌ی زیرمجموعه‌گیری رو بزنه ولی برای زبانش نه نوع ۱ (💼 زیرمجموعه‌گیری و هدیه خوش‌آمد) روشنه نه نوع ۲ (🎁 کانفیگ رایگان با دعوت).',
@@ -17319,6 +17566,9 @@ if (!function_exists('bt_nosticker_keys')) {
             'users.affiliates.rewardServiceName',
             // and the service name 🔗 واگذاری gives a handed-over service
             'users.status.assignedServiceName',
+            // a button label and a popup, not messages
+            'users.affiliates.verifyChannelBtn',
+            'users.affiliates.verifyNotYet',
             // temporary text replaced within seconds - its sticker stayed behind
             'users.sell.creating',
             // temporary too, and reworded per gateway so it rarely even matched

@@ -959,6 +959,10 @@ User <b>{username}</b> joined the bot with your invite link ✅
 🎁 Your valid invites for the free config: <b>{count} / {need}</b>',
                         'newReferralJoinedPlain' => '<b>🎉 A new referral!</b>
 User <b>{username}</b> joined the bot with your invite link ✅',
+                        'verifyPhonePrompt' => '📞 To have your invite counted for <b>{inviter}</b>, send your phone number with the button below.',
+                        'verifyChannelPrompt' => '📯 To have your invite counted for <b>{inviter}</b>, join the channels below and then tap «✅ I joined».',
+                        'verifyChannelBtn' => '✅ I joined',
+                        'verifyNotYet' => '⚠️ You have not joined all the channels yet.',
                         'nothingActive' => '🎁 There is no active referral program right now.
 
 New invite-your-friends programs are coming soon; you can find them right here 🌱',

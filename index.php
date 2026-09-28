@@ -45,6 +45,11 @@ if (isset($update['chat_member'])) {
         $lc_btn['url'] = $lc_url;
         $keyboard_channel_left = json_encode(['inline_keyboard' => [[$lc_btn]]]);
     }
+    if (in_array($status, ['member', 'administrator', 'creator'], true) && is_array($user)) {
+        // 🛡 a referral waiting on this channel: counted once all is done
+        refv_try($from_id, null, true);
+        return;
+    }
     if (in_array($status, ['left', 'kicked', 'restricted'])) {
         sendmessage($from_id, $textbotlang['users']['channel']['left_channel'], $keyboard_channel_left, 'html');
         return;
@@ -297,33 +302,23 @@ if (strpos($text, "/start ") !== false && $user['step'] != "gettextSystemMessage
             }
             $user = select("user", "*", "id", $from_id, "select");
             // checked BEFORE writing: writing first moved someone else's
-            // referral over to whoever's link was opened last
-            if (intval($user['affiliates']) != 0) {
+            // referral over to whoever's link was opened last - and one still
+            // being verified for someone is theirs too
+            $aff_pendingNow = (string) ($user['aff_pending'] ?? '');
+            if (intval($user['affiliates']) != 0 || ($aff_pendingNow !== '' && $aff_pendingNow !== (string) $affiliatesid)) {
                 bottext_extras_key_hint('users.affiliates.affiliateedago');
                 sendmessage($from_id, $textbotlang['users']['affiliates']['affiliateedago'], null, 'html');
                 return;
             }
-            update("user", "affiliates", $affiliatesid, "id", $from_id);
-            $useraffiliates = select("user", "*", 'id', $affiliatesid, "select");
-            // 👋 the newcomer, in their language: the welcome of the plan on
-            // for it - 💼's tells them about the join gift, 🎁's that they can
-            // earn a free config too, and with neither just a welcome
-            $aff_myLang = $user['lang'] ?? 'fa';
-            $aff_welcome = aff_classic_on($aff_myLang) ? 'welcomeInvited' : (affrw_live($aff_myLang) !== null ? 'welcomeInvitedReward' : 'welcomeInvitedPlain');
-            $aff_inviter = (!empty($useraffiliates['username']) && $useraffiliates['username'] !== 'none') ? '@' . $useraffiliates['username'] : (string) $affiliatesid;
-            bottext_extras_key_hint("users.affiliates.{$aff_welcome}");
-            sendmessage($from_id, strtr(text_fill_s($textbotlang['users']['affiliates'][$aff_welcome], $useraffiliates['username']), ['{inviter}' => htmlspecialchars($aff_inviter)]), $keyboard, 'html');
-            // 🎉 and the inviter, in THEIR language - it used to go in the
-            // newcomer's, with the newcomer's own menu under it
-            aff_notify_new_referral($affiliatesid, ($username !== 'NOT_USERNAME' && $username !== '') ? '@' . $username : (string) $first_name);
-            $addcountaffiliates = intval($useraffiliates['affiliatescount']) + 1;
-            update("user", "affiliatescount", $addcountaffiliates, "id", $affiliatesid);
-            $stmt = $pdo->prepare("INSERT IGNORE INTO reagent_report (user_id, get_gift,time,reagent) VALUES (?, ?,?, ?)");
-            $dateacc = date('Y/m/d H:i:s');
-            $type_gift = false;
-            $stmt->execute([$from_id, $type_gift, $dateacc, $affiliatesid]);
-            // 🎁 کانفیگ رایگان با دعوت: this may have been the invite it needed
-            affrw_check($affiliatesid);
+            if ($aff_pendingNow === (string) $affiliatesid) {
+                // the same link again while being verified: what is left
+                refv_try($from_id, $keyboard);
+            } else {
+                // 🛡 counted now, or held until the newcomer is verified
+                // (phone / channels) - see aff_record_referral() for who is
+                // told what once it counts
+                aff_invite_start($user, $affiliatesid, $keyboard);
+            }
         } else {
             sendmessage($from_id, strtr($textbotlang['users']['text_start'], bottext_user_placeholders($user, $from_id)), $keyboard, 'html');
             update("user", "Processing_value", "0", "id", $from_id);
@@ -371,8 +366,12 @@ if (feature_value('Bot_Status', $user['lang'] ?? 'fa', $setting['Bot_Status']) =
 }
 #-----------/start------------#
 if ($user['joinchannel'] != "active") {
-    if (count($channels_id) != 0) {
-        $channels = channel($channels_id);
+    // 📯 per channel and language: everyone, only newcomers, only invited
+    // customers, or nobody (a channel kept for referral verification) - a
+    // customer who came without a link never sees an «invited only» one
+    $gate_links = channel_gate_links_for($user);
+    if (count($gate_links) != 0) {
+        $channels = channel($gate_links);
         if ($datain == "confirmchannel") {
             if (count($channels) == 0) {
                 deletemessage($from_id, $message_id);
@@ -398,6 +397,8 @@ if ($user['joinchannel'] != "active") {
                 // with 🚫 for admin screens (forAdminPreview=true), so a
                 // plain call here never leaks that marker to real users
                 if (!empty($channelremark['hidden']))
+                    continue;
+                if (!in_array($channelremark['link'], $gate_links))
                     continue;
                 list($cbc_text, $cbc_iconId) = channel_button_text($channelremark);
                 $cbc_btn = [
@@ -469,6 +470,8 @@ if ($user['joinchannel'] != "active") {
                 // plain call here never leaks that marker to real users
                 if (!empty($channelremark['hidden']))
                     continue;
+                if (!in_array($channelremark['link'], $gate_links))
+                    continue;
                 list($cbc_text, $cbc_iconId) = channel_button_text($channelremark);
                 $cbc_btn = [
                     'text' => $cbc_text,
@@ -489,6 +492,15 @@ if ($user['joinchannel'] != "active") {
             return;
         }
     }
+}
+#-----------🛡 referral verification: «✅ عضو شدم»------------#
+if ($datain === 'refverify') {
+    if (refv_try($from_id, $keyboard, true)) {
+        deletemessage($from_id, $message_id);
+    } else {
+        telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $textbotlang['users']['affiliates']['verifyNotYet'], 'show_alert' => true]);
+    }
+    return;
 }
 if ($text == "/start" || $datain == "start" || $text == "start") {
     update("user", "Processing_value", "0", "id", $from_id);
@@ -562,7 +574,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     // Back to the flow that asked for the number (each of the four gates leaves
     // its marker in Processing_value), not the welcome screen. Anything else in
     // that field means there is nothing to pick up.
-    if (in_array((string) $user['Processing_value'], ['verifybuy', 'verifyusertest', 'verifybulk', 'verifytopup'], true)) {
+    if (in_array((string) $user['Processing_value'], ['verifybuy', 'verifyusertest', 'verifybulk', 'verifytopup', 'verifyref'], true)) {
         $verify_resume = $user['Processing_value'];
         update("user", "Processing_value", "0", "id", $from_id);
     }
@@ -572,6 +584,12 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     // in this same message, an inline one can't ride on a keyboard removal
     $verifyMenuIsReply = array_key_exists('keyboard', (array) json_decode((string) $keyboard, true));
     sendmessage($from_id, $textbotlang['users']['number']['active'], $verifyMenuIsReply ? $keyboard : json_encode(['remove_keyboard' => true]), 'html');
+    if ($verify_resume === 'verifyref') {
+        // 🛡 a referral waiting on this number: counted, or asked for the
+        // channels still to join
+        refv_try($from_id, $keyboard);
+        return;
+    }
     if ($verify_resume === 'verifyusertest') {
         // the test-account entry is further down this same elseif chain, so this
         // request can't reach it - its next screen, behind the same checks
@@ -3429,12 +3447,12 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     // panel selection is now always shown, even with a single active test panel, instead
     // of silently auto-picking it - mirrors the purchase flow's "if (false && ...)" fix
     if (true || $locationproduct != 1) {
-        if (feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone" && $user['step'] != "get_number" && $user['number'] == "none") {
+        if (phone_required_for($user) && $user['step'] != "get_number" && $user['number'] == "none") {
             sendmessage($from_id, $textbotlang['users']['number']['confirming'], $request_contact, 'HTML');
             update("user", "Processing_value", "verifyusertest", "id", $from_id);
             step('get_number', $from_id);
         }
-        if ($user['number'] == "none" && feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone")
+        if ($user['number'] == "none" && phone_required_for($user))
             return;
         if ($user['limit_usertest'] <= 0 && !$admin_test_free) {
             sendmessage($from_id, $textbotlang['users']['usertest']['limitwarning'], $keyboard_buy, 'html');
@@ -3476,12 +3494,12 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         sendmessage($from_id, $textbotlang['users']['usertest']['limitwarning'], $keyboard_buy, 'html');
         return;
     }
-    if (feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone" && $user['step'] != "get_number" && $user['number'] == "none") {
+    if (phone_required_for($user) && $user['step'] != "get_number" && $user['number'] == "none") {
         sendmessage($from_id, $textbotlang['users']['number']['confirming'], $request_contact, 'HTML');
         update("user", "Processing_value", "verifyusertest", "id", $from_id);
         step('get_number', $from_id);
     }
-    if ($user['number'] == "none" && feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone")
+    if ($user['number'] == "none" && phone_required_for($user))
         return;
     $locationproduct = panels_available_count($user['lang'] ?? 'fa', $user['agent'], 'test');
     // disabled (was auto-picking the single panel and skipping the picker entirely) -
@@ -4001,12 +4019,12 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
 // Skipping it hands the tap to the branch below, which says only that.
 } elseif (($text == $textbotlang['textbot']['sell'] || $datain == "buy" || $datain == "buyback" || $datain == "buyfresh" || $text == "/buy" || $text == "buy" || $verify_resume === 'verifybuy') && $statusnote
     && products_available_count($user['lang'] ?? 'fa', $user['agent']) > 0) {
-    if (feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone" && $user['step'] != "get_number" && $user['number'] == "none") {
+    if (phone_required_for($user) && $user['step'] != "get_number" && $user['number'] == "none") {
         sendmessage($from_id, $textbotlang['users']['number']['confirming'], $request_contact, 'HTML');
         update("user", "Processing_value", "verifybuy", "id", $from_id);
         step('get_number', $from_id);
     }
-    if ($user['number'] == "none" && feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone")
+    if ($user['number'] == "none" && phone_required_for($user))
         return;
     if (!mainmenu_btn_active($user['lang'] ?? 'fa', "text_sell")) {
         sendmessage($from_id, $textbotlang['users']['buttonDisabled'], null, 'HTML');
@@ -4043,12 +4061,12 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         sendmessage($from_id, $textbotlang['users']['sell']['nullPanel'], null, 'HTML');
         return;
     }
-    if (feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone" && $user['step'] != "get_number" && $user['number'] == "none") {
+    if (phone_required_for($user) && $user['step'] != "get_number" && $user['number'] == "none") {
         sendmessage($from_id, $textbotlang['users']['number']['confirming'], $request_contact, 'HTML');
         update("user", "Processing_value", "verifybuy", "id", $from_id);
         step('get_number', $from_id);
     }
-    if ($user['number'] == "none" && feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone")
+    if ($user['number'] == "none" && phone_required_for($user))
         return;
     #-----------------------#
     // 🖥 نمایش انتخاب پنل (setting.statuspanelshow, toggled in 🛒 وضعیت قابلیت‌های
@@ -4826,12 +4844,12 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         sendmessage($from_id, $textbotlang['users']['sell']['nullPanel'], null, 'HTML');
         return;
     }
-    if (feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone" && $user['step'] != "get_number" && $user['number'] == "none") {
+    if (phone_required_for($user) && $user['step'] != "get_number" && $user['number'] == "none") {
         sendmessage($from_id, $textbotlang['users']['number']['confirming'], $request_contact, 'HTML');
         update("user", "Processing_value", "verifybulk", "id", $from_id);
         step('get_number', $from_id);
     }
-    if ($user['number'] == "none" && feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone")
+    if ($user['number'] == "none" && phone_required_for($user))
         return;
     #-----------------------#
     if ($datain == "kharidanbuh") {
@@ -5182,13 +5200,13 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     update("user", "Processing_value_one", "0", "id", $from_id);
     update("user", "Processing_value_tow", "0", "id", $from_id);
     update("user", "Processing_value_four", "0", "id", $from_id);
-    if (feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone" && $user['step'] != "get_number" && $user['number'] == "none") {
+    if (phone_required_for($user) && $user['step'] != "get_number" && $user['number'] == "none") {
         sendmessage($from_id, $textbotlang['users']['number']['confirming'], $request_contact, 'HTML');
         // after the resets above, so the marker survives them
         update("user", "Processing_value", "verifytopup", "id", $from_id);
         step('get_number', $from_id);
     }
-    if ($user['number'] == "none" && feature_value('get_number', $user['lang'] ?? 'fa', $setting['get_number']) == "onAuthenticationphone")
+    if ($user['number'] == "none" && phone_required_for($user))
         return;
     // method first, amount second: $step_payment is already filtered to this
     // user's language (and, since 2026-08-08, hard-excludes fa-only gateways)
