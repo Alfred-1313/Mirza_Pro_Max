@@ -5569,20 +5569,24 @@ if (!function_exists('feature_section_payload')) {
         } elseif ($section === 'wheel') {
             $rows[] = [['text' => strtr($s['wheelPriceBtn'], ['{price}' => money($v['wheel_price'], $cur)]), 'callback_data' => "flsask:{$lang}:wheel_price"]];
         } elseif ($section === 'aff') {
-            // 🛡 راستی‌آزمایی دعوت‌ها - both plans
-            $rv = refv_cfg($lang);
-            $rows[] = [['text' => $s['refvSec'], 'callback_data' => "none"]];
-            $rows[] = [
-                ['text' => $rv['phone'] ? $on : $off, 'callback_data' => "flsrefv:{$lang}:phone", 'style' => $rv['phone'] ? 'success' : 'danger'],
-                ['text' => $s['refvPhoneBtn'], 'callback_data' => "none"],
-            ];
-            $rows[] = [
-                ['text' => $rv['channel'] ? $on : $off, 'callback_data' => "flsrefv:{$lang}:channel", 'style' => $rv['channel'] ? 'success' : 'danger'],
-                ['text' => $s['refvChannelBtn'], 'callback_data' => "none"],
-            ];
-            $rvNames = array_map(fn($r) => (string) $r['remark'], refv_channel_rows($rv));
-            $rows[] = [['text' => strtr($s['refvChannelsBtn'], ['{list}' => $rvNames ? implode('، ', $rvNames) : $s['refvNone']]), 'callback_data' => "flsrefv:{$lang}:pick", 'style' => 'primary']];
-            $rows[] = [['text' => strtr($s['refvVipBtn'], ['{n}' => count($rv['vip'])]), 'callback_data' => "flsrefv:{$lang}:vip", 'style' => 'primary']];
+            // 🛡 راستی‌آزمایی دعوت‌ها - each plan its own, under it
+            $refvRows = function ($plan) use ($lang, $s, $on, $off) {
+                $rv = refv_cfg($lang, $plan);
+                $rvNames = array_map(fn($r) => (string) $r['remark'], refv_channel_rows($rv));
+                return [
+                    [['text' => $s['refvSec'], 'callback_data' => "none"]],
+                    [
+                        ['text' => $rv['phone'] ? $on : $off, 'callback_data' => "flsrefv:{$lang}:{$plan}:phone", 'style' => $rv['phone'] ? 'success' : 'danger'],
+                        ['text' => $s['refvPhoneBtn'], 'callback_data' => "none"],
+                    ],
+                    [
+                        ['text' => $rv['channel'] ? $on : $off, 'callback_data' => "flsrefv:{$lang}:{$plan}:channel", 'style' => $rv['channel'] ? 'success' : 'danger'],
+                        ['text' => $s['refvChannelBtn'], 'callback_data' => "none"],
+                    ],
+                    [['text' => strtr($s['refvChannelsBtn'], ['{list}' => $rvNames ? implode('، ', $rvNames) : $s['refvNone']]), 'callback_data' => "flsrefv:{$lang}:{$plan}:pick", 'style' => 'primary']],
+                    [['text' => strtr($s['refvVipBtn'], ['{n}' => count($rv['vip'])]), 'callback_data' => "flsrefv:{$lang}:{$plan}:vip", 'style' => 'primary']],
+                ];
+            };
             // 💼 زیرمجموعه‌گیری و هدیه خوش‌آمد
             $rows[] = [['text' => $s['affSecClassic'], 'callback_data' => "none"]];
             $clOn = $v['aff_classic'] === '1';
@@ -5608,6 +5612,7 @@ if (!function_exists('feature_section_payload')) {
                 ['text' => $firstOn ? $on : $off, 'callback_data' => "flstog:{$lang}:aff_firstbuy:{$v['aff_firstbuy']}", 'style' => $firstOn ? 'success' : 'danger'],
                 ['text' => $s['affFirstBuyBtn'], 'callback_data' => "none"],
             ];
+            array_push($rows, ...$refvRows('c'));
             // 🎁 کانفیگ رایگان با دعوت - on this same screen now
             $rows[] = [['text' => $s['affSecReward'], 'callback_data' => "none"]];
             $rw = affrw_cfg($lang);
@@ -5629,6 +5634,7 @@ if (!function_exists('feature_section_payload')) {
                 ['text' => $lvOn ? $on : $off, 'callback_data' => "flsaffrw:{$lang}:leave", 'style' => $lvOn ? 'success' : 'danger'],
                 ['text' => $s['affrwLeaveBtn'], 'callback_data' => "none"],
             ];
+            array_push($rows, ...$refvRows('r'));
         } else {
             $rows[] = [['text' => strtr($s['locAllBtn'], ['{all}' => (string) $v['loc_limit_all']]), 'callback_data' => "flsask:{$lang}:loc_limit_all"]];
             $rows[] = [['text' => strtr($s['locFreeBtn'], ['{free}' => (string) $v['loc_limit_free']]), 'callback_data' => "flsask:{$lang}:loc_limit_free"]];
@@ -5785,53 +5791,63 @@ if (!function_exists('svcgive_panels_payload')) {
     }
 }
 if (!function_exists('refv_caption_line')) {
-    // the 🛡 part of 👥 طرح‌های زیرمجموعه‌گیری's caption
+    // the 🛡 part of 👥 طرح‌های زیرمجموعه‌گیری's caption: one line a plan
     function refv_caption_line($lang, $s)
     {
-        $rv = refv_cfg($lang);
-        $parts = [];
-        if ($rv['phone']) {
-            $parts[] = $s['refvPhoneBtn'];
+        $vars = [];
+        foreach (['c', 'r'] as $plan) {
+            $rv = refv_cfg($lang, $plan);
+            $parts = [];
+            if ($rv['phone']) {
+                $parts[] = $s['refvPhoneBtn'];
+            }
+            if ($rv['channel']) {
+                $names = array_map(fn($r) => htmlspecialchars((string) $r['remark']), refv_channel_rows($rv));
+                $parts[] = $s['refvChannelBtn'] . ($names ? ' (' . implode('، ', $names) . ')' : '');
+            }
+            $vars["{state_{$plan}}"] = $parts ? implode(' + ', $parts) : $s['refvOffState'];
+            $vars["{vip_{$plan}}"] = count($rv['vip']);
         }
-        if ($rv['channel']) {
-            $names = array_map(fn($r) => htmlspecialchars((string) $r['remark']), refv_channel_rows($rv));
-            $parts[] = $s['refvChannelBtn'] . ($names ? ' (' . implode('، ', $names) . ')' : '');
-        }
-        return strtr($s['refvCaption'], ['{state}' => $parts ? implode(' + ', $parts) : $s['refvOffState'], '{vip}' => count($rv['vip'])]);
+        return strtr($s['refvCaption'], $vars);
     }
-    // 📯 which channels a newcomer has to join to count
-    function refv_pick_payload($lang, $textbotlang)
+    // 📯 which channels a newcomer has to join to count for $plan
+    function refv_pick_payload($lang, $plan, $textbotlang)
     {
         $tx = lang_tab_texts('fa');
         $s = $tx['Admin']['FeatureSection'];
-        $rv = refv_cfg($lang);
+        $rv = refv_cfg($lang, $plan);
         $rows = [];
         foreach ((array) select("channels", "*", null, null, "fetchAll") as $r) {
             if (!is_array($r)) {
                 continue;
             }
             $on = in_array((int) $r['id'], $rv['channels'], true);
-            $rows[] = [['text' => ($on ? '✅ ' : '') . $r['remark'], 'callback_data' => "flsrefv:{$lang}:ch:{$r['id']}", 'style' => $on ? 'success' : 'primary']];
+            $rows[] = [['text' => ($on ? '✅ ' : '') . $r['remark'], 'callback_data' => "flsrefv:{$lang}:{$plan}:ch:{$r['id']}", 'style' => $on ? 'success' : 'primary']];
         }
         $rows[] = [['text' => $s['affrwBackToIt'], 'callback_data' => "flsec:{$lang}:aff", 'style' => 'danger']];
-        return [strtr($s['refvPickTitle'], ['{lang}' => $tx['bottext']['langs'][$lang] ?? $lang]), json_encode(['inline_keyboard' => $rows])];
+        return [strtr($s['refvPickTitle'], ['{lang}' => $tx['bottext']['langs'][$lang] ?? $lang, '{plan}' => $s['refvPlan_' . $plan]]), json_encode(['inline_keyboard' => $rows])];
     }
-    // 👑 inviters whose invites count with no verification
-    function refv_vip_payload($lang, $textbotlang)
+    // 👑 inviters whose invites count for $plan with no verification
+    function refv_vip_payload($lang, $plan, $textbotlang)
     {
         $tx = lang_tab_texts('fa');
         $s = $tx['Admin']['FeatureSection'];
         $rows = [];
         $list = '';
-        foreach (refv_cfg($lang)['vip'] as $id) {
+        foreach (refv_cfg($lang, $plan)['vip'] as $id) {
             $u = select("user", "*", "id", $id, "select");
             $name = (is_array($u) && !empty($u['username']) && $u['username'] !== 'none') ? ' @' . $u['username'] : '';
             $list .= "• <code>{$id}</code>" . htmlspecialchars($name) . "\n";
-            $rows[] = [['text' => "❌ {$id}{$name}", 'callback_data' => "flsrefv:{$lang}:vipdel:{$id}", 'style' => 'danger']];
+            $rows[] = [['text' => "❌ {$id}{$name}", 'callback_data' => "flsrefv:{$lang}:{$plan}:vipdel:{$id}", 'style' => 'danger']];
         }
-        $rows[] = [['text' => $s['refvVipAdd'], 'callback_data' => "flsrefv:{$lang}:vipadd", 'style' => 'success']];
+        $rows[] = [['text' => $s['refvVipAdd'], 'callback_data' => "flsrefv:{$lang}:{$plan}:vipadd", 'style' => 'success']];
         $rows[] = [['text' => $s['affrwBackToIt'], 'callback_data' => "flsec:{$lang}:aff", 'style' => 'danger']];
-        return [strtr($s['refvVipTitle'], ['{lang}' => $tx['bottext']['langs'][$lang] ?? $lang, '{list}' => $list !== '' ? rtrim($list) : $s['refvVipEmpty']]), json_encode(['inline_keyboard' => $rows])];
+        return [strtr($s['refvVipTitle'], [
+            '{lang}' => $tx['bottext']['langs'][$lang] ?? $lang,
+            '{plan}' => $s['refvPlan_' . $plan],
+            '{auto}' => $plan === 'r' ? $s['refvVipAuto'] : '',
+            '{list}' => $list !== '' ? rtrim($list) : $s['refvVipEmpty'],
+        ]), json_encode(['inline_keyboard' => $rows])];
     }
 }
 if (!function_exists('chngate_payload')) {
@@ -7610,10 +7626,13 @@ if (in_array($user['step'], ['svcgive_user', 'svcgive_to'], true) && $datain ===
 }
 
 //----------------[  🛡 راستی‌آزمایی دعوت‌ها  ]----------------
-if (preg_match('/^flsrefv:([a-z]{2}):(phone|channel|pick|vip|vipadd|ch:(\d+)|vipdel:(\d+))$/', $datain, $rv_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^flsrefv:([a-z]{2}):([cr]):(phone|channel|pick|vip|vipadd|ch:(\d+)|vipdel:(\d+))$/', $datain, $rv_m) && $adminrulecheck['rule'] == "administrator") {
     $rv_lang = $rv_m[1];
+    $rv_plan = $rv_m[2];
+    // $rv_m[2..] as they were before the plan was in the callback
+    array_splice($rv_m, 2, 1);
     $rv_s = lang_tab_texts('fa')['Admin']['FeatureSection'];
-    $rv = refv_cfg($rv_lang);
+    $rv = refv_cfg($rv_lang, $rv_plan);
     $rv_alert = function ($t) use ($callback_query_id) {
         telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $t, 'show_alert' => true]);
     };
@@ -7625,13 +7644,13 @@ if (preg_match('/^flsrefv:([a-z]{2}):(phone|channel|pick|vip|vipadd|ch:(\d+)|vip
             $rv_alert($rv_s['refvPhoneNeeds']);
             return;
         }
-        feature_setting_set('refv_phone', $rv_lang, $rv['phone'] ? '0' : '1');
+        feature_setting_set("refv_{$rv_plan}_phone", $rv_lang, $rv['phone'] ? '0' : '1');
     } elseif ($rv_m[2] === 'channel') {
         if (!$rv['channel'] && !refv_channel_rows($rv)) {
             $rv_alert($rv_hasChannels ? $rv_s['refvChannelNeeds'] : $rv_s['refvNoChannels']);
             return;
         }
-        feature_setting_set('refv_channel', $rv_lang, $rv['channel'] ? '0' : '1');
+        feature_setting_set("refv_{$rv_plan}_channel", $rv_lang, $rv['channel'] ? '0' : '1');
     } elseif ($rv_m[2] === 'pick' || strpos($rv_m[2], 'ch:') === 0) {
         if (!$rv_hasChannels) {
             $rv_alert($rv_s['refvNoChannels']);
@@ -7640,26 +7659,27 @@ if (preg_match('/^flsrefv:([a-z]{2}):(phone|channel|pick|vip|vipadd|ch:(\d+)|vip
         if (strpos($rv_m[2], 'ch:') === 0) {
             $rv_id = (int) $rv_m[3];
             $rv_list = in_array($rv_id, $rv['channels'], true) ? array_diff($rv['channels'], [$rv_id]) : array_merge($rv['channels'], [$rv_id]);
-            feature_setting_set('refv_channels', $rv_lang, implode(',', $rv_list));
+            feature_setting_set("refv_{$rv_plan}_channels", $rv_lang, implode(',', $rv_list));
             if (empty($rv_list)) {
                 // nothing to join is no channel check at all
-                feature_setting_set('refv_channel', $rv_lang, '0');
+                feature_setting_set("refv_{$rv_plan}_channel", $rv_lang, '0');
             }
         }
-        [$rv_cap, $rv_kb] = refv_pick_payload($rv_lang, $textbotlang);
+        [$rv_cap, $rv_kb] = refv_pick_payload($rv_lang, $rv_plan, $textbotlang);
         Editmessagetext($from_id, $message_id, $rv_cap, $rv_kb);
         return;
     } elseif ($rv_m[2] === 'vipadd') {
         savedata("clear", "rv_lang", $rv_lang);
+        savedata("save", "rv_plan", $rv_plan);
         step('refvvip', $from_id);
-        Editmessagetext($from_id, $message_id, $rv_s['ask_refv_vip'], json_encode(['inline_keyboard' => [[['text' => $rv_s['cancel'], 'callback_data' => "flsrefv:{$rv_lang}:vip", 'style' => 'danger']]]]));
+        Editmessagetext($from_id, $message_id, $rv_s['ask_refv_vip'], json_encode(['inline_keyboard' => [[['text' => $rv_s['cancel'], 'callback_data' => "flsrefv:{$rv_lang}:{$rv_plan}:vip", 'style' => 'danger']]]]));
         return;
     } elseif ($rv_m[2] === 'vip' || strpos($rv_m[2], 'vipdel:') === 0) {
         step('home', $from_id);
         if (strpos($rv_m[2], 'vipdel:') === 0) {
-            feature_setting_set('refv_vip', $rv_lang, implode(',', array_diff($rv['vip'], [(string) $rv_m[4]])));
+            feature_setting_set("refv_{$rv_plan}_vip", $rv_lang, implode(',', array_diff($rv['vip'], [(string) $rv_m[4]])));
         }
-        [$rv_cap, $rv_kb] = refv_vip_payload($rv_lang, $textbotlang);
+        [$rv_cap, $rv_kb] = refv_vip_payload($rv_lang, $rv_plan, $textbotlang);
         Editmessagetext($from_id, $message_id, $rv_cap, $rv_kb);
         return;
     }
@@ -7668,15 +7688,17 @@ if (preg_match('/^flsrefv:([a-z]{2}):(phone|channel|pick|vip|vipadd|ch:(\d+)|vip
 }
 if ($user['step'] === 'refvvip' && $datain === '' && $adminrulecheck['rule'] == "administrator"
     && !in_array($text, [$textbotlang['Admin']['backAdminBtn'], $textbotlang['Admin']['backMenuBtn']], true)) {
-    $rv_lang = json_decode((string) $user['Processing_value'], true)['rv_lang'] ?? 'fa';
+    $rv_pv = json_decode((string) $user['Processing_value'], true);
+    $rv_lang = $rv_pv['rv_lang'] ?? 'fa';
+    $rv_plan = ($rv_pv['rv_plan'] ?? 'c') === 'r' ? 'r' : 'c';
     $rv_u = svcgive_find_user($text);
     if ($rv_u === null) {
         sendmessage($from_id, strtr($textbotlang['Admin']['UserMgmt']['assignNoUser'], ['{id}' => htmlspecialchars(trim((string) $text))]), null, 'HTML');
         return;
     }
-    feature_setting_set('refv_vip', $rv_lang, implode(',', array_unique(array_merge(refv_cfg($rv_lang)['vip'], [(string) $rv_u['id']]))));
+    feature_setting_set("refv_{$rv_plan}_vip", $rv_lang, implode(',', array_unique(array_merge(refv_cfg($rv_lang, $rv_plan)['vip'], [(string) $rv_u['id']]))));
     step('home', $from_id);
-    [$rv_cap, $rv_kb] = refv_vip_payload($rv_lang, $textbotlang);
+    [$rv_cap, $rv_kb] = refv_vip_payload($rv_lang, $rv_plan, $textbotlang);
     sendmessage($from_id, $rv_cap, $rv_kb, 'HTML');
     return;
 }
@@ -7724,7 +7746,7 @@ if (preg_match('/^flsaffrw:([a-z]{2}):(on|mode|panel|leave|p:(\d+))$/', $datain,
     } elseif ($rw_m[2] === 'leave') {
         $rw_lv = feature_setting_value('affrw_leave', $rw_lang, '0') === '1';
         // it watches 🛡's channels - without them it could never see a leave
-        $rw_rv = refv_cfg($rw_lang);
+        $rw_rv = refv_cfg($rw_lang, 'r');
         if (!$rw_lv && (!$rw_rv['channel'] || !refv_channel_rows($rw_rv))) {
             telegram('answerCallbackQuery', [
                 'callback_query_id' => $callback_query_id,

@@ -310,18 +310,18 @@ if (strpos($text, "/start ") !== false && $user['step'] != "gettextSystemMessage
             // referral over to whoever's link was opened last - and one still
             // being verified for someone is theirs too
             $aff_pendingNow = (string) ($user['aff_pending'] ?? '');
-            if (intval($user['affiliates']) != 0 || ($aff_pendingNow !== '' && $aff_pendingNow !== (string) $affiliatesid)) {
+            if ($aff_pendingNow === (string) $affiliatesid) {
+                // the same link again while being verified: what is left
+                // (one plan may count them already, the other not yet)
+                refv_try($from_id, $keyboard);
+            } elseif (intval($user['affiliates']) != 0 || (string) ($user['aff_rw'] ?? '') !== '' || $aff_pendingNow !== '') {
                 bottext_extras_key_hint('users.affiliates.affiliateedago');
                 sendmessage($from_id, $textbotlang['users']['affiliates']['affiliateedago'], null, 'html');
                 return;
-            }
-            if ($aff_pendingNow === (string) $affiliatesid) {
-                // the same link again while being verified: what is left
-                refv_try($from_id, $keyboard);
             } else {
-                // 🛡 counted now, or held until the newcomer is verified
-                // (phone / channels) - see aff_record_referral() for who is
-                // told what once it counts
+                // 🛡 counted now, or for each plan once its own part is done
+                // (phone / channels) - see aff_count_for() for who is told
+                // what once it counts
                 aff_invite_start($user, $affiliatesid, $keyboard);
             }
         } else {

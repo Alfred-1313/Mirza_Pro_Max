@@ -1889,30 +1889,29 @@ if (!function_exists('aff_classic_on')) {
     }
     // anything under 👥 on for this language - the referral button's tap
     // sticker waits for it, so «nothing is active» does not come after one
-    // 🎉 someone joined through $refId's link: told in the inviter's own
-    // language, worded for the plan that is on for it - 💼's about the
-    // commission, 🎁's with the free-config count (only while it is still to
-    // be earned), both if both are on, and a plain one with neither.
-    function aff_notify_new_referral($refId, $displayName)
+    // 🎉 someone now counts for $refId's $plan: told in the inviter's own
+    // language - 💼's about the commission, 🎁's with the free-config count
+    // (only while it is still to be earned), and a plain one when neither
+    // has anything to say.
+    function aff_notify_new_referral($refId, $displayName, $plan)
     {
         $ref = select("user", "*", "id", $refId, "select");
         $lang = is_array($ref) ? ($ref['lang'] ?? 'fa') : 'fa';
         $a = lang_tab_texts(in_array($lang, panel_langs(), true) ? $lang : 'fa')['users']['affiliates'];
         $name = htmlspecialchars((string) $displayName);
-        $sent = false;
-        if (aff_classic_on($lang)) {
-            bottext_extras_key_hint('users.affiliates.newReferralJoined');
-            sendmessage($refId, text_fill_s($a['newReferralJoined'], htmlspecialchars(ltrim((string) $displayName, '@'))), null, 'html');
-            $sent = true;
+        if ($plan === 'c') {
+            if (aff_classic_on($lang)) {
+                bottext_extras_key_hint('users.affiliates.newReferralJoined');
+                sendmessage($refId, text_fill_s($a['newReferralJoined'], htmlspecialchars(ltrim((string) $displayName, '@'))), null, 'html');
+            }
+            return;
         }
         $cfg = affrw_live($lang);
         $row = $cfg !== null ? affrw_row($refId) : null;
         if ($cfg !== null && affrw_counting($row)) {
             bottext_extras_key_hint('users.affiliates.newReferralJoinedReward');
             sendmessage($refId, strtr($a['newReferralJoinedReward'], ['{username}' => $name, '{count}' => min(affrw_count($refId, affrw_since($cfg, $row)), $cfg['need']), '{need}' => $cfg['need']]), null, 'html');
-            $sent = true;
-        }
-        if (!$sent) {
+        } elseif (!aff_classic_on($lang)) {
             bottext_extras_key_hint('users.affiliates.newReferralJoinedPlain');
             sendmessage($refId, strtr($a['newReferralJoinedPlain'], ['{username}' => $name]), null, 'html');
         }
@@ -1927,20 +1926,40 @@ if (!function_exists('aff_classic_on')) {
     }
 }
 if (!function_exists('refv_cfg')) {
-    // 🛡 راستی‌آزمایی دعوت‌ها - one setting per language for both plans: an
-    // invite counts (commission, join gift, the free-config count) only once
-    // the newcomer has sent their phone number and/or joined the chosen
-    // channels. Off by default - then an invite counts the moment the link is
-    // opened, as before. The INVITER's language decides, like the plans.
-    function refv_cfg($lang)
+    // 🛡 راستی‌آزمایی دعوت‌ها - one setting per plan and per language: 'c'
+    // 💼 (commission, join gift) and 'r' 🎁 (the free-config count). An
+    // invite counts for a plan only once the newcomer has done that plan's
+    // part - sent their phone number and/or joined its channels. Off by
+    // default - then an invite counts the moment the link is opened, as
+    // before. The INVITER's language decides, like the plans.
+    function refv_cfg($lang, $plan)
     {
+        refv_split_legacy($lang);
         $ids = fn($v) => array_values(array_unique(array_filter(array_map('trim', explode(',', (string) $v)), 'strlen')));
         return [
-            'phone' => (string) feature_setting_value('refv_phone', $lang, '0') === '1',
-            'channel' => (string) feature_setting_value('refv_channel', $lang, '0') === '1',
-            'channels' => array_map('intval', $ids(feature_setting_value('refv_channels', $lang, ''))),
-            'vip' => $ids(feature_setting_value('refv_vip', $lang, '')),
+            'phone' => (string) feature_setting_value("refv_{$plan}_phone", $lang, '0') === '1',
+            'channel' => (string) feature_setting_value("refv_{$plan}_channel", $lang, '0') === '1',
+            'channels' => array_map('intval', $ids(feature_setting_value("refv_{$plan}_channels", $lang, ''))),
+            'vip' => $ids(feature_setting_value("refv_{$plan}_vip", $lang, '')),
         ];
+    }
+    // It was one setting for both plans at first: what was set there goes to
+    // both, once, and the shared one is emptied - an emptied list of a plan
+    // must not fall back to it.
+    function refv_split_legacy($lang)
+    {
+        foreach (['phone', 'channel', 'channels', 'vip'] as $k) {
+            $old = (string) feature_setting_value("refv_{$k}", $lang, '');
+            if ($old === '') {
+                continue;
+            }
+            foreach (['c', 'r'] as $plan) {
+                if ((string) feature_setting_value("refv_{$plan}_{$k}", $lang, '') === '') {
+                    feature_setting_set("refv_{$plan}_{$k}", $lang, $old);
+                }
+            }
+            feature_setting_set("refv_{$k}", $lang, '');
+        }
     }
     // the chosen channels that still exist, as rows
     function refv_channel_rows($cfg)
@@ -1953,15 +1972,19 @@ if (!function_exists('refv_cfg')) {
         }
         return $rows;
     }
-    // What an invite to $inviterId has to pass before it counts: a list of
-    // 'phone' / 'channel', empty when nothing (verification off, or a 👑 VIP
-    // inviter). The phone check needs 📞 احراز شماره تماس on for that language
-    // - it is that setting's country codes the number is checked against.
-    function refv_needs($inviterId)
+    // What an invite to $inviterId has to pass before it counts for $plan: a
+    // list of 'phone' / 'channel', empty when nothing (verification off, the
+    // plan itself off, or a 👑 inviter of that plan). The phone check needs
+    // 📞 احراز شماره تماس on for that language - it is that setting's
+    // country codes the number is checked against.
+    function refv_needs($inviterId, $plan)
     {
         $inv = select("user", "*", "id", (string) $inviterId, "select");
         $lang = is_array($inv) ? ($inv['lang'] ?? 'fa') : 'fa';
-        $cfg = refv_cfg($lang);
+        if ($plan === 'c' ? !aff_classic_on($lang) : affrw_live($lang) === null) {
+            return [];
+        }
+        $cfg = refv_cfg($lang, $plan);
         if (in_array((string) $inviterId, $cfg['vip'], true)) {
             return [];
         }
@@ -1975,12 +1998,12 @@ if (!function_exists('refv_cfg')) {
         }
         return $needs;
     }
-    // the chosen channels $uid has not joined (rows)
-    function refv_unjoined($uid, $inviterId)
+    // $plan's chosen channels $uid has not joined (rows)
+    function refv_unjoined($uid, $inviterId, $plan)
     {
         $inv = select("user", "*", "id", (string) $inviterId, "select");
         $out = [];
-        foreach (refv_channel_rows(refv_cfg(is_array($inv) ? ($inv['lang'] ?? 'fa') : 'fa')) as $r) {
+        foreach (refv_channel_rows(refv_cfg(is_array($inv) ? ($inv['lang'] ?? 'fa') : 'fa', $plan)) as $r) {
             $res = telegram('getChatMember', ['chat_id' => $r['link'], 'user_id' => $uid]);
             if (empty($res['ok']) || !in_array($res['result']['status'] ?? '', ['member', 'creator', 'administrator'], true)) {
                 $out[] = $r;
@@ -1988,9 +2011,10 @@ if (!function_exists('refv_cfg')) {
         }
         return $out;
     }
-    // of $needs, what the newcomer has not done yet
-    function refv_missing($userRow, $inviterId, array $needs)
+    // what the newcomer has not done yet for $plan
+    function refv_missing($userRow, $inviterId, $plan)
     {
+        $needs = refv_needs($inviterId, $plan);
         $missing = [];
         if (in_array('phone', $needs, true)) {
             $num = (string) ($userRow['number'] ?? 'none');
@@ -1998,10 +2022,16 @@ if (!function_exists('refv_cfg')) {
                 $missing[] = 'phone';
             }
         }
-        if (in_array('channel', $needs, true) && refv_unjoined($userRow['id'], $inviterId)) {
+        if (in_array('channel', $needs, true) && refv_unjoined($userRow['id'], $inviterId, $plan)) {
             $missing[] = 'channel';
         }
         return $missing;
+    }
+    // whether $userRow already counts for $plan: 💼 is the link itself
+    // (user.affiliates), 🎁 its own (user.aff_rw)
+    function aff_counted($userRow, $plan)
+    {
+        return $plan === 'c' ? intval($userRow['affiliates'] ?? 0) != 0 : (string) ($userRow['aff_rw'] ?? '') !== '';
     }
     // user.aff_pending: the inviter a newcomer is still being verified for.
     // Made here, empty by default, before anything writes it - update() would
@@ -2012,16 +2042,22 @@ if (!function_exists('refv_cfg')) {
         if (!$done) {
             $done = true;
             addFieldToTable('user', 'aff_pending', null, 'VARCHAR(50) NULL');
+            affrw_ensure_table();
         }
     }
-    // asks the newcomer for the first thing still missing - the phone first
-    function refv_prompt($userRow, $inviterId, array $missing)
+    // asks the newcomer for the first thing still missing for the plans in
+    // $plans - the phone first, then every channel of them not joined yet
+    function refv_prompt($userRow, $inviterId, array $plans)
     {
         global $request_contact;
         $tx = payer_texts($userRow['id']);
         $a = $tx['users']['affiliates'];
         $inv = select("user", "*", "id", (string) $inviterId, "select");
         $name = (is_array($inv) && !empty($inv['username']) && $inv['username'] !== 'none') ? '@' . $inv['username'] : (string) $inviterId;
+        $missing = [];
+        foreach ($plans as $plan) {
+            $missing = array_merge($missing, refv_missing($userRow, $inviterId, $plan));
+        }
         if (in_array('phone', $missing, true)) {
             update("user", "Processing_value", "verifyref", "id", $userRow['id']);
             step('get_number', $userRow['id']);
@@ -2030,88 +2066,109 @@ if (!function_exists('refv_cfg')) {
             return;
         }
         $kb = ['inline_keyboard' => []];
-        foreach (refv_unjoined($userRow['id'], $inviterId) as $r) {
-            $r = channel_row_for_lang($r, $userRow['lang'] ?? 'fa');
-            if (empty($r['linkjoin'])) {
-                continue;
+        $seen = [];
+        foreach ($plans as $plan) {
+            foreach (refv_unjoined($userRow['id'], $inviterId, $plan) as $r) {
+                if (isset($seen[$r['id']])) {
+                    continue;
+                }
+                $seen[$r['id']] = true;
+                $r = channel_row_for_lang($r, $userRow['lang'] ?? 'fa');
+                if (empty($r['linkjoin'])) {
+                    continue;
+                }
+                [$t, $icon] = channel_button_text($r);
+                $b = ['text' => $t, 'url' => $r['linkjoin']];
+                if ($icon !== '') {
+                    $b['icon_custom_emoji_id'] = $icon;
+                }
+                $kb['inline_keyboard'][] = [$b];
             }
-            [$t, $icon] = channel_button_text($r);
-            $b = ['text' => $t, 'url' => $r['linkjoin']];
-            if ($icon !== '') {
-                $b['icon_custom_emoji_id'] = $icon;
-            }
-            $kb['inline_keyboard'][] = [$b];
         }
         $kb['inline_keyboard'][] = [['text' => $a['verifyChannelBtn'], 'callback_data' => 'refverify', 'style' => 'success']];
         bottext_extras_key_hint('users.affiliates.verifyChannelPrompt');
         sendmessage($userRow['id'], strtr($a['verifyChannelPrompt'], ['{inviter}' => htmlspecialchars($name)]), json_encode($kb), 'HTML');
     }
-    // Makes $userRow $inviterId's referral: the link is written, both are told
-    // (each in their own language, for the plan that is on), the inviter's
-    // count goes up and the free config is checked. What /start with a link
-    // always did - now also what a finished verification does.
-    function aff_record_referral($userRow, $inviterId, $keyboard = null)
+    // $userRow now counts for $inviterId's $plan: 'c' 💼 (the link is
+    // written - commission, join gift - and the inviter's count goes up) or
+    // 'r' 🎁 (the free-config count, which may now be reached). The inviter
+    // is told, in their own language.
+    function aff_count_for($userRow, $inviterId, $plan)
     {
         global $pdo, $from_id, $first_name;
         refv_ensure_schema();
         $uid = (string) $userRow['id'];
-        update("user", "affiliates", $inviterId, "id", $uid);
-        update("user", "aff_pending", "", "id", $uid);
+        $u = (string) ($userRow['username'] ?? '');
+        $own = ((string) ($from_id ?? '') === $uid && (string) ($first_name ?? '') !== '') ? (string) $first_name : $uid;
+        $display = ($u !== '' && $u !== 'none' && $u !== 'NOT_USERNAME') ? '@' . $u : $own;
+        if ($plan === 'c') {
+            $inv = select("user", "*", "id", (string) $inviterId, "select");
+            update("user", "affiliates", $inviterId, "id", $uid);
+            aff_notify_new_referral($inviterId, $display, 'c');
+            update("user", "affiliatescount", intval($inv['affiliatescount'] ?? 0) + 1, "id", (string) $inviterId);
+            $stmt = $pdo->prepare("INSERT IGNORE INTO reagent_report (user_id, get_gift,time,reagent) VALUES (?, ?,?, ?)");
+            $stmt->execute([$uid, false, date('Y/m/d H:i:s'), (string) $inviterId]);
+            return;
+        }
+        update("user", "aff_rw", (string) $inviterId, "id", $uid);
+        // 🚪 a free config paused by a leave: this invite fills the gap
+        affrw_refill($inviterId, $uid);
+        aff_notify_new_referral($inviterId, $display, 'r');
+        affrw_check($inviterId);
+    }
+    // 👋 the newcomer, once they count for everything: the welcome of the
+    // plan on for them - 💼's tells them about the join gift, 🎁's that they
+    // can earn a free config too, and with neither just a welcome
+    function aff_welcome($userRow, $inviterId, $keyboard = null)
+    {
+        $uid = (string) $userRow['id'];
         $inv = select("user", "*", "id", (string) $inviterId, "select");
         $tx = payer_texts($uid);
-        // 👋 the newcomer: the welcome of the plan on for them - 💼's tells
-        // them about the join gift, 🎁's that they can earn a free config
-        // too, and with neither just a welcome
         $myLang = $userRow['lang'] ?? 'fa';
         $welcome = aff_classic_on($myLang) ? 'welcomeInvited' : (affrw_live($myLang) !== null ? 'welcomeInvitedReward' : 'welcomeInvitedPlain');
         $invName = (is_array($inv) && !empty($inv['username']) && $inv['username'] !== 'none') ? '@' . $inv['username'] : (string) $inviterId;
         bottext_extras_key_hint("users.affiliates.{$welcome}");
         sendmessage($uid, strtr(text_fill_s($tx['users']['affiliates'][$welcome], (string) ($inv['username'] ?? '')), ['{inviter}' => htmlspecialchars($invName)]), $keyboard, 'html');
-        // 🚪 a free config paused by a leave: this invite fills the gap
-        affrw_refill($inviterId, $uid);
-        // 🎉 and the inviter, in theirs
-        $u = (string) ($userRow['username'] ?? '');
-        $own = ((string) ($from_id ?? '') === $uid && (string) ($first_name ?? '') !== '') ? (string) $first_name : $uid;
-        aff_notify_new_referral($inviterId, ($u !== '' && $u !== 'none' && $u !== 'NOT_USERNAME') ? '@' . $u : $own);
-        update("user", "affiliatescount", intval($inv['affiliatescount'] ?? 0) + 1, "id", (string) $inviterId);
-        $stmt = $pdo->prepare("INSERT IGNORE INTO reagent_report (user_id, get_gift,time,reagent) VALUES (?, ?,?, ?)");
-        $stmt->execute([$uid, false, date('Y/m/d H:i:s'), (string) $inviterId]);
-        // 🎁 کانفیگ رایگان با دعوت: this may have been the invite it needed
-        affrw_check($inviterId);
     }
-    // /start with $inviterId's link: counted now, or held until the newcomer
-    // is verified - asked for it straight away, and free to use the bot
+    // /start with $inviterId's link: each plan counts it now or once its own
+    // part is done - asked for straight away, and free to use the bot
     // meanwhile
     function aff_invite_start($userRow, $inviterId, $keyboard = null)
     {
-        $needs = refv_needs($inviterId);
-        $missing = $needs ? refv_missing($userRow, $inviterId, $needs) : [];
-        if (!$missing) {
-            aff_record_referral($userRow, $inviterId, $keyboard);
-            return;
-        }
         refv_ensure_schema();
         update("user", "aff_pending", (string) $inviterId, "id", (string) $userRow['id']);
-        refv_prompt($userRow, $inviterId, $missing);
+        refv_try($userRow['id'], $keyboard);
     }
-    // After the newcomer sent a number, tapped «✅ عضو شدم» or joined a
-    // channel: counted if everything is done now (true), otherwise asked for
-    // what is left ($quiet: say nothing - a join event, not a tap).
+    // After the link was opened, a number sent, «✅ عضو شدم» tapped or a
+    // channel joined: every plan whose part is done now counts it. True once
+    // all of them do; otherwise asked for what is left ($quiet: say nothing -
+    // a join event, not a tap).
     function refv_try($uid, $keyboard = null, $quiet = false)
     {
         $u = select("user", "*", "id", (string) $uid, "select", ['cache' => false]);
         $inviterId = is_array($u) ? (string) ($u['aff_pending'] ?? '') : '';
-        if ($inviterId === '' || intval($u['affiliates'] ?? 0) != 0) {
+        if ($inviterId === '') {
             return false;
         }
-        $missing = refv_missing($u, $inviterId, refv_needs($inviterId));
-        if ($missing) {
+        $left = [];
+        foreach (['c', 'r'] as $plan) {
+            if (aff_counted($u, $plan)) {
+                continue;
+            }
+            if (refv_missing($u, $inviterId, $plan)) {
+                $left[] = $plan;
+                continue;
+            }
+            aff_count_for($u, $inviterId, $plan);
+        }
+        if ($left) {
             if (!$quiet) {
-                refv_prompt($u, $inviterId, $missing);
+                refv_prompt($u, $inviterId, $left);
             }
             return false;
         }
-        aff_record_referral($u, $inviterId, $keyboard);
+        update("user", "aff_pending", "", "id", (string) $uid);
+        aff_welcome($u, $inviterId, $keyboard);
         return true;
     }
 }
@@ -11421,7 +11478,7 @@ if (!function_exists('bt_section_meta')) {
             ],
             'referral_verify' => [
                 'label' => '🛡 پیام‌های راستی‌آزمایی دعوت',
-                'alert' => 'پیام‌هایی که کاربر دعوت‌شده می‌گیره وقتی راستی‌آزمایی دعوت‌ها روشنه (👥 طرح‌های زیرمجموعه‌گیری ← 🛡): درخواست شماره، درخواست عضویت در کانال، دکمه‌ی «عضو شدم» و پاپ‌آپ «هنوز عضو نشدی».',
+                'alert' => 'پیام‌هایی که کاربر دعوت‌شده می‌گیره وقتی راستی‌آزمایی دعوت‌های یکی از طرح‌ها روشنه (👥 طرح‌های زیرمجموعه‌گیری ← 🛡 زیر هر طرح): درخواست شماره، درخواست عضویت در کانال، دکمه‌ی «عضو شدم» و پاپ‌آپ «هنوز عضو نشدی». برای هر دو طرح همین پیام‌ها می‌رن.',
             ],
             'referral_none' => [
                 'label' => '🚫 وقتی هیچ طرحی فعال نیست',
@@ -17292,6 +17349,18 @@ if (!function_exists('affrw_cfg')) {
         addFieldToTable('affiliate_reward', 'members', null, 'TEXT NULL');
         addFieldToTable('affiliate_reward', 'left_ids', null, 'TEXT NULL');
         addFieldToTable('affiliate_reward', 'suspended', null, 'INT NOT NULL DEFAULT 0');
+        // user.aff_rw: whose free-config count a customer is in - apart from
+        // 💼's link (affiliates), each plan having its own 🛡 check. Everyone
+        // counted before that was counted for both.
+        try {
+            $has = $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user' AND COLUMN_NAME = 'aff_rw'")->fetchColumn();
+            if (!$has) {
+                $pdo->exec("ALTER TABLE user ADD aff_rw VARCHAR(50) NULL");
+                $pdo->exec("UPDATE user SET aff_rw = affiliates WHERE affiliates IS NOT NULL AND affiliates NOT IN ('', '0')");
+            }
+        } catch (Exception $e) {
+            error_log("aff_rw: " . $e->getMessage());
+        }
     }
     // whether a customer's row lets a new round count: none yet, refused, or
     // a reward earned with more to come
@@ -17311,10 +17380,10 @@ if (!function_exists('affrw_cfg')) {
         return max(0, $cfg['need'] - count(array_diff(affrw_members($row), array_map('strval', $left))));
     }
     // 🚪 غیرفعال شدن با خروج از کانال, per language: it watches the channels
-    // of 🛡's 📯 check, so with that off there is nothing to watch
+    // of 🎁's own 🛡 📯 check, so with that off there is nothing to watch
     function affrw_leave_channels($lang)
     {
-        $rv = refv_cfg($lang);
+        $rv = refv_cfg($lang, 'r');
         if (feature_setting_value('affrw_leave', $lang, '0') !== '1' || !$rv['channel']) {
             return [];
         }
@@ -17370,7 +17439,7 @@ if (!function_exists('affrw_cfg')) {
     {
         global $pdo;
         $m = select("user", "*", "id", (string) $memberId, "select");
-        $uid = is_array($m) ? (string) ($m['affiliates'] ?? '0') : '0';
+        $uid = is_array($m) ? (string) ($m['aff_rw'] ?? '') : '';
         if ($uid === '0' || $uid === '') {
             return;
         }
@@ -17392,7 +17461,7 @@ if (!function_exists('affrw_cfg')) {
         $left = array_map('strval', json_decode((string) ($row['left_ids'] ?? ''), true) ?: []);
         $was = in_array((string) $memberId, $left, true);
         if ($joined) {
-            if (!$was || refv_unjoined($memberId, $uid)) {
+            if (!$was || refv_unjoined($memberId, $uid, 'r')) {
                 return;
             }
             $left = array_values(array_diff($left, [(string) $memberId]));
@@ -17469,7 +17538,8 @@ if (!function_exists('affrw_cfg')) {
     function affrw_count($uid, $since)
     {
         global $pdo;
-        $stmt = $pdo->prepare("SELECT id FROM user WHERE affiliates = ? AND id != ? AND CAST(register AS UNSIGNED) > ?");
+        affrw_ensure_table();
+        $stmt = $pdo->prepare("SELECT id FROM user WHERE aff_rw = ? AND id != ? AND CAST(register AS UNSIGNED) > ?");
         $stmt->execute([(string) $uid, (string) $uid, (int) $since]);
         // someone who filled a paused reward's gap is not a new invite too
         return count(array_diff(array_map('strval', $stmt->fetchAll(PDO::FETCH_COLUMN)), affrw_members(affrw_row($uid))));
@@ -17524,8 +17594,8 @@ if (!function_exists('affrw_cfg')) {
         if ($count < $cfg['need']) {
             return;
         }
-        // 👑 inviters (🛡 راستی‌آزمایی دعوت‌ها) never wait for an admin
-        if ($cfg['mode'] === 'auto' || in_array((string) $uid, refv_cfg($lang)['vip'], true)) {
+        // 👑 inviters of 🎁's 🛡 never wait for an admin
+        if ($cfg['mode'] === 'auto' || in_array((string) $uid, refv_cfg($lang, 'r')['vip'], true)) {
             if (!affrw_claim($uid, $lang, 'giving', $count, affrw_since($cfg, $row))) {
                 return;
             }
@@ -17579,7 +17649,7 @@ if (!function_exists('affrw_cfg')) {
         $t = $fa['Admin']['AffReward'];
         $since = affrw_since($cfg, $row);
         $total = affrw_count($uid, $since);
-        $stmt = $pdo->prepare("SELECT id, username, register FROM user WHERE affiliates = ? AND id != ? AND CAST(register AS UNSIGNED) > ? ORDER BY CAST(register AS UNSIGNED) DESC LIMIT 15");
+        $stmt = $pdo->prepare("SELECT id, username, register FROM user WHERE aff_rw = ? AND id != ? AND CAST(register AS UNSIGNED) > ? ORDER BY CAST(register AS UNSIGNED) DESC LIMIT 15");
         $stmt->execute([(string) $uid, (string) $uid, (int) $since]);
         $list = '';
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
@@ -17672,7 +17742,7 @@ if (!function_exists('affrw_cfg')) {
         // the invitees behind it (for 🚪 a leave), and the next round - or
         // done, once it has been earned as many times as allowed
         $since = affrw_since($cfg, $row);
-        $st = $pdo->prepare("SELECT id FROM user WHERE affiliates = ? AND id != ? AND CAST(register AS UNSIGNED) > ? ORDER BY CAST(register AS UNSIGNED)");
+        $st = $pdo->prepare("SELECT id FROM user WHERE aff_rw = ? AND id != ? AND CAST(register AS UNSIGNED) > ? ORDER BY CAST(register AS UNSIGNED)");
         $st->execute([(string) $uid, (string) $uid, (int) $since]);
         $members = array_values(array_diff(array_map('strval', $st->fetchAll(PDO::FETCH_COLUMN)), affrw_members($row)));
         $times = (int) ($row['times'] ?? 0) + 1;
