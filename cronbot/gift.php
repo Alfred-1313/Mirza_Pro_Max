@@ -46,7 +46,7 @@ foreach ($userid as $iduser){
     $invoce = select("invoice","*","username",$iduser->username,"select");
     $marzban_list_get = select("marzban_panel","*","name_panel",$info['name_panel'],"select");
     $data_limit = $get_username_info['data_limit'] / pow(1024,3);
-    $data_limit_new = $data_limit + intval($info['value']);
+    $data_limit_new = $data_limit + (float) $info['value'];
     $data_limit_byte = $data_limit_new *pow(1024,3);
     $extra_volume = $ManagePanel->extra_volume($invoce['username'],$marzban_list_get['code_panel'],$info['value']);
      if($extra_volume['status'] == false){

@@ -966,7 +966,7 @@ function DirectPayment_settle($order_id, $image = 'images.jpg')
         $textcreatuser = str_replace('{day}', $get_invoice['Service_time'], $textcreatuser);
         $textcreatuser = str_replace('{volume}', $get_invoice['Volume'], $textcreatuser);
         $textcreatuser = str_replace('{time_human}', service_days_text(intval($get_invoice['Service_time']), $textbotlang), $textcreatuser);
-        $textcreatuser = str_replace('{volume_human}', service_volume_text(intval($get_invoice['Volume']) * 1024, $textbotlang), $textcreatuser);
+        $textcreatuser = str_replace('{volume_human}', service_volume_text((float) $get_invoice['Volume'] * 1024, $textbotlang), $textcreatuser);
         $textcreatuser = str_replace('{config}', "<code>{$output_config_link}</code>", $textcreatuser);
         $textcreatuser = str_replace('{links}', $config, $textcreatuser);
         $textcreatuser = str_replace('{links2}', "{$output_config_link}", $textcreatuser);
@@ -17297,7 +17297,7 @@ if (!function_exists('affrw_cfg')) {
         return [
             'on' => feature_setting_value('affrw_on', $lang, '0') === '1',
             'need' => max(1, (int) feature_setting_value('affrw_need', $lang, '3')),
-            'gb' => max(1, (int) feature_setting_value('affrw_gb', $lang, '10')),
+            'gb' => max(0.01, (float) feature_setting_value('affrw_gb', $lang, '10')),
             'days' => max(1, (int) feature_setting_value('affrw_days', $lang, '1')),
             'panel' => (string) feature_setting_value('affrw_panel', $lang, ''),
             'mode' => feature_setting_value('affrw_mode', $lang, 'admin') === 'auto' ? 'auto' : 'admin',
@@ -17711,7 +17711,7 @@ if (!function_exists('affrw_cfg')) {
     }
     function affrw_vars($cfg, $count)
     {
-        return ['{need}' => $cfg['need'], '{volume}' => $cfg['gb'], '{days}' => $cfg['days'], '{count}' => min($count, $cfg['need'])];
+        return ['{need}' => $cfg['need'], '{volume}' => volume_num($cfg['gb']), '{days}' => $cfg['days'], '{count}' => min($count, $cfg['need'])];
     }
     // Called when someone joins through $uid's link, and when $uid opens 👥.
     function affrw_check($uid)
@@ -17808,7 +17808,7 @@ if (!function_exists('affrw_cfg')) {
             '{lang}' => $fa['bottext']['langs'][$lang] ?? $lang,
             '{count}' => $total,
             '{need}' => $cfg['need'],
-            '{volume}' => $cfg['gb'],
+            '{volume}' => volume_num($cfg['gb']),
             '{days}' => $cfg['days'],
             '{panel}' => is_array($panel) ? $panel['name_panel'] : $fa['Admin']['FeatureSection']['affrwNoPanel'],
             '{list}' => rtrim($list),
@@ -17851,7 +17851,7 @@ if (!function_exists('affrw_cfg')) {
             '{name_service}' => $tx['users']['affiliates']['rewardServiceName'],
             '{location}' => $panel['name_panel'],
             '{day}' => $cfg['days'],
-            '{volume}' => $cfg['gb'],
+            '{volume}' => volume_num($cfg['gb']),
             '{time_human}' => service_days_text($cfg['days'], $tx),
             '{volume_human}' => service_volume_text($cfg['gb'] * 1024, $tx),
             '{config}' => "<code>{$sublink}</code>",
@@ -17873,7 +17873,7 @@ if (!function_exists('affrw_cfg')) {
             $username_ac = $name !== null ? (string) $name : affrw_username($uid, $lang);
             $datac = [
                 'expire' => strtotime("+" . $cfg['days'] . " days"),
-                'data_limit' => $cfg['gb'] * pow(1024, 3),
+                'data_limit' => (int) round($cfg['gb'] * pow(1024, 3)),
                 'from_id' => $uid,
                 'username' => $u['username'] ?? '',
                 'type' => 'buy',
@@ -17886,7 +17886,7 @@ if (!function_exists('affrw_cfg')) {
         }
         $id_invoice = bin2hex(random_bytes(4));
         $stmt = $pdo->prepare("INSERT IGNORE INTO invoice (id_user, id_invoice, username, time_sell, Service_location, name_product, price_product, Volume, Service_time, Status, notifctions, affrw) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)");
-        $stmt->execute([$uid, $id_invoice, $out['username'], time(), $panel['name_panel'], $tx['users']['affiliates']['rewardServiceName'], '0', $cfg['gb'], $cfg['days'], 'active', json_encode(['volume' => false, 'time' => false])]);
+        $stmt->execute([$uid, $id_invoice, $out['username'], time(), $panel['name_panel'], $tx['users']['affiliates']['rewardServiceName'], '0', volume_store($cfg['gb']), $cfg['days'], 'active', json_encode(['volume' => false, 'time' => false])]);
         bottext_extras_key_hint('users.affiliates.rewardGiven');
         sendmessage($uid, strtr($tx['users']['affiliates']['rewardGiven'], affrw_vars($cfg, (int) $invites)), null, 'HTML');
         // then the service itself, worded like a bought one
@@ -17956,7 +17956,7 @@ if (!function_exists('affrw_cfg')) {
             '{id}' => $uid,
             '{username}' => (!empty($u['username']) && $u['username'] !== 'none') ? '@' . htmlspecialchars($u['username']) : '',
             '{count}' => $row['invites'],
-            '{volume}' => $cfg['gb'],
+            '{volume}' => volume_num($cfg['gb']),
             '{days}' => $cfg['days'],
             '{panel}' => $panel['name_panel'],
             '{service}' => $made['username'],
@@ -18011,6 +18011,46 @@ if (!function_exists('bottext_extras_key_hint')) {
         $k = $pending;
         $pending = null;
         return $k;
+    }
+}
+if (!function_exists('volume_parse')) {
+    // A volume someone typed: «10», «0.2», «1.5 گیگ», «200MB», «۲۰۰ مگ» - in
+    // $base's unit ('gb' or 'mb'); a bare number is already in it. null when
+    // it is not a volume, or not above zero unless $allowZero (0 = no limit).
+    function volume_parse($text, $base = 'gb', $allowZero = false)
+    {
+        $s = trim(strtr((string) $text, [
+            '۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4', '۵' => '5', '۶' => '6', '۷' => '7', '۸' => '8', '۹' => '9',
+            '٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4', '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
+            '٫' => '.', ',' => '.', '،' => '.',
+        ]));
+        if (!preg_match('/^(\d+(?:\.\d+)?|\.\d+)\s*(mb|m|مگ|مگابایت|مگا\s*بایت|gb|g|گیگ|گیگابایت|گیگا\s*بایت)?$/iu', $s, $m)) {
+            return null;
+        }
+        $n = (float) $m[1];
+        $unit = mb_strtolower($m[2] ?? '');
+        $isMb = $unit !== '' && in_array(mb_substr($unit, 0, 1), ['m', 'م'], true);
+        if ($unit !== '' && $base === 'gb' && $isMb) {
+            $n /= 1024;
+        } elseif ($unit !== '' && $base === 'mb' && !$isMb) {
+            $n *= 1024;
+        }
+        if ($n < 0 || (!$allowZero && $n <= 0)) {
+            return null;
+        }
+        return $n;
+    }
+    // a GB amount as it is kept: up to 4 decimals, no trailing zeros
+    function volume_store($gb)
+    {
+        $s = rtrim(rtrim(number_format((float) $gb, 4, '.', ''), '0'), '.');
+        return $s === '' ? '0' : $s;
+    }
+    // ...and as it is shown: up to 2
+    function volume_num($gb)
+    {
+        $s = rtrim(rtrim(number_format((float) $gb, 2, '.', ''), '0'), '.');
+        return $s === '' ? '0' : $s;
     }
 }
 if (!function_exists('service_volume_human')) {

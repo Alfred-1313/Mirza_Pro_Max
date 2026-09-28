@@ -893,7 +893,7 @@ if ($text == $text_bot_var['btn_keyboard']['buy'] && $setting['active_step_note'
     if (isset($DataUserOut['username']) || in_array($username_ac, $usernameinvoice)) {
         $username_ac = $random_number . "_" . $username_ac;
     }
-    if (intval($datapish['Volume_constraint']) == 0)
+    if ((float) $datapish['Volume_constraint'] <= 0)
         $datapish['Volume_constraint'] = $textbotlang['users']['status']['unlimited'];
     if (intval($datapish['Service_time']) == 0)
         $datapish['Service_time'] = $textbotlang['users']['status']['unlimited'];
@@ -915,7 +915,7 @@ if ($text == $text_bot_var['btn_keyboard']['buy'] && $setting['active_step_note'
           
 💰 سفارش شما آماده پرداخت است";
     $textin = strtr($textpishfactor, $replacements);
-    if (intval($datapish['Volume_constraint']) == 0) {
+    if ((float) $datapish['Volume_constraint'] <= 0) {
         $textin = str_replace('گیگ', "", $textin);
     }
     if ($user['step'] != "getvolumecustomuser" && !in_array($marzban_list_get['MethodUsername'], [$textbotlang['users']['customusername'], "نام کاربری دلخواه + عدد رندوم"])) {
@@ -1140,7 +1140,7 @@ if ($text == $text_bot_var['btn_keyboard']['buy'] && $setting['active_step_note'
     }
     if (intval($datafactor['Service_time']) == 0)
         $datafactor['Service_time'] = $textbotlang['users']['status']['unlimited'];
-    if (intval($datafactor['Volume_constraint']) == 0)
+    if ((float) $datafactor['Volume_constraint'] <= 0)
         $datafactor['Volume_constraint'] = $textbotlang['users']['status']['unlimited'];
     $textcreatuser = str_replace('{username}', "<code>{$dataoutput['username']}</code>", $textafterpay);
     $textcreatuser = str_replace('{name_service}', $datafactor['name_product'], $textcreatuser);
@@ -1149,7 +1149,7 @@ if ($text == $text_bot_var['btn_keyboard']['buy'] && $setting['active_step_note'
     $textcreatuser = str_replace('{volume}', $datafactor['Volume_constraint'], $textcreatuser);
     $textcreatuser = str_replace('{config}', "<code>{$output_config_link}</code>", $textcreatuser);
     $textcreatuser = str_replace('{links}', "<code>{$config}</code>", $textcreatuser);
-    if (intval($datafactor['Volume_constraint']) == 0) {
+    if ((float) $datafactor['Volume_constraint'] <= 0) {
         $textcreatuser = str_replace('گیگابایت', "", $textcreatuser);
     }
     if ($marzban_list_get['type'] == "ibsng") {

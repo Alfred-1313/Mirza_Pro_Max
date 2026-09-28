@@ -193,7 +193,8 @@ class ManagePanel
             $Get_Data_Product['data_limit_reset'] = "no_reset";
         }
         $expire = $Data_Config['expire'];
-        $data_limit = $Data_Config['data_limit'];
+        // whole bytes, also from a volume under a gigabyte (0.2 GB)
+        $data_limit = (int) round((float) $Data_Config['data_limit']);
         $note = "{$Data_Config['from_id']} | {$Data_Config['username']} | {$Data_Config['type']}";
         if ($Get_Data_Panel['type'] == "marzban") {
             //create user
@@ -2317,8 +2318,8 @@ class ManagePanel
         $data_limit_old = $data_user['data_limit'];
         $time_old = $data_user['expire'];
         $time_old = time() - $time_old > 0 ? time() : $time_old;
-        $data_limit_new = $new_limit == 0 ? 0 : $new_limit * pow(1024, 3);
-        $data_limit_new_add = $new_limit == 0 ? 0 : $data_limit_old + ($new_limit * pow(1024, 3));
+        $data_limit_new = $new_limit == 0 ? 0 : (int) round($new_limit * pow(1024, 3));
+        $data_limit_new_add = $new_limit == 0 ? 0 : (int) round($data_limit_old + ($new_limit * pow(1024, 3)));
         $time_new = $time_day == 0 ? 0 : time() + $time_day * 86400;
         $time_old = $time_old == 0 ? time() : $time_old;
         $time_new_add = $time_day == 0 ? 0 : $time_old + ($time_day * 86400);
@@ -2532,7 +2533,7 @@ class ManagePanel
             );
         }
         $old_limit_volume = $user_info['data_limit'];
-        $new_limit = $limit_volume_new == 0 ? 0 : ($limit_volume_new * pow(1024, 3)) + $old_limit_volume;
+        $new_limit = $limit_volume_new == 0 ? 0 : (int) round(($limit_volume_new * pow(1024, 3)) + $old_limit_volume);
         $inbound_id = isset($panel['inboundid']) ? $panel['inboundid'] : 1;
         $inbounds = is_string($panel['inbounds']) ? json_decode($panel['inbounds']) : "{}";
         if ($panel['type'] != "WGDashboard") {

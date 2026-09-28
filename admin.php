@@ -4513,9 +4513,12 @@ if (!function_exists('bulk_product_parse')) {
             } else {
                 $price = money_normalize($price);
             }
-            if (!ctype_digit($volume)) {
+            $bulk_gb = volume_parse($volume, 'gb', true);
+            if ($bulk_gb === null) {
                 $errors[] = sprintf($t['errVolume'], $lineNo);
                 $bad = true;
+            } else {
+                $volume = volume_store($bulk_gb);
             }
             if (!ctype_digit($time)) {
                 $errors[] = sprintf($t['errTime'], $lineNo);
@@ -5753,7 +5756,7 @@ if (!function_exists('aff_section_rows')) {
                     $val(strtr($s['affrwMaxBtn'], ['{max}' => $rw['max']]), "flsask:{$lang}:affrw_max"),
                 ],
                 [
-                    $val(strtr($s['affrwVolumeBtn'], ['{volume}' => $rw['gb']]), "flsask:{$lang}:affrw_gb"),
+                    $val(strtr($s['affrwVolumeBtn'], ['{volume}' => volume_num($rw['gb'])]), "flsask:{$lang}:affrw_gb"),
                     $val(strtr($s['affrwDaysBtn'], ['{days}' => $rw['days']]), "flsask:{$lang}:affrw_days"),
                 ],
                 [$val(strtr($s['affrwPanelBtn'], ['{panel}' => $rwPanel !== null ? $rwPanel['name_panel'] : $s['affrwNoPanel']]), "flsaffrw:{$lang}:panel")],
@@ -5806,7 +5809,7 @@ if (!function_exists('aff_section_rows')) {
                 '{lang}' => $langName,
                 '{state}' => $onOff($rw['on']),
                 '{need}' => $rw['need'],
-                '{volume}' => $rw['gb'],
+                '{volume}' => volume_num($rw['gb']),
                 '{days}' => $rw['days'],
                 '{max}' => $rw['max'],
                 '{panel}' => $rwPanel !== null ? htmlspecialchars($rwPanel['name_panel']) : $s['affrwNoPanel'],
@@ -6030,7 +6033,7 @@ if (!function_exists('afftest_send')) {
         $me = afftest_inviter();
         $new = $t['sampleNew'];
         $langName = $fa['bottext']['langs'][$lang] ?? $lang;
-        $vars = ['{lang}' => $langName, '{volume}' => $cfg['gb'], '{days}' => $cfg['days'], '{panel}' => $panel['name_panel'] ?? $fa['Admin']['FeatureSection']['affrwNoPanel']];
+        $vars = ['{lang}' => $langName, '{volume}' => volume_num($cfg['gb']), '{days}' => $cfg['days'], '{panel}' => $panel['name_panel'] ?? $fa['Admin']['FeatureSection']['affrwNoPanel']];
         sendmessage($to, strtr($real ? $t['introRReal'] : $t['introRView'], $vars) . ($cfg['on'] ? '' : $t['planOff']) . ($cfg['mode'] === 'auto' ? $t['modeAuto'] : ''), null, 'HTML');
         $link = "https://t.me/{$usernamebot}?start={$to}";
         $status = $cfg['mode'] === 'auto' ? $a['rewardStatusAuto'] : $a['rewardStatusAdmin'];
@@ -6054,7 +6057,7 @@ if (!function_exists('afftest_send')) {
                 '{lang}' => $langName,
                 '{count}' => $cfg['need'],
                 '{need}' => $cfg['need'],
-                '{volume}' => $cfg['gb'],
+                '{volume}' => volume_num($cfg['gb']),
                 '{days}' => $cfg['days'],
                 '{panel}' => $panel['name_panel'] ?? $fa['Admin']['FeatureSection']['affrwNoPanel'],
                 '{list}' => rtrim($list),
@@ -8051,7 +8054,7 @@ if (preg_match('/^afftest:([a-z]{2}):(c|r|r:view|r:real|r:go)$/', $datain, $at_m
             return;
         }
         if ($at_m[2] === 'r:real') {
-            Editmessagetext($from_id, $message_id, strtr($at_t['confirm'], ['{volume}' => $at_cfg['gb'], '{days}' => $at_cfg['days'], '{panel}' => htmlspecialchars($at_panel['name_panel'])]), json_encode(['inline_keyboard' => [
+            Editmessagetext($from_id, $message_id, strtr($at_t['confirm'], ['{volume}' => volume_num($at_cfg['gb']), '{days}' => $at_cfg['days'], '{panel}' => htmlspecialchars($at_panel['name_panel'])]), json_encode(['inline_keyboard' => [
                 [['text' => $at_t['confirmBtn'], 'callback_data' => "afftest:{$at_lang}:r:go", 'style' => 'success']],
                 [['text' => $at_fa['Admin']['FeatureSection']['back'], 'callback_data' => "afftest:{$at_lang}:r"]],
             ]]));
@@ -12082,7 +12085,15 @@ elseif ($datain == "systemsms") {
             return;
         }
         lottery_prize_set($fs_lang, (int) substr($fs_key, -1), money_normalize($text));
-    } elseif (in_array($fs_key, ['affrw_need', 'affrw_gb', 'affrw_days', 'affrw_max'], true)) {
+    } elseif ($fs_key === 'affrw_gb') {
+        // 🎁 کانفیگ رایگان's volume: under a gigabyte too (0.5, 200MB)
+        $fs_gb = volume_parse($text, 'gb');
+        if ($fs_gb === null) {
+            sendmessage($from_id, $fs_tx['common']['invalidVolume'], null, 'HTML');
+            return;
+        }
+        feature_setting_set($fs_key, $fs_lang, volume_store($fs_gb));
+    } elseif (in_array($fs_key, ['affrw_need', 'affrw_days', 'affrw_max'], true)) {
         // 🎁 کانفیگ رایگان: a count, gigabytes, days - none of them can be 0
         if (!ctype_digit((string) $text) || intval($text) < 1) {
             sendmessage($from_id, $fs_tx['common']['invalidInput'], null, 'HTML');
@@ -14042,7 +14053,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
         step('gettimereset', $from_id);
         return;
     }
-    sendmessage($from_id, $textbotlang['Admin']['Product']['getLimit'], $backadmin, 'HTML');
+    sendmessage($from_id, $textbotlang['Admin']['Product']['getLimit'] . $textbotlang['Admin']['volumeHint'], $backadmin, 'HTML');
     step('get_time', $from_id);
 } elseif ($user['step'] == "getcategory") {
     $category = select("category", "*", "remark", $text, "count");
@@ -14060,14 +14071,15 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
         step('gettimereset', $from_id);
         return;
     }
-    sendmessage($from_id, $textbotlang['Admin']['Product']['getLimit'], $backadmin, 'HTML');
+    sendmessage($from_id, $textbotlang['Admin']['Product']['getLimit'] . $textbotlang['Admin']['volumeHint'], $backadmin, 'HTML');
     step('get_time', $from_id);
 } elseif ($user['step'] == "get_time") {
-    if (!ctype_digit($text)) {
+    $pv_gb = volume_parse($text, 'gb', true);
+    if ($pv_gb === null) {
         sendmessage($from_id, $textbotlang['common']['invalidVolume'], $backadmin, 'HTML');
         return;
     }
-    savedata("save", "Volume_constraint", $text);
+    savedata("save", "Volume_constraint", volume_store($pv_gb));
     sendmessage($from_id, $textbotlang['Admin']['Product']['getTime'], $backadmin, 'HTML');
     step('get_price', $from_id);
 } elseif ($user['step'] == "get_price") {
@@ -14473,7 +14485,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     sendmessage($from_id, $textbotlang['Admin']['Product']['askNewPrice'], $backadmin, 'HTML');
     step('change_price', $from_id);
 } elseif ($datain == "prodedit_volume" && $adminrulecheck['rule'] == "administrator") {
-    sendmessage($from_id, $textbotlang['Admin']['Product']['askNewVolume'], $backadmin, 'HTML');
+    sendmessage($from_id, $textbotlang['Admin']['Product']['askNewVolume'] . $textbotlang['Admin']['volumeHint'], $backadmin, 'HTML');
     step('change_val', $from_id);
 } elseif ($datain == "prodedit_time" && $adminrulecheck['rule'] == "administrator") {
     sendmessage($from_id, $textbotlang['Admin']['Product']['newTime'], $backadmin, 'HTML');
@@ -14720,13 +14732,15 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     sendmessage($from_id, $textbotlang['Admin']['Product']['locationUpdated'] . ($__pcaption !== null ? "\n\n" . $__pcaption : ""), product_edit_hub_payload($textbotlang), 'HTML');
     step('home', $from_id);
 } elseif ($text == $textbotlang['keyboard']['volume'] && $adminrulecheck['rule'] == "administrator") {
-    sendmessage($from_id, $textbotlang['Admin']['Product']['askNewVolume'], $backadmin, 'HTML');
+    sendmessage($from_id, $textbotlang['Admin']['Product']['askNewVolume'] . $textbotlang['Admin']['volumeHint'], $backadmin, 'HTML');
     step('change_val', $from_id);
 } elseif ($user['step'] == "change_val") {
-    if (!ctype_digit($text)) {
+    $pv_gb = volume_parse($text, 'gb', true);
+    if ($pv_gb === null) {
         sendmessage($from_id, $textbotlang['common']['invalidVolume'], $backadmin, 'HTML');
         return;
     }
+    $text = volume_store($pv_gb);
     $product = select("product", "*", "id", $user['Processing_value']);
     $panel = select("marzban_panel", "*", "code_panel", $user['Processing_value_one']);
     $stmt = $pdo->prepare("UPDATE product SET Volume_constraint = :Volume_constraint WHERE id = :name_product AND (Location = :Location OR Location = '/all') AND agent = :agent");
@@ -15661,13 +15675,15 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     update("marzban_panel", "time_usertest", $text, "name_panel", $user['Processing_value']);
     step('home', $from_id);
 } elseif ($text == $textbotlang['keyboard']['testAccountVolume'] && $adminrulecheck['rule'] == "administrator") {
-    sendmessage($from_id, $textbotlang['Admin']['getlimitusertest']['askVolume'], $backadmin, 'HTML');
+    sendmessage($from_id, $textbotlang['Admin']['getlimitusertest']['askVolume'] . $textbotlang['Admin']['volumeHintMb'], $backadmin, 'HTML');
     step('val_usertest', $from_id);
 } elseif ($user['step'] == "val_usertest") {
-    if (!ctype_digit($text)) {
+    $ut_mb = volume_parse($text, 'mb');
+    if ($ut_mb === null) {
         sendmessage($from_id, $textbotlang['common']['invalidVolume'], $backadmin, 'HTML');
         return;
     }
+    $text = (string) max(1, (int) round($ut_mb));
     $typepanel = select("marzban_panel", "*", "name_panel", $user['Processing_value'], "select");
     outtypepanel($typepanel['type'], $textbotlang['Admin']['managepanel']['savedData']);
     update("marzban_panel", "val_usertest", $text, "name_panel", $user['Processing_value']);
@@ -17393,7 +17409,7 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     $textbotlang['textbot']['afterPay'] = $marzban_list_get['type'] == "ibsng" || $marzban_list_get['type'] == "mikrotik" ? $textbotlang['textbot']['afterPayIbsng'] : $textbotlang['textbot']['afterPay'];
     if (intval($info_product['Service_time']) == 0)
         $info_product['Service_time'] = $textbotlang['users']['status']['unlimited'];
-    if (intval($info_product['Volume_constraint']) == 0)
+    if ((float) $info_product['Volume_constraint'] <= 0)
         $info_product['Volume_constraint'] = $textbotlang['users']['status']['unlimited'];
     $textcreatuser = str_replace('{username}', "<code>{$DataUserOut['username']}</code>", $textbotlang['textbot']['afterPay']);
     $textcreatuser = str_replace('{name_service}', $info_product['name_product'], $textcreatuser);
@@ -17401,11 +17417,11 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     $textcreatuser = str_replace('{day}', $info_product['Service_time'], $textcreatuser);
     $textcreatuser = str_replace('{volume}', $info_product['Volume_constraint'], $textcreatuser);
     $textcreatuser = str_replace('{time_human}', service_days_text(intval($info_product['Service_time']), $textbotlang), $textcreatuser);
-    $textcreatuser = str_replace('{volume_human}', service_volume_text(intval($info_product['Volume_constraint']) * 1024, $textbotlang), $textcreatuser);
+    $textcreatuser = str_replace('{volume_human}', service_volume_text((float) $info_product['Volume_constraint'] * 1024, $textbotlang), $textcreatuser);
     $textcreatuser = str_replace('{config}', "<code>{$output_config_link}</code>", $textcreatuser);
     $textcreatuser = str_replace('{links}', $config, $textcreatuser);
     $textcreatuser = str_replace('{links2}', $output_config_link, $textcreatuser);
-    if (intval($info_product['Volume_constraint']) == 0) {
+    if ((float) $info_product['Volume_constraint'] <= 0) {
         $textcreatuser = str_replace($textbotlang['Admin']['unit']['gigabytes'], "", $textcreatuser);
     }
     if ($marzban_list_get['type'] == "Manualsale" || $marzban_list_get['type'] == "ibsng" || $marzban_list_get['type'] == "mikrotik") {
@@ -19057,15 +19073,16 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     step("home", $from_id);
     update("PaySetting", "ValuePay", $text, "NamePay", "maxbalanceiranpay");
 } elseif ($text == $textbotlang['keyboard']['minCustomVolume'] && $adminrulecheck['rule'] == "administrator") {
-    sendmessage($from_id, $textbotlang['Admin']['price']['askMinVolume'], $backadmin, 'HTML');
+    sendmessage($from_id, $textbotlang['Admin']['price']['askMinVolume'] . $textbotlang['Admin']['volumeHint'], $backadmin, 'HTML');
     step('GetmaineExtra', $from_id);
 } elseif ($user['step'] == "GetmaineExtra") {
-    if (!ctype_digit($text)) {
+    $mm_gb = volume_parse($text, 'gb', true);
+    if ($mm_gb === null) {
         sendmessage($from_id, $textbotlang['common']['invalidVolume'], $backuser, 'HTML');
         return;
     }
     savedata("clear", "namepanel", $user['Processing_value']);
-    savedata("save", "mainvalume", $text);
+    savedata("save", "mainvalume", volume_store($mm_gb));
     sendmessage($from_id, $textbotlang['Admin']['price']['selectUserGroup'], $backuser, 'HTML');
     step('gettypeextramain', $from_id);
 } elseif ($user['step'] == "gettypeextramain") {
@@ -19084,15 +19101,16 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     update("user", "Processing_value", $userdata['namepanel'], "id", $from_id);
     step('home', $from_id);
 } elseif ($text == $textbotlang['keyboard']['maxCustomVolume'] && $adminrulecheck['rule'] == "administrator") {
-    sendmessage($from_id, $textbotlang['Admin']['price']['askMaxVolume'], $backadmin, 'HTML');
+    sendmessage($from_id, $textbotlang['Admin']['price']['askMaxVolume'] . $textbotlang['Admin']['volumeHint'], $backadmin, 'HTML');
     step('GetmaxeExtra', $from_id);
 } elseif ($user['step'] == "GetmaxeExtra") {
-    if (!ctype_digit($text)) {
+    $mm_gb = volume_parse($text, 'gb', true);
+    if ($mm_gb === null) {
         sendmessage($from_id, $textbotlang['common']['invalidVolume'], $backuser, 'HTML');
         return;
     }
     savedata("clear", "namepanel", $user['Processing_value']);
-    savedata("save", "maxvolume", $text);
+    savedata("save", "maxvolume", volume_store($mm_gb));
     sendmessage($from_id, $textbotlang['Admin']['price']['selectUserGroup'], $backuser, 'HTML');
     step('gettypeextramax', $from_id);
 } elseif ($user['step'] == "gettypeextramax") {
@@ -20116,18 +20134,19 @@ elseif ($text == $textbotlang['keyboard']['hidePanelForUser'] && $adminrulecheck
     }
     update("user", "Processing_value_one", $nameloc['id_invoice'], "id", $from_id);
     savedata("clear", "id_invoice", $nameloc['id_invoice']);
-    $textcustom = $textbotlang['Admin']['order']['askVolume'];
+    $textcustom = $textbotlang['Admin']['order']['askVolume'] . $textbotlang['Admin']['volumeHint'];
     sendmessage($from_id, $textcustom, $backuser, 'html');
     step('gettimecustomvolomforextendadmin', $from_id);
 } elseif ($user['step'] == "gettimecustomvolomforextendadmin") {
     $userdate = json_decode($user['Processing_value'], true);
     $nameloc = select("invoice", "*", "id_invoice", $userdate['id_invoice'], "select");
     $marzban_list_get = select("marzban_panel", "*", "name_panel", $nameloc['Service_location'], "select");
-    if (!ctype_digit($text)) {
+    $ce_gb = volume_parse($text, 'gb', true);
+    if ($ce_gb === null) {
         sendmessage($from_id, $textbotlang['common']['invalidVolume'], $backuser, 'HTML');
         return;
     }
-    savedata("save", "volume", $text);
+    savedata("save", "volume", volume_store($ce_gb));
     $textcustom = $textbotlang['Admin']['order']['askTime'];
     sendmessage($from_id, $textcustom, $backuser, 'html');
     step('getvolumecustomuserforextendadmin', $from_id);
@@ -21585,13 +21604,20 @@ if ($datain == "linkappsetting") {
     savedata("save", "typegift", $typegift);
     deletemessage($from_id, $message_id);
     if ($typegift == "volume") {
-        sendmessage($from_id, $textbotlang['Admin']['gift']['askVolume'], $backadmin, "html");
+        sendmessage($from_id, $textbotlang['Admin']['gift']['askVolume'] . $textbotlang['Admin']['volumeHint'], $backadmin, "html");
     } else {
         sendmessage($from_id, $textbotlang['Admin']['gift']['askDays'], $backadmin, "html");
     }
     step("getvaluegift", $from_id);
 } elseif ($user['step'] == "getvaluegift") {
-    if (!ctype_digit($text)) {
+    if ((json_decode((string) $user['Processing_value'], true)['typegift'] ?? '') === 'volume') {
+        $gv_gb = volume_parse($text, 'gb');
+        if ($gv_gb === null) {
+            sendmessage($from_id, $textbotlang['common']['invalidVolume'], $backadmin, 'HTML');
+            return;
+        }
+        $text = volume_store($gv_gb);
+    } elseif (!ctype_digit($text)) {
         sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
         return;
     }

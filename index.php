@@ -2012,18 +2012,19 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $maintime = $maintime[$user['agent']];
     $maxtime = json_decode($marzban_list_get['maxtime'], true);
     $maxtime = $maxtime[$user['agent']];
-    if (!ctype_digit($text)) {
+    $cv_gb = volume_parse($text, 'gb');
+    if ($cv_gb === null) {
         sendmessage($from_id, $textbotlang['common']['invalidVolume'], $backuser, 'HTML');
         return;
     }
-    if ($text > intval($maxvolume) || $text < intval($mainvolume)) {
+    if ($cv_gb > (float) $maxvolume || $cv_gb < (float) $mainvolume) {
         $texttime = strtr($textbotlang['users']['customSellVolume']['invalidVolume'], ['{mainvolume}' => $mainvolume, '{maxvolume}' => $maxvolume]);
         sendmessage($from_id, $texttime, $backuser, 'HTML');
         return;
     }
     $eextraprice = json_decode($marzban_list_get['pricecustomtime'], true);
     $customtimevalueprice = $eextraprice[$user['agent']];
-    savedata("save", "volume", $text);
+    savedata("save", "volume", volume_store($cv_gb));
     $textcustom = sprintf($textbotlang['users']['sell']['customTimePrompt'], $customtimevalueprice, $maintime, $maxtime);
     sendmessage($from_id, $textcustom, $backuser, 'html');
     step('getvolumecustomuserforextend', $from_id);
@@ -2118,7 +2119,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         $product['name_product'] = $nameloc['name_product'];
         $product['code_product'] = "customvolume";
         $product['note'] = "";
-        $product['price_product'] = (intval($userdate['volume']) * $custompricevalue) + ($text * $customtimevalueprice);
+        $product['price_product'] = ((float) $userdate['volume'] * $custompricevalue) + ($text * $customtimevalueprice);
         $product['Service_time'] = $text;
         $product['Volume_constraint'] = $userdate['volume'];
         step("home", $from_id);
@@ -2578,14 +2579,12 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     Editmessagetext($from_id, $message_id, $textextra, $bakinfos);
     step('getvolumeextra', $from_id);
 } elseif ($user['step'] == "getvolumeextra") {
-    if (!ctype_digit($text)) {
+    $ev_gb = volume_parse($text, 'gb');
+    if ($ev_gb === null) {
         sendmessage($from_id, $textbotlang['common']['invalidVolume'], $backuser, 'HTML');
         return;
     }
-    if ($text < 1) {
-        sendmessage($from_id, $textbotlang['users']['extraVolume']['invalidprice'], $backuser, 'HTML');
-        return;
-    }
+    $text = volume_store($ev_gb);
     $nameloc = select("invoice", "*", "id_invoice", $user['Processing_value'], "select");
     $marzban_list_get = select("marzban_panel", "*", "name_panel", $nameloc['Service_location'], "select");
     $eextraprice = json_decode($marzban_list_get['priceextravolume'], true);
@@ -2603,7 +2602,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $textextra = sprintf($textbotlang['users']['extraVolume']['invoiceCreated'], $extrapricevalues, $text, $priceextra);
     sendmessage($from_id, $textextra, $keyboardsetting, 'HTML');
     step('home', $from_id);
-} elseif (preg_match('/confirmaextra-(\w+)/', $datain, $dataget)) {
+} elseif (preg_match('/confirmaextra-(\d+(?:\.\d+)?)/', $datain, $dataget)) {
     $volume = $dataget[1];
     $nameloc = select("invoice", "*", "id_invoice", $user['Processing_value'], "select");
     if (!in_array($nameloc['Status'], ['active', 'end_of_time', 'end_of_volume', 'sendedwarn', 'send_on_hold'])) {
@@ -2629,7 +2628,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             step('getprice', $from_id);
             return;
         } else {
-            $valuevolume = intval($volume) / intval($extrapricevalue);
+            $valuevolume = (float) $extrapricevalue > 0 ? (float) $volume / (float) $extrapricevalue : 0;
             if (intval($user['pricediscount']) != 0) {
                 $result = ($volume * $user['pricediscount']) / 100;
                 $volume = $volume - $result;
@@ -2666,12 +2665,12 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     update("user", "Balance", $Balance_Low_user, "id", $from_id);
     $DataUserOut = $ManagePanel->DataUser($nameloc['Service_location'], $nameloc['username']);
     $data_for_database = json_encode(array(
-        'volume_value' => intval($volume) / intval($extrapricevalue),
+        'volume_value' => (float) $extrapricevalue > 0 ? (float) $volume / (float) $extrapricevalue : 0,
         'priceـper_gig' => $extrapricevalue,
         'old_volume' => $DataUserOut['data_limit'],
         'expire_old' => $DataUserOut['expire']
     ));
-    $data_limit = intval($volume) / intval($extrapricevalue);
+    $data_limit = (float) $extrapricevalue > 0 ? (float) $volume / (float) $extrapricevalue : 0;
     $extra_volume = $ManagePanel->extra_volume($nameloc['username'], $marzban_list_get['code_panel'], $data_limit);
     if ($extra_volume['status'] == false) {
         $extra_volume['msg'] = json_encode($extra_volume['msg']);
@@ -4447,15 +4446,17 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     $maintime = $maintime[$user['agent']];
     $maxtime = json_decode($marzban_list_get['maxtime'], true);
     $maxtime = $maxtime[$user['agent']];
-    if ($text > intval($maxvolume) || $text < intval($mainvolume)) {
+    $cv_gb = volume_parse($text, 'gb');
+    if ($cv_gb === null) {
+        sendmessage($from_id, $textbotlang['common']['invalidVolume'], $backuser, 'HTML');
+        return;
+    }
+    if ($cv_gb > (float) $maxvolume || $cv_gb < (float) $mainvolume) {
         $texttime = strtr($textbotlang['users']['customSellVolume']['invalidVolume'], ['{mainvolume}' => $mainvolume, '{maxvolume}' => $maxvolume]);
         sendmessage($from_id, $texttime, $backuser, 'HTML');
         return;
     }
-    if (!ctype_digit($text)) {
-        sendmessage($from_id, $textbotlang['common']['invalidVolume'], $backuser, 'HTML');
-        return;
-    }
+    $text = volume_store($cv_gb);
     $marzban_list_get = select("marzban_panel", "*", "name_panel", $userdate['name_panel'], "select");
     $eextraprice = json_decode($marzban_list_get['pricecustomtime'], true);
     $customtimevalueprice = $eextraprice[$user['agent']];
@@ -4607,7 +4608,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     }
     if (isset($username_ac))
         update("user", "Processing_value_tow", $username_ac, "id", $from_id);
-    if (intval($info_product['Volume_constraint']) == 0)
+    if ((float) $info_product['Volume_constraint'] <= 0)
         $info_product['Volume_constraint'] = $textbotlang['users']['status']['unlimited'];
     if (intval($info_product['Service_time']) == 0)
         $info_product['Service_time'] = $textbotlang['users']['status']['unlimited'];
@@ -4624,7 +4625,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     ];
     $replacements = array_merge($replacements, bottext_user_placeholders($user, $from_id));
     $textin = strtr($textbotlang['textbot']['preInvoice'], $replacements);
-    if (intval($info_product['Volume_constraint']) == 0) {
+    if ((float) $info_product['Volume_constraint'] <= 0) {
         $textin = str_replace($textbotlang['common']['units']['gb'], "", $textin);
     }
     if ($user['step'] != "getvolumecustomuser" && !username_method_is($marzban_list_get['MethodUsername'], 'common.labels.customUsername') && !username_method_is($marzban_list_get['MethodUsername'], 'common.labels.customUsernameRandom')) {
@@ -4774,7 +4775,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     $textbotlang['textbot']['afterPay'] = $marzban_list_get['type'] == "ibsng" || $marzban_list_get['type'] == "mikrotik" ? $textbotlang['textbot']['afterPayIbsng'] : $textbotlang['textbot']['afterPay'];
     if (intval($info_product['Service_time']) == 0)
         $info_product['Service_time'] = $textbotlang['users']['status']['unlimited'];
-    if (intval($info_product['Volume_constraint']) == 0)
+    if ((float) $info_product['Volume_constraint'] <= 0)
         $info_product['Volume_constraint'] = $textbotlang['users']['status']['unlimited'];
     $textcreatuser = str_replace('{username}', "<code>{$dataoutput['username']}</code>", $textbotlang['textbot']['afterPay']);
     $textcreatuser = str_replace('{name_service}', $info_product['name_product'], $textcreatuser);
@@ -4782,11 +4783,11 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     $textcreatuser = str_replace('{day}', $info_product['Service_time'], $textcreatuser);
     $textcreatuser = str_replace('{volume}', $info_product['Volume_constraint'], $textcreatuser);
     $textcreatuser = str_replace('{time_human}', service_days_text(intval($info_product['Service_time']), $textbotlang), $textcreatuser);
-    $textcreatuser = str_replace('{volume_human}', service_volume_text(intval($info_product['Volume_constraint']) * 1024, $textbotlang), $textcreatuser);
+    $textcreatuser = str_replace('{volume_human}', service_volume_text((float) $info_product['Volume_constraint'] * 1024, $textbotlang), $textcreatuser);
     $textcreatuser = str_replace('{config}', "<code>{$output_config_link}</code>", $textcreatuser);
     $textcreatuser = str_replace('{links}', $config, $textcreatuser);
     $textcreatuser = str_replace('{links2}', $output_config_link, $textcreatuser);
-    if (intval($info_product['Volume_constraint']) == 0) {
+    if ((float) $info_product['Volume_constraint'] <= 0) {
         $textcreatuser = str_replace($textbotlang['common']['units']['gigabyte'], "", $textcreatuser);
     }
     if ($marzban_list_get['type'] == "Manualsale" || $marzban_list_get['type'] == "ibsng" || $marzban_list_get['type'] == "mikrotik") {
@@ -4983,15 +4984,17 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     $maintime = $maintime[$user['agent']];
     $maxtime = json_decode($marzban_list_get['maxtime'], true);
     $maxtime = $maxtime[$user['agent']];
-    if ($text > intval($maxvolume) || $text < intval($mainvolume)) {
+    $cv_gb = volume_parse($text, 'gb');
+    if ($cv_gb === null) {
+        sendmessage($from_id, $textbotlang['common']['invalidVolume'], $backuser, 'HTML');
+        return;
+    }
+    if ($cv_gb > (float) $maxvolume || $cv_gb < (float) $mainvolume) {
         $texttime = strtr($textbotlang['users']['customSellVolume']['invalidVolume'], ['{mainvolume}' => $mainvolume, '{maxvolume}' => $maxvolume]);
         sendmessage($from_id, $texttime, $backuser, 'HTML');
         return;
     }
-    if (!ctype_digit($text)) {
-        sendmessage($from_id, $textbotlang['common']['invalidVolume'], $backuser, 'HTML');
-        return;
-    }
+    $text = volume_store($cv_gb);
     update("user", "Processing_value_one", $text, "id", $from_id);
     $textcustom = sprintf($textbotlang['users']['sell']['timePrompt'], $customtimevalueprice, $maintime, $maxtime);
     sendmessage($from_id, $textcustom, $backuser, 'html');
@@ -5246,7 +5249,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         $textcreatuser = str_replace('{day}', $info_product['Service_time'], $textcreatuser);
         $textcreatuser = str_replace('{volume}', $info_product['Volume_constraint'], $textcreatuser);
         $textcreatuser = str_replace('{time_human}', service_days_text(intval($info_product['Service_time']), $textbotlang), $textcreatuser);
-        $textcreatuser = str_replace('{volume_human}', service_volume_text(intval($info_product['Volume_constraint']) * 1024, $textbotlang), $textcreatuser);
+        $textcreatuser = str_replace('{volume_human}', service_volume_text((float) $info_product['Volume_constraint'] * 1024, $textbotlang), $textcreatuser);
         $textcreatuser = str_replace('{config}', "<code>{$output_config_link}</code>", $textcreatuser);
         $textcreatuser = str_replace('{links}', "<code>{$config}</code>", $textcreatuser);
         $textcreatuser = str_replace('{links2}', "{$output_config_link}", $textcreatuser);
@@ -6426,14 +6429,12 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     sendmessage($from_id, $textextra, $backuser, 'HTML');
     step('getvolumeextras', $from_id);
 } elseif ($user['step'] == "getvolumeextras") {
-    if (!ctype_digit($text)) {
+    $ev_gb = volume_parse($text, 'gb');
+    if ($ev_gb === null) {
         sendmessage($from_id, $textbotlang['common']['invalidVolume'], $backuser, 'HTML');
         return;
     }
-    if ($text < 1) {
-        sendmessage($from_id, $textbotlang['users']['extraVolume']['invalidprice'], $backuser, 'HTML');
-        return;
-    }
+    $text = volume_store($ev_gb);
     $marzban_list_get = select("marzban_panel", "*", "name_panel", $user['Processing_value_one'], "select");
     $eextraprice = json_decode($marzban_list_get['priceextravolume'], true);
     $extrapricevalue = $eextraprice[$user['agent']];
@@ -6450,7 +6451,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     $textextra = sprintf($textbotlang['users']['extraVolume']['extravolumeinvoice'], $extrapricevalues, $priceextra, $text);
     sendmessage($from_id, $textextra, $keyboardsetting, 'HTML');
     step('home', $from_id);
-} elseif (preg_match('/confirmaextras_(\w+)/', $datain, $dataget)) {
+} elseif (preg_match('/confirmaextras_(\d+(?:\.\d+)?)/', $datain, $dataget)) {
     $volume = $dataget[1];
     if ($user['Balance'] < $volume && $user['agent'] != "n2" && !$admin_buy_free) {
         $marzbandirectpay = shop_feature_value('paydirect', $user['lang'] ?? 'fa', select('shopSetting', "*", "Namevalue", "statusdirectpabuy", "select")['value']);
@@ -6501,7 +6502,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     }
 
     $DataUserOut = $ManagePanel->DataUser($user['Processing_value_one'], $user['Processing_value']);
-    $data_limit = $DataUserOut['data_limit'] + (intval($volume) / intval($extrapricevalue) * pow(1024, 3));
+    $data_limit = $DataUserOut['data_limit'] + ((float) $extrapricevalue > 0 ? (float) $volume / (float) $extrapricevalue * pow(1024, 3) : 0);
     $stmt = $pdo->prepare("INSERT IGNORE INTO service_other (id_user, username, value, type, time, price) VALUES (:id_user, :username, :value, :type, :time, :price)");
     $value = $data_limit;
     $dateacc = date('Y/m/d H:i:s');
@@ -6514,7 +6515,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
         ':time' => $dateacc,
         ':price' => $admin_buy_free ? 0 : $volume,
     ]);
-    $data_limit_new = (intval($volume) / intval($extrapricevalue));
+    $data_limit_new = (float) $extrapricevalue > 0 ? (float) $volume / (float) $extrapricevalue : 0;
     $extra_volume = $ManagePanel->extra_volume($user['Processing_value'], $marzban_list_get['code_panel'], $data_limit_new);
     if ($extra_volume['status'] == false) {
         $extra_volume['msg'] = json_encode($extra_volume['msg']);
