@@ -62,6 +62,9 @@ $methodMap = [
   'Star Telegram' => $textbotlang['panel']['paymentMethodTelegramStar'],
   'nowpayment' => 'NowPayment',
   'USDT-BEP20' => 'USDT (BEP20)',
+  'cubepay' => 'CubePay',
+  'AbanGateway' => 'AbanGateway',
+  'variza' => $textbotlang['panel']['paymentMethodVariza'],
 ];
 
 $pageTitle = $textbotlang['panel']['paymentTransactionsTitle'];

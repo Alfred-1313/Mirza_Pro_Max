@@ -1,5 +1,10 @@
-# secrets - never commit
-config.php
+# secrets - never commit: the bot's own config, and each agent bot's copy
+# (its token). Only those - panel/inc/config.php and vpnbot/Default/config.php
+# are code, and ignoring every config.php by name kept them out of the repo:
+# a fresh install had no web panel and could not build an agent bot.
+/config.php
+/vpnbot/*/config.php
+!/vpnbot/Default/config.php
 
 # third-party dependencies - regenerate with `composer install`
 /vendor/
