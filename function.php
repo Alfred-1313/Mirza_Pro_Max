@@ -1334,7 +1334,7 @@ function DirectPayment_settle($order_id, $image = 'images.jpg')
         // wallet credit passes through, so no gateway integration changes.
         $topup_bonus = function_exists('topup_disc_award') ? round((float) topup_disc_award($Payment_report, $Balance_id), 2) : 0;
         $Balance_confrim = round((float) $Balance_id['Balance'] + (float) $Payment_report['price'] + $topup_bonus, 2);
-        update("user", "Balance", $Balance_confrim, "id", $Payment_report['id_user']);
+        balance_add($Payment_report['id_user'], round((float) $Payment_report['price'] + $topup_bonus, 2));
         update("Payment_report", "payment_Status", "paid", "id_order", $Payment_report['id_order']);
         $bc_cur = currency_for_user($Balance_id);
         $Payment_report['price'] = money($Payment_report['price'], $bc_cur, false);
@@ -8648,7 +8648,7 @@ if (!function_exists('pruneUnlockedBotCrons')) {
         return true;
     }
 }
-function activecron()
+function bot_cron_commands()
 {
     global $domainhosts;
 
@@ -8664,7 +8664,7 @@ function activecron()
     // difference is silently added alongside rather than replacing - which is
     // precisely how the box ended up running two competing sets of the same
     // jobs. Change the schedule here, never only in the crontab.
-    $cronCommands = [
+    return [
         // --- money path: still every minute ---
         "*/1 * * * * flock -n /tmp/mz_croncard.lock curl -s --max-time 55 https://$domainhosts/cronbot/croncard.php > /dev/null 2>&1",
         "*/1 * * * * flock -n /tmp/mz_iranpay1.lock curl -s --max-time 55 https://$domainhosts/cronbot/iranpay1.php > /dev/null 2>&1",
@@ -8694,6 +8694,85 @@ function activecron()
         "14,29,44,59 * * * * flock -n /tmp/mz_uptime_panel.lock curl -s --max-time 600 https://$domainhosts/cronbot/uptime_panel.php > /dev/null 2>&1",
         "9,39 * * * * flock -n /tmp/mz_expireagent.lock curl -s --max-time 1700 https://$domainhosts/cronbot/expireagent.php > /dev/null 2>&1",
     ];
+}
+
+// ⏱ وضعیت کرون‌ها: the crons are curl calls, so nothing else knows whether
+// they ran - every cronbot script leaves the time it last finished, and the
+// fatal error it died of, if any
+function cron_heartbeat($job)
+{
+    if (!preg_match('/^[A-Za-z0-9_]+$/', (string) $job)) {
+        return;
+    }
+    $dir = __DIR__ . '/storage/cron_status';
+    if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
+        return;
+    }
+    $e = error_get_last();
+    $fatal = is_array($e) && in_array($e['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR], true);
+    @file_put_contents("$dir/$job.json", json_encode(['time' => time(), 'error' => $fatal ? mb_substr((string) $e['message'], 0, 300) : null]), LOCK_EX);
+}
+if (isset($_SERVER['SCRIPT_FILENAME']) && basename(dirname((string) $_SERVER['SCRIPT_FILENAME'])) === 'cronbot') {
+    register_shutdown_function('cron_heartbeat', basename((string) $_SERVER['SCRIPT_FILENAME'], '.php'));
+}
+
+// [text, keyboard] of the ⏱ screen: each job of bot_cron_commands(), when it
+// last ran, and ✅ on time / ❌ late or never / ⚠️ died of an error
+function cron_status_screen()
+{
+    global $textbotlang;
+    $t = $textbotlang['Admin']['cronHealth'];
+    $ago = function ($ts) use ($t) {
+        $m = intdiv(max(0, time() - (int) $ts), 60);
+        return $m < 1 ? $t['justNow'] : sprintf($t['minutesAgo'], $m);
+    };
+    $commands = bot_cron_commands();
+    $lines = [];
+    $errors = [];
+    $latest = 0;
+    foreach ($commands as $line) {
+        if (!preg_match('#^(\S+) \S+ \S+ \S+ \S+ .*cronbot/([A-Za-z0-9_]+)\.php#', $line, $m)) {
+            continue;
+        }
+        // minutes between runs: */N, or N runs an hour (3,18,33,48)
+        $every = strpos($m[1], '*/') === 0 ? max(1, (int) substr($m[1], 2)) : intdiv(60, max(1, count(explode(',', $m[1]))));
+        $name = $t['jobs'][$m[2]] ?? $m[2];
+        $st = json_decode((string) @file_get_contents(__DIR__ . "/storage/cron_status/{$m[2]}.json"), true);
+        if (!is_array($st) || empty($st['time'])) {
+            $lines[] = "❌ $name — {$t['never']}";
+            continue;
+        }
+        $latest = max($latest, (int) $st['time']);
+        if (!empty($st['error'])) {
+            $icon = '⚠️';
+            $errors[] = "• $name: <code>" . htmlspecialchars((string) $st['error']) . '</code>';
+        } else {
+            $icon = time() - (int) $st['time'] <= $every * 120 + 120 ? '✅' : '❌';
+        }
+        $lines[] = "$icon $name — " . $ago($st['time']);
+    }
+    $text = $t['title'] . "\n\n" . ($latest > 0 && time() - $latest <= 180 ? $t['running'] : $t['stopped']) . "\n";
+    $text .= sprintf($t['lastRun'], $latest > 0 ? $ago($latest) : $t['never']) . "\n";
+    $crontab = isShellExecAvailable() ? (string) shell_exec('crontab -l 2>/dev/null') : null;
+    if ($crontab !== null) {
+        $have = array_map('trim', explode("\n", $crontab));
+        $text .= sprintf($t['installed'], count(array_intersect($commands, $have)), count($commands)) . "\n";
+    }
+    $text .= "\n" . implode("\n", $lines);
+    if ($errors) {
+        $text .= "\n\n" . $t['errors'] . "\n" . implode("\n", $errors);
+    }
+    $keyboard = json_encode(['inline_keyboard' => [
+        [['text' => $t['refresh'], 'callback_data' => 'cronstatus_refresh'], ['text' => $t['fix'], 'callback_data' => 'cronstatus_fix']],
+    ]]);
+    return [$text, $keyboard];
+}
+
+function activecron()
+{
+    global $domainhosts;
+
+    $cronCommands = bot_cron_commands();
 
     // Drop the pre-flock shape of these same jobs before adding ours. Without
     // this the two sets run side by side, each holding its own lock and neither
@@ -18013,6 +18092,69 @@ if (!function_exists('bottext_extras_key_hint')) {
         $k = $pending;
         $pending = null;
         return $k;
+    }
+}
+if (!function_exists('panelErrorText')) {
+    // A panel that could not be reached, said in words - timeout, refused,
+    // unknown domain, bad SSL - with the raw error under it, instead of the
+    // raw error (or a JSON dump) alone
+    function panelErrorText($rawError)
+    {
+        global $textbotlang, $request_exec_timeout;
+        $raw = (is_array($rawError) || is_object($rawError)) ? json_encode($rawError, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : trim((string) $rawError);
+        if ($raw === '' || $raw === false) {
+            $raw = 'unknown error';
+        }
+        error_log('Panel connection error: ' . $raw);
+        $messages = $textbotlang['Admin']['managepanel']['panelConnection'] ?? [];
+        if (empty($messages)) {
+            return htmlspecialchars($raw, ENT_NOQUOTES, 'UTF-8');
+        }
+        $needle = strtolower($raw);
+        if (str_contains($needle, 'timed out') || str_contains($needle, 'timeout') || str_contains($needle, 'operation too slow')) {
+            $seconds = preg_match('/after (\d+) milliseconds/', $needle, $ms) ? (int) round(intval($ms[1]) / 1000) : 0;
+            if ($seconds < 1) {
+                $seconds = (int) round(intval($request_exec_timeout ?: 10000) / 1000);
+            }
+            $text = sprintf($messages['timeout'], $seconds);
+        } elseif (str_contains($needle, 'could not resolve') || str_contains($needle, 'name or service not known') || str_contains($needle, 'name lookup')) {
+            $text = $messages['dns'];
+        } elseif (str_contains($needle, 'connection refused') || str_contains($needle, 'failed to connect') || str_contains($needle, "couldn't connect") || str_contains($needle, 'connection reset')) {
+            $text = $messages['refused'];
+        } elseif (str_contains($needle, 'ssl') || str_contains($needle, 'certificate')) {
+            $text = $messages['ssl'];
+        } else {
+            $text = $messages['generic'];
+        }
+        return $text . sprintf($messages['detail'], htmlspecialchars($raw, ENT_NOQUOTES, 'UTF-8'));
+    }
+}
+if (!function_exists('panelProtocolsConfigured')) {
+    // No protocol set for a Marzban / Marzneshin location: the user it made had
+    // none either - a config that connects to nothing. Refused instead, saying so.
+    function panelProtocolsConfigured($rawProxies)
+    {
+        $decoded = json_decode((string) $rawProxies, true);
+        return is_array($decoded) && count($decoded) > 0;
+    }
+    function panelProtocolsMissingError($panelName = '')
+    {
+        global $textbotlang;
+        error_log('Panel protocols not configured' . ((string) $panelName !== '' ? " [$panelName]" : ''));
+        return ['error' => $textbotlang['Admin']['managepanel']['protocolsNotConfigured'] ?? 'Protocols and inbounds are not configured for this location.'];
+    }
+}
+if (!function_exists('balance_add')) {
+    // A balance moved by an amount in ONE statement. «Read it, then write the
+    // sum back» lost whatever landed in between: a top-up approved while a
+    // purchase was talking to the panel, or a second purchase.
+    function balance_add($userId, $amount)
+    {
+        global $pdo, $user;
+        $stmt = $pdo->prepare("UPDATE user SET Balance = Balance + ? WHERE id = ?");
+        $stmt->execute([$amount, $userId]);
+        file_put_contents('log.txt', "\nuser_Balance_" . ($amount >= 0 ? '+' : '') . $amount . "_id_{$userId}_" . ($user['step'] ?? '') . '_' . date("Y-m-d H:i:s"), FILE_APPEND);
+        clearSelectCache('user');
     }
 }
 if (!function_exists('containsHtmlMarkup')) {

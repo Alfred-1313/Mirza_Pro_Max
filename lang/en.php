@@ -2277,6 +2277,47 @@ Description:  %s ',
                         'statusApproved2' => '
 Status: approved (%s)',
                 ],
+                'premiumEmojiRefused' => '⚠️ <b>Telegram refused this bot\'s premium emoji.</b>
+
+The messages were sent with plain emoji so they still reach the user.
+To show premium emoji, the bot owner needs Telegram Premium or the bot needs a username bought on Fragment. If you have one of these, check the emoji IDs in 🎨 personalization.
+
+<i>Telegram said:</i> <code>{reason}</code>',
+                'cronHealth' => [
+                        'title' => '⏱ <b>Cron status</b>',
+                        'running' => '✅ The cron jobs are running.',
+                        'stopped' => '❌ No cron job has run in the last 3 minutes - cron is stopped or not set up. Tap «🔧 Set up cron again».',
+                        'lastRun' => '🕐 Last run: %s',
+                        'installed' => '🗓 Cron lines in the crontab: %s of %s',
+                        'never' => 'never',
+                        'justNow' => 'just now',
+                        'minutesAgo' => '%s min ago',
+                        'errors' => '⚠️ Last error:',
+                        'refresh' => '🔄 Refresh',
+                        'fix' => '🔧 Set up cron again',
+                        'fixed' => '✅ Cron set up again.',
+                        'jobs' => [
+                                'croncard' => 'Card-to-card receipts',
+                                'iranpay1' => 'Rial crypto gateway',
+                                'sendmessage' => 'Broadcast messages',
+                                'ton' => 'TON payments',
+                                'trx' => 'TRX payments',
+                                'usdtbep' => 'USDT BEP20 payments',
+                                'plisio' => 'Plisio payments',
+                                'frenzyex' => 'FrenzyEx payments',
+                                'payment_expire' => 'Invoice expiry',
+                                'NoticationsService' => 'Service volume/time warnings',
+                                'activeconfig' => 'Bulk service activation',
+                                'disableconfig' => 'Bulk service deactivation',
+                                'gift' => 'Gifts',
+                                'configtest' => 'Test accounts',
+                                'statusday' => 'Daily report',
+                                'on_hold' => 'On-hold services',
+                                'uptime_node' => 'Node status',
+                                'uptime_panel' => 'Panel status',
+                                'expireagent' => 'Agency expiry',
+                        ],
+                ],
                 'agentbot' => [
                         'askToken' => '📌 Send the token',
                         'limitReached' => '❌ Currently you are limited to creating only 15 bots for your agents.',
@@ -2656,6 +2697,40 @@ The support access level has access to user services and support message reply s
                         'connectXUi' => '✅ The panel is connected',
                         'customNameSend' => 'Send your custom text',
                         'errorStatusPanel' => 'It is not possible to connect to the panel 😔 The error is written below. If the problem is not resolved, contact support',
+                        'protocolsNotConfigured' => '⚠️ Protocols and inbounds are not configured for this location. Until they are, the bot cannot build a working config. Go to panel management > ⚙️ protocol and inbound settings and send the username of a sample config.',
+                        'panelConnection' => [
+                                'timeout' => '⏳ <b>The panel did not respond within %s seconds.</b>
+
+This is not a bot fault — the request reached your panel, but the panel did not answer in time.
+
+🔹 Check that the panel server is up and reachable.
+🔹 If your panel is under heavy load, raise <code>$request_exec_timeout</code> in <code>config.php</code> (in milliseconds, e.g. 25000).',
+                                'refused' => '🚫 <b>Could not connect to the panel.</b>
+
+This is not a bot fault — the panel server refused the connection.
+
+🔹 Check the panel address and port.
+🔹 Make sure the panel service is running and the firewall allows the port.',
+                                'dns' => '🌐 <b>The panel domain could not be resolved.</b>
+
+This is not a bot fault — the panel address did not resolve to an IP.
+
+🔹 Check the spelling of the panel address.
+🔹 Check the domain DNS records.',
+                                'ssl' => '🔐 <b>Secure connection to the panel failed.</b>
+
+This is not a bot fault — the panel SSL certificate was invalid or the handshake failed.
+
+🔹 Check the panel SSL certificate and its expiry date.',
+                                'generic' => '⚠️ <b>Could not reach the panel.</b>
+
+This is not a bot fault — the request to the panel failed.
+
+🔹 Check the status of the panel server.',
+                                'detail' => '
+
+<i>Technical detail:</i> <code>%s</code>',
+                        ],
                         'getLimitedPanel' => '📌 Specify the account creation limit on this panel.
 ⚠️ Note that the limit is based on the number of active orders in the bot 
 If you want it to be unlimited, send the text unlimited',
@@ -4660,6 +4735,7 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'remnawave' => 'Remnawave',
                 'reWebhookAgentBots' => '🔗 Re-webhook agent bots',
                 'updateBotBtn' => '🔄 Update bot',
+                'cronStatus' => '⏱ Cron status',
                 'receiveMembershipGift' => '🎁 Receive membership gift',
                 'reconnectNode' => '♻️ Reconnect node',
                 'refresh' => '♻️ Update',

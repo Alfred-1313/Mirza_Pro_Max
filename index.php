@@ -85,6 +85,12 @@ if (!webhook_secret_ok())
     die("Unauthorized access");
 if (intval($from_id) == 0)
     return;
+// One update per person at a time. A double tap on «buy» or «renew» reached
+// the bot as two updates at once: both read the same balance and both went
+// through on it. The second now waits for the first (up to 15 s), then reads
+// what the first one left. Named per bot: bots can share one MySQL server.
+$pdo->query("SELECT GET_LOCK(" . $pdo->quote('mz' . substr(md5((string) $APIKEY), 0, 10) . '_' . (int) $from_id) . ", 15)");
+clearSelectCache('user');
 #-------------Variable----------#
 $users_ids = select("user", "id", null, null, "FETCH_COLUMN");
 $otherreport = select("topicid", "idreport", "report", "otherreport", "select")['idreport'];
@@ -2279,7 +2285,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         sendmessage($from_id, sprintf($textbotlang['users']['extend']['giftCharged'], $result), null, 'HTML');
     }
     $Balance_Low_user = $user['Balance'] - $pricelastextend;
-    update("user", "Balance", $Balance_Low_user, "id", $from_id);
+    balance_add($from_id, -$pricelastextend);
     $stmt = $pdo->prepare("INSERT IGNORE INTO service_other (id_user, username,value,type,time,price,output,status) VALUES (?, ?, ?, ?,?,?,?,?)");
     $dateacc = date('Y/m/d H:i:s');
     $value = json_encode(array(
@@ -2674,7 +2680,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         $volumepricelast = 0;
     }
     $Balance_Low_user = $user['Balance'] - $volumepricelast;
-    update("user", "Balance", $Balance_Low_user, "id", $from_id);
+    balance_add($from_id, -$volumepricelast);
     $DataUserOut = $ManagePanel->DataUser($nameloc['Service_location'], $nameloc['username']);
     $data_for_database = json_encode(array(
         'volume_value' => (float) $extrapricevalue > 0 ? (float) $volume / (float) $extrapricevalue : 0,
@@ -2957,7 +2963,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $textchangeloc = sprintf($textbotlang['users']['changeLocation']['success'], $marzban_list_get_new['name_panel'], $nameloc['username'], $RemainingVolume, $expirationDate, $day, $output_config_link);
     if (intval($Pricechange) != 0) {
         $Balance_Low_user = $user['Balance'] - $Pricechange;
-        update("user", "Balance", $Balance_Low_user, "id", $from_id);
+        balance_add($from_id, -$Pricechange);
     }
     update("invoice", "Service_location", $marzban_list_get_new['name_panel'], "username", $nameloc['username']);
     if ($marzban_list_get_new['inboundid'] != null) {
@@ -3290,7 +3296,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         }
         return;
     }
-    update("user", "Balance", $Balance_Low_user, "id", $from_id);
+    balance_add($from_id, -$pricelasttime);
     $stmt = $pdo->prepare("INSERT IGNORE INTO service_other (id_user, username, value, type, time, price, output) VALUES (:id_user, :username, :value, :type, :time, :price, :output)");
     $value = $data_for_database;
     $dateacc = date('Y/m/d H:i:s');
@@ -4809,7 +4815,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     sendMessageService($marzban_list_get, $dataoutput['configs'], $output_config_link, $dataoutput['username'], $Shoppinginfo, $textcreatuser, $randomString);
     if (intval($priceproduct) != 0) {
         $Balance_prim = $user['Balance'] - $priceproduct;
-        update("user", "Balance", $Balance_prim, "id", $from_id);
+        balance_add($from_id, -$priceproduct);
     }
     if (username_method_is($marzban_list_get['MethodUsername'], 'keyboard.customTextSequential') || username_method_is($marzban_list_get['MethodUsername'], 'keyboard.usernameSequential') || username_method_is($marzban_list_get['MethodUsername'], 'keyboard.numericIdSequential') || username_method_is($marzban_list_get['MethodUsername'], 'keyboard.agentCustomTextSequential')) {
         $value = intval($user['number_username']) + 1;
@@ -5269,7 +5275,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     }
     $user_Balance = select("user", "*", "id", $from_id, "select");
     $Balance_prim = $user_Balance['Balance'] - $priceproduct;
-    update("user", "Balance", $Balance_prim, "id", $from_id);
+    balance_add($from_id, -$priceproduct);
     $balanceformatsell = money(select("user", "Balance", "id", $from_id, "select")['Balance'], currency_for_user($user), false);
     $balanceformatsellbefore = wallet_amount_text($user);
     $pricebulk = $info_product['price_product'] * intval($user['Processing_value_four']);
@@ -6413,7 +6419,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     $useraffiliates = select("user", "*", 'id', $reagent['reagent'], "select");
     $Balance_add_regent = wallet_credit($reagent['reagent'], $price_gift_Start, currency_for_user($user));
     $Balance_add_user = $user['Balance'] + $price_gift_Start;
-    update("user", "Balance", $Balance_add_user, "id", $from_id);
+    balance_add($from_id, $price_gift_Start);
     $addbalancediscount = money($price_gift_Start, currency_for_user($user));
     // to the inviter, in their own language
     bottext_extras_key_hint('users.affiliates.joinedGift');
@@ -6544,7 +6550,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
         return;
     }
     $Balance_Low_user = $user['Balance'] - ($admin_buy_free ? 0 : $volume);
-    update("user", "Balance", $Balance_Low_user, "id", $from_id);
+    balance_add($from_id, -($admin_buy_free ? 0 : $volume));
     $back = json_encode([
         'inline_keyboard' => [
             [
@@ -6639,7 +6645,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     step("getagentrequest", $from_id);
 } elseif ($user['step'] == "getagentrequest" && $text) {
     $balancelow = $user['Balance'] - $setting['agentreqprice'];
-    update("user", "Balance", $balancelow, "id", $from_id);
+    balance_add($from_id, -$setting['agentreqprice']);
     sendmessage($from_id, $textbotlang['users']['agent']['endrequest'], $keyboard, 'html');
     step("home", $from_id);
     $stmt = $pdo->prepare("INSERT INTO Requestagent (id, username, time, Description, status, type) VALUES (:id, :username, :time, :description, :status, :type)");
@@ -6789,7 +6795,7 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     if ($status) {
         $wheel_prize = feature_setting_value('wheel_price', $user['lang'] ?? 'fa', $setting['wheelـluck_price']);
         $balance_last = $wheel_prize + $user['Balance'];
-        update("user", "Balance", $balance_last, "id", $from_id);
+        balance_add($from_id, $wheel_prize);
         // the prize is denominated in this language's currency, so render it
         // with that currency's symbol instead of a bare "toman" number
         $price = money($wheel_prize, currency_for_user($user));
@@ -7249,7 +7255,7 @@ if (isset($update['message']['successful_payment'])) {
         $prodcut['price_product'] = 0;
     }
     $Balance_Low_user = $user['Balance'] - $prodcut['price_product'];
-    update("user", "Balance", $Balance_Low_user, "id", $from_id);
+    balance_add($from_id, -$prodcut['price_product']);
     $extend = $ManagePanel->extend($marzban_list_get['Methodextend'], $prodcut['Volume_constraint'], $prodcut['Service_time'], $usernamePanelExtends, $prodcut['code_product'], $marzban_list_get['code_panel']);
     affrw_mark_renewed($extend, $usernamePanelExtends, $marzban_list_get['name_panel']);
     if ($extend['status'] == false) {

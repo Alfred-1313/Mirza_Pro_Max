@@ -27,6 +27,9 @@ $textbotlang = languagechange();
 $dataBase = select("botsaz", "*", "bot_token", $ApiToken, "select");
 if (!webhook_secret_ok($dataBase))
     die("Unauthorized access");
+if (intval($from_id) != 0) {
+    $pdo->query("SELECT GET_LOCK(" . $pdo->quote('mz' . substr(md5((string) $ApiToken), 0, 10) . '_' . (int) $from_id) . ", 15)");
+}
 $admin_ids = json_decode($dataBase['admin_ids']);
 $setting = json_decode($dataBase['setting'], true);
 if (!empty($setting['channel'])) {
@@ -983,7 +986,7 @@ if ($text == $text_bot_var['btn_keyboard']['buy'] && $setting['active_step_note'
             "data_limit_reset" => "no_reset"
         );
     }
-    if (!ctype_digit($datafactor['Volume_constraint']) || !ctype_digit($datafactor['Service_time'])) {
+    if (!is_numeric($datafactor['Volume_constraint']) || (float) $datafactor['Volume_constraint'] < 0 || !ctype_digit($datafactor['Service_time'])) {
         sendmessage($from_id, "❌ خطایی رخ داده است مراحل خرید را از اول انجام دهید", $keyboard, 'html');
         step("home", $from_id);
         return;
@@ -997,6 +1000,20 @@ if ($text == $text_bot_var['btn_keyboard']['buy'] && $setting['active_step_note'
             sendmessage($admin, "❌ ادمین عزیز موجودی شما به پایان رسید برای فعالسازی به ربات اصلی مراجعه و ربات خود را شارژ نمایید.", null, 'HTML');
         }
         return;
+    }
+    if (intval($userbotbalance['maxbuyagent']) != 0 and $userbotbalance['agent'] == "n2") {
+        $pricecapcheck = $datafactor['price_productMain'];
+        if (intval($userbotbalance['pricediscount']) != 0) {
+            $pricecapcheck = $pricecapcheck - (($pricecapcheck * $userbotbalance['pricediscount']) / 100);
+        }
+        if (($userbotbalance['Balance'] - $pricecapcheck) < -intval($userbotbalance['maxbuyagent'])) {
+            sendmessage($from_id, "❌ خطایی در خرید رخ داده است برای رفع مشکل با پشتیبانی در ارتباط باشید", $keyboard, 'HTML');
+            step("home", $from_id);
+            foreach ($admin_ids as $admin) {
+                sendmessage($admin, "❌ ادمین عزیز شما به حداکثر سقف خرید خود رسیده اید برای ادامه فروش ابتدا حساب خود را در ربات اصلی شارژ نمایید.", null, 'HTML');
+            }
+            return;
+        }
     }
     $username_ac = strtolower($userdate['username']);
     $DataUserOut = $ManagePanel->DataUser($marzban_list_get['name_panel'], $username_ac);
@@ -1204,7 +1221,8 @@ if ($text == $text_bot_var['btn_keyboard']['buy'] && $setting['active_step_note'
         file_put_contents("data/$from_id/$from_id.json", json_encode($userbalance));
     }
     $Balancebot = $userbotbalance['Balance'] - $datafactor['price_productMain'];
-    update("user", "Balance", $Balancebot, "id", $userbotbalance['id']);
+    $stmt = $pdo->prepare("UPDATE user SET Balance = Balance - :price WHERE id = :id");
+    $stmt->execute([':price' => $datafactor['price_productMain'], ':id' => $userbotbalance['id']]);
     if ($marzban_list_get['MethodUsername'] == "متن دلخواه + عدد ترتیبی" || $marzban_list_get['MethodUsername'] == "نام کاربری + عدد به ترتیب" || $marzban_list_get['MethodUsername'] == "آیدی عددی+عدد ترتیبی" || $marzban_list_get['MethodUsername'] == "متن دلخواه نماینده + عدد ترتیبی") {
         $value = intval($user['number_username']) + 1;
         update("user", "number_username", $value, "id", $from_id);
@@ -1758,6 +1776,20 @@ $output
         }
         return;
     }
+    if (intval($userbotbalance['maxbuyagent']) != 0 and $userbotbalance['agent'] == "n2") {
+        $pricecapcheck = $datafactor['price_productMain'];
+        if (intval($userbotbalance['pricediscount']) != 0) {
+            $pricecapcheck = $pricecapcheck - (($pricecapcheck * $userbotbalance['pricediscount']) / 100);
+        }
+        if (($userbotbalance['Balance'] - $pricecapcheck) < -intval($userbotbalance['maxbuyagent'])) {
+            sendmessage($from_id, "❌ خطایی در خرید رخ داده است برای رفع مشکل با پشتیبانی در ارتباط باشید", $keyboard, 'HTML');
+            step("home", $from_id);
+            foreach ($admin_ids as $admin) {
+                sendmessage($admin, "❌ ادمین عزیز شما به حداکثر سقف خرید خود رسیده اید برای ادامه فروش ابتدا حساب خود را در ربات اصلی شارژ نمایید.", null, 'HTML');
+            }
+            return;
+        }
+    }
     if ($datafactor['price_product'] > $user['Balance'] && intval($datafactor['price_product']) != 0) {
         $marzbandirectpay = select("shopSetting", "*", "Namevalue", "statusdirectpabuy", "select")['value'];
         $Balance_prim = $datafactor['price_product'] - $user['Balance'];
@@ -1823,7 +1855,8 @@ $output
         $datafactor['price_productMain'] = $datafactor['price_productMain'] - $resultper;
     }
     $Balancebot = $userbotbalance['Balance'] - $datafactor['price_productMain'];
-    update("user", "Balance", $Balancebot, "id", $userbotbalance['id']);
+    $stmt = $pdo->prepare("UPDATE user SET Balance = Balance - :price WHERE id = :id");
+    $stmt->execute([':price' => $datafactor['price_productMain'], ':id' => $userbotbalance['id']]);
     $keyboardextendfnished = json_encode([
         'inline_keyboard' => [
             [

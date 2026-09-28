@@ -1,5 +1,64 @@
 <?php
 require_once 'config.php';
+// ✨ premium emoji: <tg-emoji> in a text or caption, icon_custom_emoji_id on a button
+function premium_emoji_in(array $datas)
+{
+    foreach (['text', 'caption'] as $k) {
+        if (isset($datas[$k]) && is_string($datas[$k]) && stripos($datas[$k], '<tg-emoji') !== false) {
+            return true;
+        }
+    }
+    $markup = $datas['reply_markup'] ?? null;
+    return strpos(is_string($markup) ? $markup : (string) json_encode($markup), 'icon_custom_emoji_id') !== false;
+}
+// the same message with plain emoji: each <tg-emoji> left as the emoji inside
+// it, each button without its premium icon
+function premium_emoji_strip(array $datas)
+{
+    foreach (['text', 'caption'] as $k) {
+        if (isset($datas[$k]) && is_string($datas[$k])) {
+            $plain = preg_replace('#<tg-emoji\b[^>]*>(.*?)</tg-emoji>#isu', '$1', $datas[$k]);
+            if ($plain !== null) {
+                $datas[$k] = $plain;
+            }
+        }
+    }
+    if (isset($datas['reply_markup'])) {
+        $asString = is_string($datas['reply_markup']);
+        $markup = $asString ? json_decode($datas['reply_markup'], true) : $datas['reply_markup'];
+        if (is_array($markup)) {
+            foreach (['keyboard', 'inline_keyboard'] as $kb) {
+                foreach ((array) ($markup[$kb] ?? []) as $r => $row) {
+                    foreach ((array) $row as $c => $btn) {
+                        if (is_array($btn)) {
+                            unset($markup[$kb][$r][$c]['icon_custom_emoji_id']);
+                        }
+                    }
+                }
+            }
+            $datas['reply_markup'] = $asString ? json_encode($markup, JSON_UNESCAPED_UNICODE) : $markup;
+        }
+    }
+    return $datas;
+}
+// The owner hears why, once every 6 hours: a bot may show premium emoji only
+// when its owner has Telegram Premium or it has a Fragment username.
+function premium_emoji_refused_notice($reason)
+{
+    global $adminnumber;
+    $stamp = __DIR__ . '/storage/cache/premium_emoji_refused';
+    if (empty($adminnumber) || (is_file($stamp) && time() - (int) @filemtime($stamp) < 21600)) {
+        return;
+    }
+    if (!is_dir(dirname($stamp))) {
+        @mkdir(dirname($stamp), 0775, true);
+    }
+    @touch($stamp);
+    $text = function_exists('lang_tab_texts') ? (string) (lang_tab_texts('fa')['Admin']['premiumEmojiRefused'] ?? '') : '';
+    if ($text !== '') {
+        telegram('sendmessage', ['chat_id' => $adminnumber, 'text' => strtr($text, ['{reason}' => htmlspecialchars((string) $reason)]), 'parse_mode' => 'HTML']);
+    }
+}
 function telegram($method, $datas = [], $token = null)
 {
     global $APIKEY;
@@ -74,6 +133,17 @@ function telegram($method, $datas = [], $token = null)
     }
 
     if (isset($decodedResponse['ok']) && !$decodedResponse['ok']) {
+        // A premium emoji Telegram would not show made it refuse the WHOLE
+        // message - the customer got nothing. Sent again with plain emoji.
+        $reason = (string) ($decodedResponse['description'] ?? '');
+        if ((int) ($decodedResponse['error_code'] ?? 0) === 400 && is_array($datas) && premium_emoji_in($datas)
+            && !preg_match('/not modified|not found|can\'t be deleted/i', $reason)) {
+            $retry = telegram($method, premium_emoji_strip($datas), $token);
+            if (is_array($retry) && !empty($retry['ok'])) {
+                premium_emoji_refused_notice($reason);
+                return $retry;
+            }
+        }
         error_log(json_encode($decodedResponse));
     }
 
