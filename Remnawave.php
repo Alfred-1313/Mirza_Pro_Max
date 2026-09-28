@@ -161,9 +161,10 @@ function rw_squads_for($panel, $product = null)
     }
     return $list ?: array_keys(rw_all_squads($panel));
 }
-// «تنظیم پروتکل و اینباند»: squad names (split by commas), or the username of
-// a panel user whose squads are copied. ['uuids' => [], 'names' => []], or
-// null when it is neither.
+// «تنظیم پروتکل و اینباند», the way every panel does it: a config made in the
+// panel with the squads wanted - its username or its sub link - whose squads
+// are copied. Squad names (split by commas) work too. ['uuids' => [],
+// 'names' => []], or null when it is none of these.
 function rw_squads_from_text($text, $location)
 {
     $all = rw_all_squads($location);
@@ -181,7 +182,21 @@ function rw_squads_from_text($text, $location)
         $picked[] = $byName[mb_strtolower($p)];
     }
     if (!$picked && count($parts) === 1) {
-        $user = rw_user($parts[0], $location);
+        $user = null;
+        if (preg_match('#^https?://#i', $parts[0])) {
+            // a sub link ends in the user's short id - or in a client's
+            // suffix (/json, /singbox ...) with the id just before it
+            $segs = array_reverse(array_values(array_filter(explode('/', (string) parse_url($parts[0], PHP_URL_PATH)), 'strlen')));
+            foreach (array_slice($segs, 0, 2) as $short) {
+                $res = rw_request($location, 'GET', '/users/by-short-uuid/' . rawurlencode($short));
+                $user = rw_ok($res) ? (json_decode((string) $res['body'], true)['response'] ?? null) : null;
+                if (is_array($user)) {
+                    break;
+                }
+            }
+        } else {
+            $user = rw_user($parts[0], $location);
+        }
         foreach ((array) ($user['activeInternalSquads'] ?? []) as $sq) {
             if (is_array($sq) && !empty($sq['uuid'])) {
                 $picked[] = (string) $sq['uuid'];
