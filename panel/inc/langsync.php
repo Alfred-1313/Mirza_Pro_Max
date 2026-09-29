@@ -32,7 +32,7 @@ function web_lang_list($value): array
 }
 
 // the ticked boxes as the column stores them, the way the bot's picker does:
-// none ticked (or «all») is 'all', otherwise the codes
+// none ticked, «all», or every language is 'all', otherwise the codes
 function web_lang_value($posted): string
 {
     $posted = array_map('strval', (array) $posted);
@@ -40,7 +40,7 @@ function web_lang_value($posted): string
         return 'all';
     }
     $picked = array_values(array_intersect(panel_langs(), $posted));
-    return $picked ? implode(',', $picked) : 'all';
+    return ($picked && count($picked) < count(panel_langs())) ? implode(',', $picked) : 'all';
 }
 
 // does a row whose lang column is $value show to $lang

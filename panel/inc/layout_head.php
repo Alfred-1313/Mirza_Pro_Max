@@ -119,6 +119,11 @@ $initials = mb_strtoupper(mb_substr($currentUser, 0, 1, 'UTF-8'), 'UTF-8');
             <span class="nav-icon"><?= icon('package') ?></span><span
               class="nav-label"><?= $textbotlang['panel']['layoutMenuSectionSystem'] ?></span>
           </a>
+          <a href="servers.php" class="nav-item <?= $activeNav === 'servers' ? 'active' : '' ?>"
+            title="<?= $textbotlang['panel']['srvPageTitle'] ?>">
+            <span class="nav-icon"><?= icon('server') ?></span><span
+              class="nav-label"><?= $textbotlang['panel']['srvPageTitle'] ?></span>
+          </a>
           <a href="category.php" class="nav-item <?= $activeNav === 'category' ? 'active' : '' ?>"
             title="<?= $textbotlang['panel']['categoryPageTitle'] ?>">
             <span class="nav-icon"><?= icon('folder') ?></span><span
@@ -138,6 +143,16 @@ $initials = mb_strtoupper(mb_substr($currentUser, 0, 1, 'UTF-8'), 'UTF-8');
             title="<?= $textbotlang['panel']['layoutPageTitlePayment'] ?>">
             <span class="nav-icon"><?= icon('card') ?></span><span
               class="nav-label"><?= $textbotlang['panel']['layoutSearchBoxPlaceholder'] ?></span>
+          </a>
+          <a href="channels.php" class="nav-item <?= $activeNav === 'channels' ? 'active' : '' ?>"
+            title="<?= $textbotlang['panel']['chnPageTitle'] ?>">
+            <span class="nav-icon"><?= icon('eye') ?></span><span
+              class="nav-label"><?= $textbotlang['panel']['chnPageTitle'] ?></span>
+          </a>
+          <a href="help.php" class="nav-item <?= $activeNav === 'help' ? 'active' : '' ?>"
+            title="<?= $textbotlang['panel']['helpPageTitle'] ?>">
+            <span class="nav-icon"><?= icon('edit') ?></span><span
+              class="nav-label"><?= $textbotlang['panel']['helpPageTitle'] ?></span>
           </a>
           <a href="gateways.php" class="nav-item <?= $activeNav === 'gateways' ? 'active' : '' ?>"
             title="<?= $textbotlang['panel']['gwPageTitle'] ?>">

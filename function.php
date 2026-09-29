@@ -16799,6 +16799,98 @@ if (!function_exists('help_section_on')) {
         return is_array($rows) ? $rows : [];
     }
 }
+if (!function_exists('help_category_list')) {
+    // Categories used to exist only as whatever strings the tutorials happened
+    // to carry, so a category could not be created before its first tutorial
+    // and vanished again when the last one left it. The names now also live in
+    // setting.help_categories; this merges that list with the ones in use, so
+    // an empty category still shows up (with a count of 0) and nothing that IS
+    // in use can go missing even if the store falls behind.
+    function help_category_store()
+    {
+        $setting = select("setting", "*", null, null, "select");
+        $s = json_decode((string) ($setting['help_categories'] ?? ''), true);
+        return is_array($s) ? array_values(array_filter(array_map('strval', $s), function ($v) {
+            return trim($v) !== '';
+        })) : [];
+    }
+    function help_category_store_save(array $names)
+    {
+        $clean = [];
+        foreach ($names as $n) {
+            $n = trim((string) $n);
+            if ($n !== '' && !in_array($n, $clean, true)) {
+                $clean[] = $n;
+            }
+        }
+        update("setting", "help_categories", json_encode($clean, JSON_UNESCAPED_UNICODE), null, null);
+    }
+    function help_category_store_add($name)
+    {
+        $names = help_category_store();
+        $names[] = $name;
+        help_category_store_save($names);
+    }
+    function help_category_list()
+    {
+        $rows = select("help", "*", null, null, "fetchAll");
+        $cats = [];
+        foreach (help_category_store() as $n) {
+            $cats[$n] = 0;
+        }
+        foreach (is_array($rows) ? $rows : [] as $r) {
+            $c = trim((string) ($r['category'] ?? ''));
+            // "0" is what the add flow writes for "no category"
+            if ($c === '' || $c === '0') {
+                continue;
+            }
+            $cats[$c] = ($cats[$c] ?? 0) + 1;
+        }
+        ksort($cats, SORT_NATURAL | SORT_FLAG_CASE);
+        return $cats;
+    }
+}
+if (!function_exists('help_set_lang_field')) {
+    // writes tutorial fields for one language: 'fa' lands in the base columns,
+    // every other language merges into the translations JSON blob (merge, not
+    // overwrite, so name / category / content can be translated independently)
+    function help_set_lang_field($id, $lang, array $fields)
+    {
+        $row = select("help", "*", "id", $id, "select");
+        if ($row === false) {
+            return false;
+        }
+        if ($lang === 'fa') {
+            $map = [
+                'name' => 'name_os',
+                'category' => 'category',
+                'description' => 'Description_os',
+                'media' => 'Media_os',
+                'media_type' => 'type_Media_os',
+                'entities' => 'entities_os',
+            ];
+            foreach ($fields as $fk => $fv) {
+                if (!isset($map[$fk])) {
+                    continue;
+                }
+                update("help", $map[$fk], ($fk === 'entities') ? json_encode($fv) : $fv, "id", $id);
+            }
+            return true;
+        }
+        $tr = json_decode((string) ($row['translations'] ?? ''), true);
+        if (!is_array($tr)) {
+            $tr = [];
+        }
+        if (!isset($tr[$lang]) || !is_array($tr[$lang])) {
+            $tr[$lang] = [];
+        }
+        foreach ($fields as $fk => $fv) {
+            $tr[$lang][$fk] = $fv;
+        }
+        update("help", "translations", json_encode($tr, JSON_UNESCAPED_UNICODE), "id", $id);
+        return true;
+    }
+}
 if (!function_exists('help_layout_get')) {
     function help_layout_get()
     {
