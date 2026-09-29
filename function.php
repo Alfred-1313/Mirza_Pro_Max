@@ -7750,6 +7750,97 @@ if (!function_exists('gateway_fa_only_keys')) {
         return ['zarinpal', 'frenzyex', 'cubepay', 'abangateway', 'variza', 'aqayepardakht', 'iranpay1', 'iranpay2', 'iranpay3', 'paymentnotverify'];
     }
 }
+// read and written by the bot's 💳 hub and by the web panel alike
+if (!function_exists('gateway_globally_on')) {
+    // Mirrors the flags the payment keyboard itself reads, so the admin can see
+    // when a per-language choice is being overruled by the global switch.
+    function gateway_globally_on($key)
+    {
+        switch ($key) {
+            case 'card':
+                return getPaySettingValue('Cartstatus') === 'oncard';
+            case 'plisio':
+                return getPaySettingValue('nowpaymentstatus') === 'onnowpayment';
+            case 'nowpayment':
+                return (string) getPaySettingValue('statusnowpayment') === '1';
+            case 'digitaltron':
+                return getPaySettingValue('digistatus') === 'ondigi';
+            case 'iranpay1':
+                return getPaySettingValue('statusSwapWallet') === 'onSwapinoBot';
+            case 'iranpay2':
+                return getPaySettingValue('statustarnado') === 'onternado';
+            case 'iranpay3':
+                return getPaySettingValue('statusiranpay3') === 'oniranpay3';
+            case 'aqayepardakht':
+                return getPaySettingValue('statusaqayepardakht') === 'onaqayepardakht';
+            case 'zarinpal':
+                return getPaySettingValue('zarinpalstatus') === 'onzarinpal';
+            case 'frenzyex':
+                return getPaySettingValue('frenzyexstatus') === 'onfrenzyex';
+            case 'cubepay':
+                return getPaySettingValue('statuscubepay') === 'oncubepay';
+            case 'abangateway':
+                return getPaySettingValue('statusabangateway') === 'onabangateway';
+            case 'variza':
+                return getPaySettingValue('statusvariza') === 'onvariza';
+            case 'paymentnotverify':
+                return getPaySettingValue('paymentstatussnotverify') === 'onverifypay';
+            case 'startelegrams':
+                return (string) getPaySettingValue('statusstar') === '1';
+            case 'ton':
+                return (string) getPaySettingValue('statuston') === '1';
+            case 'trx':
+                return (string) getPaySettingValue('statustrx') === '1';
+            case 'usdtbep':
+                return (string) getPaySettingValue('statususdtbep') === '1';
+        }
+        return false;
+    }
+}
+if (!function_exists('gateway_globally_set')) {
+    // Exact write-side mirror of gateway_globally_on()'s switch: same PaySetting
+    // names and on/off literals, so read and write can never drift apart.
+    function gateway_globally_set($key, $on)
+    {
+        $map = [
+            'card' => ['Cartstatus', 'oncard', 'offcard'],
+            'plisio' => ['nowpaymentstatus', 'onnowpayment', 'offnowpayment'],
+            'nowpayment' => ['statusnowpayment', '1', '0'],
+            'digitaltron' => ['digistatus', 'ondigi', 'offdigi'],
+            'iranpay1' => ['statusSwapWallet', 'onSwapinoBot', 'offSwapinoBot'],
+            'iranpay2' => ['statustarnado', 'onternado', 'offternado'],
+            'iranpay3' => ['statusiranpay3', 'oniranpay3', 'offiranpay3'],
+            'aqayepardakht' => ['statusaqayepardakht', 'onaqayepardakht', 'offaqayepardakht'],
+            'zarinpal' => ['zarinpalstatus', 'onzarinpal', 'offzarinpal'],
+            'frenzyex' => ['frenzyexstatus', 'onfrenzyex', 'offfrenzyex'],
+            'cubepay' => ['statuscubepay', 'oncubepay', 'offcubepay'],
+            'abangateway' => ['statusabangateway', 'onabangateway', 'offabangateway'],
+            'variza' => ['statusvariza', 'onvariza', 'offvariza'],
+            'paymentnotverify' => ['paymentstatussnotverify', 'onverifypay', 'offverifypay'],
+            'startelegrams' => ['statusstar', '1', '0'],
+            'ton' => ['statuston', '1', '0'],
+            'trx' => ['statustrx', '1', '0'],
+            'usdtbep' => ['statususdtbep', '1', '0'],
+        ];
+        if (!isset($map[$key])) {
+            return;
+        }
+        [$name, $onVal, $offVal] = $map[$key];
+        $value = $on ? $onVal : $offVal;
+        // paymentnotverify's row (paymentstatussnotverify) has never existed in
+        // some installs - a plain UPDATE would silently no-op, so insert first
+        // when there's nothing to update yet.
+        $exists = select("PaySetting", "NamePay", "NamePay", $name, "select");
+        if (!is_array($exists) || !array_key_exists('NamePay', $exists)) {
+            global $pdo;
+            $stmt = $pdo->prepare("INSERT INTO PaySetting (NamePay, ValuePay) VALUES (?, ?)");
+            $stmt->execute([$name, $value]);
+        } else {
+            update("PaySetting", "ValuePay", $value, "NamePay", $name);
+        }
+        clearSelectCache("PaySetting");
+    }
+}
 if (!function_exists('gateway_applicable_for_lang')) {
     function gateway_applicable_for_lang($key, $lang)
     {
@@ -14130,15 +14221,9 @@ if (!function_exists('topup_disc_enabled_gateways')) {
             if (!gateway_allowed_for_lang($key, $lang)) {
                 continue;
             }
-            // gateway_globally_on() lives in admin.php, which is only loaded on
-            // the admin dispatch path. This function is admin-UI-only today, so
-            // the guard is really a safety net: rather than fatal if it is ever
-            // called from a user-facing path (the exact failure gateway_registry
-            // once caused in production), it degrades to the per-language rule
-            // alone. NOT fixed by moving gateway_globally_on() into function.php
-            // - it is the anchor string 10 test files use to extract admin.php's
-            // gateway block, and moving it would break every one of them.
-            if (function_exists('gateway_globally_on') && !gateway_globally_on($key)) {
+            // the shared switch too (gateway_globally_on lives in this file now,
+            // so the web panel can read it as well)
+            if (!gateway_globally_on($key)) {
                 continue;
             }
             // named the way this language's customer sees it

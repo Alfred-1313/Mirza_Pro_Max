@@ -2074,96 +2074,6 @@ if (!function_exists('help_disp_tut_hub_payload')) {
 }
 
 
-if (!function_exists('gateway_globally_on')) {
-    // Mirrors the flags the payment keyboard itself reads, so the admin can see
-    // when a per-language choice is being overruled by the global switch.
-    function gateway_globally_on($key)
-    {
-        switch ($key) {
-            case 'card':
-                return getPaySettingValue('Cartstatus') === 'oncard';
-            case 'plisio':
-                return getPaySettingValue('nowpaymentstatus') === 'onnowpayment';
-            case 'nowpayment':
-                return (string) getPaySettingValue('statusnowpayment') === '1';
-            case 'digitaltron':
-                return getPaySettingValue('digistatus') === 'ondigi';
-            case 'iranpay1':
-                return getPaySettingValue('statusSwapWallet') === 'onSwapinoBot';
-            case 'iranpay2':
-                return getPaySettingValue('statustarnado') === 'onternado';
-            case 'iranpay3':
-                return getPaySettingValue('statusiranpay3') === 'oniranpay3';
-            case 'aqayepardakht':
-                return getPaySettingValue('statusaqayepardakht') === 'onaqayepardakht';
-            case 'zarinpal':
-                return getPaySettingValue('zarinpalstatus') === 'onzarinpal';
-            case 'frenzyex':
-                return getPaySettingValue('frenzyexstatus') === 'onfrenzyex';
-            case 'cubepay':
-                return getPaySettingValue('statuscubepay') === 'oncubepay';
-            case 'abangateway':
-                return getPaySettingValue('statusabangateway') === 'onabangateway';
-            case 'variza':
-                return getPaySettingValue('statusvariza') === 'onvariza';
-            case 'paymentnotverify':
-                return getPaySettingValue('paymentstatussnotverify') === 'onverifypay';
-            case 'startelegrams':
-                return (string) getPaySettingValue('statusstar') === '1';
-            case 'ton':
-                return (string) getPaySettingValue('statuston') === '1';
-            case 'trx':
-                return (string) getPaySettingValue('statustrx') === '1';
-            case 'usdtbep':
-                return (string) getPaySettingValue('statususdtbep') === '1';
-        }
-        return false;
-    }
-}
-if (!function_exists('gateway_globally_set')) {
-    // Exact write-side mirror of gateway_globally_on()'s switch: same PaySetting
-    // names and on/off literals, so read and write can never drift apart.
-    function gateway_globally_set($key, $on)
-    {
-        $map = [
-            'card' => ['Cartstatus', 'oncard', 'offcard'],
-            'plisio' => ['nowpaymentstatus', 'onnowpayment', 'offnowpayment'],
-            'nowpayment' => ['statusnowpayment', '1', '0'],
-            'digitaltron' => ['digistatus', 'ondigi', 'offdigi'],
-            'iranpay1' => ['statusSwapWallet', 'onSwapinoBot', 'offSwapinoBot'],
-            'iranpay2' => ['statustarnado', 'onternado', 'offternado'],
-            'iranpay3' => ['statusiranpay3', 'oniranpay3', 'offiranpay3'],
-            'aqayepardakht' => ['statusaqayepardakht', 'onaqayepardakht', 'offaqayepardakht'],
-            'zarinpal' => ['zarinpalstatus', 'onzarinpal', 'offzarinpal'],
-            'frenzyex' => ['frenzyexstatus', 'onfrenzyex', 'offfrenzyex'],
-            'cubepay' => ['statuscubepay', 'oncubepay', 'offcubepay'],
-            'abangateway' => ['statusabangateway', 'onabangateway', 'offabangateway'],
-            'variza' => ['statusvariza', 'onvariza', 'offvariza'],
-            'paymentnotverify' => ['paymentstatussnotverify', 'onverifypay', 'offverifypay'],
-            'startelegrams' => ['statusstar', '1', '0'],
-            'ton' => ['statuston', '1', '0'],
-            'trx' => ['statustrx', '1', '0'],
-            'usdtbep' => ['statususdtbep', '1', '0'],
-        ];
-        if (!isset($map[$key])) {
-            return;
-        }
-        [$name, $onVal, $offVal] = $map[$key];
-        $value = $on ? $onVal : $offVal;
-        // paymentnotverify's row (paymentstatussnotverify) has never existed in
-        // some installs - a plain UPDATE would silently no-op, so insert first
-        // when there's nothing to update yet.
-        $exists = select("PaySetting", "NamePay", "NamePay", $name, "select");
-        if (!is_array($exists) || !array_key_exists('NamePay', $exists)) {
-            global $pdo;
-            $stmt = $pdo->prepare("INSERT INTO PaySetting (NamePay, ValuePay) VALUES (?, ?)");
-            $stmt->execute([$name, $value]);
-        } else {
-            update("PaySetting", "ValuePay", $value, "NamePay", $name);
-        }
-        clearSelectCache("PaySetting");
-    }
-}
 if (!function_exists('gw_legacy_settings_datain')) {
     // Gateways that still have a dedicated global screen for integration
     // credentials (API keys / merchant IDs) - these stay global-only (one
@@ -2275,10 +2185,7 @@ if (!function_exists('gateway_hub_payload')) {
 if (!function_exists('gateway_group_state')) {
     // 'all' | 'some' | 'none' - how many of the group's gateways a real user
     // would actually see (per-language flag AND the global switch, the same
-    // pair the per-gateway ✅ already reflects). Lives here rather than beside
-    // the other gateway_group_* helpers in function.php because
-    // gateway_globally_on() is an admin-only function - function.php is loaded
-    // for every customer request too, where that call would be undefined.
+    // pair the per-gateway ✅ already reflects).
     function gateway_group_state($group, $lang)
     {
         $members = gateway_group_members($group, $lang);
