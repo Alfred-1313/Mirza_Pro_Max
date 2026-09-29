@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/inc/config.php';
 require_once __DIR__ . '/inc/icons.php';
+require_once __DIR__ . '/inc/langsync.php';
 require_auth();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add') {
@@ -17,7 +18,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add')
     exit;
   }
   try {
-    db_query($pdo, "INSERT INTO category (remark) VALUES (?)", [$remark]);
+    // which languages see it - the same column 🌐 مدیریت نمایش بر اساس زبان sets
+    db_query($pdo, "INSERT INTO category (remark, lang) VALUES (?, ?)", [$remark, web_lang_value($_POST['langs'] ?? [])]);
     flash('success', $textbotlang['panel']['categoryAdded']);
   } catch (Exception $e) {
     flash('error', $textbotlang['panel']['productDbError'] . $e->getMessage());
@@ -38,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'edit'
   }
   if ($old && $remark !== '') {
     try {
-      db_query($pdo, "UPDATE category SET remark=? WHERE id=?", [$remark, $cid]);
+      db_query($pdo, "UPDATE category SET remark=?, lang=? WHERE id=?", [$remark, web_lang_value($_POST['langs'] ?? []), $cid]);
       // products name their category, not its id - they move with it, as when
       // the bot renames one
       db_query($pdo, "UPDATE product SET category=? WHERE category=?", [$remark, $old['remark']]);
@@ -59,13 +61,17 @@ if (isset($_GET['delete'])) {
   exit;
 }
 
-$categories = db_fetchAll($pdo, "SELECT * FROM category ORDER BY id");
+$view = in_array($_GET['view'] ?? '', panel_langs(), true) ? $_GET['view'] : '';
+$categories = array_values(array_filter(db_fetchAll($pdo, "SELECT * FROM category ORDER BY id"), fn($c) => $view === '' || web_lang_has($c['lang'] ?? 'all', $view)));
 
 $pageTitle = $textbotlang['panel']['categoryPageTitle'];
 $pageLede = $textbotlang['panel']['categoryPageLede'];
 $activeNav = 'category';
 include __DIR__ . '/inc/layout_head.php';
+echo web_lang_assets();
 ?>
+
+<?= web_lang_tabs($view, fn($c) => 'category.php?' . http_build_query(['view' => $c ?: null]), true) ?>
 
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px" class="fade-up">
   <div style="font-size:.85rem;color:var(--mute)"><?= count($categories) ?> <?= $textbotlang['panel']['categoryCount'] ?></div>
@@ -103,6 +109,7 @@ include __DIR__ . '/inc/layout_head.php';
           <tr>
             <th style="width:70px">#</th>
             <th><?= $textbotlang['panel']['categoryColName'] ?></th>
+            <th><?= $textbotlang['panel']['prodColLangs'] ?></th>
             <th style="width:110px;text-align:left"><?= $textbotlang['panel']['categoryColActions'] ?></th>
           </tr>
         </thead>
@@ -112,6 +119,7 @@ include __DIR__ . '/inc/layout_head.php';
             <tr>
               <td class="cf"><?= $i++ ?></td>
               <td class="cs"><?= htmlspecialchars($c['remark'] ?? '') ?></td>
+              <td><span class="tag tag-plain"><?= htmlspecialchars(web_lang_label($c['lang'] ?? 'all')) ?></span></td>
               <td>
                 <div style="display:flex;gap:5px;justify-content:flex-end">
                   <button class="btn btn-ghost btn-sm btn-icon" title="<?= htmlspecialchars($textbotlang['panel']['productEditBtn']) ?>"
@@ -148,6 +156,10 @@ include __DIR__ . '/inc/layout_head.php';
             <label><?= $textbotlang['panel']['categoryNameLabel'] ?></label>
             <input type="text" name="remark" class="input" placeholder="<?= htmlspecialchars($textbotlang['panel']['categoryNamePlaceholder']) ?>" required>
           </div>
+          <div class="field full">
+            <label><?= $textbotlang['panel']['prodFieldLangs'] ?></label>
+            <?= web_lang_checkboxes('langs', $view ?: 'all', 'catAddLang') ?>
+          </div>
         </div>
       </div>
       <div class="modal-foot">
@@ -174,6 +186,10 @@ include __DIR__ . '/inc/layout_head.php';
             <label><?= $textbotlang['panel']['categoryNameLabel'] ?></label>
             <input type="text" name="remark" id="edit_remark" class="input" required>
           </div>
+          <div class="field full">
+            <label><?= $textbotlang['panel']['prodFieldLangs'] ?></label>
+            <?= web_lang_checkboxes('langs', 'all', 'catEditLang') ?>
+          </div>
         </div>
       </div>
       <div class="modal-foot">
@@ -188,6 +204,10 @@ include __DIR__ . '/inc/layout_head.php';
 window.openEditModal = function(c) {
   document.getElementById('edit_id').value = c.id || '';
   document.getElementById('edit_remark').value = c.remark || '';
+  var langs = (!c.lang || c.lang === 'all') ? [] : c.lang.split(',');
+  document.querySelectorAll('[data-lang-group=catEditLang] input').forEach(function (b) {
+    b.checked = b.value === 'all' ? !langs.length : langs.indexOf(b.value) !== -1;
+  });
   openModal('editModal');
 };
 </script>
