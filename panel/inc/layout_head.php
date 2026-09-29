@@ -124,6 +124,11 @@ $initials = mb_strtoupper(mb_substr($currentUser, 0, 1, 'UTF-8'), 'UTF-8');
             <span class="nav-icon"><?= icon('folder') ?></span><span
               class="nav-label"><?= $textbotlang['panel']['categoryPageTitle'] ?></span>
           </a>
+          <a href="features.php" class="nav-item <?= $activeNav === 'features' ? 'active' : '' ?>"
+            title="<?= $textbotlang['panel']['featPageTitle'] ?>">
+            <span class="nav-icon"><?= icon('settings') ?></span><span
+              class="nav-label"><?= $textbotlang['panel']['featPageTitle'] ?></span>
+          </a>
           <a href="referral.php" class="nav-item <?= $activeNav === 'referral' ? 'active' : '' ?>"
             title="<?= $textbotlang['panel']['refPageTitle'] ?>">
             <span class="nav-icon"><?= icon('users') ?></span><span
