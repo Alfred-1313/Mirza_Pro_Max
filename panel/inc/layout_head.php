@@ -159,6 +159,11 @@ $initials = mb_strtoupper(mb_substr($currentUser, 0, 1, 'UTF-8'), 'UTF-8');
             <span class="nav-icon"><?= icon('wallet') ?></span><span
               class="nav-label"><?= $textbotlang['panel']['gwPageTitle'] ?></span>
           </a>
+          <a href="topuplook.php" class="nav-item <?= $activeNav === 'topuplook' ? 'active' : '' ?>"
+            title="<?= $textbotlang['panel']['tlPageTitle'] ?>">
+            <span class="nav-icon"><?= icon('invoice') ?></span><span
+              class="nav-label"><?= $textbotlang['panel']['tlPageTitle'] ?></span>
+          </a>
           <a href="discounts.php" class="nav-item <?= $activeNav === 'discounts' ? 'active' : '' ?>"
             title="<?= $textbotlang['panel']['discPageTitle'] ?>">
             <span class="nav-icon"><?= icon('chart') ?></span><span

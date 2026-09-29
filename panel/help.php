@@ -15,13 +15,6 @@ $lang = web_lang_pick();
 $isFa = $lang === 'fa';
 $cats = help_category_list();
 
-// Telegram reads the text as HTML: its own tags only, a bare «<» breaks the
-// message and the tutorial would not arrive at all
-function help_html_ok(string $s): bool
-{
-    $s = preg_replace('~</?(?:b|strong|i|em|u|ins|s|strike|del|code|pre|blockquote|span|tg-spoiler|tg-emoji|a)(?:\s+[a-z-]+(?:="[^"<>]*")?)*\s*>~i', '', $s);
-    return strpos($s, '<') === false;
-}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check_post();
@@ -52,7 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $err = $t['helpNameInvalid'];
         } elseif ($desc === '') {
             $err = $t['helpContentEmpty'];
-        } elseif (!help_html_ok($desc)) {
+        } elseif (!web_tg_html_ok($desc)) {
             $err = $t['helpHtmlInvalid'];
         } elseif ($sameName(0)) {
             // unique inside its category, as in the bot
@@ -87,7 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $err = $t['helpNameInvalid'];
             } elseif ($isFa && $desc === '' && $rawMedia === '') {
                 $err = $t['helpContentEmpty'];
-            } elseif ($desc !== $rawDesc && !help_html_ok($desc)) {
+            } elseif ($desc !== $rawDesc && !web_tg_html_ok($desc)) {
                 $err = $t['helpHtmlInvalid'];
             } elseif ($isFa && ($name !== $rawName || $cat !== $curCat) && $sameName($id)) {
                 $err = $t['helpNameExists'];

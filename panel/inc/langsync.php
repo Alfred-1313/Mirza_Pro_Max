@@ -89,6 +89,14 @@ function web_lang_tabs(string $current, callable $url, bool $withAll = false): s
     return $h . '</div>';
 }
 
+// Telegram reads the text as HTML: its own tags only, a bare «<» breaks the
+// message and it would not arrive at all
+function web_tg_html_ok(string $s): bool
+{
+    $s = preg_replace('~</?(?:b|strong|i|em|u|ins|s|strike|del|code|pre|blockquote|span|tg-spoiler|tg-emoji|a)(?:\s+[a-z-]+(?:="[^"<>]*")?)*\s*>~i', '', $s);
+    return strpos($s, '<') === false;
+}
+
 // shared look of the above, and «all» vs a language being exclusive
 function web_lang_assets(): string
 {
