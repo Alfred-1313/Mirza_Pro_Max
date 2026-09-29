@@ -174,6 +174,11 @@ $initials = mb_strtoupper(mb_substr($currentUser, 0, 1, 'UTF-8'), 'UTF-8');
             <span class="nav-icon"><?= icon('package') ?></span><span
               class="nav-label"><?= $textbotlang['panel']['btnPageTitle'] ?></span>
           </a>
+          <a href="looks.php" class="nav-item <?= $activeNav === 'looks' ? 'active' : '' ?>"
+            title="<?= $textbotlang['panel']['looksPageTitle'] ?>">
+            <span class="nav-icon"><?= icon('menu') ?></span><span
+              class="nav-label"><?= $textbotlang['panel']['looksPageTitle'] ?></span>
+          </a>
           <a href="bottext.php" class="nav-item <?= $activeNav === 'bottext' ? 'active' : '' ?>"
             title="<?= $textbotlang['panel']['bottextPageTitle'] ?>">
             <span class="nav-icon"><?= icon('edit') ?></span><span

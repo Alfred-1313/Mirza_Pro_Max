@@ -128,15 +128,6 @@ $pos = ($layout['emoji_pos_global'] ?? '') === 'left' ? 'left' : 'right';
 <div class="card" style="margin-bottom:14px">
   <div class="card-head"><div><div class="card-title">🧩 <?= $t['menuArrange'] ?></div><div class="card-subtitle"><?= $t['menuArrangeSub'] ?></div></div></div>
   <div class="card-body">
-    <style>
-      .kb-grid{display:flex;flex-direction:column;gap:6px;max-width:460px}
-      .kb-row{display:flex;gap:6px}
-      .kb-chip{flex:1;text-align:center;padding:10px 6px;border-radius:9px;color:#fff;font-size:.84rem;cursor:grab;user-select:none;-webkit-user-select:none;touch-action:manipulation}
-      .kb-chip.plain{background:var(--sf3);color:var(--text)}
-      .kb-chip.off{opacity:.45}
-      .kb-chip.sel{outline:3px solid var(--warn);outline-offset:1px}
-      .kb-slot,.kb-newrow{flex:1;border:2px dashed var(--bd);border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--mute);cursor:pointer;min-height:40px;font-size:.84rem}
-    </style>
     <div class="kb-grid" id="kbGrid">
       <?php $i = 0; foreach ($layout['keyboard'] as $r => $row): ?>
         <div class="kb-row">
@@ -182,76 +173,6 @@ $pos = ($layout['emoji_pos_global'] ?? '') === 'left' ? 'left' : 'right';
 </div>
 </form>
 
-<script>
-// 🧩 the bot's own way of arranging, by tap on a phone or by dragging with a
-// mouse: a button onto another swaps the two, onto ＋ joins that row, onto
-// «new row» gets a row of its own. Two to a row at most, as in the bot. The
-// row numbers the form sends follow what is on screen.
-(function () {
-  var grid = document.getElementById('kbGrid');
-  if (!grid) return;
-  var sel = null, dragged = null;
-  function unselect() { if (sel) sel.classList.remove('sel'); sel = null; }
-  function swap(a, b) {
-    var mark = document.createElement('span');
-    a.parentNode.insertBefore(mark, a);
-    b.parentNode.insertBefore(a, b);
-    mark.parentNode.insertBefore(b, mark);
-    mark.remove();
-  }
-  function normalize() {
-    grid.querySelectorAll('.kb-row').forEach(function (row) {
-      row.querySelectorAll('.kb-slot').forEach(function (s) { s.remove(); });
-      var n = row.querySelectorAll('.kb-chip').length;
-      if (!n) { row.remove(); return; }
-      if (n < 2) { var s = document.createElement('div'); s.className = 'kb-slot'; s.textContent = '＋'; row.appendChild(s); }
-    });
-    grid.querySelectorAll('.kb-row').forEach(function (row, r) {
-      row.querySelectorAll('.kb-rowin').forEach(function (inp) { inp.value = r + 1; });
-    });
-  }
-  function place(chip, target) {
-    var other = target.closest('.kb-chip'), slot = target.closest('.kb-slot'), fresh = target.closest('.kb-newrow');
-    if (other && other !== chip) {
-      swap(chip, other);
-    } else if (slot) {
-      slot.parentNode.insertBefore(chip, slot);
-    } else if (fresh) {
-      var row = document.createElement('div');
-      row.className = 'kb-row';
-      row.appendChild(chip);
-      grid.insertBefore(row, fresh);
-    } else {
-      return false;
-    }
-    normalize();
-    return true;
-  }
-  grid.addEventListener('click', function (e) {
-    var chip = e.target.closest('.kb-chip');
-    if (!sel) {
-      if (chip) { sel = chip; chip.classList.add('sel'); }
-      return;
-    }
-    if (chip === sel) { unselect(); return; }
-    var picked = sel;
-    unselect();
-    place(picked, e.target);
-  });
-  grid.addEventListener('dragstart', function (e) {
-    dragged = e.target.closest('.kb-chip');
-    if (dragged) { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', ''); unselect(); }
-  });
-  grid.addEventListener('dragover', function (e) {
-    if (dragged && (e.target.closest('.kb-chip') || e.target.closest('.kb-slot') || e.target.closest('.kb-newrow'))) e.preventDefault();
-  });
-  grid.addEventListener('drop', function (e) {
-    e.preventDefault();
-    if (dragged) place(dragged, e.target);
-    dragged = null;
-  });
-  grid.addEventListener('dragend', function () { dragged = null; });
-})();
-</script>
+<script src="js/kbgrid.js"></script>
 
 <?php include __DIR__ . '/inc/layout_foot.php'; ?>

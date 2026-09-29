@@ -107,6 +107,13 @@ function web_lang_assets(): string
 .set-row .set-ctl{min-width:220px;max-width:320px;flex-shrink:0}
 .set-off{opacity:.55}
 @media (max-width:640px){.set-row{flex-direction:column;align-items:stretch}.set-row .set-ctl{min-width:0;max-width:none}}
+.kb-grid{display:flex;flex-direction:column;gap:6px;max-width:460px}
+.kb-row{display:flex;gap:6px}
+.kb-chip{flex:1;text-align:center;padding:10px 6px;border-radius:9px;color:#fff;font-size:.84rem;cursor:grab;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+.kb-chip.plain{background:var(--sf3);color:var(--text)}
+.kb-chip.off{opacity:.45}
+.kb-chip.sel{outline:3px solid var(--warn);outline-offset:1px}
+.kb-slot,.kb-newrow{flex:1;border:2px dashed var(--bd);border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--mute);cursor:pointer;min-height:40px;font-size:.84rem}
 </style>
 <script>
 document.addEventListener('change', function (e) {
