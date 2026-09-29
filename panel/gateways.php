@@ -66,6 +66,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $writes[] = fn() => gw_pay_override_set($f['field'], $lang, $v);
             }
         }
+        if ($key === 'card') {
+            // what card-to-card keeps per language (the bot's 🔧 تنظیمات فنی
+            // درگاه): three switches, the auto-approve wait and the help text
+            $smsOn = (string) (select("setting", "smsForwardEnabled", null, null, "select")['smsForwardEnabled'] ?? '0') === '1';
+            foreach (card_legacy_toggle_fields() as $field => $def) {
+                $want = ($_POST['cl'][$field] ?? '') === '1';
+                if ($want !== (pay_value($field, $lang, $def['off']) === $def['on'])) {
+                    if ($want && $field === 'autoconfirmcart' && $smsOn) {
+                        // a real bank SMS confirms payments then; this would skip it
+                        $err = $t['gwCardSmsLock'];
+                    }
+                    $writes[] = fn() => gw_pay_override_set($field, $lang, $want ? $def['on'] : $def['off']);
+                }
+            }
+            $mins = trim((string) ($_POST['cl_time'] ?? ''));
+            $mins = $mins === '' ? '0' : $mins;
+            if ($mins !== (string) intval(pay_value('timeauto_not_verify', $lang, '0'))) {
+                if (!ctype_digit($mins)) {
+                    $err = $t['gwNumberInvalid'];
+                } elseif ((int) $mins > 0 && $smsOn) {
+                    $err = $t['gwCardSmsLock'];
+                }
+                $writes[] = fn() => gw_pay_override_set('timeauto_not_verify', $lang, (string) (int) $mins);
+            }
+            $help = gw_pay_override_has('helpcart', $lang) ? json_decode((string) pay_value('helpcart', $lang, ''), true) : null;
+            $helpNew = trim(str_replace("\r\n", "\n", (string) ($_POST['cl_help'] ?? '')));
+            if (($_POST['cl_help_shared'] ?? '') === '1') {
+                if ($help !== null) {
+                    $writes[] = fn() => gw_pay_override_set('helpcart', $lang, '');
+                }
+            } elseif ($helpNew !== (string) ($help['text'] ?? '')) {
+                if (!web_tg_html_ok($helpNew)) {
+                    $err = $t['helpHtmlInvalid'];
+                }
+                // its photo or video, sent from the bot, stays with it
+                $media = is_array($help) && in_array($help['type'] ?? '', ['photo', 'video'], true);
+                $data = is_array($help) ? $help : ['type' => 'text'];
+                $data['text'] = $helpNew;
+                $writes[] = ($helpNew === '' && !$media)
+                    ? fn() => gw_pay_override_set('helpcart', $lang, '')
+                    : fn() => gw_pay_override_set('helpcart', $lang, json_encode($data));
+            }
+        }
+        if ($key === 'ton') {
+            // the memo the customer sends with the payment: the bot's rules
+            $memo = topup_memo_config($lang, 'ton');
+            $lim = topup_memo_limits();
+            $prefix = trim((string) ($_POST['memo_prefix'] ?? ''));
+            if ($prefix !== $memo['prefix']) {
+                $clean = topup_memo_clean_prefix($prefix);
+                if ($prefix !== '' && $clean === '') {
+                    $err = $t['gwTonPrefixInvalid'];
+                }
+                $writes[] = fn() => topup_memo_set($lang, 'ton', 'prefix', $clean);
+            }
+            $len = trim((string) ($_POST['memo_len'] ?? ''));
+            if ($len !== (string) $memo['len']) {
+                if (!ctype_digit($len) || (int) $len < $lim['lenMin'] || (int) $len > $lim['lenMax']) {
+                    $err = $t['gwTonLenInvalid'];
+                }
+                $writes[] = fn() => topup_memo_set($lang, 'ton', 'len', (int) $len);
+            }
+        }
         // the amount range, checked as the bot's 🏦 screen checks it: '0' or
         // empty clears a side, and only a side that changed is checked
         $tp = $fa['Admin']['TopupPkg'];
@@ -194,6 +257,21 @@ $chk = fn($name, $on, $label) => '<label class="lang-chip"><input type="hidden" 
           <div class="set-ctl"><input type="text" class="input" name="f[<?= $i ?>]" value="<?= htmlspecialchars($val) ?>" dir="auto"></div></div>
       <?php endif; ?>
     <?php endforeach; ?>
+    <?php if ($key === 'card'): $help = gw_pay_override_has('helpcart', $lang) ? json_decode((string) pay_value('helpcart', $lang, ''), true) : null; ?>
+      <div class="set-row"><div><div class="set-label">💳 <?= $t['gwCardLegacy'] ?></div><div class="set-hint"><?= $t['gwCardLegacyHint'] ?></div></div>
+        <div class="set-ctl lang-chips"><?php foreach (card_legacy_toggle_fields() as $field => $def): ?><label class="lang-chip"><input type="checkbox" name="cl[<?= $field ?>]" value="1"<?= pay_value($field, $lang, $def['off']) === $def['on'] ? ' checked' : '' ?>> <?= htmlspecialchars($def['label']) ?></label><?php endforeach; ?></div></div>
+      <div class="set-row"><div><div class="set-label"><?= $t['gwCardTime'] ?></div><div class="set-hint"><?= $t['gwCardTimeHint'] ?></div></div>
+        <div class="set-ctl"><input type="text" class="input" name="cl_time" value="<?= intval(pay_value('timeauto_not_verify', $lang, '0')) ?>" inputmode="numeric"></div></div>
+      <div class="set-row"><div><div class="set-label"><?= $t['gwCardHelp'] ?></div><div class="set-hint"><?= $t['gwCardHelpHint'] ?><?= is_array($help) && in_array($help['type'] ?? '', ['photo', 'video'], true) ? '<br>' . sprintf($t['gwCardHelpMedia'], $help['type'] === 'photo' ? '🖼' : '🎬') : '' ?></div></div>
+        <div class="set-ctl"><textarea class="textarea" name="cl_help" rows="3" dir="auto"><?= htmlspecialchars((string) ($help['text'] ?? '')) ?></textarea>
+          <?php if ($help !== null): ?><label class="lang-chip" style="margin-top:6px"><input type="checkbox" name="cl_help_shared" value="1"> <?= $t['gwCardHelpShared'] ?></label><?php endif; ?></div></div>
+    <?php endif; ?>
+    <?php if ($key === 'ton'): $memo = topup_memo_config($lang, 'ton'); ?>
+      <div class="set-row"><div><div class="set-label">🏷 <?= $t['gwTonPrefix'] ?></div><div class="set-hint"><?= $t['gwTonPrefixHint'] ?></div></div>
+        <div class="set-ctl"><input type="text" class="input" name="memo_prefix" value="<?= htmlspecialchars($memo['prefix']) ?>" dir="ltr" maxlength="12"></div></div>
+      <div class="set-row"><div><div class="set-label">🎲 <?= $t['gwTonLen'] ?></div><div class="set-hint"><?= $t['gwTonLenHint'] ?></div></div>
+        <div class="set-ctl"><input type="text" class="input" name="memo_len" value="<?= (int) $memo['len'] ?>" inputmode="numeric"></div></div>
+    <?php endif; ?>
     <div class="set-row"><div><div class="set-label"><?= sprintf($t['gwRange'], htmlspecialchars($curRow['title'] ?? $cur)) ?></div><div class="set-hint"><?= $t['gwRangeHint'] ?></div></div>
       <div class="set-ctl" style="display:flex;gap:6px"><input type="text" class="input" name="min" value="<?= htmlspecialchars((string) $min) ?>" placeholder="<?= $t['gwMin'] ?>" inputmode="decimal"><input type="text" class="input" name="max" value="<?= htmlspecialchars((string) $max) ?>" placeholder="<?= $t['gwMax'] ?>" inputmode="decimal"></div></div>
     <div class="set-row"><div><div class="set-label"><?= $t['gwPackages'] ?></div><div class="set-hint"><?= $t['gwPackagesHint'] ?></div></div>

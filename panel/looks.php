@@ -117,10 +117,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $new['emojiSimple'] = ($_POST['simple'] ?? '') === '1';
     }
+    // the families on the payment method screen: each one's own name and
+    // colour, and the caption of a family's own screen
+    $famWrites = [];
+    if ($err === null && $kind === 'gateway') {
+        foreach (array_keys(gateway_groups()) as $group) {
+            $p = (array) ($_POST['fam'][$group] ?? []);
+            $name = trim((string) ($p['name'] ?? ''));
+            if (containsHtmlMarkup($name) || mb_strlen($name) > 64) {
+                $err = $t['menuNameInvalid'];
+                break;
+            }
+            $cur = topup_group_btnstyle_for($lang, $group);
+            $style = $cur;
+            $style['label'] = $name;
+            // blue, green or red - the three the bot's colour button cycles
+            $style['color'] = in_array($p['color'] ?? '', ['primary', 'success', 'danger'], true) ? $p['color'] : 'primary';
+            if (($style['label'] ?? '') !== ($cur['label'] ?? '') || $style['color'] !== ($cur['color'] ?? 'primary')) {
+                $famWrites[] = fn() => topup_group_btnstyle_set($lang, $group, $style);
+            }
+        }
+        $cap = trim(str_replace("\r\n", "\n", (string) ($_POST['fam_caption'] ?? '')));
+        if ($err === null && $cap !== (topup_group_caption_has_override($lang) ? (string) topup_group_caption_for($lang, '') : '')) {
+            if (!web_tg_html_ok($cap)) {
+                $err = $t['helpHtmlInvalid'];
+            }
+            $famWrites[] = fn() => topup_group_caption_set($lang, $cap);
+        }
+    }
     if ($err === null) {
         help_layout_set_section($lang, $kind, $new);
         if ($kind === 'gateway' && (($_POST['groups'] ?? '') === '1') !== topup_group_methods_on($lang)) {
             topup_group_methods_set($lang, ($_POST['groups'] ?? '') === '1');
+        }
+        foreach ($famWrites as $w) {
+            $w();
         }
     }
     flash($err === null ? 'success' : 'error', $err ?? $t['refSaved']);
@@ -194,9 +225,22 @@ $face = function ($key) use ($items, $section) {
       </table></div>
       <div class="set-row"><div><div class="set-label"><?= $t['menuSimple'] ?></div><div class="set-hint"><?= $t['looksSimpleHint'] ?></div></div>
         <div class="set-ctl"><label class="lang-chip"><input type="checkbox" name="simple" value="1"<?= $section['emojiSimple'] ? ' checked' : '' ?>> <?= $t['refOn'] ?></label></div></div>
-      <?php if ($kind === 'gateway'): ?>
+      <?php if ($kind === 'gateway'): $famTx = lang_tab_texts($lang); ?>
         <div class="set-row"><div><div class="set-label"><?= htmlspecialchars($fa['Admin']['BtnStyle']['groupMethodsBtn']) ?></div><div class="set-hint"><?= $t['looksGroupsHint'] ?></div></div>
           <div class="set-ctl"><label class="lang-chip"><input type="checkbox" name="groups" value="1"<?= topup_group_methods_on($lang) ? ' checked' : '' ?>> <?= $t['refOn'] ?></label></div></div>
+        <div class="set-row" style="flex-direction:column;align-items:stretch"><div><div class="set-label">🗂 <?= $t['looksFamilies'] ?></div><div class="set-hint"><?= $t['looksFamiliesHint'] ?></div></div>
+          <div class="tbl-wrap"><table class="tbl-xl"><tbody>
+          <?php foreach (array_keys(gateway_groups()) as $group): $fs = topup_group_btnstyle_for($lang, $group); $fname = trim(strip_tags((string) gateway_group_label($group, $famTx))); ?>
+            <tr>
+              <td class="cs"><?= htmlspecialchars($fname) ?></td>
+              <td><input type="text" class="input" name="fam[<?= $group ?>][name]" value="<?= htmlspecialchars((string) ($fs['label'] ?? '')) ?>" placeholder="<?= htmlspecialchars($fname) ?>" maxlength="64"></td>
+              <td><select class="select" name="fam[<?= $group ?>][color]"><?php foreach (['primary' => '🔵 ' . $t['menuColorBlue'], 'success' => '🟢 ' . $t['menuColorGreen'], 'danger' => '🔴 ' . $t['menuColorRed']] as $v => $label): ?><option value="<?= $v ?>"<?= (string) ($fs['color'] ?? 'primary') === $v ? ' selected' : '' ?>><?= htmlspecialchars($label) ?></option><?php endforeach; ?></select></td>
+            </tr>
+          <?php endforeach; ?>
+          </tbody></table></div>
+          <div class="set-label" style="margin-top:8px"><?= $t['looksFamilyCaption'] ?></div><div class="set-hint"><?= $t['looksFamilyCaptionHint'] ?></div>
+          <textarea class="textarea" name="fam_caption" rows="3" placeholder="<?= htmlspecialchars(strip_tags((string) $famTx['users']['Balance']['groupMethodCaption'])) ?>"><?= htmlspecialchars(topup_group_caption_has_override($lang) ? (string) topup_group_caption_for($lang, '') : '') ?></textarea>
+        </div>
       <?php endif; ?>
       <div class="field-hint"><?= $t['looksHint'] ?></div>
     </div>
