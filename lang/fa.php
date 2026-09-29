@@ -8347,6 +8347,8 @@ nowpayments.io
     'bottextChangedLabel' => 'تغییر یافته',
     'bottextCountLabel' => 'متن',
     'paymentMethodVariza' => 'واریزا',
+    'featShopTitle' => 'قابلیت‌های فروشگاه',
+    'featShopSub' => 'مراحل خرید برای کاربران %s؛ کلیدی که برای این زبان عوض نشده، از فارسی پیروی می‌کند',
     'srvPageTitle' => 'پنل‌ها (سرورها)',
     'srvPageLede' => 'هر پنل موقع خرید به کاربران کدام زبان‌ها نشان داده شود',
     'srvMissing' => 'این پنل پیدا نشد.',

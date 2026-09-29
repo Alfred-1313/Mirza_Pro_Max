@@ -47,6 +47,26 @@ $switchOn = function ($key) use ($switches, $lang, $setting) {
     // the bot counts anything but «off» as on for this one
     return $key === 'Bot_Status' ? $v !== $switches[$key][1] : $v === $switches[$key][0];
 };
+// 🛒 وضعیت قابلیت‌های فروشگاه, in its order: key => [on, off, label, the
+// shop-wide value a language without its own follows (after Persian's)]
+$shopRows = [];
+foreach (db_fetchAll($pdo, "SELECT Namevalue, value FROM shopSetting") as $r) {
+    $shopRows[$r['Namevalue']] = (string) $r['value'];
+}
+$shopSwitches = [
+    'extravolunme' => ['onextra', 'offextra', $fa['Admin']['Status']['statusVolumeExtra'], $shopRows['statusextra'] ?? ''],
+    'paydirect' => ['ondirectbuy', 'offdirectbuy', $fa['Admin']['Status']['paydirect'], $shopRows['statusdirectpabuy'] ?? ''],
+    'statustimeextra' => ['ontimeextraa', 'offtimeextraa', $fa['Admin']['Status']['statusTimeExtra'], $shopRows['statustimeextra'] ?? ''],
+    'disorderss' => ['ondisorder', 'offdisorder', $fa['keyboard']['sendDisruptionReport'], $shopRows['statusdisorder'] ?? ''],
+    'panelshow' => ['onpanelshow', 'offpanelshow', $fa['Admin']['Status']['showPanelSelection'], (string) ($setting['statuspanelshow'] ?? 'onpanelshow')],
+    'categroygenral' => ['oncategorys', 'offcategorys', $fa['keyboard']['categoryBug'], (string) ($setting['statuscategorygenral'] ?? '')],
+    'categorytime' => ['oncategory', 'offcategory', $fa['Admin']['Status']['statusCategoryTime'], (string) ($setting['statuscategory'] ?? '')],
+    'changgestatus' => ['onstatus', 'offstatus', $fa['keyboard']['deactivateAccountStatus'], $shopRows['statuschangeservice'] ?? ''],
+    'showprice' => ['onshowprice', 'offshowprice', $fa['keyboard']['showProductPrice'], $shopRows['statusshowprice'] ?? ''],
+    'showconfig' => ['onconfig', 'offconfig', $fa['keyboard']['getConfigBtn'], $shopRows['configshow'] ?? ''],
+    'removeservicebackbtn' => ['on', 'off', $fa['keyboard']['refundBtn'], $shopRows['backserviecstatus'] ?? ''],
+];
+$shopOn = fn($key) => (string) shop_feature_value($key, $lang, $shopSwitches[$key][3]) === $shopSwitches[$key][0];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check_post();
@@ -59,6 +79,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // following Persian, as in the bot
             if ($posted('sw_' . md5($key)) !== $switchOn($key)) {
                 feature_set($key, $lang, $posted('sw_' . md5($key)) ? $on : $off);
+            }
+        }
+    } elseif ($card === 'shop') {
+        foreach ($shopSwitches as $key => [$on, $off]) {
+            // this language's own value, and only where it changed - the
+            // shop-wide one stays as it is for everyone else, as in the bot
+            if ($posted('shop_' . $key) !== $shopOn($key)) {
+                shop_feature_set($key, $lang, $posted('shop_' . $key) ? $on : $off);
             }
         }
     } elseif ($card === 'phone') {
@@ -189,6 +217,17 @@ echo web_lang_assets();
   <div class="card-body" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px">
     <?php foreach ($switches as $key => [$on, $off, $label]): ?>
       <?= $chk('sw_' . md5($key), $switchOn($key), $label) ?>
+    <?php endforeach; ?>
+  </div>
+  <?= $saveBtn ?></form>
+</div>
+
+<div class="card fade-up" id="shop" style="margin-bottom:14px">
+  <?= $cardHead('🛒 ' . $t['featShopTitle'], sprintf($t['featShopSub'], htmlspecialchars($langName))) ?>
+  <?= $formOpen('shop') ?>
+  <div class="card-body" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px">
+    <?php foreach ($shopSwitches as $key => [$on, $off, $label]): ?>
+      <?= $chk('shop_' . $key, $shopOn($key), $label) ?>
     <?php endforeach; ?>
   </div>
   <?= $saveBtn ?></form>

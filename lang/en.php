@@ -4923,6 +4923,8 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'bottextChangedLabel' => 'changed',
                 'bottextCountLabel' => 'texts',
                 'paymentMethodVariza' => 'Variza',
+                'featShopTitle' => 'Shop features',
+                'featShopSub' => 'The buy flow for %s customers; a switch never changed for this language follows Persian',
                 'srvPageTitle' => 'Panels (servers)',
                 'srvPageLede' => 'Which languages see each panel when they buy',
                 'srvMissing' => 'That panel was not found.',
