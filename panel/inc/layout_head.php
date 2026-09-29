@@ -164,12 +164,6 @@ $initials = mb_strtoupper(mb_substr($currentUser, 0, 1, 'UTF-8'), 'UTF-8');
             <span class="nav-icon"><?= icon('chart') ?></span><span
               class="nav-label"><?= $textbotlang['panel']['discPageTitle'] ?></span>
           </a>
-          <a href="keyboard.php" class="nav-item <?= $activeNav === 'keyboard' ? 'active' : '' ?>"
-            title="<?= $textbotlang['panel']['layoutPageTitleKeyboard'] ?>">
-            <span class="nav-icon">
-              <?= icon('settings') ?>
-            </span><span class="nav-label"><?= $textbotlang['panel']['layoutThemeToggleLabel'] ?></span>
-          </a>
           <a href="menu.php" class="nav-item <?= $activeNav === 'menu' ? 'active' : '' ?>"
             title="<?= $textbotlang['panel']['menuPageTitle'] ?>">
             <span class="nav-icon"><?= icon('dashboard') ?></span><span
