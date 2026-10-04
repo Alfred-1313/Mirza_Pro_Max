@@ -21,6 +21,10 @@ function telegram($method, $datas = [], $token = null)
     if (is_array($datas) && array_key_exists('chat_id', $datas) && in_array((string) $datas['chat_id'], ['', '0'], true)) {
         return ['ok' => false, 'description' => 'No chat to send to.'];
     }
+    // a report to the report group names the language of the user it is about
+    if ($token === null && function_exists('report_lang_tag')) {
+        $datas = report_lang_tag($method, $datas);
+    }
     $token = $token === null ? $APIKEY : $token;
     $url = "https://api.telegram.org/bot" . $token . "/" . $method;
 

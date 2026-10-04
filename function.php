@@ -2356,6 +2356,105 @@ if (!function_exists('panel_texts')) {
         return lang_tab_texts('fa');
     }
 }
+if (!function_exists('report_lang_tag')) {
+    // Every report to the report group ends with the language of the user it
+    // is about ("🌐 زبان کاربر: 🇬🇧 English"), so a purchase, a test account
+    // or a payment shows which language it came from. Called by telegram()
+    // for every call, so no report site has to remember it.
+    //
+    // Whose language: the first id in the message's buttons (manageuser_123)
+    // or text that is a user of this bot - reports name their user - else the
+    // user whose update this is, unless that is an admin: an admin's own
+    // panel action has no customer behind it. Nobody found: no line.
+    // A text or caption that would grow past Telegram's limit is left as it
+    // was, as is one that already carries the line (an edit of a report).
+    function report_lang_tag($method, $datas)
+    {
+        global $pdo;
+        $m = strtolower((string) $method);
+        if (in_array($m, ['sendmessage', 'editmessagetext'], true)) {
+            $field = 'text';
+            $max = 4096;
+        } elseif (in_array($m, ['sendphoto', 'senddocument', 'sendvideo', 'sendanimation', 'sendaudio', 'sendvoice', 'editmessagecaption'], true)) {
+            $field = 'caption';
+            $max = 1024;
+        } else {
+            return $datas;
+        }
+        if (!is_array($datas) || !isset($datas['chat_id']) || !($pdo instanceof PDO)) {
+            return $datas;
+        }
+        static $reportChat = null;
+        if ($reportChat === null) {
+            try {
+                $reportChat = (string) $pdo->query("SELECT Channel_Report FROM setting LIMIT 1")->fetchColumn();
+            } catch (Throwable $e) {
+                $reportChat = '';
+            }
+        }
+        $body = (string) ($datas[$field] ?? '');
+        if ($reportChat === '' || $reportChat === '0' || (string) $datas['chat_id'] !== $reportChat || $body === '') {
+            return $datas;
+        }
+        $tpl = panel_texts()['Admin']['reportgroup']['userLangLine'] ?? '🌐 زبان کاربر: %s';
+        if (mb_strpos($body, sprintf($tpl, '')) !== false) {
+            return $datas;
+        }
+
+        $ids = [];
+        $markup = $datas['reply_markup'] ?? '';
+        $markup = is_string($markup) ? $markup : (string) json_encode($markup);
+        if (preg_match_all('/"callback_data"\s*:\s*"([^"]*)"/', $markup, $cbs)) {
+            foreach ($cbs[1] as $cb) {
+                preg_match_all('/(?<!\d)\d{5,15}(?!\d)/', $cb, $n);
+                $ids = array_merge($ids, $n[0]);
+            }
+        }
+        preg_match_all('/(?<!\d)\d{5,15}(?!\d)/', $body, $n);
+        $ids = array_slice(array_values(array_unique(array_merge($ids, $n[0]))), 0, 20);
+
+        $lang = null;
+        try {
+            if ($ids) {
+                $stmt = $pdo->prepare("SELECT id, lang FROM user WHERE id IN (" . implode(',', array_fill(0, count($ids), '?')) . ")");
+                $stmt->execute($ids);
+                $found = [];
+                foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                    $found[(string) $row['id']] = (string) $row['lang'];
+                }
+                foreach ($ids as $id) {
+                    if (isset($found[$id])) {
+                        $lang = $found[$id];
+                        break;
+                    }
+                }
+            }
+            $sender = (string) ($GLOBALS['from_id'] ?? '');
+            if ($lang === null && preg_match('/^\d+$/', $sender)) {
+                $stmt = $pdo->prepare("SELECT lang FROM user u WHERE u.id = ? AND NOT EXISTS (SELECT 1 FROM admin a WHERE a.id_admin = u.id)");
+                $stmt->execute([$sender]);
+                $row = $stmt->fetch(PDO::FETCH_ASSOC);
+                if ($row) {
+                    $lang = (string) $row['lang'];
+                }
+            }
+        } catch (Throwable $e) {
+            return $datas;
+        }
+        if ($lang === null) {
+            return $datas;
+        }
+        // a language the bot no longer offers counts as Persian, as everywhere
+        // else in the panel (user_lang_where)
+        $code = in_array($lang, panel_langs(), true) ? $lang : 'fa';
+        $line = sprintf($tpl, panel_texts()['bottext']['langs'][$code] ?? $code);
+        if (mb_strlen($body) + mb_strlen($line) + 2 > $max) {
+            return $datas;
+        }
+        $datas[$field] = $body . "\n\n" . $line;
+        return $datas;
+    }
+}
 if (!function_exists('payer_texts')) {
     // The language of whoever actually paid.
     //
@@ -16387,6 +16486,18 @@ if (!function_exists('backup_run_now')) {
     {
         global $dbhost, $usernamedb, $passworddb, $dbname;
         $setting = select("setting", "*", null, null, "select");
+        // backups go to the report group: with none set there is nowhere to
+        // send them, so say so and where to set it, instead of a false "sent"
+        $reportChat = trim((string) ($setting['Channel_Report'] ?? ''));
+        if ($reportChat === '' || $reportChat === '0') {
+            $tx = panel_texts();
+            telegram('sendmessage', [
+                'chat_id' => $fromAdminId,
+                'text' => sprintf($tx['Admin']['BackupSettings']['manualBackupNoGroup'], $tx['Admin']['panelAdmin'], $tx['keyboard']['generalSettings'], $tx['keyboard']['botReports']),
+                'parse_mode' => 'HTML',
+            ]);
+            return;
+        }
         $reportbackup = select("topicid", "idreport", "report", "backupfile", "select")['idreport'];
         $dbEnabled = ($setting['backup_db_enabled'] ?? '1') !== '0';
         $botEnabled = ($setting['backup_bot_enabled'] ?? '1') !== '0';
@@ -16421,13 +16532,13 @@ if (!function_exists('backup_run_now')) {
                 // with a password set, the bare dump is never the fallback - it
                 // is exactly what the password is there to keep from going out
                 if ($zipWhy === '' || $dbBackupPassword === '') {
-                    telegram('sendDocument', [
+                    $sent = telegram('sendDocument', [
                         'chat_id' => $setting['Channel_Report'],
                         'message_thread_id' => $reportbackup,
                         'document' => new CURLFile($zipWhy === '' ? $zipFileName : $backupFileName),
                         'caption' => $textbotlang['hardcoded']['backupDatabaseCaption'],
                     ]);
-                    $sentAny = true;
+                    $sentAny = $sentAny || !empty($sent['ok']);
                 } else {
                     telegram('sendmessage', [
                         'chat_id' => $setting['Channel_Report'],
@@ -16451,13 +16562,13 @@ if (!function_exists('backup_run_now')) {
             $botBackupPassword = $forceNoPassword ? '' : ($setting['backup_bot_password'] ?? '');
             $zipWhy = backup_zip_create($botFolderZipName, $botRootDir, ['.'], $botBackupPassword, ['.git/*', '*.bak_*']);
             if ($zipWhy === '') {
-                telegram('sendDocument', [
+                $sent = telegram('sendDocument', [
                     'chat_id' => $setting['Channel_Report'],
                     'message_thread_id' => $reportbackup,
                     'document' => new CURLFile($botFolderZipName),
                     'caption' => $textbotlang['hardcoded']['botFolderBackupCaption'],
                 ]);
-                $sentAny = true;
+                $sentAny = $sentAny || !empty($sent['ok']);
                 unlink($botFolderZipName);
             } else {
                 telegram('sendmessage', [
@@ -16469,10 +16580,19 @@ if (!function_exists('backup_run_now')) {
             }
         }
 
+        // only a file Telegram actually took counts as sent - a group the bot
+        // was removed from used to get "sent" all the same
         if ($sentAny) {
             telegram('sendmessage', [
                 'chat_id' => $fromAdminId,
                 'text' => $textbotlang['Admin']['BackupSettings']['manualBackupDone'],
+            ]);
+        } else {
+            $tx = panel_texts();
+            telegram('sendmessage', [
+                'chat_id' => $fromAdminId,
+                'text' => sprintf($tx['Admin']['BackupSettings']['manualBackupNotSent'], $tx['Admin']['panelAdmin'], $tx['keyboard']['generalSettings'], $tx['keyboard']['botReports']),
+                'parse_mode' => 'HTML',
             ]);
         }
     }
