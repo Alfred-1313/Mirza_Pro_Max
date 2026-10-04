@@ -6374,6 +6374,11 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     if ($affrw_text !== null) {
         bottext_extras_key_hint('users.affiliates.rewardInfo');
         sendmessage($from_id, $affrw_text, (affrw_row($from_id)['status'] ?? '') === 'naming' ? affrw_name_kb($textbotlang) : null, 'HTML');
+        // 🛡 دسترسی ادمین: an admin with no limit gets the config right here,
+        // every tap - no invites, nobody's approval
+        if (affrw_admin_free($from_id)) {
+            affrw_admin_give($from_id);
+        }
     }
     // neither: say so, instead of a tap that answers nothing
     if (!$aff_classic && $affrw_text === null) {

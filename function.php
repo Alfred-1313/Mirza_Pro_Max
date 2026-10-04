@@ -1989,8 +1989,8 @@ if (!function_exists('refv_cfg')) {
         if (in_array((string) $inviterId, $cfg['vip'], true)) {
             return [];
         }
-        // an admin with no limit (🎁's 🛡 دسترسی ادمین): nothing asked of their invites either
-        if ($plan === 'r' && affrw_admin_free($inviterId, $lang)) {
+        // an admin with no limit (🛡 دسترسی ادمین): nothing asked of their invites either
+        if ($plan === 'r' && affrw_admin_free($inviterId)) {
             return [];
         }
         $setting = select("setting", "*", null, null, "select");
@@ -16781,14 +16781,15 @@ if (!function_exists('help_layout_save')) {
     }
 }
 if (!function_exists('admin_perm_payload')) {
-    // 🛡 دسترسی ادمین: what an admin's own test accounts and purchases are held
-    // to. Both switches are bot-wide, not per language - $lang only threads the
-    // customization screen's back button.
+    // 🛡 دسترسی ادمین: what an admin's own test accounts, purchases and free
+    // configs are held to. All the switches are bot-wide, not per language -
+    // $lang only threads the customization screen's back button.
     function admin_perm_payload($lang)
     {
         $setting = select("setting", "*", null, null, "select");
         $testFree = (string) ($setting['admin_test_unlimited'] ?? '1') !== '0';
         $buyFree = (string) ($setting['admin_buy_free'] ?? '0') === '1';
+        $rwFree = (string) ($setting['admin_affrw_unlimited'] ?? '0') === '1';
         $info = "🛡 <b>دسترسی ادمین</b>\n➖➖➖➖➖➖➖➖➖➖\n";
         $info .= "این تنظیمات فقط روی حساب ادمین‌ها اثر داره، نه کاربرها.\n";
         $info .= "📌 بین همه‌ی زبان‌ها مشترکه - از هر تبی باز بشه همین یکیه.\n\n";
@@ -16798,9 +16799,14 @@ if (!function_exists('admin_perm_payload')) {
         $info .= $buyFree
             ? "خرید سرویس، خرید چندتایی، تمدید و حجم/زمان اضافه برای ادمین رایگانه و از موجودیش چیزی کم نمی‌شه."
             : "ادمین هم مثل کاربرها هزینه‌ی خرید رو از موجودیش پرداخت می‌کنه.";
+        $info .= "\n\n🎁 <b>کانفیگ رایگان با دعوت بدون محدودیت:</b> " . ($rwFree ? "روشن ✅" : "خاموش ❌") . "\n";
+        $info .= $rwFree
+            ? "ادمین هر بار «👥 زیرمجموعه‌گیری» رو بزنه، همون لحظه یه کانفیگ رایگان (همونی که کاربرها با دعوت می‌گیرن) براش ساخته می‌شه - بدون دعوت و بدون تایید ادمین، هر چند بار که بخواد، چه تحویل «خودکار» باشه چه «با تایید ادمین». دعوت‌های خودش هم بدون راستی‌آزمایی و بدون سقف «🔁 چند بار» حساب می‌شه. (طرح 🎁 باید برای زبان ادمین روشن باشه.)"
+            : "ادمین هم مثل کاربرها باید دعوت کنه و سقف «🔁 چند بار» و تایید ادمین روش هست.";
         $kb = ['inline_keyboard' => []];
         $kb['inline_keyboard'][] = [['text' => '🔑 اکانت تست بدون محدودیت: ' . ($testFree ? 'روشن ✅' : 'خاموش ❌'), 'callback_data' => "admperm|test|{$lang}", 'style' => $testFree ? 'success' : 'danger']];
         $kb['inline_keyboard'][] = [['text' => '🛍 خرید رایگان: ' . ($buyFree ? 'روشن ✅' : 'خاموش ❌'), 'callback_data' => "admperm|buy|{$lang}", 'style' => $buyFree ? 'success' : 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '🎁 کانفیگ رایگان با دعوت بدون محدودیت: ' . ($rwFree ? 'روشن ✅' : 'خاموش ❌'), 'callback_data' => "admperm|affrw|{$lang}", 'style' => $rwFree ? 'success' : 'danger']];
         $kb['inline_keyboard'][] = [['text' => '🔙 برگشت به لیست', 'callback_data' => "btact|back|{$lang}", 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
         return [$info, json_encode($kb)];
@@ -17487,21 +17493,40 @@ if (!function_exists('affrw_cfg')) {
         }
         return $cfg;
     }
-    // 🛡 دسترسی ادمین (a setting of 🎁, per language): «بدون محدودیت» lets an
-    // administrator of the bot - full access, not a seller or support - past
-    // every limit of this plan: the 🔁 allowance, 🛡's checks on the people
-    // they invite, and an admin's approval. So the plan can be tried again and
-    // again, whichever way it is delivered. Off, an admin is a customer like
-    // any other. The INVITER's language decides, like the rest of it.
-    function affrw_admin_free($uid, $lang)
+    // 🎨 ← 🛡 دسترسی و محدودیت‌های ادمین ← «🎁 کانفیگ رایگان با دعوت بدون
+    // محدودیت»: one switch for the whole bot, like that screen's other two.
+    // On, an admin gets the free config every time they open 👥 - no invites,
+    // nobody's approval, whichever way it is delivered (affrw_admin_give) -
+    // and their own invites skip the 🔁 allowance, 🛡's checks and approval
+    // too. Off, an admin is a customer like any other.
+    function affrw_admin_free($uid)
     {
-        global $pdo;
-        if (feature_setting_value('affrw_admin', $lang, '0') !== '1') {
+        $setting = select("setting", "*", null, null, "select");
+        if ((string) ($setting['admin_affrw_unlimited'] ?? '0') !== '1') {
             return false;
         }
-        $st = $pdo->prepare("SELECT COUNT(*) FROM admin WHERE id_admin = ? AND rule = 'administrator'");
-        $st->execute([(string) $uid]);
-        return (int) $st->fetchColumn() > 0;
+        return in_array((string) $uid, array_map('strval', (array) select("admin", "id_admin", null, null, "FETCH_COLUMN")), true);
+    }
+    // ...and the config itself: their language's 🎁 plan, made and sent the
+    // way a customer gets it, so the admin sees exactly that. The reward's
+    // own bookkeeping (affiliate_reward) is left alone, as 🧪 تست واقعی does.
+    // False when the plan is off for their language or the panel refused
+    // (the admin is told why).
+    function affrw_admin_give($uid)
+    {
+        $u = select("user", "*", "id", (string) $uid, "select");
+        $lang = is_array($u) ? ($u['lang'] ?? 'fa') : 'fa';
+        $cfg = affrw_live($lang);
+        if ($cfg === null) {
+            return false;
+        }
+        $err = null;
+        $made = affrw_deliver($uid, $cfg, affrw_panel($cfg), is_array($u) ? $u : ['username' => ''], payer_texts($uid), $lang, $cfg['need'], $err);
+        if ($made === null) {
+            sendmessage($uid, strtr(lang_tab_texts('fa')['Admin']['AffTest']['realFailed'], ['{msg}' => htmlspecialchars(json_encode($err, JSON_UNESCAPED_UNICODE))]), null, 'HTML');
+            return false;
+        }
+        return true;
     }
     // One row per customer who reached the count, and it is what makes the
     // gift once only: status pending (waiting for an admin), giving (being
@@ -17844,7 +17869,7 @@ if (!function_exists('affrw_cfg')) {
         }
         // 🛡 an admin with no limit never reaches the end of it: a row that
         // did, before that was switched on, goes on counting from here
-        if ($r['status'] === 'done' && affrw_admin_free($uid, (string) $r['lang'])) {
+        if ($r['status'] === 'done' && affrw_admin_free($uid)) {
             $pdo->prepare("UPDATE affiliate_reward SET status = 'open' WHERE user_id = ? AND status = 'done'")->execute([(string) $uid]);
             $r['status'] = 'open';
         }
@@ -17941,7 +17966,7 @@ if (!function_exists('affrw_cfg')) {
         }
         // 👑 inviters of 🎁's 🛡 never wait for an admin - nor does an admin
         // with no limit (🛡 دسترسی ادمین)
-        if ($cfg['mode'] === 'auto' || in_array((string) $uid, refv_cfg($lang, 'r')['vip'], true) || affrw_admin_free($uid, $lang)) {
+        if ($cfg['mode'] === 'auto' || in_array((string) $uid, refv_cfg($lang, 'r')['vip'], true) || affrw_admin_free($uid)) {
             if (!affrw_claim($uid, $lang, 'giving', $count, affrw_since($cfg, $row))) {
                 return;
             }
@@ -17988,8 +18013,10 @@ if (!function_exists('affrw_cfg')) {
             $status = $a['rewardStatusPending'];
             $count = $cfg['need'];
         } else {
-            $status = ($cfg['mode'] === 'auto' || affrw_admin_free($user['id'], $user['lang'] ?? 'fa')) ? $a['rewardStatusAuto'] : $a['rewardStatusAdmin'];
-            $count = affrw_count($user['id'], affrw_since($cfg, $row));
+            $free = affrw_admin_free($user['id']);
+            $status = ($cfg['mode'] === 'auto' || $free) ? $a['rewardStatusAuto'] : $a['rewardStatusAdmin'];
+            // an admin with no limit gets it right after this page: shown full
+            $count = $free ? $cfg['need'] : affrw_count($user['id'], affrw_since($cfg, $row));
         }
         return strtr($a['rewardInfo'], affrw_vars($cfg, $count) + ['{link}' => $link, '{status}' => $status]);
     }
@@ -18164,7 +18191,7 @@ if (!function_exists('affrw_cfg')) {
         $st->execute([(string) $uid, (string) $uid, (int) $since]);
         $members = array_values(array_diff(array_map('strval', $st->fetchAll(PDO::FETCH_COLUMN)), affrw_members($row)));
         $times = (int) ($row['times'] ?? 0) + 1;
-        $more = $times < $cfg['max'] || affrw_admin_free($uid, $row['lang']);
+        $more = $times < $cfg['max'] || affrw_admin_free($uid);
         $stmt = $pdo->prepare("UPDATE affiliate_reward SET status = ?, id_invoice = ?, time = ?, times = ?, since = ?, members = ?, left_ids = '[]', suspended = 0 WHERE user_id = ?");
         $stmt->execute([$more ? 'open' : 'done', $id_invoice, time(), $times, $more ? time() : (int) ($row['since'] ?? 0), json_encode($members), (string) $uid]);
         $report('porsantreport', strtr($fa['Admin']['AffReward']['report'], [

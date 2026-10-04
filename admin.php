@@ -5912,7 +5912,6 @@ if (!function_exists('aff_section_rows')) {
                 [$val(strtr($s['affrwPanelBtn'], ['{panel}' => $rwPanel !== null ? $rwPanel['name_panel'] : $s['affrwNoPanel']]), "flsaffrw:{$lang}:panel")],
                 [$val(strtr($s['affrwModeBtn'], ['{mode}' => $rw['mode'] === 'auto' ? $s['affrwModeAuto'] : $s['affrwModeAdmin']]), "flsaffrw:{$lang}:mode")],
                 [$tog(feature_setting_value('affrw_leave', $lang, '0') === '1', $s['affrwLeaveBtn'], "flsaffrw:{$lang}:leave")],
-                [$tog(feature_setting_value('affrw_admin', $lang, '0') === '1', $s['affrwAdminBtn'], "flsaffrw:{$lang}:admin")],
                 [$go(strtr($s['refvOpenBtn'], ['{state}' => refv_state_text($lang, 'r', $s, true)]), "flsec:{$lang}:refvr")],
                 [$go($s['affTestRewardBtn'], "afftest:{$lang}:r")],
                 [$go($s['back'], "flsec:{$lang}:aff")],
@@ -5966,7 +5965,6 @@ if (!function_exists('aff_section_rows')) {
                 '{panel}' => $rwPanel !== null ? htmlspecialchars($rwPanel['name_panel']) : $s['affrwNoPanel'],
                 '{mode}' => $rw['mode'] === 'auto' ? $s['affrwModeAuto'] : $s['affrwModeAdmin'],
                 '{leave}' => feature_setting_value('affrw_leave', $lang, '0') !== '1' ? $st['statusoff'] : (affrw_leave_channels($lang) ? $st['statuson'] : $s['affrwLeaveNotReady']),
-                '{admin}' => feature_setting_value('affrw_admin', $lang, '0') === '1' ? $s['affrwAdminFree'] : $s['affrwAdminSame'],
                 '{refv}' => refv_state_text($lang, 'r', $s),
             ]);
         } else {
@@ -7102,12 +7100,14 @@ if (preg_match('/^cfgdeliv\|set\|([a-z]{2})\|([^|]+)\|(purchase|usertest|affrw)\
     Editmessagetext($from_id, $message_id, $cd_text, $cd_kb, 'HTML');
     return;
 }
-if (preg_match('/^admperm\|(open|test|buy)\|([a-z]{2})$/', $datain, $ap_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^admperm\|(open|test|buy|affrw)\|([a-z]{2})$/', $datain, $ap_m) && $adminrulecheck['rule'] == "administrator") {
     $ap_setting = select("setting", "*", null, null, "select");
     if ($ap_m[1] === 'test') {
         update("setting", "admin_test_unlimited", ((string) ($ap_setting['admin_test_unlimited'] ?? '1') !== '0') ? '0' : '1', null, null);
     } elseif ($ap_m[1] === 'buy') {
         update("setting", "admin_buy_free", ((string) ($ap_setting['admin_buy_free'] ?? '0') === '1') ? '0' : '1', null, null);
+    } elseif ($ap_m[1] === 'affrw') {
+        update("setting", "admin_affrw_unlimited", ((string) ($ap_setting['admin_affrw_unlimited'] ?? '0') === '1') ? '0' : '1', null, null);
     }
     list($ap_text, $ap_kb) = admin_perm_payload($ap_m[2]);
     Editmessagetext($from_id, $message_id, $ap_text, $ap_kb, 'HTML');
@@ -8224,7 +8224,7 @@ if (preg_match('/^afftest:([a-z]{2}):(c|r|r:view|r:real|r:go)$/', $datain, $at_m
     }
     return;
 }
-if (preg_match('/^flsaffrw:([a-z]{2}):(on|mode|panel|leave|admin|p:(\d+))$/', $datain, $rw_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^flsaffrw:([a-z]{2}):(on|mode|panel|leave|p:(\d+))$/', $datain, $rw_m) && $adminrulecheck['rule'] == "administrator") {
     $rw_lang = $rw_m[1];
     $rw = affrw_cfg($rw_lang);
     if ($rw_m[2] === 'on') {
@@ -8256,8 +8256,6 @@ if (preg_match('/^flsaffrw:([a-z]{2}):(on|mode|panel|leave|admin|p:(\d+))$/', $d
             return;
         }
         feature_setting_set('affrw_leave', $rw_lang, $rw_lv ? '0' : '1');
-    } elseif ($rw_m[2] === 'admin') {
-        feature_setting_set('affrw_admin', $rw_lang, feature_setting_value('affrw_admin', $rw_lang, '0') === '1' ? '0' : '1');
     } elseif ($rw_m[2] === 'panel') {
         [$rw_cap, $rw_kb] = affrw_panel_payload($rw_lang);
         Editmessagetext($from_id, $message_id, $rw_cap, $rw_kb);
