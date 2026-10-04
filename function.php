@@ -17897,9 +17897,31 @@ if (!function_exists('affrw_cfg')) {
     {
         return ['{need}' => $cfg['need'], '{volume}' => volume_num($cfg['gb']), '{days}' => $cfg['days'], '{count}' => min($count, $cfg['need'])];
     }
+    // A delivery that never finished - the request died half way (a crash, a
+    // timeout) - left its row at 'giving', and that blocked the customer for
+    // good: no config, no request to anyone, nothing on 👥 ever again. After
+    // five minutes such a row goes to the admins instead, as when the panel
+    // refuses, and the customer is told. Swept whenever an invite is counted
+    // or anyone opens 👥, so an old stuck one is found too.
+    function affrw_unstick()
+    {
+        global $pdo;
+        affrw_ensure_table();
+        $st = $pdo->prepare("SELECT user_id, lang, invites FROM affiliate_reward WHERE status = 'giving' AND time < ?");
+        $st->execute([time() - 300]);
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            if (!affrw_move($r['user_id'], 'giving', 'pending')) {
+                continue;
+            }
+            affrw_ask_admins($r['user_id'], true);
+            bottext_extras_key_hint('users.affiliates.rewardSentToAdmin');
+            sendmessage($r['user_id'], strtr(payer_texts($r['user_id'])['users']['affiliates']['rewardSentToAdmin'], affrw_vars(affrw_cfg($r['lang']), (int) $r['invites'])), null, 'HTML');
+        }
+    }
     // Called when someone joins through $uid's link, and when $uid opens 👥.
     function affrw_check($uid)
     {
+        affrw_unstick();
         $u = select("user", "*", "id", $uid, "select");
         if (!is_array($u)) {
             return;
@@ -17923,7 +17945,15 @@ if (!function_exists('affrw_cfg')) {
             if (!affrw_claim($uid, $lang, 'giving', $count, affrw_since($cfg, $row))) {
                 return;
             }
-            if (affrw_give($uid)) {
+            // anything thrown on the way counts as the panel refusing, rather
+            // than ending the request with the row stuck at 'giving'
+            try {
+                $given = affrw_give($uid);
+            } catch (Throwable $e) {
+                error_log('affrw_give: ' . $e->getMessage());
+                $given = false;
+            }
+            if ($given) {
                 return;
             }
             // the panel refused - an admin gets it instead of nobody

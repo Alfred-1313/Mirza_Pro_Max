@@ -16,6 +16,13 @@ require_once 'panels.php';
 $textbotlang = ui_texts();
 if ($is_bot)
     return;
+// Before the join/leave updates below, not after: a join Telegram reports can
+// complete the invite that earns a free config (🎁's 🛡 channel check), and a
+// leave can pause one (🚪) - both talk to the panel. Made after them, the panel
+// object did not exist yet there: the request died right after the inviter's
+// «3 / 3» and the config was never made nor sent to anyone.
+$setting = select("setting", "*");
+$ManagePanel = new ManagePanel();
 if (isset($update['chat_member'])) {
     $status = $update['chat_member']['new_chat_member']['status'];
     $from_id = $update['chat_member']['new_chat_member']['user']['id'];
@@ -65,8 +72,6 @@ if (!in_array($Chat_type, ["private", "supergroup"]))
 if (isset($chat_member))
     return;
 $first_name = sanitizeUserName($first_name);
-$setting = select("setting", "*");
-$ManagePanel = new ManagePanel();
 $keyboard_check = json_decode($setting['keyboardmain'], true);
 if (is_array($keyboard_check) && preg_match('/[\x{600}-\x{6FF}\x{FB50}-\x{FDFF}]/u', $keyboard_check['keyboard'][0][0]['text'])) {
     // Same starting layout table.php installs - six on, the rest hidden. This
