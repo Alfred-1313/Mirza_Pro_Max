@@ -8300,6 +8300,41 @@ if (!function_exists('user_lang_where')) {
         }
         return ["({$col} IS NULL OR {$col} = '' OR {$col} NOT IN (" . implode(',', array_fill(0, count($others), '?')) . "))", $others];
     }
+    // The rows of one language tab in a sales table (invoice, Payment_report,
+    // service_other), as SQL: a sale belongs to the language its buyer had
+    // when buying. A row stamped with a currency - its buyer has since moved
+    // to a language with another wallet (wallet_switch_lang) - goes by that
+    // currency; any other row by its buyer's language now. Persian also takes
+    // what belongs to no tab, as above. $byCurrency: the table has a currency
+    // column. [condition, positional params]
+    function stats_lang_where($lang, $alias = '', $byCurrency = true)
+    {
+        $a = $alias !== '' ? $alias . '.' : '';
+        [$uw, $up] = user_lang_where($lang);
+        $byUser = "{$a}id_user IN (SELECT id FROM user WHERE {$uw})";
+        if (!$byCurrency) {
+            return [$byUser, $up];
+        }
+        // each currency belongs to the first language using it
+        $owner = [];
+        foreach (panel_langs() as $l) {
+            $c = (string) currency_for_lang($l);
+            if (!isset($owner[$c])) {
+                $owner[$c] = $l;
+            }
+        }
+        $mine = array_map('strval', array_keys($owner, $lang, true));
+        $others = array_values(array_diff(array_map('strval', array_keys($owner)), $mine));
+        $set = $lang === 'fa' ? $others : $mine;
+        $in = implode(',', array_fill(0, count($set), '?'));
+        if ($lang === 'fa') {
+            $cur = $set ? "{$a}currency NOT IN ({$in})" : "1 = 1";
+        } else {
+            $cur = $set ? "{$a}currency IN ({$in})" : "1 = 0";
+        }
+        $stamped = "({$a}currency IS NOT NULL AND {$a}currency != '')";
+        return ["(({$stamped} AND {$cur}) OR (NOT {$stamped} AND {$byUser}))", array_merge($set, $up)];
+    }
     // how many users each language tab has, and 'total'
     function um_lang_counts()
     {

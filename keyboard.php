@@ -2244,27 +2244,6 @@ $keyboard_buy = json_encode([
         ],
     ]
 ]);
-$keyboard_stat = json_encode([
-    'inline_keyboard' => [
-        [
-            ['text' => $textbotlang['keyboard']['totalStats'], 'callback_data' => 'stat_all_bot'],
-        ],
-        [
-            ['text' => $textbotlang['keyboard']['lastHourStats'], 'callback_data' => 'hoursago_stat'],
-        ],
-        [
-            ['text' => $textbotlang['keyboard']['today'], 'callback_data' => 'today_stat'],
-            ['text' => $textbotlang['keyboard']['yesterday'], 'callback_data' => 'yesterday_stat'],
-        ],
-        [
-            ['text' => $textbotlang['keyboard']['currentMonth'], 'callback_data' => 'month_current_stat'],
-            ['text' => $textbotlang['keyboard']['lastMonth'], 'callback_data' => 'month_old_stat'],
-        ],
-        [
-            ['text' => $textbotlang['keyboard']['statsAtDate'], 'callback_data' => 'view_stat_time'],
-        ]
-    ]
-]);
 $option_mirza = json_encode([
     'keyboard' => [
         [['text' => $textbotlang['keyboard']['panelFeatureStatus']]],
