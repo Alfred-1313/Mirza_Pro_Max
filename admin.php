@@ -5912,6 +5912,7 @@ if (!function_exists('aff_section_rows')) {
                 [$val(strtr($s['affrwPanelBtn'], ['{panel}' => $rwPanel !== null ? $rwPanel['name_panel'] : $s['affrwNoPanel']]), "flsaffrw:{$lang}:panel")],
                 [$val(strtr($s['affrwModeBtn'], ['{mode}' => $rw['mode'] === 'auto' ? $s['affrwModeAuto'] : $s['affrwModeAdmin']]), "flsaffrw:{$lang}:mode")],
                 [$tog(feature_setting_value('affrw_leave', $lang, '0') === '1', $s['affrwLeaveBtn'], "flsaffrw:{$lang}:leave")],
+                [$tog(feature_setting_value('affrw_admin', $lang, '0') === '1', $s['affrwAdminBtn'], "flsaffrw:{$lang}:admin")],
                 [$go(strtr($s['refvOpenBtn'], ['{state}' => refv_state_text($lang, 'r', $s, true)]), "flsec:{$lang}:refvr")],
                 [$go($s['affTestRewardBtn'], "afftest:{$lang}:r")],
                 [$go($s['back'], "flsec:{$lang}:aff")],
@@ -5965,6 +5966,7 @@ if (!function_exists('aff_section_rows')) {
                 '{panel}' => $rwPanel !== null ? htmlspecialchars($rwPanel['name_panel']) : $s['affrwNoPanel'],
                 '{mode}' => $rw['mode'] === 'auto' ? $s['affrwModeAuto'] : $s['affrwModeAdmin'],
                 '{leave}' => feature_setting_value('affrw_leave', $lang, '0') !== '1' ? $st['statusoff'] : (affrw_leave_channels($lang) ? $st['statuson'] : $s['affrwLeaveNotReady']),
+                '{admin}' => feature_setting_value('affrw_admin', $lang, '0') === '1' ? $s['affrwAdminFree'] : $s['affrwAdminSame'],
                 '{refv}' => refv_state_text($lang, 'r', $s),
             ]);
         } else {
@@ -8222,7 +8224,7 @@ if (preg_match('/^afftest:([a-z]{2}):(c|r|r:view|r:real|r:go)$/', $datain, $at_m
     }
     return;
 }
-if (preg_match('/^flsaffrw:([a-z]{2}):(on|mode|panel|leave|p:(\d+))$/', $datain, $rw_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^flsaffrw:([a-z]{2}):(on|mode|panel|leave|admin|p:(\d+))$/', $datain, $rw_m) && $adminrulecheck['rule'] == "administrator") {
     $rw_lang = $rw_m[1];
     $rw = affrw_cfg($rw_lang);
     if ($rw_m[2] === 'on') {
@@ -8254,6 +8256,8 @@ if (preg_match('/^flsaffrw:([a-z]{2}):(on|mode|panel|leave|p:(\d+))$/', $datain,
             return;
         }
         feature_setting_set('affrw_leave', $rw_lang, $rw_lv ? '0' : '1');
+    } elseif ($rw_m[2] === 'admin') {
+        feature_setting_set('affrw_admin', $rw_lang, feature_setting_value('affrw_admin', $rw_lang, '0') === '1' ? '0' : '1');
     } elseif ($rw_m[2] === 'panel') {
         [$rw_cap, $rw_kb] = affrw_panel_payload($rw_lang);
         Editmessagetext($from_id, $message_id, $rw_cap, $rw_kb);

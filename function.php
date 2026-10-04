@@ -1989,6 +1989,10 @@ if (!function_exists('refv_cfg')) {
         if (in_array((string) $inviterId, $cfg['vip'], true)) {
             return [];
         }
+        // an admin with no limit (🎁's 🛡 دسترسی ادمین): nothing asked of their invites either
+        if ($plan === 'r' && affrw_admin_free($inviterId, $lang)) {
+            return [];
+        }
         $setting = select("setting", "*", null, null, "select");
         $needs = [];
         if ($cfg['phone'] && feature_value('get_number', $lang, $setting['get_number'] ?? '') == "onAuthenticationphone") {
@@ -17483,6 +17487,22 @@ if (!function_exists('affrw_cfg')) {
         }
         return $cfg;
     }
+    // 🛡 دسترسی ادمین (a setting of 🎁, per language): «بدون محدودیت» lets an
+    // administrator of the bot - full access, not a seller or support - past
+    // every limit of this plan: the 🔁 allowance, 🛡's checks on the people
+    // they invite, and an admin's approval. So the plan can be tried again and
+    // again, whichever way it is delivered. Off, an admin is a customer like
+    // any other. The INVITER's language decides, like the rest of it.
+    function affrw_admin_free($uid, $lang)
+    {
+        global $pdo;
+        if (feature_setting_value('affrw_admin', $lang, '0') !== '1') {
+            return false;
+        }
+        $st = $pdo->prepare("SELECT COUNT(*) FROM admin WHERE id_admin = ? AND rule = 'administrator'");
+        $st->execute([(string) $uid]);
+        return (int) $st->fetchColumn() > 0;
+    }
     // One row per customer who reached the count, and it is what makes the
     // gift once only: status pending (waiting for an admin), giving (being
     // made), done, or rejected. Also made here for a bot whose table.php has
@@ -17819,7 +17839,16 @@ if (!function_exists('affrw_cfg')) {
         $stmt = $pdo->prepare("SELECT * FROM affiliate_reward WHERE user_id = ?");
         $stmt->execute([(string) $uid]);
         $r = $stmt->fetch(PDO::FETCH_ASSOC);
-        return is_array($r) ? $r : null;
+        if (!is_array($r)) {
+            return null;
+        }
+        // 🛡 an admin with no limit never reaches the end of it: a row that
+        // did, before that was switched on, goes on counting from here
+        if ($r['status'] === 'done' && affrw_admin_free($uid, (string) $r['lang'])) {
+            $pdo->prepare("UPDATE affiliate_reward SET status = 'open' WHERE user_id = ? AND status = 'done'")->execute([(string) $uid]);
+            $r['status'] = 'open';
+        }
+        return $r;
     }
     // counting starts when the offer was switched on - or, after a refusal,
     // at the refusal
@@ -17888,8 +17917,9 @@ if (!function_exists('affrw_cfg')) {
         if ($count < $cfg['need']) {
             return;
         }
-        // 👑 inviters of 🎁's 🛡 never wait for an admin
-        if ($cfg['mode'] === 'auto' || in_array((string) $uid, refv_cfg($lang, 'r')['vip'], true)) {
+        // 👑 inviters of 🎁's 🛡 never wait for an admin - nor does an admin
+        // with no limit (🛡 دسترسی ادمین)
+        if ($cfg['mode'] === 'auto' || in_array((string) $uid, refv_cfg($lang, 'r')['vip'], true) || affrw_admin_free($uid, $lang)) {
             if (!affrw_claim($uid, $lang, 'giving', $count, affrw_since($cfg, $row))) {
                 return;
             }
@@ -17928,7 +17958,7 @@ if (!function_exists('affrw_cfg')) {
             $status = $a['rewardStatusPending'];
             $count = $cfg['need'];
         } else {
-            $status = $cfg['mode'] === 'auto' ? $a['rewardStatusAuto'] : $a['rewardStatusAdmin'];
+            $status = ($cfg['mode'] === 'auto' || affrw_admin_free($user['id'], $user['lang'] ?? 'fa')) ? $a['rewardStatusAuto'] : $a['rewardStatusAdmin'];
             $count = affrw_count($user['id'], affrw_since($cfg, $row));
         }
         return strtr($a['rewardInfo'], affrw_vars($cfg, $count) + ['{link}' => $link, '{status}' => $status]);
@@ -18104,7 +18134,7 @@ if (!function_exists('affrw_cfg')) {
         $st->execute([(string) $uid, (string) $uid, (int) $since]);
         $members = array_values(array_diff(array_map('strval', $st->fetchAll(PDO::FETCH_COLUMN)), affrw_members($row)));
         $times = (int) ($row['times'] ?? 0) + 1;
-        $more = $times < $cfg['max'];
+        $more = $times < $cfg['max'] || affrw_admin_free($uid, $row['lang']);
         $stmt = $pdo->prepare("UPDATE affiliate_reward SET status = ?, id_invoice = ?, time = ?, times = ?, since = ?, members = ?, left_ids = '[]', suspended = 0 WHERE user_id = ?");
         $stmt->execute([$more ? 'open' : 'done', $id_invoice, time(), $times, $more ? time() : (int) ($row['since'] ?? 0), json_encode($members), (string) $uid]);
         $report('porsantreport', strtr($fa['Admin']['AffReward']['report'], [
