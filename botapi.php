@@ -16,6 +16,11 @@ function telegram($method, $datas = [], $token = null)
     if (stripos($method, 'get') !== 0) {
         $GLOBALS['bt_any_reply'] = true;
     }
+    // No report group set (Channel_Report is "0" until the admin sets one):
+    // nobody to send to, so no request and no "chat not found" in the logs
+    if (is_array($datas) && array_key_exists('chat_id', $datas) && in_array((string) $datas['chat_id'], ['', '0'], true)) {
+        return ['ok' => false, 'description' => 'No chat to send to.'];
+    }
     $token = $token === null ? $APIKEY : $token;
     $url = "https://api.telegram.org/bot" . $token . "/" . $method;
 

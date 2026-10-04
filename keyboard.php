@@ -1900,12 +1900,6 @@ $list_departman['inline_keyboard'][] = [
     ['text' => $customer_texts['users']['backbtn'], 'callback_data' => "backuser"],
 ];
 $list_departman = json_encode($list_departman);
-$active_panell = json_encode([
-    'keyboard' => [
-        [['text' => $textbotlang['keyboard']['botReports']]],
-    ],
-    'resize_keyboard' => true
-]);
 $wheelkeyboard = json_encode([
     'keyboard' => [
         [['text' => $textbotlang['keyboard']['lotteryWinAmount']]],

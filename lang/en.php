@@ -1814,13 +1814,6 @@ To use the default name, press the green button; to cancel and go back to the me
                 ],
         ],
         'Admin' => [
-                'activeBotText' => 'To use the admin panel features:
-
-Go to a page that has a keyboard at the bottom.
-In the keyboard, find a button called Bot Reports and click on it.
-After clicking the Bot Reports button, a page will open.
-On this page, you can select and configure the group you want.
-This step is mandatory',
                 'askNewText' => '📌 Send your new text',
                 'backAdmin' => 'You have returned to the admin panel!',
                 'backAdminBtn' => '🏠 Back to management menu',

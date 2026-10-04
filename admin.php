@@ -9996,10 +9996,8 @@ if (preg_match('/^cfgcoltxtrw-([a-z]{2})-([0123])$/', (string) $user['step'], $c
 
 if (in_array($text, $textadmin) || $datain == "admin") {    if ($datain == "admin")
         deletemessage($from_id, $message_id);
-    if ($buyreport == "0" || $otherservice == "0" || $otherreport == "0" || $paymentreports == "0" || $reporttest == "0" || $errorreport == "0") {
-        sendmessage($from_id, $textbotlang['Admin']['activeBotText'], $active_panell, 'HTML');
-        return;
-    }
+    // The report group is optional: without one the panel opens all the same
+    // and reports are simply not sent (⚙️ Settings > Bot reports sets it up).
     $version_mini_app = miniapp_version($textbotlang);
     activecron();
     $text_admin = sprintf($text_panel_admin_login_template, $version, $version_mini_app);
@@ -10011,10 +10009,6 @@ if (in_array($text, $textadmin) || $datain == "admin") {    if ($datain == "admi
     // below is kept so the dismiss button on any message already sent still
     // works.
 } elseif ($text == $textbotlang['Admin']['backAdminBtn']) {
-    if ($buyreport == "0" || $otherservice == "0" || $otherreport == "0" || $paymentreports == "0" || $reporttest == "0" || $errorreport == "0") {
-        sendmessage($from_id, $textbotlang['Admin']['activeBotText'], $active_panell, 'HTML');
-        return;
-    }
     $version_mini_app = miniapp_version($textbotlang);
     $text_admin = sprintf($text_panel_admin_login_template, $version, $version_mini_app);
     sendmessage($from_id, $text_admin, $keyboardadmin, 'HTML');
@@ -10032,10 +10026,6 @@ if (in_array($text, $textadmin) || $datain == "admin") {    if ($datain == "admi
     Editmessagetext($from_id, $message_id, $confirmationText, $confirmationKeyboard, 'HTML');
     return;
 } elseif ($text == $textbotlang['Admin']['backMenuBtn']) {
-    if ($buyreport == "0" || $otherservice == "0" || $otherreport == "0" || $paymentreports == "0" || $reporttest == "0" || $errorreport == "0") {
-        sendmessage($from_id, $textbotlang['Admin']['activeBotText'], $setting_panel, 'HTML');
-        return;
-    }
     step('home', $from_id);
     if (in_array($user['step'], ["updatetime", "val_usertest", "del_usertest", "getlimitnew", "GetusernameNew", "GeturlNew", "protocolset", "updatemethodusername", "GetNameNew", "getprotocol", "getprotocolremove", "GetpaawordNew", "updateextendmethod", "setpricechangelocation"])) {
         $typepanel = select("marzban_panel", "*", "name_panel", $user['Processing_value'], "select");

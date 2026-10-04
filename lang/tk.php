@@ -6079,13 +6079,6 @@ Häzirki merçant kodyňyz : %s',
 
 <code>https://%s/app/</code>',
     ),
-    'activeBotText' => 'Admin panelynyň mümkinçiliklerinden peýdalanmak üçin:
-
-Aşagynda klawiatura bolan sahypa geçiň.
-Klawiaturada, Bot hasabatlary diýen düwmäni tapyň we oňa basyň.
-Bot hasabatlary düwmesine basanyňyzdan soň, bir sahypa açylar.
-Bu sahypada, isleýän toparyňyzy saýlap sazlap bilersiňiz.
-Bu ädim hökmanydyr',
     'backAdmin' => 'Admin paneline gaýdyp geldiňiz!',
     'backAdminBtn' => '🏠 Dolandyryş menýusyna gaýdyp barmak',
     'backMenu' => 'Öňki menýusyna gaýdyp geldiňiz!',
