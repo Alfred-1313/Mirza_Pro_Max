@@ -666,7 +666,7 @@ precheck_fresh_server() {
     # --- panels that bind the same ports and rewrite the same configs ---
     { [ -d /opt/marzban ] || [ -d /var/lib/marzban ]; } && blockers+=("Panel|Marzban|owns ports 80/443")
     { [ -d /opt/hiddify-manager ] || [ -d /opt/hiddify-config ]; } && blockers+=("Panel|Hiddify|owns ports 80/443")
-    { [ -d /etc/x-ui ] || [ -d /usr/local/x-ui ]; } && notes+=("x-ui is installed - make sure it is not using port 80 or 443")
+    { [ -d /etc/x-ui ] || [ -d /usr/local/x-ui ]; } && notes+=("x-ui is installed - make sure it is not using port 80 (on 443 it is fine: the bot can take 8443 or 88)")
 
     # --- nginx: only a problem if it is actually serving ---
     if _pkg_installed nginx || _pkg_installed nginx-core || _pkg_installed nginx-full; then
@@ -856,7 +856,7 @@ bot_section() {
     if [ ! -f "$dir/config.php" ]; then
         return
     fi
-    SSL_DOMAIN=$(grep '^\$domainhosts' "$dir/config.php" | cut -d"'" -f2 | cut -d'/' -f1)
+    SSL_DOMAIN=$(hosts_domain "$(grep '^\$domainhosts' "$dir/config.php" | cut -d"'" -f2)")
     if [ -n "$SSL_DOMAIN" ] && [ -f "/etc/letsencrypt/live/$SSL_DOMAIN/cert.pem" ]; then
         local expiry days
         expiry=$(openssl x509 -enddate -noout -in "/etc/letsencrypt/live/$SSL_DOMAIN/cert.pem" 2>/dev/null | cut -d= -f2)
@@ -1073,7 +1073,7 @@ function renew_ssl() {
     fi
     if [ -z "$domain" ]; then
         local cfg="/var/www/html/mirzaprobotconfig/config.php"
-        [ -f "$cfg" ] && domain=$(grep -E "\\\$domainhosts" "$cfg" 2>/dev/null | head -1 | cut -d"'" -f2)
+        [ -f "$cfg" ] && domain=$(hosts_domain "$(grep -E "\\\$domainhosts" "$cfg" 2>/dev/null | head -1 | cut -d"'" -f2)")
     fi
     [ -z "$domain" ] && domain="$(state_get DOMAIN)"
     if [ -z "$domain" ]; then
@@ -1697,6 +1697,14 @@ validate_token() {
 valid_db_ident() { [[ "$1" =~ ^[A-Za-z0-9_]{1,32}$ ]]; }
 valid_db_pass()  { [[ "$1" =~ ^[A-Za-z0-9_]{6,64}$ ]]; }
 
+# config.php's $domainhosts is the bot's address as its links use it:
+# "bot.example.com", or "bot.example.com:8443" for a bot on another port.
+# hosts_domain gives the bare domain (certificates, vhost files), hosts_port
+# the port (443 when there is none), hosts_of builds it back.
+hosts_domain() { local h="${1%%/*}"; echo "${h%%:*}"; }
+hosts_port()   { local h="${1%%/*}"; case "$h" in *:*) echo "${h##*:}" ;; *) echo 443 ;; esac; }
+hosts_of()     { if [ "${2:-443}" = "443" ]; then echo "$1"; else echo "$1:$2"; fi; }
+
 # ── Multi-bot registry ────────────────────────────────────────
 # Tracks every bot installed on this server (name, directory, domain) so
 # Update/Remove/Renew SSL/Backup/Restore can ask which one to act on. A
@@ -1717,11 +1725,12 @@ bots_registry_ensure() {
     [ -f "$BOTS_REGISTRY" ] || echo '[]' > "$BOTS_REGISTRY"
     if [ "$(jq 'length' "$BOTS_REGISTRY" 2>/dev/null)" = "0" ] \
         && [ -f "$BOT_DIR_DEFAULT/config.php" ]; then
-        local name domain
+        local name hosts
         name=$(grep '^\$usernamebot' "$BOT_DIR_DEFAULT/config.php" 2>/dev/null | cut -d"'" -f2)
         [ -z "$name" ] && name="Bot 1"
-        domain=$(grep '^\$domainhosts' "$BOT_DIR_DEFAULT/config.php" 2>/dev/null | cut -d"'" -f2 | cut -d'/' -f1)
-        bots_registry_add "$name" "$BOT_DIR_DEFAULT" "$domain"
+        hosts=$(grep '^\$domainhosts' "$BOT_DIR_DEFAULT/config.php" 2>/dev/null | cut -d"'" -f2)
+        bots_registry_add "$name" "$BOT_DIR_DEFAULT" "$(hosts_domain "$hosts")"
+        [ "$(hosts_port "$hosts")" != "443" ] && bots_registry_set_bot_port "$BOT_DIR_DEFAULT" "$(hosts_port "$hosts")"
     fi
 }
 
@@ -1808,20 +1817,37 @@ pick_bot_instance() {
 
 # ── phpMyAdmin port ───────────────────────────────────────────
 # phpMyAdmin is included in each bot's own vhosts, so it answers at
-# https://<bot domain>/phpmyadmin - on 443, next to the webhook. A bot can
-# move it to a port of its own instead: https://<bot domain>:<port>/phpmyadmin.
-# The webhook never moves (Telegram only calls 443). Several bots may share
-# one port: Apache tells them apart by domain (SNI), exactly as on 443.
+# https://<bot domain>[:<bot port>]/phpmyadmin - next to the webhook. A bot
+# can move it to a port of its own instead: https://<bot domain>:<port>/phpmyadmin.
+# The webhook stays on the bot's port (443, or 8443/88 when something else
+# holds 443). Several bots may share one port: Apache tells them apart by
+# domain (SNI), exactly as on 443.
 # The registry's pma_port is the source of truth; pma_sync_all turns it
 # into Apache config.
 PMA_CONF="/etc/apache2/conf-available/phpmyadmin.conf"
 PMA_PORTS_CONF="/etc/apache2/conf-available/mirza-pma-ports.conf"
 
-# bots_registry_pma_port DIR - that bot's phpMyAdmin port (443 when unset)
+# bots_registry_pma_port DIR - that bot's phpMyAdmin port (the bot's own
+# port when unset: phpMyAdmin inside the bot's own site)
 bots_registry_pma_port() {
     local p
     p=$(jq -r --arg d "$1" '.[] | select(.dir==$d) | .pma_port // empty' "$BOTS_REGISTRY" 2>/dev/null | head -1)
+    echo "${p:-$(bots_registry_bot_port "$1")}"
+}
+
+# bots_registry_bot_port DIR - the port Telegram reaches that bot on: the
+# registry's, else the one in its config.php's $domainhosts, else 443
+bots_registry_bot_port() {
+    local p
+    p=$(jq -r --arg d "$1" '.[] | select(.dir==$d) | .port // empty' "$BOTS_REGISTRY" 2>/dev/null | head -1)
+    [ -z "$p" ] && p=$(hosts_port "$(grep '^\$domainhosts' "$1/config.php" 2>/dev/null | head -1 | cut -d"'" -f2)")
     echo "${p:-443}"
+}
+
+bots_registry_set_bot_port() {
+    local tmp; tmp=$(mktemp)
+    jq --arg d "$1" --arg p "$2" 'map(if .dir==$d then .port=($p|tonumber) else . end)' \
+        "$BOTS_REGISTRY" > "$tmp" && mv "$tmp" "$BOTS_REGISTRY"
 }
 
 # A bot stopped on this server (option 11, or after a transfer): its sites
@@ -1852,36 +1878,99 @@ pma_url() {
 }
 
 # Prints why PORT cannot carry phpMyAdmin and returns 1; silent when it can.
+# BOT_PORT (2nd argument, 443 when not given) is the bot's own port: always
+# fine, phpMyAdmin then answers inside the bot's own site.
 pma_port_problem() {
-    local p="$1" held who
+    local p="$1" bp="${2:-443}" held who
     if ! [[ "$p" =~ ^[1-9][0-9]{0,4}$ ]]; then echo "Enter a port number."; return 1; fi
-    [ "$p" -eq 443 ] && return 0
-    if [ "$p" -lt 1024 ] || [ "$p" -gt 65535 ]; then
-        echo "Use 443, or a port from 1024 to 65535."; return 1
+    [ "$p" -eq "$bp" ] && return 0
+    if [ "$p" -ne 443 ] && { [ "$p" -lt 1024 ] || [ "$p" -gt 65535 ]; }; then
+        echo "Use the bot port ($bp), 443, or a port from 1024 to 65535."; return 1
     fi
     held=$(ss -ltnp "( sport = :$p )" 2>/dev/null | tail -n +2)
     [ -z "$held" ] && return 0
     who=$(printf '%s' "$held" | grep -o 'users:(("[^"]*"' | head -1 | cut -d'"' -f2)
-    # Apache already on it for another bot's phpMyAdmin: sharing is fine
+    # Apache already on it for another bot or its phpMyAdmin: sharing is fine
     if [ "$who" = "apache2" ] \
-        && jq -e --arg p "$p" 'any(.[]; .pma_port == ($p|tonumber))' "$BOTS_REGISTRY" >/dev/null 2>&1; then
+        && jq -e --arg p "$p" 'any(.[]; .pma_port == ($p|tonumber) or (.port // 443) == ($p|tonumber))' "$BOTS_REGISTRY" >/dev/null 2>&1; then
         return 0
     fi
     echo "Port $p is already used by ${who:-another program}. Pick another one."
     return 1
 }
 
-# Asked while a bot is being set up; Enter keeps 443. Sets PMA_PORT.
+# Asked while a bot is being set up; Enter keeps the bot's own port (the
+# argument, 443 when not given). Sets PMA_PORT.
 ask_pma_port() {
-    local p why
+    local p why bp="${1:-443}"
     while true; do
-        printf "\e[33m[+] \e[36mphpMyAdmin port ${CR}${C_DIM}[default: 443]${CR}: "
+        printf "\e[33m[+] \e[36mphpMyAdmin port ${CR}${C_DIM}(can be the same as the bot port) [default: ${bp}]${CR}: "
         read -r p
-        [ -z "$p" ] && p=443
-        if why=$(pma_port_problem "$p"); then break; fi
+        [ -z "$p" ] && p="$bp"
+        if why=$(pma_port_problem "$p" "$bp"); then break; fi
         echo -e "\e[91m${why}\033[0m"
     done
     PMA_PORT="$p"
+}
+
+# ── The bot's own port ────────────────────────────────────────
+# Telegram delivers a webhook to 443, 80, 88 or 8443 only, and 80 stays
+# Apache's plain-HTTP site (certificate renewals use it) - so a bot is on
+# 443, 8443 or 88. 443 is the default; when something else already holds it
+# (Xray, a VPN panel) the bot takes 8443 or 88 instead and neither has to
+# move. config.php's $domainhosts then carries the port, so every link the
+# bot makes (webhook, payment callbacks, scheduled jobs) uses it too.
+BOT_PORTS_ALLOWED="443 8443 88"
+
+# Prints why PORT cannot carry the bot and returns 1; silent when it can.
+bot_port_problem() {
+    local p="$1" held who
+    case " $BOT_PORTS_ALLOWED " in
+        *" $p "*) ;;
+        *) echo "Telegram only reaches a bot on 443, 8443 or 88."; return 1 ;;
+    esac
+    held=$(ss -ltnp "( sport = :$p )" 2>/dev/null | tail -n +2)
+    [ -z "$held" ] && return 0
+    who=$(printf '%s' "$held" | grep -o 'users:(("[^"]*"' | head -1 | cut -d'"' -f2)
+    # Apache already on it (another bot of this server): sharing is fine
+    [ "$who" = "apache2" ] && return 0
+    echo "Port $p is already used by ${who:-another program}. Pick another one."
+    return 1
+}
+
+# The first allowed port nothing else holds - what Enter picks.
+bot_port_default() {
+    local p
+    for p in $BOT_PORTS_ALLOWED; do
+        bot_port_problem "$p" >/dev/null && { echo "$p"; return 0; }
+    done
+    echo 443
+}
+
+# Asked while a bot is being set up; --port answers it. Sets BOT_PORT.
+ask_bot_port() {
+    local p why def who
+    if [ -n "$ARG_PORT" ]; then
+        if why=$(bot_port_problem "$ARG_PORT"); then
+            BOT_PORT="$ARG_PORT"
+            echo -e "\e[33m[+] \e[36mBot port (from --port):\e[0m ${BOT_PORT}"
+            return 0
+        fi
+        echo -e "\e[91m--port ${ARG_PORT}: ${why}\033[0m"
+    fi
+    def=$(bot_port_default)
+    if [ "$def" != "443" ]; then
+        who=$(ss -ltnp "( sport = :443 )" 2>/dev/null | tail -n +2 | grep -o 'users:(("[^"]*"' | head -1 | cut -d'"' -f2)
+        echo -e "  ${C_WARN}!${CR} ${C_WARN}Port 443 is used by ${who:-another program} - the bot can use port ${def} instead.${CR}"
+    fi
+    while true; do
+        printf "\e[33m[+] \e[36mBot port ${CR}${C_DIM}(Telegram accepts 443, 8443 or 88) [default: ${def}]${CR}: "
+        read -r p
+        [ -z "$p" ] && p="$def"
+        if why=$(bot_port_problem "$p"); then break; fi
+        echo -e "\e[91m${why}\033[0m"
+    done
+    BOT_PORT="$p"
 }
 
 _pma_restore() {
@@ -1889,35 +1978,76 @@ _pma_restore() {
     for d in sites-available sites-enabled conf-available conf-enabled; do
         rm -rf "/etc/apache2/$d" && cp -a "$1/$d" /etc/apache2/
     done
+    # 443's Listen may have been switched off for a bot on another port
+    [ -f "$1/ports.conf" ] && cp -a "$1/ports.conf" /etc/apache2/ports.conf
+    return 0
+}
+
+# Apache's HTTPS ports: every bot's own port and every phpMyAdmin port in
+# the registry, plus any given here (a bot being set up, not registered
+# yet). 443 comes from ports.conf's own Listen, which is switched off -
+# marked, so it can come back - while nothing uses 443: with Xray on 443
+# Apache would not even start otherwise. Every other port goes in
+# $PMA_PORTS_CONF. Opens the ports in UFW when it is active.
+mirza_listen_sync() {
+    local need p others=""
+    need="$* $(jq -r '.[] | select(.domain != null and .domain != "" and .domain != "null" and (.stopped // false) != true) | "\(.port // 443) \(.pma_port // .port // 443)"' "$BOTS_REGISTRY" 2>/dev/null)"
+    # a site the registry does not know (an original Mirza bot) may be on 443 too
+    grep -qsE '^[[:space:]]*<VirtualHost[^>]*:443[[:space:]>]' /etc/apache2/sites-enabled/* && need="$need 443"
+    need=$(printf '%s\n' $need | grep -E '^[0-9]+$' | sort -un | tr '\n' ' ')
+    for p in $need; do
+        [ "$p" != "443" ] && [ "$p" != "80" ] && others="$others $p"
+    done
+    if [ -n "${others// /}" ]; then
+        {
+            echo "# Written by the mirza script: the HTTPS ports a bot or its phpMyAdmin uses besides 443."
+            for p in $others; do echo "Listen $p https"; done
+        } > "$PMA_PORTS_CONF"
+        a2enconf mirza-pma-ports >/dev/null 2>&1
+    else
+        a2disconf mirza-pma-ports >/dev/null 2>&1
+        rm -f "$PMA_PORTS_CONF"
+    fi
+    if [[ " $need " == *" 443 "* ]]; then
+        sed -i -E 's/^([[:space:]]*)#mirza# (Listen 443)/\1\2/' /etc/apache2/ports.conf 2>/dev/null
+    else
+        sed -i -E 's/^([[:space:]]*)(Listen 443([[:space:]]|$))/\1#mirza# \2/' /etc/apache2/ports.conf 2>/dev/null
+    fi
+    if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
+        for p in $others; do ufw allow "$p/tcp" >/dev/null 2>&1; done
+    fi
 }
 
 # Write every bot's phpMyAdmin wiring from the registry, then reload Apache.
-# A bot on 443 keeps phpMyAdmin inside its own two vhosts, as the installer
-# writes them; a bot on another port has it taken out of those and served
-# from <domain>-pma.conf instead, on that port with the bot's certificate.
+# A bot whose phpMyAdmin is on its own port (443 unless it moved the bot)
+# keeps it inside its own two vhosts, as the installer writes them; a bot
+# with phpMyAdmin on another port has it taken out of those and served from
+# <domain>-pma.conf instead, on that port with the bot's certificate.
 # Apache's config is backed up first and put back if Apache rejects the
 # result, so a bad port can never take the webhooks down with it.
 pma_sync_all() {
     bots_registry_ensure
-    local sa="/etc/apache2/sites-available" rows domain port ports="" f p
+    local sa="/etc/apache2/sites-available" rows domain port bport ports="" f p
     # a stopped bot's sites stay switched off - including its phpMyAdmin port
-    rows=$(jq -r '.[] | select(.domain != null and .domain != "" and .domain != "null" and (.stopped // false) != true) | "\(.domain) \(.pma_port // 443)"' "$BOTS_REGISTRY" 2>/dev/null)
+    rows=$(jq -r '.[] | select(.domain != null and .domain != "" and .domain != "null" and (.stopped // false) != true) | "\(.domain) \(.pma_port // .port // 443) \(.port // 443)"' "$BOTS_REGISTRY" 2>/dev/null)
     # Nothing ever moved: leave Apache exactly as the installer wrote it
-    if [ -z "$(printf '%s\n' "$rows" | awk '$2 != "" && $2 != 443')" ] \
-        && [ ! -f "$PMA_PORTS_CONF" ] && ! ls "$sa"/*-pma.conf >/dev/null 2>&1; then
+    if [ -z "$(printf '%s\n' "$rows" | awk '($2 != "" && $2 != 443) || ($3 != "" && $3 != 443)')" ] \
+        && [ ! -f "$PMA_PORTS_CONF" ] && ! ls "$sa"/*-pma.conf >/dev/null 2>&1 \
+        && ! grep -q '^[[:space:]]*#mirza# Listen 443' /etc/apache2/ports.conf 2>/dev/null; then
         return 0
     fi
     local bak; bak=$(mktemp -d)
     cp -a /etc/apache2/sites-available /etc/apache2/sites-enabled \
           /etc/apache2/conf-available /etc/apache2/conf-enabled "$bak"/
+    cp -a /etc/apache2/ports.conf "$bak"/
 
-    while read -r domain port; do
+    while read -r domain port bport; do
         [ -z "$domain" ] && continue
-        if [ "$port" != "443" ] && [ ! -f "/etc/letsencrypt/live/${domain}/fullchain.pem" ]; then
-            printf "    ${C_WARN}!${CR} ${C_WARN}%s has no SSL certificate - its phpMyAdmin stays on 443.${CR}\n" "$domain"
-            port=443
+        if [ "$port" != "$bport" ] && [ ! -f "/etc/letsencrypt/live/${domain}/fullchain.pem" ]; then
+            printf "    ${C_WARN}!${CR} ${C_WARN}%s has no SSL certificate - its phpMyAdmin stays on the bot's address.${CR}\n" "$domain"
+            port="$bport"
         fi
-        if [ "$port" = "443" ]; then
+        if [ "$port" = "$bport" ]; then
             for f in "$sa/${domain}.conf" "$sa/${domain}-ssl.conf"; do
                 [ -f "$f" ] || continue
                 grep -qF "Include $PMA_CONF" "$f" && continue
@@ -1948,21 +2078,16 @@ EOF
         fi
     done <<< "$rows"
 
-    ports=$(printf '%s\n' $ports | sort -un | tr '\n' ' ')
     if [ -n "${ports// /}" ]; then
-        {
-            echo "# Written by the mirza script: ports that carry a bot's phpMyAdmin."
-            for p in $ports; do echo "Listen $p https"; done
-        } > "$PMA_PORTS_CONF"
-        a2enconf mirza-pma-ports >/dev/null 2>&1
         # The phpMyAdmin package enables /phpmyadmin for every site on its
-        # own, which would keep it on 443 for a bot that just moved away.
-        # Bots still on 443 carry their own Include (made sure of above).
+        # own, which would keep it on the bot's port for a bot whose
+        # phpMyAdmin just moved away. The others carry their own Include
+        # (made sure of above).
         a2disconf phpmyadmin >/dev/null 2>&1
-    else
-        a2disconf mirza-pma-ports >/dev/null 2>&1
-        rm -f "$PMA_PORTS_CONF"
     fi
+    # every port a bot or a phpMyAdmin is on - 443 too, or not at all
+    mirza_listen_sync
+    ports=$(sed -n 's/^Listen \([0-9]*\) https$/\1/p' "$PMA_PORTS_CONF" 2>/dev/null | tr '\n' ' ')
 
     local out
     if ! out=$(apache2ctl configtest 2>&1); then
@@ -1973,7 +2098,8 @@ EOF
     fi
     systemctl reload apache2 >/dev/null 2>&1 || systemctl restart apache2 >/dev/null 2>&1
     sleep 1
-    # A reload does not always open a brand-new Listen port; a restart does
+    # A reload does not always open a brand-new Listen port, nor let go of
+    # 443 for the program that needs it; a restart does
     for p in $ports; do
         if [ -z "$(ss -ltn "( sport = :$p )" 2>/dev/null | tail -n +2)" ]; then
             systemctl restart apache2 >/dev/null 2>&1; sleep 1; break
@@ -1984,9 +2110,6 @@ EOF
         systemctl restart apache2 >/dev/null 2>&1
         printf "    ${C_BAD}●${CR} ${C_BAD}Apache would not start with the new port - the old setup is back.${CR}\n"
         return 1
-    fi
-    if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
-        for p in $ports; do ufw allow "$p/tcp" >/dev/null 2>&1; done
     fi
     rm -rf "$bak"
     return 0
@@ -2089,26 +2212,27 @@ db_change_password() {
     _back_prompt
 }
 
-# Move this bot's phpMyAdmin to another port, or back to 443.
+# Move this bot's phpMyAdmin to another port, or back to the bot's own.
 pma_port_screen() {
-    local dir="$1" domain="$2" cur p why
+    local dir="$1" domain="$2" cur p why bp
     echo ""
     if [ -z "$domain" ] || [ "$domain" = "null" ]; then
         printf "    ${C_BAD}●${CR} ${C_BAD}No domain is on record for this bot.${CR}\n"
         _back_prompt; return 1
     fi
     cur=$(bots_registry_pma_port "$dir")
-    printf "    ${C_DIM}443 is the default (the bot's own address). The webhook stays on${CR}\n"
-    printf "    ${C_DIM}443 whatever you pick, and several bots may share one port.${CR}\n"
+    bp=$(bots_registry_bot_port "$dir")
+    printf "    ${C_DIM}%s is the default: the bot's own port (it can be the same). The webhook${CR}\n" "$bp"
+    printf "    ${C_DIM}stays on %s whatever you pick, and several bots may share one port.${CR}\n" "$bp"
     echo ""
     while true; do
         printf "  ${C_PROMPT}❯${CR} New port ${C_DIM}[now %s, 0 = back]${CR}: " "$cur"
         read -r p
         if [ -z "$p" ] || [ "$p" = "0" ]; then return 0; fi
-        if ! why=$(pma_port_problem "$p"); then
+        if ! why=$(pma_port_problem "$p" "$bp"); then
             printf "    ${C_BAD}●${CR} ${C_BAD}%s${CR}\n" "$why"; continue
         fi
-        if [ "$p" != "443" ] && [ ! -f "/etc/letsencrypt/live/${domain}/fullchain.pem" ]; then
+        if [ "$p" != "$bp" ] && [ ! -f "/etc/letsencrypt/live/${domain}/fullchain.pem" ]; then
             printf "    ${C_BAD}●${CR} ${C_BAD}%s has no SSL certificate yet - renew it first (menu 5).${CR}\n" "$domain"; continue
         fi
         break
@@ -2118,7 +2242,7 @@ pma_port_screen() {
         printf "    ${C_DIM}Already on port %s - nothing to change.${CR}\n" "$p"
     elif pma_set_port "$dir" "$p"; then
         printf "    ${C_OK}●${CR} ${C_OK}phpMyAdmin is now at %s${CR}\n" "$(pma_url "$domain" "$p")"
-        [ "$p" != "443" ] && printf "    ${C_DIM}If your server provider has its own firewall, open port %s there too.${CR}\n" "$p"
+        [ "$p" != "443" ] && [ "$p" != "$bp" ] && printf "    ${C_DIM}If your server provider has its own firewall, open port %s there too.${CR}\n" "$p"
     else
         printf "    ${C_BAD}●${CR} ${C_BAD}Port %s could not be used - phpMyAdmin is still at %s${CR}\n" "$p" "$(pma_url "$domain" "$cur")"
     fi
@@ -2228,13 +2352,18 @@ preflight() {
         _kv "Network" "$(_dot bad) ${C_BAD}offline (cannot reach GitHub/Telegram)${CR}"; ok=0
     fi
 
-    local b80 b443
+    local b80 w443
     b80=$(ss -ltnH 'sport = :80' 2>/dev/null | head -1)
-    b443=$(ss -ltnH 'sport = :443' 2>/dev/null | head -1)
-    if [ -n "$b80" ] || [ -n "$b443" ]; then
-        _kv "Ports 80/443" "$(_dot warn) ${C_WARN}in use (will be freed for Apache/SSL)${CR}"
+    w443=$(ss -ltnpH 'sport = :443' 2>/dev/null | grep -o 'users:(("[^"]*"' | head -1 | cut -d'"' -f2)
+    if [ -n "$b80" ]; then
+        _kv "Port 80" "$(_dot warn) ${C_WARN}in use (will be freed for Apache/SSL)${CR}"
     else
-        _kv "Ports 80/443" "$(_dot ok) ${C_OK}free${CR}"
+        _kv "Port 80" "$(_dot ok) ${C_OK}free${CR}"
+    fi
+    if [ -z "$w443" ] || [ "$w443" = "apache2" ]; then
+        _kv "Port 443" "$(_dot ok) ${C_OK}free for the bot${CR}"
+    else
+        _kv "Port 443" "$(_dot warn) ${C_WARN}used by ${w443}${CR} ${C_DIM}· the bot can take 8443 or 88 (asked later)${CR}"
     fi
 
     if [ "$ok" -ne 1 ]; then
@@ -2530,12 +2659,23 @@ function install_bot() {
     DOMAIN_NAME="$domainname"
     PATHS=$(cat /root/confmirza/dbrootmirza.txt | grep '$path' | cut -d"'" -f2)
 
+    # ── The bot's port: 443, or 8443/88 when something (Xray) holds 443 ──
+    BOT_PORT="$(state_get BOT_PORT)"
+    # an install begun by an older version of this script set Apache up on 443
+    [ -z "$BOT_PORT" ] && phase_done VHOST && { BOT_PORT=443; state_set BOT_PORT 443; }
+    if [ -n "$BOT_PORT" ]; then
+        echo -e "\e[33m[+] \e[36mBot port (resumed):\e[0m ${BOT_PORT}"
+    else
+        ask_bot_port
+        state_set BOT_PORT "$BOT_PORT"
+    fi
+
     # ╭──────────────────────── PHASE: SSL ─────────────────────────╮
     if ! phase_done SSL; then
         if [ -f "/etc/letsencrypt/live/$DOMAIN_NAME/fullchain.pem" ]; then
             echo -e "  ${C_OK}●${CR} ${C_DIM}SSL certificate for ${DOMAIN_NAME} already exists - skipping issuance.${CR}"
         else
-            run_step "Opening firewall ports 80 & 443" "ufw allow 80 && ufw allow 443" \
+            run_step "Opening firewall ports 80 & ${BOT_PORT}" "ufw allow 80 && ufw allow ${BOT_PORT}" \
                 || { show_step_error; install_pause "Opening firewall ports"; }
             run_step "Stopping Apache for certificate issuance" "systemctl stop apache2 && systemctl disable apache2" \
                 || { show_step_error; install_pause "Stopping Apache"; }
@@ -2573,7 +2713,7 @@ function install_bot() {
 EOF
         VHOST_SSL_FILE="/etc/apache2/sites-available/${DOMAIN_NAME}-ssl.conf"
         sudo tee "$VHOST_SSL_FILE" > /dev/null <<EOF
-<VirtualHost *:443>
+<VirtualHost *:${BOT_PORT}>
     ServerName $DOMAIN_NAME
     DocumentRoot $BOT_DIR
     SSLEngine on
@@ -2589,6 +2729,9 @@ EOF
     CustomLog \${APACHE_LOG_DIR}/${DOMAIN_NAME}-access.log combined
 </VirtualHost>
 EOF
+        # Apache listens on the bot's port - and leaves 443 alone when the
+        # bot is not on it, or Apache could not start beside Xray at all
+        mirza_listen_sync "$BOT_PORT"
         run_step "Configuring Apache virtual hosts" \
             "a2ensite '${DOMAIN_NAME}.conf' && a2ensite '${DOMAIN_NAME}-ssl.conf' ; a2dissite 000-default.conf 2>/dev/null ; a2dissite 000-default-le-ssl.conf 2>/dev/null ; a2dissite default-ssl.conf 2>/dev/null ; rm -f /etc/apache2/sites-enabled/000-default.conf /etc/apache2/sites-enabled/000-default-le-ssl.conf /etc/apache2/sites-enabled/default-ssl.conf ; rm -f /etc/apache2/sites-available/000-default.conf /etc/apache2/sites-available/000-default-le-ssl.conf /etc/apache2/sites-available/default-ssl.conf ; a2enmod ssl ; a2enmod rewrite ; systemctl restart apache2" \
             || { show_step_error; install_pause "Configuring Apache virtual hosts"; }
@@ -2690,10 +2833,10 @@ EOF
     fi
 
     PMA_PORT="$(state_get PMA_PORT)"
-    if [ -n "$PMA_PORT" ]; then
+    if [ -n "$PMA_PORT" ] && pma_port_problem "$PMA_PORT" "$BOT_PORT" >/dev/null; then
         echo -e "\e[33m[+] \e[36mphpMyAdmin port (resumed):\e[0m ${PMA_PORT}"
     else
-        ask_pma_port
+        ask_pma_port "$BOT_PORT"
         state_set PMA_PORT "$PMA_PORT"
     fi
 
@@ -2795,7 +2938,7 @@ mysqli_set_charset(\$connect, "utf8mb4");
 try { \$pdo = new PDO(\$dsn, \$usernamedb, \$passworddb, \$options); } catch (\PDOException \$e) { error_log("Database connection failed: " . \$e->getMessage()); }
 \$APIKEY = '${YOUR_BOT_TOKEN}';
 \$adminnumber = '${YOUR_CHAT_ID}';
-\$domainhosts = '${YOUR_DOMAIN}';
+\$domainhosts = '$(hosts_of "$YOUR_DOMAIN" "$BOT_PORT")';
 \$usernamebot = '${YOUR_BOTNAME}';
 ?>
 EOF
@@ -2834,7 +2977,7 @@ EOF
         # about the webhook and invite the admin to send /start. Doing this
         # earlier risked a real update arriving before table.php had run.
         run_step "Setting Telegram webhook" \
-            "curl -s -F \"url=https://${YOUR_DOMAIN}/index.php\" -F \"secret_token=${secrettoken}\" \"https://api.telegram.org/bot${YOUR_BOT_TOKEN}/setWebhook\"" \
+            "curl -s -F \"url=https://$(hosts_of "$YOUR_DOMAIN" "$BOT_PORT")/index.php\" -F \"secret_token=${secrettoken}\" \"https://api.telegram.org/bot${YOUR_BOT_TOKEN}/setWebhook\"" \
             || { show_step_error; install_pause "Setting Telegram webhook"; }
 
         MESSAGE="✅ The Mirza bot is installed! for start the bot send /start command."
@@ -2846,8 +2989,9 @@ EOF
     # ── Done ──
     mark_phase COMPLETE
     bots_registry_add "$YOUR_BOTLABEL" "$BOT_DIR" "$YOUR_DOMAIN"
+    bots_registry_set_bot_port "$BOT_DIR" "${BOT_PORT:-443}"
     local pma_failed=0
-    pma_set_port "$BOT_DIR" "${PMA_PORT:-443}" || pma_failed=1
+    pma_set_port "$BOT_DIR" "${PMA_PORT:-${BOT_PORT:-443}}" || pma_failed=1
     # issued in standalone mode above (Apache was not set up yet); switch it
     # to renew through Apache, or it cannot renew at all
     ssl_renewal_ensure "$YOUR_DOMAIN" >/dev/null
@@ -2859,9 +3003,9 @@ EOF
 
     _sec "Access"
     _kv "Name" "${C_DIM}${YOUR_BOTLABEL}${CR}"
-    _kv "Bot URL" "${C_DIM}https://${YOUR_DOMAIN}${CR}"
+    _kv "Bot URL" "${C_DIM}https://$(hosts_of "$YOUR_DOMAIN" "$BOT_PORT")${CR}"
     _kv "phpMyAdmin" "${C_DIM}$(pma_url "$YOUR_DOMAIN" "$(bots_registry_pma_port "$BOT_DIR")")${CR}"
-    [ "$pma_failed" -eq 1 ] && printf "    ${C_WARN}!${CR} ${C_DIM}Port ${PMA_PORT} could not be used, so phpMyAdmin stayed on 443. Try another from menu 9.${CR}\n"
+    [ "$pma_failed" -eq 1 ] && printf "    ${C_WARN}!${CR} ${C_DIM}Port ${PMA_PORT} could not be used, so phpMyAdmin stayed on the bot's address. Try another from menu 9.${CR}\n"
 
     _sec "Database"
     _kv "Name" "${C_KEY}${dbname}${CR}"
@@ -2931,6 +3075,8 @@ function install_second_bot() {
            [[ "$_gd" =~ ^[Yy]$ ]] || { echo -e "  ${C_BAD}Aborted.${CR}"; sleep 1; show_menu; return 1; } ;;
     esac
     local DOMAIN_NAME="$domainname"
+    local BOT_PORT
+    ask_bot_port
 
     # ── Bot token / chat id / username ────────────────────────
     print_header "Bot Configuration"
@@ -2953,7 +3099,7 @@ function install_second_bot() {
     read YOUR_BOTLABEL
     [ -z "$YOUR_BOTLABEL" ] && YOUR_BOTLABEL="$YOUR_BOTNAME"
     local PMA_PORT
-    ask_pma_port
+    ask_pma_port "$BOT_PORT"
 
     # ── Download & extract ────────────────────────────────────
     print_header "Downloading Bot Files"
@@ -3008,7 +3154,7 @@ mysqli_set_charset(\$connect, "utf8mb4");
 try { \$pdo = new PDO(\$dsn, \$usernamedb, \$passworddb, \$options); } catch (\PDOException \$e) { error_log("Database connection failed: " . \$e->getMessage()); }
 \$APIKEY = '${YOUR_BOT_TOKEN}';
 \$adminnumber = '${YOUR_CHAT_ID}';
-\$domainhosts = '${DOMAIN_NAME}';
+\$domainhosts = '$(hosts_of "$DOMAIN_NAME" "$BOT_PORT")';
 \$usernamebot = '${YOUR_BOTNAME}';
 ?>
 EOF
@@ -3056,7 +3202,7 @@ EOF
     if [ "$ssl_ok" -eq 1 ]; then
         local VHOST_SSL_FILE="/etc/apache2/sites-available/${DOMAIN_NAME}-ssl.conf"
         tee "$VHOST_SSL_FILE" > /dev/null <<EOF
-<VirtualHost *:443>
+<VirtualHost *:${BOT_PORT}>
     ServerName $DOMAIN_NAME
     DocumentRoot $NEW_BOT_DIR
     SSLEngine on
@@ -3072,25 +3218,32 @@ EOF
     CustomLog \${APACHE_LOG_DIR}/${DOMAIN_NAME}-access.log combined
 </VirtualHost>
 EOF
+        mirza_listen_sync "$BOT_PORT"
         run_step "Enabling the HTTPS virtual host" "a2ensite '${DOMAIN_NAME}-ssl.conf' && a2enmod ssl && systemctl reload apache2" \
             || show_step_error
+        # a reload does not always open a brand-new port
+        if [ -z "$(ss -ltn "( sport = :${BOT_PORT} )" 2>/dev/null | tail -n +2)" ]; then
+            systemctl restart apache2 >/dev/null 2>&1
+        fi
     fi
 
     # ── table.php, then webhook - never the other way around. Telling
     #    Telegram (and the admin) the bot is ready before the schema is
     #    migrated risks a real update arriving mid-migration.  ─────
-    local proto="http"; [ "$ssl_ok" -eq 1 ] && proto="https"
+    local proto="http" hosts="$DOMAIN_NAME"
+    [ "$ssl_ok" -eq 1 ] && { proto="https"; hosts=$(hosts_of "$DOMAIN_NAME" "$BOT_PORT"); }
     run_step "Initializing database tables" "cd '$NEW_BOT_DIR' && php table.php" \
         || { show_step_error; echo -e "\033[31mtable.php failed - see the details above.\033[0m"; }
     # table.php ran as root; files it created (log.txt) must stay writable by Apache
     chown -R www-data:www-data "$NEW_BOT_DIR" 2>/dev/null
     run_step "Setting Telegram webhook" \
-        "curl -s -F \"url=${proto}://${DOMAIN_NAME}/index.php\" -F \"secret_token=${secrettoken}\" \"https://api.telegram.org/bot${YOUR_BOT_TOKEN}/setWebhook\"" \
+        "curl -s -F \"url=${proto}://${hosts}/index.php\" -F \"secret_token=${secrettoken}\" \"https://api.telegram.org/bot${YOUR_BOT_TOKEN}/setWebhook\"" \
         || show_step_error
     curl -s -X POST "https://api.telegram.org/bot${YOUR_BOT_TOKEN}/sendMessage" -d chat_id="${YOUR_CHAT_ID}" -d text="✅ The Mirza bot is installed! for start the bot send /start command." > /dev/null 2>&1
     bots_registry_add "$YOUR_BOTLABEL" "$NEW_BOT_DIR" "$DOMAIN_NAME"
+    bots_registry_set_bot_port "$NEW_BOT_DIR" "$BOT_PORT"
     local pma_note=""
-    if [ "$PMA_PORT" != "443" ]; then
+    if [ "$PMA_PORT" != "$BOT_PORT" ]; then
         if [ "$ssl_ok" -ne 1 ]; then
             pma_note="No SSL certificate yet, so phpMyAdmin stayed on the bot's address. Change it later from menu 9."
         elif ! pma_set_port "$NEW_BOT_DIR" "$PMA_PORT"; then
@@ -3104,7 +3257,7 @@ EOF
     printf "    ${C_OK}●${CR} ${C_OK}Set up alongside the bot(s) already on this server.${CR}\n"
     echo ""
     _kv "Name"       "${C_DIM}${YOUR_BOTLABEL}${CR}"
-    _kv "Bot URL"    "${C_DIM}${proto}://${DOMAIN_NAME}${CR}"
+    _kv "Bot URL"    "${C_DIM}${proto}://${hosts}${CR}"
     _kv "phpMyAdmin" "${C_DIM}$(pma_url "$DOMAIN_NAME" "$(bots_registry_pma_port "$NEW_BOT_DIR")" "$proto")${CR}"
     [ -n "$pma_note" ] && printf "    ${C_WARN}!${CR} ${C_DIM}%s${CR}\n" "$pma_note"
     _kv "Directory"  "${C_DIM}${NEW_BOT_DIR}${CR}"
@@ -3287,7 +3440,7 @@ function update_bot() {
     # it upgrades an original-Mirza schema without touching existing rows.
     local DOMAIN_URL DOMAIN_NAME
     DOMAIN_URL=$(grep "^\$domainhosts" "$CONFIG_PATH" | cut -d"'" -f2)
-    DOMAIN_NAME=$(echo "$DOMAIN_URL" | cut -d'/' -f1)
+    DOMAIN_NAME=$(hosts_domain "$DOMAIN_URL")
     local DB_STATE=""
     if ( cd "$BOT_DIR" && php table.php >/dev/null 2>&1 ); then
         printf "    ${C_OK}✔${CR} ${C_DIM}Database schema updated${CR}\n"
@@ -3311,7 +3464,7 @@ function update_bot() {
     # ── 8. Is the bot actually answering? ────────────────────
     if [ -n "$DOMAIN_NAME" ]; then
         local code
-        code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "https://${DOMAIN_NAME}/" 2>/dev/null)
+        code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "https://${DOMAIN_URL%%/*}/" 2>/dev/null)
         if [ "$code" = "200" ] || [ "$code" = "301" ] || [ "$code" = "302" ]; then
             printf "    ${C_OK}✔${CR} ${C_DIM}Site responds (HTTP ${code})${CR}\n"
         else
@@ -3779,7 +3932,7 @@ _ensure_selfupdate_cron() {
 # Create the Apache vhost only when it is missing or points somewhere else.
 # An operator's customised vhost is backed up, never silently overwritten.
 _ensure_vhost() {
-    local domain="$1" botdir="$2"
+    local domain="$1" botdir="$2" port
     local vhost="/etc/apache2/sites-available/${domain}.conf"
     local vhost_ssl="/etc/apache2/sites-available/${domain}-ssl.conf"
     local need=0
@@ -3803,9 +3956,10 @@ _ensure_vhost() {
     CustomLog \${APACHE_LOG_DIR}/${domain}-access.log combined
 </VirtualHost>
 EOF
+    port=$(bots_registry_bot_port "$botdir")
     if [ -f "/etc/letsencrypt/live/${domain}/fullchain.pem" ] && [ ! -f "$vhost_ssl" ]; then
         tee "$vhost_ssl" >/dev/null <<EOF
-<VirtualHost *:443>
+<VirtualHost *:${port}>
     ServerName $domain
     DocumentRoot $botdir
     SSLEngine on
@@ -3824,6 +3978,7 @@ EOF
     fi
     a2ensite "${domain}.conf" >/dev/null 2>&1 || true
     a2enmod rewrite ssl >/dev/null 2>&1 || true
+    mirza_listen_sync "$port"
     if apache2ctl configtest >/dev/null 2>&1; then
         systemctl reload apache2 >/dev/null 2>&1 || systemctl restart apache2 >/dev/null 2>&1
         printf "    ${C_OK}✔${CR} ${C_DIM}Apache vhost written and reloaded${CR}\n"
@@ -4521,6 +4676,8 @@ PHPEOF
 chmod 644 /tmp/mirza_cron_setup.php
 if ( cd "$BOT" && runuser -u www-data -- php /tmp/mirza_cron_setup.php ) >/dev/null 2>&1; then echo "CRONS=1"; fi
 rm -f /tmp/mirza_cron_setup.php
+# the address (and port) the install there gave the bot
+echo "HOSTS=$(grep '^\$domainhosts' "$BOT/config.php" | cut -d"'" -f2)"
 echo "RESULT=OK"
 EOF
 }
@@ -4546,7 +4703,7 @@ function transfer_bot() {
     admin=$(grep '^\$adminnumber' "$cfg" | head -1 | cut -d"'" -f2)
     botname=$(grep '^\$usernamebot' "$cfg" | head -1 | cut -d"'" -f2)
     hosts=$(grep '^\$domainhosts' "$cfg" | head -1 | cut -d"'" -f2)
-    [ -z "$domain" ] && domain=$(printf '%s' "$hosts" | cut -d'/' -f1)
+    [ -z "$domain" ] && domain=$(hosts_domain "$hosts")
     if [ -z "$dbname" ] || [ -z "$token" ] || [ -z "$domain" ]; then
         _tr_back "Could not read this bot's settings from $cfg."; return 1
     fi
@@ -4608,7 +4765,7 @@ EOF
 )
     os=$(printf '%s\n' "$info" | sed -n 's/^OS=//p')
     has_mirza=$(printf '%s\n' "$info" | sed -n 's/^MIRZA=//p')
-    their_domain=$(printf '%s\n' "$info" | sed -n 's/^DOMAIN=//p')
+    their_domain=$(hosts_domain "$(printf '%s\n' "$info" | sed -n 's/^DOMAIN=//p')")
     free=$(printf '%s\n' "$info" | sed -n 's/^FREE=//p')
     need=$(( $(du -sm "$dir" 2>/dev/null | cut -f1) + 3000 ))
     case "$os" in
@@ -4711,10 +4868,11 @@ EOF
         _sec "Installing on ${TR_HOST}"
         printf "    ${C_DIM}The installer now runs on the new server. Its answers are filled in;${CR}\n"
         printf "    ${C_DIM}if it asks anything (bot name, phpMyAdmin port), answer as usual.${CR}\n"
+        printf "    ${C_DIM}The bot keeps port %s if it is free there; if not, it asks for another.${CR}\n" "$(hosts_port "$hosts")"
         echo ""
         local icmd
-        icmd=$(printf 'bash /root/mirza_transfer/install.sh install --name %q --token %q --admin %q --domain %q --db-user %q --db-pass %q' \
-            "$botname" "$token" "$admin" "$domain" "$dbuser" "$dbpass")
+        icmd=$(printf 'bash /root/mirza_transfer/install.sh install --name %q --token %q --admin %q --domain %q --port %q --db-user %q --db-pass %q' \
+            "$botname" "$token" "$admin" "$domain" "$(hosts_port "$hosts")" "$dbuser" "$dbpass")
         _tr_ssh -t "$icmd"
     fi
     if ! _tr_ssh 'grep -qx "PHASE:COMPLETE" /root/confmirza/.mirza_install_state 2>/dev/null && [ -f /var/www/html/mirzaprobotconfig/config.php ]'; then
@@ -4741,23 +4899,25 @@ EOF
     _tr_ssh 'rm -rf /root/mirza_transfer' >/dev/null 2>&1
     rm -rf "$work"
 
-    # 9) Is it the live one now?
-    local code hook
-    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 --resolve "${domain}:443:${TR_HOST}" "https://${domain}/" 2>/dev/null)
+    # 9) Is it the live one now? (on the port the new server gave it)
+    local code hook new_hosts
+    new_hosts=$(printf '%s\n' "$res" | sed -n 's/^HOSTS=//p')
+    [ -z "$new_hosts" ] && new_hosts="$domain"
+    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 --resolve "${domain}:$(hosts_port "$new_hosts"):${TR_HOST}" "https://${new_hosts}/" 2>/dev/null)
     hook=$(curl -s --max-time 10 "https://api.telegram.org/bot${token}/getWebhookInfo" 2>/dev/null)
     # its jobs here would now reach the new server and run everything twice
     _bot_crons_remove "$hosts" >/dev/null 2>&1
 
     _sec "Transferred"
     _kv "Bot" "${C_KEY}${name}${CR}"
-    _kv "Now on" "${C_OK}${TR_HOST}${CR} ${C_DIM}· https://${domain}${CR}"
+    _kv "Now on" "${C_OK}${TR_HOST}${CR} ${C_DIM}· https://${new_hosts}${CR}"
     if [ "$code" = "200" ] || [ "$code" = "301" ] || [ "$code" = "302" ]; then
         _kv "Site" "$(_dot ok) ${C_OK}answers (HTTP ${code})${CR}"
     else
         _kv "Site" "$(_dot warn) ${C_WARN}HTTP ${code:-timeout}${CR} ${C_DIM}· check it once DNS has settled${CR}"
     fi
-    if printf '%s' "$hook" | grep -q "\"url\":\"https://${domain}/index.php\""; then
-        _kv "Webhook" "$(_dot ok) ${C_OK}https://${domain}/index.php${CR}"
+    if printf '%s' "$hook" | grep -q "\"url\":\"https://${new_hosts}/index.php\""; then
+        _kv "Webhook" "$(_dot ok) ${C_OK}https://${new_hosts}/index.php${CR}"
     else
         _kv "Webhook" "$(_dot warn) ${C_WARN}not confirmed${CR} ${C_DIM}· run option 2 (Update) on the new server${CR}"
     fi
@@ -4942,7 +5102,7 @@ function startstop_menu() {
 # ── Command-line argument parsing ────────────────────────────
 # Globals filled from flags (consumed by install/update where relevant)
 ARG_NAME=""     ARG_TOKEN=""   ARG_ADMIN=""    ARG_DOMAIN=""
-ARG_DBUSER=""   ARG_DBPASS=""
+ARG_DBUSER=""   ARG_DBPASS=""  ARG_PORT=""
 
 print_usage() {
     cat <<USAGE
@@ -4974,6 +5134,8 @@ print_usage() {
     --token   <token>  Telegram bot token from @BotFather
     --admin   <id>     Your numeric Telegram id (from @userinfobot)
     --domain  <fqdn>   Domain already pointed at this server, e.g. bot.example.com
+    --port    <port>   The bot's HTTPS port: 443, 8443 or 88 (Telegram allows
+                       only these). Use 8443 or 88 when Xray already has 443.
     --db-user <user>   Database user to create
     --db-pass <pass>   Database password (letters, digits, underscore; 6-64)
     -h, --help         Show this help
@@ -5012,6 +5174,7 @@ process_arguments() {
             --token)   ARG_TOKEN="$2";   shift 2 ;;
             --admin)   ARG_ADMIN="$2";   shift 2 ;;
             --domain)  ARG_DOMAIN="$2";  shift 2 ;;
+            --port)    ARG_PORT="$2";    shift 2 ;;
             --db-user) ARG_DBUSER="$2";  shift 2 ;;
             --db-pass) ARG_DBPASS="$2";  shift 2 ;;
             -h|--help) print_usage; exit 0 ;;
