@@ -10101,8 +10101,8 @@ if (!function_exists('config_delivery_panel_payload')) {
         $info .= "📌 نحوه‌ی نمایش کانفیگ (هنگام {$kindLabel})\n➖➖➖➖➖➖➖➖➖➖\n";
         $info .= "بعد از اینکه سرویس تحویل داده شد، کاربر چی ببینه؟\n\n";
         $info .= "🔹 <b>حالت ۱ — فقط پیام کامل</b>\n";
-        $info .= "مشخصات سرویس (نام، لوکیشن، مدت، حجم) و لینک اتصال، توی یک پیام.\n";
-        $info .= "اگه طولانی‌تر از حد تلگرام بشه، چند تیکه فرستاده می‌شه.\n\n";
+        $info .= "مشخصات سرویس (نام، لوکیشن، مدت، حجم) و لینک اشتراک، توی یک پیام.\n";
+        $info .= "با «ارسال کانفیگ» این پنل روشن، بعدش هر کانفیگ جدا توی پیام خودش میاد - با QR خودش اگه QR روشن باشه، مثل «دریافت کانفیگ».\n\n";
         $info .= "🔹 <b>حالت ۲ — فقط صفحه‌ی کانفیگ</b>\n";
         $info .= "به‌جای پیام کامل، یه پیام با دکمه‌های انتخاب کانفیگ. بدون QR.\n";
         $info .= "مناسب سرویس‌هایی که چند تا کانفیگ دارن.\n";
@@ -10122,7 +10122,7 @@ if (!function_exists('config_delivery_panel_payload')) {
             $info .= "\n\n📷 <b>QR کد:</b> ❌ در حالت ۲ فرستاده نمی‌شه.";
         } else {
             $info .= "\n\n📷 <b>QR کد همراه پیام:</b> " . ($qrOn ? "روشن ✅" : "خاموش ❌") . "\n";
-            $info .= "QR لینک اشتراک رو نشون می‌ده. اگه لینک اشتراک این پنل خاموش باشه، فقط وقتی سرویس یک کانفیگ داره QR فرستاده می‌شه.";
+            $info .= "QR پیام اول، لینک اشتراک رو نشون می‌ده؛ با «ارسال کانفیگ» روشن، هر کانفیگ هم با QR خودش جدا میاد.";
         }
         $kb = ['inline_keyboard' => []];
         $kb['inline_keyboard'][] = [
@@ -18838,18 +18838,24 @@ function sendMessageService($panel_info, $config, $sub_link, $username_service, 
             unlink($urlimage);
         }
     } else {
-        // What the QR stands for: the subscription link covers every config, so
-        // it wins even when there are several - that case used to send no QR at
-        // all. A lone config works on its own; several configs with no
-        // subscription link have nothing a single QR could stand for.
-        $out_put_qrcode = "";
-        if ($panel_info['sublink'] == "onsublink") {
-            $out_put_qrcode = (string) $sub_link;
-        } elseif ($panel_info['config'] == "onconfig" && $configCount == 1) {
-            $out_put_qrcode = (string) $config[0];
+        // «ارسال کانفیگ» on: the message goes first WITHOUT the config links,
+        // then every config follows on a message of its own - a photo of its
+        // own QR with the link under it when the QR is on, as 🛍's «دریافت
+        // کانفیگ» sends it, the link alone when not. All of them in the one
+        // caption ran past Telegram's 1024 characters, and the photo then came
+        // apart from its text.
+        $cfgLinks = $panel_info['config'] == "onconfig" && is_array($config)
+            ? array_values(array_filter(array_map(fn($c) => trim((string) $c), $config), 'strlen'))
+            : [];
+        if ($cfgLinks) {
+            $caption = service_caption_without_configs($caption, $cfgLinks);
         }
+        $qrOn = config_delivery_qr_on($kind, $panel_info['code_panel'] ?? null, $sms_lang);
+        // The first message's QR is the subscription link, which covers every
+        // config; the configs bring their own.
+        $out_put_qrcode = $panel_info['sublink'] == "onsublink" ? (string) $sub_link : "";
         $captionSent = false;
-        if ($out_put_qrcode !== '' && config_delivery_qr_on($kind, $panel_info['code_panel'] ?? null, $sms_lang)) {
+        if ($out_put_qrcode !== '' && $qrOn) {
             $urlimage = "$user_id$invoice_id.png";
             try {
                 $qrCode = createqrcode($out_put_qrcode);
@@ -18877,6 +18883,56 @@ function sendMessageService($panel_info, $config, $sub_link, $username_service, 
         if (!$captionSent) {
             $sendFull($caption);
         }
+        foreach ($cfgLinks as $i => $link) {
+            config_send_one($user_id, $link, $qrOn, $image, "{$user_id}{$invoice_id}_{$i}.png");
+        }
+    }
+}
+if (!function_exists('service_caption_without_configs')) {
+    // A new service's message with its config links taken out - they follow on
+    // messages of their own (sendMessageService). What held them is tidied: an
+    // emptied <code></code>, and the blank lines left behind.
+    function service_caption_without_configs($caption, array $links)
+    {
+        $out = str_replace($links, '', (string) $caption);
+        $out = preg_replace('~<code>\s*</code>~u', '', $out);
+        $out = preg_replace("~[ \t]+\n~u", "\n", $out);
+        $out = preg_replace("~\n{3,}~u", "\n\n", $out);
+        return rtrim($out);
+    }
+}
+if (!function_exists('config_send_one')) {
+    // One config on a message of its own: a photo of its QR on $image with the
+    // link under it, exactly as 🛍's «دریافت کانفیگ» sends one - or the link
+    // alone, with the QR off or when the photo cannot be made or sent.
+    function config_send_one($chatId, $link, $withQr, $image, $file)
+    {
+        $caption = "<code>{$link}</code>";
+        if ($withQr) {
+            try {
+                $qrCode = createqrcode($link);
+                file_put_contents($file, $qrCode->getString());
+                addBackgroundImage($file, $qrCode, $image);
+                $res = telegram('sendphoto', [
+                    'chat_id' => $chatId,
+                    'photo' => new CURLFile($file),
+                    'caption' => $caption,
+                    'parse_mode' => "HTML",
+                ]);
+                if (is_file($file)) {
+                    unlink($file);
+                }
+                if (!empty($res['ok'])) {
+                    return;
+                }
+            } catch (\Throwable $e) {
+                error_log('config_send_one QR: ' . $e->getMessage());
+                if (is_file($file)) {
+                    unlink($file);
+                }
+            }
+        }
+        sendmessage($chatId, $caption, null, 'HTML');
     }
 }
 function isValidInvitationCode($setting, $fromId, $verfy_status, $lang = 'fa')
