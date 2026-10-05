@@ -1072,7 +1072,10 @@ if (!function_exists('bottext_item_menu_payload')) {
         $info = "📝 <b>{$bt_label}</b>\n➖➖➖➖➖➖➖➖➖➖\n{$bt_extra_note}";
         $info .= "✏️ متن: " . ($bt_custom ? "سفارشی ✅" : "پیش‌فرض") . "\n";
         if (!$bt_nosticker) {
-            $info .= "🖼 استیکر: " . ($bt_sticker !== '' ? "ست شده ✅" : "ندارد ❌") . "\n";
+            // one the message ships with (bt_default_stickers) is sent until the
+            // admin's own replaces it - «ندارد» read as if it sent none
+            $bt_def_st = function_exists('bt_default_sticker') && bt_default_sticker($bt_key) !== '';
+            $info .= "🖼 استیکر: " . ($bt_sticker !== '' ? "ست شده ✅" : ($bt_def_st ? "پیش‌فرض 🔹" : "ندارد ❌")) . "\n";
         }
         if ($bt_can_react && !$bt_nosticker) {
             $info .= "❤️ ری‌اکشن: " . ($bt_react !== '' ? $bt_react : "ندارد ❌") . "\n";
@@ -8745,7 +8748,8 @@ if (preg_match('/^btact\|delst\|([a-z]{2})\|(.+)$/', $datain, $btm) && $adminrul
     }
     step('home', $from_id);
     list($btm_text, $btm_kb) = bottext_item_menu_payload($btm[2], $btm[1], $textbotlang);
-    Editmessagetext($from_id, $message_id, "🗑 استیکر حذف شد.\n\n" . $btm_text, $btm_kb, 'HTML');
+    $btm_def = function_exists('bt_default_sticker') && bt_default_sticker($btm[2]) !== '';
+    Editmessagetext($from_id, $message_id, ($btm_def ? "🗑 استیکر خودت حذف شد و استیکر پیش‌فرض این پیام برگشت 🔹" : "🗑 استیکر حذف شد.") . "\n\n" . $btm_text, $btm_kb, 'HTML');
     return;
 }
 if (preg_match('/^btact\|delre\|([a-z]{2})\|(.+)$/', $datain, $btm) && $adminrulecheck['rule'] == "administrator") {
