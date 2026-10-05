@@ -1930,6 +1930,19 @@ if (!function_exists('aff_classic_on')) {
         }
         return aff_classic_on($lang) || affrw_live($lang) !== null;
     }
+    // ...and with 💼 off, one who has used 🎁 up gets nothing but its «used up»
+    // message, which brings a sticker of its own: the button's would land
+    // right on top of it, so that one goes alone
+    function aff_tap_sticker_yields($uid, $lang)
+    {
+        if (aff_classic_on($lang) || affrw_live($lang) === null || !affrw_used_up(affrw_row($uid))) {
+            return false;
+        }
+        $setting = select("setting", "*", null, null, "select");
+        $layout = json_decode((string) ($setting['keyboardmain'] ?? ''), true);
+        $map = (is_array($layout) && is_array($layout['text_stickers'] ?? null)) ? $layout['text_stickers'] : [];
+        return bt_effective_sticker($map, 'users.affiliates.rewardLimitReached', $lang) !== '';
+    }
 }
 if (!function_exists('refv_cfg')) {
     // 🛡 راستی‌آزمایی دعوت‌ها - one setting per plan and per language: 'c'
