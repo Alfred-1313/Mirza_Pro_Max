@@ -18642,6 +18642,7 @@ if (!function_exists('bt_default_stickers')) {
             'users.sell.noPaymentMethod' => 'CAACAgQAAxkBAAJyomqmL8XWREbwt2BPYfm8fToL4HqdAAKGDwACnQVRU0jlv2uEhl4wPQQ',
             'users.unknownMsg' => 'CAACAgQAAxkBAAJy5mqxYm-rS6jwNkdpdLI9_0J0GCQYAAJYDAACm6GYUo8o_EwMQ7lTPQQ',
             'users.text_start' => 'CAACAgQAAxkBAAJy6mqxY_xKWxtBsdsM_I8arNldDhf3AAKZEgACdnlZUW2qPBOT3zBNPQQ',
+            'users.affiliates.rewardLimitReached' => 'CAACAgQAAxkBAAJzzmrDaNPb4yRiifLUYnNjF0KDryttAAJEFQACKplIU4h3vf6E677mPQQ',
         ];
     }
     function bt_default_sticker($key)
