@@ -122,6 +122,25 @@ function web_lang_assets(): string
 .kb-chip.off{opacity:.45}
 .kb-chip.sel{outline:3px solid var(--warn);outline-offset:1px}
 .kb-slot,.kb-newrow{flex:1;border:2px dashed var(--bd);border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--mute);cursor:pointer;min-height:40px;font-size:.84rem}
+/* a phone: tabs wrap instead of hiding past the edge, and every table row
+   becomes a card - its name on top, each field under its column's name -
+   instead of a table four phones wide to swipe through */
+@media (max-width:640px){
+.lang-tabs,.bt-groups{flex-wrap:wrap;overflow-x:visible!important}
+.tbl-wrap{overflow:visible!important;background:none!important}
+.card>.tbl-wrap{padding:12px 12px 2px}
+.tbl-wrap>table.tbl-xl{min-width:0!important}
+.tbl-wrap>table.tbl-xl thead{display:none}
+.tbl-wrap>table.tbl-xl,.tbl-wrap>table.tbl-xl tbody{display:block;width:100%}
+.tbl-wrap>table.tbl-xl tr{display:grid;grid-template-columns:1fr 1fr;column-gap:12px;border:1px solid var(--bd);border-radius:10px;padding:2px 12px 6px;margin-bottom:10px;background:var(--sf2)}
+.tbl-wrap>table.tbl-xl td{display:block;min-width:0;border:0!important;padding:7px 0!important;white-space:normal!important;text-align:right!important}
+.tbl-wrap>table.tbl-xl td[data-label]::before{content:attr(data-label);display:block;font-size:.7rem;font-weight:700;color:var(--dim);margin-bottom:4px}
+.tbl-wrap>table.tbl-xl td.stk-title,.tbl-wrap>table.tbl-xl td.stk-wide{grid-column:1/-1}
+.tbl-wrap>table.tbl-xl td.stk-title{order:-1;font-size:.92rem;border-bottom:1px solid var(--bd)!important;padding:9px 0!important}
+.tbl-wrap>table.tbl-xl td .select{max-width:100%}
+.tbl-wrap>table.tbl-xl td.stk-title::before,.tbl-wrap>table.tbl-xl td[data-label="#"]{display:none}
+.tbl-wrap>table.tbl-xl tbody tr:hover td{background:none}
+}
 </style>
 <script>
 document.addEventListener('change', function (e) {
@@ -137,6 +156,25 @@ document.addEventListener('change', function (e) {
   var any = Array.prototype.some.call(boxes, function (b) { return b.checked; });
   if (!any) boxes.forEach(function (b) { if (b.value === 'all') b.checked = true; });
   group.dispatchEvent(new CustomEvent('langchange', { bubbles: true }));
+});
+// the card a table row becomes on a phone: each cell named after its column,
+// the row's own name (its first .cs cell) as the card's title, and a cell with
+// a text to type (or a row of boxes) the card's full width - the small ones
+// (emoji, side, colour, a switch) two to a line
+document.addEventListener('DOMContentLoaded', function () {
+  document.querySelectorAll('.tbl-wrap > table.tbl-xl').forEach(function (t) {
+    var heads = Array.prototype.map.call(t.querySelectorAll('thead th'), function (th) { return th.textContent.trim(); });
+    t.querySelectorAll('tbody tr').forEach(function (tr) {
+      var col = 0, title = tr.querySelector('td.cs');
+      if (title) title.classList.add('stk-title');
+      Array.prototype.forEach.call(tr.children, function (td) {
+        var span = parseInt(td.getAttribute('colspan') || '1', 10);
+        if (span === 1 && heads[col]) td.setAttribute('data-label', heads[col]);
+        if (span > 1 || td.querySelector('textarea, .lang-chips, input.input:not([style*="width"])')) td.classList.add('stk-wide');
+        col += span;
+      });
+    });
+  });
 });
 </script>
 HTML;

@@ -180,7 +180,7 @@ echo web_lang_assets();
 
 <?= web_lang_tabs($lang, fn($code) => 'bottext.php?' . http_build_query(['lang' => $code, 'group' => $group, 'q' => $query ?: null, 'changed' => $onlyChanged ? 1 : null])) ?>
 
-<div style="display:flex;gap:4px;margin-bottom:14px;background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:5px;overflow-x:auto" class="fade-up">
+<div style="display:flex;gap:4px;margin-bottom:14px;background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:5px;overflow-x:auto" class="bt-groups fade-up">
     <?php foreach (['*' => array_sum($groupCounts)] + $groupCounts as $g => $n): ?>
         <a href="<?= htmlspecialchars($tabUrl((string) $g)) ?>"
             style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:7px;font-size:.82rem;font-weight:600;white-space:nowrap;flex-shrink:0;text-decoration:none;

@@ -89,7 +89,7 @@ include __DIR__ . '/inc/layout_head.php';
             <table class="tbl-sm">
                 <thead>
                     <tr>
-                        <th><?= $textbotlang['panel']['dashColUser'] ?></th>
+                        <th data-m="0"><?= $textbotlang['panel']['dashColUser'] ?></th>
                         <th><?= $textbotlang['panel']['dashColProduct'] ?></th>
                         <th><?= $textbotlang['panel']['dashColAmount'] ?></th>
                         <th><?= $textbotlang['panel']['dashColStatus'] ?></th>
@@ -116,7 +116,7 @@ include __DIR__ . '/inc/layout_head.php';
                             [$tagClass, $label] = $statusMap[$inv['Status'] ?? ''] ?? ['tag-plain', $inv['Status'] ?? '—'];
                             ?>
                             <tr>
-                                <td class="cm cf"><?= htmlspecialchars($inv['id_user'] ?? '—') ?></td>
+                                <td class="cm cf" data-m="0"><?= htmlspecialchars($inv['id_user'] ?? '—') ?></td>
                                 <td class="cs"
                                     style="max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
                                     <?= htmlspecialchars(trunc($inv['name_product'] ?? '—', 20)) ?>
@@ -144,7 +144,7 @@ include __DIR__ . '/inc/layout_head.php';
             <table class="tbl-sm">
                 <thead>
                     <tr>
-                        <th><?= $textbotlang['panel']['dashColId'] ?></th>
+                        <th data-m="0"><?= $textbotlang['panel']['dashColId'] ?></th>
                         <th><?= $textbotlang['panel']['dashColName'] ?></th>
                         <th><?= $textbotlang['panel']['dashColBalance'] ?></th>
                         <th><?= $textbotlang['panel']['dashColGroup'] ?></th>
@@ -171,7 +171,7 @@ include __DIR__ . '/inc/layout_head.php';
                                 $uname = '';
                             ?>
                             <tr>
-                                <td class="cm cf"><?= htmlspecialchars($u['id']) ?></td>
+                                <td class="cm cf" data-m="0"><?= htmlspecialchars($u['id']) ?></td>
                                 <td>
                                     <?php if ($name): ?>
                                         <span class="cs"><?= htmlspecialchars(trunc($name, 14)) ?></span>
