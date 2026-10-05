@@ -1260,12 +1260,38 @@ _db_owner_label() {
     echo "$1"
 }
 
+# The folder inside a zip that holds a bot - index.php and function.php side
+# by side; "" when they sit at its top, as in the bot's own botfolder_*.zip.
+# Fails when the zip holds no bot.
+_restore_bot_prefix() {
+    local list fn p
+    list=$(unzip -Z1 "$1" 2>/dev/null)
+    fn=$(printf '%s\n' "$list" | grep -E '(^|/)function\.php$' | awk -F/ '{ print NF "\t" $0 }' | sort -n | head -1 | cut -f2-)
+    [ -n "$fn" ] || return 1
+    p="${fn%function.php}"
+    printf '%s\n' "$list" | grep -qxF "${p}index.php" || return 1
+    printf '%s' "$p"
+}
+
+# A zip of the bot's folder rather than of its database
+_restore_is_botfolder() {
+    _is_zip "$1" && ! unzip -Z1 "$1" 2>/dev/null | grep -qiE '\.sql$' && _restore_bot_prefix "$1" >/dev/null
+}
+
 # One short note per listed file: whose data it is, or why it cannot be used
 _restore_file_note() {
-    local f="$1" entry src
+    local f="$1" entry src prefix
     if _is_zip "$f"; then
         entry=$(unzip -Z1 "$f" 2>/dev/null | grep -iE '\.sql$' | head -1)
-        if [ -z "$entry" ]; then echo "zip · no .sql inside"; return; fi
+        if [ -z "$entry" ]; then
+            prefix=$(_restore_bot_prefix "$f") || { echo "zip · not a backup"; return; }
+            if unzip -Z -v "$f" "${prefix}index.php" 2>/dev/null | grep -q 'file security status:[[:space:]]*encrypted'; then
+                echo "bot folder · password"; return
+            fi
+            src=$(unzip -p "$f" "${prefix}config.php" 2>/dev/null | grep '^\$dbname' | cut -d"'" -f2)
+            if [ -n "$src" ]; then echo "bot folder · from $(_db_owner_label "$src")"; else echo "bot folder"; fi
+            return
+        fi
         if unzip -Z -v "$f" "$entry" 2>/dev/null | grep -q 'file security status:[[:space:]]*encrypted'; then
             echo "zip · password"; return
         fi
@@ -1292,7 +1318,7 @@ _restore_prepare() {
     fi
     entries=$(unzip -Z1 "$f" 2>/dev/null | grep -iE '\.sql$')
     if [ -z "$entries" ]; then
-        printf "    ${C_BAD}●${CR} ${C_BAD}This zip has no .sql file inside - it is not a database backup.${CR}\n"
+        printf "    ${C_BAD}●${CR} ${C_BAD}This zip holds neither a database dump (.sql) nor a bot folder - it is not a backup.${CR}\n"
         return 1
     fi
     n=$(printf '%s\n' "$entries" | wc -l)
@@ -1337,21 +1363,31 @@ _restore_drop_sql() {
         done
 }
 
-_restore_finish() {
-    [ -n "$1" ] && rm -rf "$1"
+# after a restore, a refusal or a wrong pick: back to the file list, not
+# all the way out to the main menu
+_restore_pause() {
     echo ""
-    printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "
+    printf "  ${C_PROMPT}❯${CR} Press Enter to go back to the list... "
     read -r _
-    show_menu
 }
 
-# Menu 7 - put a backup (.sql, or the .zip the bot sends) into one bot's
-# database. The database is saved first; if the import fails half way it
-# is put back from that copy, so a bad file never leaves the bot empty.
+# What a restore replaced is kept in MIRZA_BACKUP_DIR (next to the update
+# snapshots) instead of /root itself - the newest MIRZA_SNAPSHOTS_KEEP of
+# each kind for each bot. $1: the name up to its date.
+_restore_prune() {
+    ls -1t "$MIRZA_BACKUP_DIR/$1"[0-9]* 2>/dev/null | tail -n +$((MIRZA_SNAPSHOTS_KEEP + 1)) \
+        | while IFS= read -r f; do rm -f "$f"; done
+}
+
+# Menu 7 - put a backup into one bot: a database dump (.sql, or the .zip the
+# bot sends) into its database, or the bot's folder zip (botfolder_*.zip)
+# over its files. What is there now is saved first either way. The list
+# stays open until 0 - a refusal or a finished restore comes back to it,
+# and [R] reads /root again for a file uploaded meanwhile.
 function import_bot() {
     clear 2>/dev/null || true
     banner
-    _sec "Restore database"
+    _sec "Restore"
     if ! pick_bot_instance "restore a backup into"; then
         [ "$(bots_registry_count)" = "0" ] && sleep 2
         show_menu; return 0
@@ -1359,7 +1395,8 @@ function import_bot() {
     local dir="$PICKED_DIR" name="$PICKED_NAME" cfg="$PICKED_DIR/config.php"
     if [ ! -f "$cfg" ]; then
         printf "    ${C_BAD}●${CR} ${C_BAD}Mirza is not installed. config.php not found.${CR}\n"
-        _restore_finish; return 1
+        echo ""; printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "; read -r _
+        show_menu; return 1
     fi
 
     local dbhost dbname dbuser dbpass
@@ -1370,48 +1407,71 @@ function import_bot() {
     [ -z "$dbhost" ] && dbhost="localhost"
     if [ -z "$dbname" ] || [ -z "$dbuser" ] || [ -z "$dbpass" ]; then
         printf "    ${C_BAD}●${CR} ${C_BAD}Could not read database credentials from config.php${CR}\n"
-        _restore_finish; return 1
+        echo ""; printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "; read -r _
+        show_menu; return 1
     fi
 
-    _kv "Bot" "${C_KEY}${name}${CR}"
-    _kv "Database" "${C_DIM}${dbname}${CR}"
-    echo ""
-    printf "    ${C_DIM}Put the backup in /root - a .sql file, or the .zip the bot${CR}\n"
-    printf "    ${C_DIM}sends you - and it shows up here (newest first).${CR}\n"
-    echo ""
-    local files=() f i=1
-    while IFS= read -r f; do
-        files+=("$f")
-        printf "    ${C_KEY}[%d]${CR} ${C_TXT}%-38s${CR} ${C_DIM}%5s  %s  %s${CR}\n" "$i" "$(basename "$f")" \
-            "$(du -h "$f" 2>/dev/null | cut -f1)" "$(date -r "$f" '+%d %b %H:%M' 2>/dev/null)" "$(_restore_file_note "$f")"
-        i=$((i + 1))
-    done < <(find /root -maxdepth 1 -type f \( -iname '*.sql' -o -iname '*.zip' \) -printf '%T@\t%p\n' 2>/dev/null \
-                | sort -rn | head -n 15 | cut -f2-)
-    [ "${#files[@]}" -eq 0 ] && printf "    ${C_WARN}!${CR} ${C_WARN}No .sql or .zip file in /root yet.${CR}\n"
-    printf "    ${C_KEY}[0]${CR} ${C_TXT}Back to menu${CR}\n"
-    echo ""
-    printf "  ${C_PROMPT}❯${CR} Choose a file, or type its full path: "
-    local choice file=""
-    read -r choice
-    if [ -z "$choice" ] || [ "$choice" = "0" ]; then show_menu; return 0; fi
-    if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -le "${#files[@]}" ]; then
-        file="${files[$((choice - 1))]}"
-    else
-        file="$choice"
-    fi
-    if [ ! -f "$file" ]; then
-        printf "\n    ${C_BAD}●${CR} ${C_BAD}File not found: %s${CR}\n" "$file"
-        _restore_finish; return 1
-    fi
+    local files f i choice file rc
+    while true; do
+        clear 2>/dev/null || true
+        banner
+        _sec "Restore"
+        _kv "Bot" "${C_KEY}${name}${CR}"
+        _kv "Database" "${C_DIM}${dbname}${CR}"
+        echo ""
+        printf "    ${C_DIM}Put the backup in /root - the .sql or .zip of the database, or${CR}\n"
+        printf "    ${C_DIM}the bot's botfolder zip - and it shows up here (newest first).${CR}\n"
+        echo ""
+        files=(); i=1
+        while IFS= read -r f; do
+            files+=("$f")
+            printf "    ${C_KEY}[%d]${CR} ${C_TXT}%-38s${CR} ${C_DIM}%5s  %s  %s${CR}\n" "$i" "$(basename "$f")" \
+                "$(du -h "$f" 2>/dev/null | cut -f1)" "$(date -r "$f" '+%d %b %H:%M' 2>/dev/null)" "$(_restore_file_note "$f")"
+            i=$((i + 1))
+        done < <(find /root -maxdepth 1 -type f \( -iname '*.sql' -o -iname '*.zip' \) -printf '%T@\t%p\n' 2>/dev/null \
+                    | sort -rn | head -n 15 | cut -f2-)
+        [ "${#files[@]}" -eq 0 ] && printf "    ${C_WARN}!${CR} ${C_WARN}No .sql or .zip file in /root yet.${CR}\n"
+        printf "    ${C_KEY}[R]${CR} ${C_TXT}Refresh this list${CR}\n"
+        printf "    ${C_KEY}[0]${CR} ${C_TXT}Back to menu${CR}\n"
+        echo ""
+        printf "  ${C_PROMPT}❯${CR} Choose a file, or type its full path: "
+        # nobody at the keyboard (stdin closed): leave instead of looping
+        read -r choice || { show_menu; return 0; }
+        case "$choice" in
+            0) show_menu; return 0 ;;
+            ""|r|R) continue ;;
+        esac
+        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -le "${#files[@]}" ]; then
+            file="${files[$((choice - 1))]}"
+        else
+            file="$choice"
+        fi
+        rc=0
+        if [ ! -f "$file" ]; then
+            printf "\n    ${C_BAD}●${CR} ${C_BAD}File not found: %s${CR}\n" "$file"
+        elif _restore_is_botfolder "$file"; then
+            _restore_files "$file" "$dir" "$name" "$dbname"; rc=$?
+        else
+            _restore_db "$file" "$dir" "$name" "$dbhost" "$dbuser" "$dbpass" "$dbname"; rc=$?
+        fi
+        # 2: backed out of a question - straight back to the list
+        [ "$rc" -eq 2 ] || _restore_pause
+    done
+}
 
-    local work; work=$(mktemp -d /root/.mirza_restore.XXXXXX)
+# A database dump (.sql, or the .zip the bot sends) into DBNAME. The
+# database is saved first; if the import fails half way it is put back from
+# that copy, so a bad file never leaves the bot empty. Unpacked outside
+# /root, and nothing of it is left behind.
+# Returns 0 done or cancelled, 1 failed, 2 backed out.
+_restore_db() {
+    local file="$1" dir="$2" name="$3" dbhost="$4" dbuser="$5" dbpass="$6" dbname="$7" rc
+    local work; work=$(mktemp -d /var/tmp/mirza_restore.XXXXXX)
     echo ""
-    _restore_prepare "$file" "$work"
-    case $? in
-        0) ;;
-        2) rm -rf "$work"; show_menu; return 0 ;;
-        *) _restore_finish "$work"; return 1 ;;
-    esac
+    _restore_prepare "$file" "$work"; rc=$?
+    if [ "$rc" -ne 0 ]; then
+        rm -rf "$work"; return "$rc"
+    fi
 
     local src owner shown
     src=$(_sql_source_db < "$RESTORE_SQL")
@@ -1434,18 +1494,20 @@ function import_bot() {
     local confirm; read -r confirm
     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
         printf "\n    ${C_DIM}Restore cancelled - nothing was changed.${CR}\n"
-        _restore_finish "$work"; return 0
+        rm -rf "$work"; return 0
     fi
     echo ""
 
-    local safe="/root/mirza_before_restore_${dbname}_$(date +%Y-%m-%d_%H-%M-%S).sql"
+    mkdir -p "$MIRZA_BACKUP_DIR"
+    local safe="$MIRZA_BACKUP_DIR/pre-restore_db_${dbname}_$(date +%Y%m%d_%H%M%S).sql"
     local my="mysql -h '$dbhost' -u '$dbuser' -p'$dbpass' '$dbname'"
     if ! run_step "Saving the current database" \
         "mysqldump -h '$dbhost' -u '$dbuser' -p'$dbpass' --no-tablespaces --ssl-mode=DISABLED '$dbname' > '$safe'"; then
         show_step_error; rm -f "$safe"
         printf "\n    ${C_BAD}●${CR} ${C_BAD}Could not save the current database - nothing was changed.${CR}\n"
-        _restore_finish "$work"; return 1
+        rm -rf "$work"; return 1
     fi
+    _restore_prune "pre-restore_db_${dbname}_"
     _restore_drop_sql "$dbhost" "$dbuser" "$dbpass" "$dbname" > "$work/drop.sql"
     # A dump may name its own database (CREATE DATABASE / USE); drop those
     # lines so it always lands in this bot's database, never another one.
@@ -1461,8 +1523,9 @@ function import_bot() {
             printf "\n    ${C_BAD}●${CR} ${C_BAD}The import failed and the old data could not be put back.${CR}\n"
             printf "    ${C_DIM}It is saved in %s${CR}\n" "$safe"
         fi
-        _restore_finish "$work"; return 1
+        rm -rf "$work"; return 1
     fi
+    rm -rf "$work"
     # An older backup gets the columns and tables this version expects
     run_step "Updating tables for this version" "cd '$dir' && php table.php" || show_step_error
     chown -R www-data:www-data "$dir" 2>/dev/null
@@ -1470,7 +1533,106 @@ function import_bot() {
     echo ""
     printf "    ${C_OK}✔${CR} ${C_OK}Restored into %s (%s).${CR}\n" "$dbname" "$name"
     printf "    ${C_DIM}The data it had before is kept in %s${CR}\n" "$safe"
-    _restore_finish "$work"
+    return 0
+}
+
+# The bot's folder zip (botfolder_*.zip) over DIR: unpacked outside /root
+# first (asking for the password the bot's backup settings put on it, if
+# any), the folder as it is now saved, then laid over it - files the zip
+# has are replaced, the rest stays. config.php stays this bot's own, so it
+# keeps its database, token and address; the update machinery's state
+# files stay too. Core files failing the PHP syntax check put the saved
+# folder back. Returns 0 done or cancelled, 1 failed, 2 backed out.
+_restore_files() {
+    local file="$1" dir="$2" name="$3" dbname="$4"
+    local prefix from work rc pw src owner confirm tag snap bad c
+    prefix=$(_restore_bot_prefix "$file") || return 1
+    work=$(mktemp -d /var/tmp/mirza_restore.XXXXXX)
+    from="$work/new/${prefix}"
+    echo ""
+    if unzip -Z -v "$file" "${prefix}index.php" 2>/dev/null | grep -q 'file security status:[[:space:]]*encrypted'; then
+        printf "    ${C_DIM}This zip is password-protected (the password from the bot's backup settings).${CR}\n"
+        while true; do
+            printf "  ${C_PROMPT}❯${CR} Zip password ${C_DIM}[0 = back]${CR}: "
+            read -rs pw; echo ""
+            if [ -z "$pw" ] || [ "$pw" = "0" ]; then rm -rf "$work"; return 2; fi
+            rm -rf "$work/new"
+            unzip -q -o -P "$pw" "$file" -d "$work/new" >/dev/null 2>&1; rc=$?
+            [ "$rc" -le 1 ] && [ -s "${from}index.php" ] && break
+            printf "    ${C_BAD}●${CR} ${C_BAD}Wrong password, or the zip is damaged. Try again.${CR}\n"
+        done
+    else
+        unzip -q -o "$file" -d "$work/new" >/dev/null 2>&1; rc=$?
+    fi
+    if [ "$rc" -gt 1 ] || [ ! -s "${from}index.php" ]; then
+        printf "    ${C_BAD}●${CR} ${C_BAD}The zip could not be unpacked - it may be damaged.${CR}\n"
+        rm -rf "$work"; return 1
+    fi
+
+    src=$(grep '^\$dbname' "${from}config.php" 2>/dev/null | cut -d"'" -f2)
+    _sec "Restore into ${name}"
+    _kv "File" "${C_DIM}$(basename "$file")${CR} ${C_DIM}($(du -h "$file" 2>/dev/null | cut -f1), the bot's folder)${CR}"
+    if [ -n "$src" ]; then
+        owner=$(_db_owner_label "$src")
+        if [ "$owner" = "$src" ]; then _kv "Made from" "${C_DIM}${src}${CR}"
+        else _kv "Made from" "${C_DIM}${owner} (${src})${CR}"; fi
+    fi
+    _kv "Into" "${C_KEY}${dir}${CR} ${C_DIM}(${name})${CR}"
+    echo ""
+    if [ -n "$src" ] && [ "$src" != "$dbname" ]; then
+        printf "    ${C_WARN}!${CR} ${C_WARN}This backup was made from another bot (%s).${CR}\n" "$owner"
+    fi
+    printf "    ${C_WARN}!${CR} ${C_WARN}The bot's files are replaced with the ones in this backup. A copy of them is saved first.${CR}\n"
+    printf "    ${C_DIM}config.php stays as it is, so the bot keeps its own database, token and address.${CR}\n"
+    printf "  ${C_PROMPT}❯${CR} Continue? ${C_DIM}[y/N]${CR}: "
+    read -r confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        printf "\n    ${C_DIM}Restore cancelled - nothing was changed.${CR}\n"
+        rm -rf "$work"; return 0
+    fi
+    echo ""
+
+    rm -f "${from}config.php" "${from}update_request" "${from}update_request.running" "${from}rollback_request" \
+          "${from}update_progress.json" "${from}update_status.json" "${from}update_backups.json"
+    # named like the update snapshots - after the bot's @username, or its directory
+    tag=$(grep '^\$usernamebot' "$dir/config.php" 2>/dev/null | cut -d"'" -f2 | tr -cd 'A-Za-z0-9_' | cut -c1-32)
+    [ -z "$tag" ] && tag=$(basename "$dir" | tr -cd 'A-Za-z0-9_' | cut -c1-32)
+    mkdir -p "$MIRZA_BACKUP_DIR"
+    snap="$MIRZA_BACKUP_DIR/pre-restore_files_${tag}_$(date +%Y%m%d_%H%M%S).tar.gz"
+    if ! run_step "Saving the current files" \
+        "tar --warning=no-file-changed -czf '$snap' -C '$(dirname "$dir")' --exclude='*.bak*' --exclude='.git' '$(basename "$dir")'"; then
+        show_step_error; rm -f "$snap"
+        printf "\n    ${C_BAD}●${CR} ${C_BAD}Could not save the current files - nothing was changed.${CR}\n"
+        rm -rf "$work"; return 1
+    fi
+    _restore_prune "pre-restore_files_${tag}_"
+    if ! run_step "Putting the backup's files in place" "cp -a '${from}.' '$dir/'"; then
+        show_step_error
+        _rollback_update "$snap" "$dir" restore
+        rm -rf "$work"; return 1
+    fi
+    rm -rf "$work"
+    run_step "Setting ownership and permissions" \
+        "chown -R www-data:www-data '$dir' && find '$dir' -type d -exec chmod 755 {} + && find '$dir' -type f -exec chmod 644 {} + && chmod +x '$dir'/*.sh 2>/dev/null; true" \
+        || true
+    bad=""
+    for c in index.php admin.php function.php keyboard.php table.php; do
+        [ -f "$dir/$c" ] || continue
+        php -l "$dir/$c" >/dev/null 2>&1 || bad="$bad $c"
+    done
+    if [ -n "$bad" ]; then
+        printf "    ${C_BAD}●${CR} ${C_BAD}PHP syntax errors in the restored files:${CR}${C_KEY}%s${CR}\n" "$bad"
+        _rollback_update "$snap" "$dir" restore
+        return 1
+    fi
+    # the restored code gets the columns and tables it expects
+    run_step "Updating tables for this version" "cd '$dir' && php table.php" || show_step_error
+    chown -R www-data:www-data "$dir" 2>/dev/null
+
+    echo ""
+    printf "    ${C_OK}✔${CR} ${C_OK}The bot's files were restored into %s (%s).${CR}\n" "$dir" "$name"
+    printf "    ${C_DIM}The files it had before are kept in %s${CR}\n" "$snap"
+    return 0
 }
 
 function show_menu() {
@@ -1491,7 +1653,7 @@ function show_menu() {
     _mi "4" "Migrate"   "move an original Mirza to Pro Max ${C_WARN}(beta)${CR}"
     _mi "5" "Renew SSL" "reissue the domain certificate"
     _mi "6" "Backup"    "database dump, sent to Telegram"
-    _mi "7" "Restore"   "import a .sql or .zip backup ${C_WARN}(beta)${CR}"
+    _mi "7" "Restore"   "a database or bot folder backup ${C_WARN}(beta)${CR}"
     _mi "8" "Help"      "commands and flags for scripts"
     _mi "9" "Database"  "password, login info, phpMyAdmin port"
     _mi "10" "Transfer"  "move a bot to another server"
@@ -1531,7 +1693,7 @@ function show_help_screen() {
     _kv "addbot" "${C_DIM}Install a second, independent bot on this server${CR}"
     _kv "renew" "${C_DIM}Renew the bot domain SSL certificate${CR}"
     _kv "backup" "${C_DIM}Backup database & send to Telegram${CR}"
-    _kv "import" "${C_DIM}Import a database backup, .sql or .zip (Beta)${CR}"
+    _kv "import" "${C_DIM}Restore a database backup (.sql/.zip) or a bot folder zip (Beta)${CR}"
     _kv "menu" "${C_DIM}Open this interactive panel (default)${CR}"
 
     _sec "Install parameters"
@@ -3591,9 +3753,10 @@ NOTIFYEOF
 }
 
 # Put the pre-update snapshot back, exactly as it was.
+# $3: what is being undone, for the wording - an update (default) or a restore
 _rollback_update() {
-    local archive="$1" botdir="$2"
-    printf "  ${C_WARN}↺${CR} ${C_WARN}Rolling back to the pre-update snapshot...${CR}\n"
+    local archive="$1" botdir="$2" what="${3:-update}"
+    printf "  ${C_WARN}↺${CR} ${C_WARN}Rolling back to the pre-${what} snapshot...${CR}\n"
     if [ ! -f "$archive" ]; then
         printf "  ${C_BAD}●${CR} ${C_BAD}Snapshot missing (${archive}). Manual recovery needed.${CR}\n"
         return 1
@@ -3603,7 +3766,7 @@ _rollback_update() {
     if tar -xzf "$archive" -C "$(dirname "$botdir")" 2>/dev/null; then
         chown -R www-data:www-data "$botdir" 2>/dev/null
         rm -rf "${botdir}.failed"
-        printf "  ${C_OK}✔${CR} ${C_OK}Rolled back. Your bot is as it was before the update.${CR}\n"
+        printf "  ${C_OK}✔${CR} ${C_OK}Rolled back. Your bot is as it was before the ${what}.${CR}\n"
         return 0
     fi
     mv "${botdir}.failed" "$botdir" 2>/dev/null
@@ -5126,7 +5289,9 @@ print_usage() {
     addbot             Install a second, independent bot on this server
     renew              Reissue the domain's SSL certificate
     backup             Dump the database and send it to Telegram
-    import             Restore the database from a .sql or .zip backup (beta)
+    import             Restore the database from a .sql or .zip backup, or the
+                       bot's files from its botfolder zip (beta). What it
+                       replaces is kept in /root/mirza-backups/ first.
     menu               Open the interactive menu (default)
 
   Options:
