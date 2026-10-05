@@ -1045,7 +1045,7 @@ if (!function_exists('bottext_item_menu_payload')) {
             return $textCustom || $stickerCustom || $reactCustom || $btnCustom;
         };
         // reaction needs a triggering user message — only these keys have one
-        $bt_can_react = in_array($bt_key, ['users.text_start', 'textbot.faqDesc', 'textbot.tariffListDesc', 'textbot.rules', 'users.unknownMsg'], true);
+        $bt_can_react = in_array($bt_key, bt_react_keys(), true);
         // Items whose text is not a message of its own: it is concatenated into
         // ANOTHER caption, or shown as an Alert popup. There is no message to
         // attach a sticker or a reaction to, and a "👁 پیش‌نمایش" screen showing

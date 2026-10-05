@@ -184,10 +184,20 @@ $initials = mb_strtoupper(mb_substr($currentUser, 0, 1, 'UTF-8'), 'UTF-8');
             <span class="nav-icon"><?= icon('menu') ?></span><span
               class="nav-label"><?= $textbotlang['panel']['looksPageTitle'] ?></span>
           </a>
+          <a href="svclook.php" class="nav-item <?= $activeNav === 'svclook' ? 'active' : '' ?>"
+            title="<?= $textbotlang['panel']['svcPageTitle'] ?>">
+            <span class="nav-icon"><?= icon('package') ?></span><span
+              class="nav-label"><?= $textbotlang['panel']['svcPageTitle'] ?></span>
+          </a>
           <a href="bottext.php" class="nav-item <?= $activeNav === 'bottext' ? 'active' : '' ?>"
             title="<?= $textbotlang['panel']['bottextPageTitle'] ?>">
             <span class="nav-icon"><?= icon('edit') ?></span><span
               class="nav-label"><?= $textbotlang['panel']['bottextPageTitle'] ?></span>
+          </a>
+          <a href="tools.php" class="nav-item <?= $activeNav === 'tools' ? 'active' : '' ?>"
+            title="<?= $textbotlang['panel']['toolsPageTitle'] ?>">
+            <span class="nav-icon"><?= icon('settings') ?></span><span
+              class="nav-label"><?= $textbotlang['panel']['toolsPageTitle'] ?></span>
           </a>
         </div>
         <div class="nav-section">

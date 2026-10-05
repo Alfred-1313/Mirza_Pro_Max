@@ -18902,6 +18902,14 @@ if (!function_exists('affrw_cfg')) {
         return true;
     }
 }
+if (!function_exists('bt_react_keys')) {
+    // the messages a ❤️ reaction can go on: the bot puts it on the customer's
+    // own message that called them up, and only these have one
+    function bt_react_keys()
+    {
+        return ['users.text_start', 'textbot.faqDesc', 'textbot.tariffListDesc', 'textbot.rules', 'users.unknownMsg'];
+    }
+}
 if (!function_exists('bt_nosticker_keys')) {
     // Messages whose 🖼 استیکر can never do anything useful - hidden on their
     // editing screen and skipped when stickers are sent. A sticker stored on

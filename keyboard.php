@@ -2403,7 +2403,7 @@ function keyboard_list_text($lang, $groupFilter = null)
         'bottext.langPickerCaption',
         // opened from inside 📯 پیام عضویت اجباری کانال, whose back it uses
         'users.channel.left_channel'];
-    $bt_can_react_keys = ['users.text_start', 'textbot.faqDesc', 'textbot.tariffListDesc', 'textbot.rules', 'users.unknownMsg'];
+    $bt_can_react_keys = bt_react_keys();
     $bt_list_setting = select("setting", "*", null, null, "select");
     $bt_list_edit = json_decode((string) ($bt_list_setting['text_edit'] ?? ''), true);
     $bt_list_layout = json_decode((string) ($bt_list_setting['keyboardmain'] ?? ''), true);

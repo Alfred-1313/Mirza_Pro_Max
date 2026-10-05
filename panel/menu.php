@@ -63,15 +63,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             unset($b['icon_emoji']);
         }
         $b['emoji'] = $emoji === '' ? null : $emoji;
+        // its colour in each look of the menu - glass (style) and keyboard
+        // (style_reply) - as the bot's 🎨 رنگ‌بندی دکمه‌ها keeps them apart
         $style = (string) ($p['style'] ?? '');
         $b['style'] = in_array($style, ['primary', 'success', 'danger'], true) ? $style : null;
+        $styleReply = (string) ($p['style_reply'] ?? '');
+        $b['style_reply'] = in_array($styleReply, ['primary', 'success', 'danger'], true) ? $styleReply : null;
         $hidden = ($p['hidden'] ?? '') === '1';
         if ($token === 'text_change_language') {
             $langBtnHidden = $hidden;
         }
         $b['hidden'] = $hidden ? true : null;
+        $sticker = trim((string) ($p['sticker'] ?? ''));
         if (!empty($p['sticker_del'])) {
             $b['sticker'] = null;
+        } elseif ($sticker !== '') {
+            // a Telegram file id, the one way to name a sticker outside Telegram
+            if (!preg_match('/^[A-Za-z0-9_-]{20,}$/', $sticker)) {
+                $err = sprintf($t['btStickerInvalid'], $names[$token] ?? $token);
+                break;
+            }
+            $b['sticker'] = $sticker;
         }
         $b = array_filter($b, fn($v) => $v !== null);
         $placed[$token] = [(int) $rowNo, $b];
@@ -149,7 +161,7 @@ $pos = ($layout['emoji_pos_global'] ?? '') === 'left' ? 'left' : 'right';
   <div class="card-head"><div><div class="card-title">🔘 <?= $t['menuButtons'] ?></div><div class="card-subtitle"><?= $t['menuButtonsSub'] ?></div></div></div>
   <div class="card-body">
     <div class="tbl-wrap"><table class="tbl-xl">
-      <thead><tr><th><?= $t['menuColButton'] ?></th><th><?= $t['menuColName'] ?></th><th><?= $t['menuColEmoji'] ?></th><th><?= $t['menuColColor'] ?></th><th><?= $t['menuColHidden'] ?></th><th><?= $t['menuColSticker'] ?></th></tr></thead>
+      <thead><tr><th><?= $t['menuColButton'] ?></th><th><?= $t['menuColName'] ?></th><th><?= $t['menuColEmoji'] ?></th><th><?= $t['menuColColorGlass'] ?></th><th><?= $t['menuColColorReply'] ?></th><th><?= $t['menuColHidden'] ?></th><th><?= $t['menuColSticker'] ?></th></tr></thead>
       <tbody>
       <?php $i = 0; foreach ($layout['keyboard'] as $r => $row): foreach ((array) $row as $b): if (!is_array($b) || !isset($b['text'])) continue; $n = "btn[$i]"; ?>
         <tr>
@@ -157,8 +169,11 @@ $pos = ($layout['emoji_pos_global'] ?? '') === 'left' ? 'left' : 'right';
           <td><input type="text" class="input" name="<?= $n ?>[custom_text]" value="<?= htmlspecialchars((string) ($b['custom_text'] ?? '')) ?>" placeholder="<?= htmlspecialchars($names[$b['text']] ?? '') ?>" maxlength="64"></td>
           <td><input type="text" class="input" name="<?= $n ?>[emoji]" value="<?= htmlspecialchars((string) ($b['emoji'] ?? '')) ?>" style="width:64px;text-align:center" placeholder="<?= !empty($b['icon_emoji']) ? '✨' : '—' ?>"></td>
           <td><select class="select" name="<?= $n ?>[style]"><?php foreach ($colors as $v => $label): ?><option value="<?= $v ?>"<?= ($b['style'] ?? '') === $v ? ' selected' : '' ?>><?= htmlspecialchars($label) ?></option><?php endforeach; ?></select></td>
+          <td><select class="select" name="<?= $n ?>[style_reply]"><?php foreach ($colors as $v => $label): ?><option value="<?= $v ?>"<?= ($b['style_reply'] ?? '') === $v ? ' selected' : '' ?>><?= htmlspecialchars($label) ?></option><?php endforeach; ?></select></td>
           <td><label class="lang-chip"><input type="hidden" name="<?= $n ?>[hidden]" value="0"><input type="checkbox" name="<?= $n ?>[hidden]" value="1"<?= !empty($b['hidden']) ? ' checked' : '' ?>> <?= $t['menuHidden'] ?></label></td>
-          <td><?php if (!empty($b['sticker'])): ?><label class="lang-chip">✅ <input type="checkbox" name="<?= $n ?>[sticker_del]" value="1"> <?= $t['btStickerDelete'] ?></label><?php else: ?><span class="cf">—</span><?php endif; ?></td>
+          <td style="white-space:nowrap"><?= !empty($b['sticker']) ? '✅' : (mainmenu_btn_sticker($b) !== '' ? '<span title="' . htmlspecialchars($t['menuStickerDefault']) . '">🔹</span>' : '<span class="cf">—</span>') ?>
+            <input type="text" class="input" name="<?= $n ?>[sticker]" value="" dir="ltr" style="width:150px;padding:4px 8px" placeholder="<?= htmlspecialchars($t['btStickerPlaceholder']) ?>">
+            <?php if (!empty($b['sticker'])): ?><label class="lang-chip"><input type="checkbox" name="<?= $n ?>[sticker_del]" value="1"> <?= $t['btStickerDelete'] ?></label><?php endif; ?></td>
         </tr>
       <?php $i++; endforeach; endforeach; ?>
       </tbody>

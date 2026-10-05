@@ -24,7 +24,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $card = (string) ($_POST['card'] ?? '');
     $err = null;
     $save = [];
-    if ($card === 'status') {
+    $okMsg = $t['refSaved'];
+    if ($card === 'rwreset') {
+        // 🔄 one customer's free config from the start - its count and its
+        // 🔁 allowance, as the bot's own «صفر کردن دعوت‌های یک کاربر» does
+        $who = trim((string) ($_POST['who'] ?? ''));
+        $u = ctype_digit($who) ? db_fetch($pdo, "SELECT id, username FROM user WHERE id = ?", [$who])
+            : (preg_match('/^@?(\w{3,32})$/', $who, $m) ? db_fetch($pdo, "SELECT id, username FROM user WHERE username = ?", [$m[1]]) : null);
+        if ($u === null) {
+            $err = sprintf($t['refVipMissing'], $who);
+        } else {
+            affrw_reset($u['id']);
+            $okMsg = sprintf($t['refResetDone'], $u['id'] . (!empty($u['username']) && $u['username'] !== 'none' ? ' @' . $u['username'] : ''));
+        }
+    } elseif ($card === 'status') {
         feature_set('affiliatesstatus', $lang, $isOn('affiliatesstatus') ? 'onaffiliates' : 'offaffiliates');
     } elseif ($card === 'classic') {
         $pct = trim((string) ($_POST['aff_percent'] ?? ''));
@@ -127,7 +140,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         foreach ($save as $k => $v) {
             feature_setting_set($k, $lang, $v);
         }
-        flash('success', $t['refSaved']);
+        flash('success', $okMsg);
     }
     header('Location: ' . $back($card));
     exit;
@@ -229,6 +242,15 @@ echo web_lang_assets();
     <?= $field($t['refRuleHours'], $input('affrw_del_hours', $rules['hours'], 'inputmode="numeric"'), $t['refRuleHoursHint']) ?>
   </div>
   <?= $saveBtn ?></form>
+</div>
+
+<div class="card fade-up<?= $affOn ? '' : ' set-off' ?>" id="rwreset" style="margin-bottom:14px">
+  <?= $cardHead('🔄 ' . $t['refResetTitle'], $t['refResetSub']) ?>
+  <?= $formOpen('rwreset') ?>
+  <div class="card-body">
+    <?= $field($t['refResetWho'], $input('who', '', 'dir="ltr" placeholder="123456789 · @username"'), $t['refResetHint']) ?>
+  </div>
+  <div class="modal-foot" style="border-radius:0 0 10px 10px"><button type="submit" class="btn btn-primary">🔄 <?= $t['refResetBtn'] ?></button></div></form>
 </div>
 
 <?php foreach (['c' => '💼 ' . $t['refClassicTitle'], 'r' => '🎁 ' . $t['refRewardTitle']] as $plan => $planName):

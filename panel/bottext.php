@@ -43,6 +43,8 @@ $layout = json_decode((string) ($row['keyboardmain'] ?? ''), true);
 $stickers = is_array($layout['text_stickers'] ?? null) ? $layout['text_stickers'] : [];
 $reactions = is_array($layout['text_reactions'] ?? null) ? $layout['text_reactions'] : [];
 $noSticker = array_flip(bt_nosticker_keys());
+// a reaction goes on the customer's own message - only these have one
+$canReact = array_flip(bt_react_keys());
 $switchable = bt_item_switch_defaults();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -72,7 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $mediaChanged = false;
     foreach ((array) ($_POST['react'] ?? []) as $key => $value) {
         $key = (string) $key;
-        if (!isset($labels[$key])) {
+        if (!isset($labels[$key]) || !isset($canReact[$key])) {
             continue;
         }
         $value = trim((string) $value);
@@ -247,9 +249,11 @@ echo web_lang_assets();
                             <?php if (isset($switchable[$key])): ?>
                                 <label class="lang-chip"><input type="hidden" name="on[<?= $k ?>]" value="0"><input type="checkbox" name="on[<?= $k ?>]" value="1"<?= bt_item_enabled($key, $lang) ? ' checked' : '' ?>> <?= htmlspecialchars(bt_item_switch_label($key)) ?></label>
                             <?php endif; ?>
-                            <label class="lang-chip" title="<?= htmlspecialchars($t['btReactionHint']) ?>"><?= $t['btReaction'] ?> <input type="text" name="react[<?= $k ?>]" value="<?= htmlspecialchars($v['reaction']) ?>" class="input" style="width:64px;padding:4px 8px;text-align:center" placeholder="—"></label>
+                            <?php if (isset($canReact[$key])): ?>
+                                <label class="lang-chip" title="<?= htmlspecialchars($t['btReactionHint']) ?>"><?= $t['btReaction'] ?> <input type="text" name="react[<?= $k ?>]" value="<?= htmlspecialchars($v['reaction']) ?>" class="input" style="width:64px;padding:4px 8px;text-align:center" placeholder="—"></label>
+                            <?php endif; ?>
                             <?php if (!isset($noSticker[$key])): ?>
-                                <label class="lang-chip"><?= $t['btSticker'] ?> <?= $v['sticker'] !== '' ? '✅' : '—' ?>
+                                <label class="lang-chip"><?= $t['btSticker'] ?> <?= $v['sticker'] !== '' ? '✅' : (bt_default_sticker($key) !== '' ? '<span title="' . htmlspecialchars($t['btStickerDefault']) . '">🔹</span>' : '—') ?>
                                     <input type="text" name="sticker[<?= $k ?>]" value="" class="input" dir="ltr" style="width:170px;padding:4px 8px" placeholder="<?= htmlspecialchars($t['btStickerPlaceholder']) ?>"></label>
                                 <?php if ($v['sticker'] !== ''): ?>
                                     <label class="lang-chip"><input type="checkbox" name="sticker_del[<?= $k ?>]" value="1"> <?= $t['btStickerDelete'] ?></label>
@@ -258,7 +262,7 @@ echo web_lang_assets();
                         </div>
                     </div>
                 <?php endforeach; ?>
-                <div class="field-hint"><?= $t['btStickerHint'] ?></div>
+                <div class="field-hint"><?= $t['btStickerHint'] ?> <?= $t['btStickerDefault'] ?></div>
             </div>
             <div class="modal-foot" style="position:sticky;bottom:0;z-index:5;border-radius:0 0 10px 10px;box-shadow:0 -8px 20px rgba(0,0,0,.25)">
                 <button type="submit" class="btn btn-primary"><?= icon('check', 13) ?> <?= $t['bottextSaveBtn'] ?></button>
