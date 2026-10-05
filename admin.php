@@ -6191,6 +6191,7 @@ if (!function_exists('afftest_send')) {
         afftest_verify($to, $lang, 'r', '@' . $me);
         afftest_send($to, $lang, $t['wWelcomeR'], 'users.affiliates.welcomeInvitedReward', strtr(text_fill_s($a['welcomeInvitedReward'], $me), ['{inviter}' => '@' . $me]));
         afftest_send($to, $lang, $t['wNewRef'], 'users.affiliates.newReferralJoinedReward', strtr($a['newReferralJoinedReward'], ['{username}' => '@' . $new, '{count}' => 1, '{need}' => $cfg['need']]));
+        afftest_send($to, $lang, $t['wWasMember'], 'users.affiliates.newReferralWasMember', strtr($a['newReferralWasMember'], ['{username}' => '@' . $t['sampleOld'], '{count}' => 1, '{need}' => $cfg['need']]));
         if ($cfg['mode'] !== 'auto') {
             afftest_send($to, $lang, strtr($t['wReached'], ['{need}' => $cfg['need']]), 'users.affiliates.rewardSentToAdmin', strtr($a['rewardSentToAdmin'], affrw_vars($cfg, $cfg['need'])));
             $r = $fa['Admin']['AffReward'];
@@ -15868,16 +15869,16 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     sendmessage($from_id, $textbotlang['Admin']['manageUser']['sendPaymentList'], $keyboardadmin, 'HTML');
 } elseif (preg_match('/affiliates-(\w+)/', $datain, $dataget)) {
     $iduser = $dataget[1];
-    $affiliatesUsers = select("user", "*", "affiliates", $iduser, "count");
-    if ($affiliatesUsers == 0) {
+    // 💼's (user.affiliates) and 🎁's (user.aff_rw) - this listed 💼's only
+    $affiliatesUsers = aff_referrals_of($iduser);
+    if (count($affiliatesUsers) == 0) {
         sendmessage($from_id, $textbotlang['Admin']['affiliates']['noReferrals'], null, 'HTML');
         return;
     }
-    $affiliatesUsers = select("user", "*", "affiliates", $iduser, "fetchAll");
     $count = 0;
     $text_affiliates = "";
     foreach ($affiliatesUsers as $affiliatesUser) {
-        $text_affiliates .= "<code>{$affiliatesUser['id']}</code>\n\r";
+        $text_affiliates .= "<code>{$affiliatesUser}</code>\n\r";
         $count++;
         if ($count == 10) {
             sendmessage($from_id, $text_affiliates, null, 'HTML');
@@ -15888,17 +15889,12 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     sendmessage($from_id, $text_affiliates, null, 'HTML');
     sendmessage($from_id, $textbotlang['Admin']['affiliates']['idsSent'], $keyboardadmin, 'HTML');
 } elseif (preg_match('/removeaffiliate-(\w+)/', $datain, $dataget)) {
-    $iduser = $dataget[1];
-    $user2 = select("user", "*", "id", $iduser, "select");
-    $user2 = select("user", "*", "id", $user2['affiliates'], "select");
-    $affiliatescount = intval($user2['affiliatescount']) - 1;
-    update("user", "affiliatescount", $affiliatescount, "id", $user2['id']);
-    update("user", "affiliates", "0", "id", $iduser);
+    // clearing user.affiliates alone left 🎁's aff_rw: still counted, and
+    // never invitable again
+    aff_detach($dataget[1]);
     sendmessage($from_id, $textbotlang['Admin']['affiliates']['userRemoved'], $keyboardadmin, 'HTML');
 } elseif (preg_match('/removeaffiliateuser-(\w+)/', $datain, $dataget)) {
-    $iduser = $dataget[1];
-    update("user", "affiliatescount", "0", "id", $iduser);
-    update("user", "affiliates", "0", "affiliates", $iduser);
+    aff_detach_all($dataget[1]);
     sendmessage($from_id, $textbotlang['Admin']['affiliates']['referralsDeleted'], $keyboardadmin, 'HTML');
 } elseif (preg_match('/removeservice-(.*)/', $datain, $dataget)) {
     $username = $dataget[1];

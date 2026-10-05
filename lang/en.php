@@ -960,6 +960,11 @@ User <b>{username}</b> joined the bot with your invite link ✅
 🎁 Your valid invites for the free config: <b>{count} / {need}</b>',
                         'newReferralJoinedPlain' => '<b>🎉 A new referral!</b>
 User <b>{username}</b> joined the bot with your invite link ✅',
+                        'newReferralWasMember' => '<b>ℹ️ An existing member came through your link</b>
+User <b>{username}</b> joined the bot with your invite link, but was already a member of the bot, so they do not count for the free config.
+Only people who are new to the bot count.
+
+🎁 Your valid invites for the free config: <b>{count} / {need}</b>',
                         'verifyPhonePrompt' => '📞 To have your invite counted for <b>{inviter}</b>, send your phone number with the button below.',
                         'verifyChannelPrompt' => '📯 To have your invite counted for <b>{inviter}</b>, join the channels below and then tap «✅ I joined».',
                         'verifyChannelBtn' => '✅ I joined',

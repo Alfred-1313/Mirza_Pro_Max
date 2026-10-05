@@ -889,6 +889,7 @@ return array (
       'affrw_9' => array ('label' => '🏷 اسم سرویس (صفحه‌ی اطلاعات سرویس)', 'key' => 'users.affiliates.rewardServiceName', 'group' => 'referral'),
       'affrw_10' => array ('label' => '👋 خوش‌آمد به کاربر دعوت‌شده (کانفیگ رایگان)', 'key' => 'users.affiliates.welcomeInvitedReward', 'group' => 'referral'),
       'affrw_11' => array ('label' => '🎉 اعلان «زیرمجموعه‌ی جدید» به معرف، با شمارنده‌ی دعوت‌ها', 'key' => 'users.affiliates.newReferralJoinedReward', 'group' => 'referral'),
+      'affrw_24' => array ('label' => 'ℹ️ اعلان به معرف وقتی کسی که با لینکش اومده از قبل عضو ربات بوده (حساب نمی‌شه)', 'key' => 'users.affiliates.newReferralWasMember', 'group' => 'referral'),
       'affrw_12' => array ('label' => '🚪 اعلان غیرفعال شدن کانفیگ رایگان (خروج از کانال)', 'key' => 'users.affiliates.rewardPaused', 'group' => 'referral'),
       'affrw_13' => array ('label' => '✅ اعلان فعال شدن دوباره‌ی کانفیگ رایگان', 'key' => 'users.affiliates.rewardResumed', 'group' => 'referral'),
       'affrw_14' => array ('label' => '⏸ وقتی کاربر کانفیگ غیرفعال‌شده رو خودش روشن کنه', 'key' => 'users.affiliates.rewardPausedLocked', 'group' => 'referral'),
@@ -1641,6 +1642,11 @@ return array (
 🎁 دعوت‌های معتبر تو برای کانفیگ رایگان: <b>{count} / {need}</b>',
       'newReferralJoinedPlain' => '<b>🎉 یک زیرمجموعه جدید!</b>
 کاربر <b>{username}</b> با لینک دعوت شما وارد ربات شد ✅',
+      'newReferralWasMember' => '<b>ℹ️ کاربر قدیمی با لینک شما اومد</b>
+کاربر <b>{username}</b> با لینک دعوت شما وارد ربات شد، ولی از قبل عضو ربات بوده؛ برای همین برای کانفیگ رایگان حساب نمی‌شه.
+فقط کسایی حساب می‌شن که تازه عضو ربات می‌شن.
+
+🎁 دعوت‌های معتبر تو برای کانفیگ رایگان: <b>{count} / {need}</b>',
       // 🛡 verifying an invite
       'verifyPhonePrompt' => '📞 برای اینکه دعوتت برای <b>{inviter}</b> حساب بشه، شماره‌ی تلفنت رو با دکمه‌ی پایین بفرست.',
       'verifyChannelPrompt' => '📯 برای اینکه دعوتت برای <b>{inviter}</b> حساب بشه، عضو کانال‌های زیر شو و بعد «✅ عضو شدم» رو بزن.',
@@ -6509,6 +6515,7 @@ nowpayments.io
       'wWelcome' => '👤 کاربر دعوت‌شده، وقتی دعوتش حساب می‌شه',
       'wWelcomeR' => '👤 کاربر دعوت‌شده، وقتی دعوتش حساب می‌شه (اگه 💼 خاموش باشه؛ وگرنه خوش‌آمد 💼 می‌ره)',
       'wNewRef' => '👤 معرف، وقتی یه زیرمجموعه‌ی جدید حساب می‌شه',
+      'wWasMember' => '👤 معرف، وقتی کسی با لینکش میاد که از قبل عضو ربات بوده (حساب نمی‌شه)',
       'wGiftUser' => '👤 کاربر دعوت‌شده، بعد از زدن «دریافت هدیه»',
       'wGiftRef' => '👤 معرف، همون موقع',
       'wCommission' => '👤 معرف، وقتی زیرمجموعه‌ش خرید می‌کنه (مبلغ نمونه)',
@@ -6526,6 +6533,7 @@ nowpayments.io
       'wNamePrompt' => '👤 معرف، بعد از زدن «انتخاب نام»',
       'wDeleted' => '👤 معرف، وقتی کانفیگ تموم‌شده‌ش پاک می‌شه',
       'sampleNew' => 'new_friend',
+      'sampleOld' => 'old_member',
       'realFailed' => "❌ پنل کانفیگ رو نساخت:\n<code>{msg}</code>",
       'done' => '✅ پیش‌نمایش تموم شد.',
       'doneReal' => '✅ تست تموم شد. کانفیگ توی «🛍 سرویس های من»ت هست.',

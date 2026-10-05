@@ -1894,7 +1894,9 @@ if (!function_exists('aff_classic_on')) {
     // language - 💼's about the commission, 🎁's with the free-config count
     // (only while it is still to be earned), and a plain one when neither
     // has anything to say.
-    function aff_notify_new_referral($refId, $displayName, $plan)
+    // $newId: the newcomer - one who was a member before the inviter's count
+    // began does not count, and is announced as such (newReferralWasMember)
+    function aff_notify_new_referral($refId, $displayName, $plan, $newId = null)
     {
         $ref = select("user", "*", "id", $refId, "select");
         $lang = is_array($ref) ? ($ref['lang'] ?? 'fa') : 'fa';
@@ -1910,8 +1912,11 @@ if (!function_exists('aff_classic_on')) {
         $cfg = affrw_live($lang);
         $row = $cfg !== null ? affrw_row($refId) : null;
         if ($cfg !== null && affrw_counting($row)) {
-            bottext_extras_key_hint('users.affiliates.newReferralJoinedReward');
-            sendmessage($refId, strtr($a['newReferralJoinedReward'], ['{username}' => $name, '{count}' => min(affrw_count($refId, affrw_since($cfg, $row)), $cfg['need']), '{need}' => $cfg['need']]), null, 'html');
+            // a «new referral» whose counter did not move read as a bug: one
+            // who was a member already is said to be one
+            $key = ($newId === null || affrw_member_counts($refId, $newId)) ? 'newReferralJoinedReward' : 'newReferralWasMember';
+            bottext_extras_key_hint("users.affiliates.{$key}");
+            sendmessage($refId, strtr($a[$key], ['{username}' => $name, '{count}' => min(affrw_count($refId, affrw_since($cfg, $row)), $cfg['need']), '{need}' => $cfg['need']]), null, 'html');
         } elseif (!aff_classic_on($lang)) {
             bottext_extras_key_hint('users.affiliates.newReferralJoinedPlain');
             sendmessage($refId, strtr($a['newReferralJoinedPlain'], ['{username}' => $name]), null, 'html');
@@ -2019,6 +2024,11 @@ if (!function_exists('refv_cfg')) {
     // what the newcomer has not done yet for $plan
     function refv_missing($userRow, $inviterId, $plan)
     {
+        // 🎁 does not count a member from before the count began - so they are
+        // not asked to join channels or send a number on its behalf either
+        if ($plan === 'r' && !affrw_member_counts($inviterId, $userRow['id'] ?? '')) {
+            return [];
+        }
         $needs = refv_needs($inviterId, $plan);
         $missing = [];
         if (in_array('phone', $needs, true)) {
@@ -2118,7 +2128,7 @@ if (!function_exists('refv_cfg')) {
         update("user", "aff_rw", (string) $inviterId, "id", $uid);
         // 🚪 a free config paused by a leave: this invite fills the gap
         affrw_refill($inviterId, $uid);
-        aff_notify_new_referral($inviterId, $display, 'r');
+        aff_notify_new_referral($inviterId, $display, 'r', $uid);
         affrw_check($inviterId);
     }
     // 👋 the newcomer, once they count for everything: the welcome of the
@@ -2175,6 +2185,54 @@ if (!function_exists('refv_cfg')) {
         update("user", "aff_pending", "", "id", (string) $uid);
         aff_welcome($u, $inviterId, $keyboard);
         return true;
+    }
+}
+if (!function_exists('aff_detach')) {
+    // 👤 مدیریت کاربر's «خارج کردن از زیرمجموعه»: $uid is nobody's referral any
+    // more - for 💼 (affiliates, and the inviter's affiliatescount), for 🎁
+    // (aff_rw) and for a 🛡 check still waiting (aff_pending). These buttons
+    // used to clear affiliates alone: the customer went on counting for 🎁 and
+    // could never be invited by anyone again. A join gift not claimed yet goes
+    // too; one already claimed stays on record, so it cannot be claimed twice.
+    function aff_detach($uid)
+    {
+        global $pdo;
+        refv_ensure_schema();
+        $id = (string) $uid;
+        $u = select("user", "*", "id", $id, "select", ['cache' => false]);
+        if (!is_array($u)) {
+            return;
+        }
+        $ref = (string) ($u['affiliates'] ?? '0');
+        if ($ref !== '' && $ref !== '0') {
+            $pdo->prepare("UPDATE user SET affiliatescount = GREATEST(CAST(affiliatescount AS SIGNED) - 1, 0) WHERE id = ?")->execute([$ref]);
+        }
+        $pdo->prepare("UPDATE user SET affiliates = '0', aff_rw = NULL, aff_pending = NULL WHERE id = ?")->execute([$id]);
+        $pdo->prepare("DELETE FROM reagent_report WHERE user_id = ? AND (get_gift = 0 OR get_gift IS NULL)")->execute([$id]);
+        clearSelectCache();
+    }
+    // ...«حذف زیرمجموعه های کاربر»: every referral of $uid, in both plans
+    function aff_detach_all($uid)
+    {
+        global $pdo;
+        refv_ensure_schema();
+        $id = (string) $uid;
+        $pdo->prepare("UPDATE user SET affiliates = '0' WHERE affiliates = ?")->execute([$id]);
+        $pdo->prepare("UPDATE user SET aff_rw = NULL WHERE aff_rw = ?")->execute([$id]);
+        $pdo->prepare("UPDATE user SET aff_pending = NULL WHERE aff_pending = ?")->execute([$id]);
+        $pdo->prepare("UPDATE user SET affiliatescount = '0' WHERE id = ?")->execute([$id]);
+        $pdo->prepare("DELETE FROM reagent_report WHERE reagent = ? AND (get_gift = 0 OR get_gift IS NULL)")->execute([$id]);
+        clearSelectCache();
+    }
+    // ...and «👥 زیرمجموعه های کاربر»: who came through $uid's link, for 💼
+    // or for 🎁 (each plan keeps its own)
+    function aff_referrals_of($uid)
+    {
+        global $pdo;
+        refv_ensure_schema();
+        $st = $pdo->prepare("SELECT id FROM user WHERE affiliates = ? OR aff_rw = ? ORDER BY CAST(register AS UNSIGNED)");
+        $st->execute([(string) $uid, (string) $uid]);
+        return array_map('strval', $st->fetchAll(PDO::FETCH_COLUMN));
     }
 }
 if (!function_exists('phone_required_for')) {
@@ -8263,7 +8321,7 @@ if (!function_exists('wallet_stash')) {
             return [];
         }
         $pdo->prepare("UPDATE user SET Balance = Balance + ?, wallets = ? WHERE id = ?")->execute([round($add, 2), empty($w) ? '{}' : json_encode($w), $userId]);
-        clearSelectCache('user');
+        clearSelectCache();
         return $folded;
     }
     // the currency a payment was asked in: recorded at a language switch,
@@ -17880,6 +17938,22 @@ if (!function_exists('affrw_cfg')) {
     function affrw_since($cfg, $row)
     {
         return max($cfg['since'], is_array($row) ? (int) $row['since'] : 0);
+    }
+    // Whether $memberId, newly $inviterId's referral, counts for their free
+    // config: a newcomer to the bot since the count began, and not already
+    // behind their latest reward. Anyone counts while 🎁 is off for the
+    // inviter's language (there is nothing to count then).
+    function affrw_member_counts($inviterId, $memberId)
+    {
+        $inv = select("user", "*", "id", (string) $inviterId, "select");
+        $cfg = affrw_live(is_array($inv) ? ($inv['lang'] ?? 'fa') : 'fa');
+        if ($cfg === null) {
+            return true;
+        }
+        $row = affrw_row($inviterId);
+        $m = select("user", "*", "id", (string) $memberId, "select");
+        return is_array($m) && (int) ($m['register'] ?? 0) > affrw_since($cfg, $row)
+            && !in_array((string) $memberId, affrw_members($row), true);
     }
     // valid invites: people who joined the bot through this customer's link
     // since then
