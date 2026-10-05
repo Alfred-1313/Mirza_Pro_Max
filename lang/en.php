@@ -970,6 +970,11 @@ User <b>{username}</b> joined the bot with your invite link ✅
 🎁 Your valid invites for the free config: <b>{count} / {need}</b>',
                         'newReferralJoinedPlain' => '<b>🎉 A new referral!</b>
 User <b>{username}</b> joined the bot with your invite link ✅',
+                        'newReferralWasMember' => '<b>ℹ️ An existing member came through your link</b>
+User <b>{username}</b> joined the bot with your invite link, but was already a member of the bot, so they do not count for the free config.
+Only people who are new to the bot count.
+
+🎁 Your valid invites for the free config: <b>{count} / {need}</b>',
                         'verifyPhonePrompt' => '📞 To have your invite counted for <b>{inviter}</b>, send your phone number with the button below.',
                         'verifyChannelPrompt' => '📯 To have your invite counted for <b>{inviter}</b>, join the channels below and then tap «✅ I joined».',
                         'verifyChannelBtn' => '✅ I joined',
@@ -991,7 +996,12 @@ and get a free <b>{volume} GB · {days}-day</b> subscription!
                         'rewardStatusAuto' => '☑️ Once complete, the config is created automatically and shows up in «🛍 My services».',
                         'rewardStatusAdmin' => '☑️ Once complete and approved by the admin, the config is created and shows up in «🛍 My services».',
                         'rewardStatusPending' => '⏳ Your invites are complete! Your request is waiting for the admin\'s approval.',
-                        'rewardStatusDone' => '✅ You got your free config; it is in «🛍 My services».',
+                        'rewardLimitReached' => '<blockquote>🎁 Free config</blockquote>
+
+🔒 The invite free config is limited to <b>{max}</b> per user, and you have reached that limit, so new invites will not earn you another one.
+
+✅ The configs you got are in «🛍 My services».
+🙏 Thanks for introducing the bot to your friends!',
                         'rewardSentToAdmin' => '🎉 Your invites reached {need}!
 Your free config request was sent to the admin; it will be created once approved.',
                         'rewardGiven' => '🎁 Congratulations! For inviting {need} people, a free <b>{volume} GB · {days}-day</b> config was created for you 👇',
@@ -1824,13 +1834,6 @@ To use the default name, press the green button; to cancel and go back to the me
                 ],
         ],
         'Admin' => [
-                'activeBotText' => 'To use the admin panel features:
-
-Go to a page that has a keyboard at the bottom.
-In the keyboard, find a button called Bot Reports and click on it.
-After clicking the Bot Reports button, a page will open.
-On this page, you can select and configure the group you want.
-This step is mandatory',
                 'askNewText' => '📌 Send your new text',
                 'backAdmin' => 'You have returned to the admin panel!',
                 'backAdminBtn' => '🏠 Back to management menu',

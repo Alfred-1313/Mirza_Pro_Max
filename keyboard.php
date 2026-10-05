@@ -1915,12 +1915,6 @@ $list_departman['inline_keyboard'][] = [
     ['text' => $customer_texts['users']['backbtn'], 'callback_data' => "backuser"],
 ];
 $list_departman = json_encode($list_departman);
-$active_panell = json_encode([
-    'keyboard' => [
-        [['text' => $textbotlang['keyboard']['botReports']]],
-    ],
-    'resize_keyboard' => true
-]);
 $wheelkeyboard = json_encode([
     'keyboard' => [
         [['text' => $textbotlang['keyboard']['lotteryWinAmount']]],
@@ -2263,27 +2257,6 @@ $keyboard_buy = json_encode([
         [
             ['text' => $customer_texts['keyboard']['buySubscription'], 'callback_data' => 'buy'],
         ],
-    ]
-]);
-$keyboard_stat = json_encode([
-    'inline_keyboard' => [
-        [
-            ['text' => $textbotlang['keyboard']['totalStats'], 'callback_data' => 'stat_all_bot'],
-        ],
-        [
-            ['text' => $textbotlang['keyboard']['lastHourStats'], 'callback_data' => 'hoursago_stat'],
-        ],
-        [
-            ['text' => $textbotlang['keyboard']['today'], 'callback_data' => 'today_stat'],
-            ['text' => $textbotlang['keyboard']['yesterday'], 'callback_data' => 'yesterday_stat'],
-        ],
-        [
-            ['text' => $textbotlang['keyboard']['currentMonth'], 'callback_data' => 'month_current_stat'],
-            ['text' => $textbotlang['keyboard']['lastMonth'], 'callback_data' => 'month_old_stat'],
-        ],
-        [
-            ['text' => $textbotlang['keyboard']['statsAtDate'], 'callback_data' => 'view_stat_time'],
-        ]
     ]
 ]);
 $option_mirza = json_encode([
@@ -3028,8 +3001,9 @@ if ($sticker_btn_key === 'text_sell') {
 }
 // 👥 زیرمجموعه‌گیری: its sticker comes first only when one of its two kinds
 // is on for this customer; with neither, the «nothing is active» message
-// goes out alone
-$st_wait = $sticker_btn_key === 'text_affiliates' && function_exists('aff_any_on') && !aff_any_on($users['lang'] ?? 'fa');
+// goes out alone - and so does 🎁's «used up» one, with its own sticker
+$st_wait = $sticker_btn_key === 'text_affiliates' && function_exists('aff_any_on')
+    && (!aff_any_on($users['lang'] ?? 'fa') || aff_tap_sticker_yields($from_id, $users['lang'] ?? 'fa'));
 if ($sticker_btn_key !== null && !$st_wait && !empty($keyboardRows) && function_exists('telegram')) {
     foreach ($keyboardRows as $st_row) {
         if (!is_array($st_row)) {

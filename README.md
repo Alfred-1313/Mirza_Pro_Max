@@ -124,7 +124,7 @@ Useful paths:
 ```
 /var/www/html/mirzaprobotconfig    the bot
   └─ config.php                    your credentials — never overwritten, never committed
-/root/mirza-backups/               rollback archives from updates
+/root/mirza-backups/               rollback archives from updates, and what a restore replaced
 /root/install.sh                   the management script itself
 ```
 

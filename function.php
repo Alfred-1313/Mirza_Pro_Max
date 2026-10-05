@@ -1894,7 +1894,9 @@ if (!function_exists('aff_classic_on')) {
     // language - 💼's about the commission, 🎁's with the free-config count
     // (only while it is still to be earned), and a plain one when neither
     // has anything to say.
-    function aff_notify_new_referral($refId, $displayName, $plan)
+    // $newId: the newcomer - one who was a member before the inviter's count
+    // began does not count, and is announced as such (newReferralWasMember)
+    function aff_notify_new_referral($refId, $displayName, $plan, $newId = null)
     {
         $ref = select("user", "*", "id", $refId, "select");
         $lang = is_array($ref) ? ($ref['lang'] ?? 'fa') : 'fa';
@@ -1910,8 +1912,11 @@ if (!function_exists('aff_classic_on')) {
         $cfg = affrw_live($lang);
         $row = $cfg !== null ? affrw_row($refId) : null;
         if ($cfg !== null && affrw_counting($row)) {
-            bottext_extras_key_hint('users.affiliates.newReferralJoinedReward');
-            sendmessage($refId, strtr($a['newReferralJoinedReward'], ['{username}' => $name, '{count}' => min(affrw_count($refId, affrw_since($cfg, $row)), $cfg['need']), '{need}' => $cfg['need']]), null, 'html');
+            // a «new referral» whose counter did not move read as a bug: one
+            // who was a member already is said to be one
+            $key = ($newId === null || affrw_member_counts($refId, $newId)) ? 'newReferralJoinedReward' : 'newReferralWasMember';
+            bottext_extras_key_hint("users.affiliates.{$key}");
+            sendmessage($refId, strtr($a[$key], ['{username}' => $name, '{count}' => min(affrw_count($refId, affrw_since($cfg, $row)), $cfg['need']), '{need}' => $cfg['need']]), null, 'html');
         } elseif (!aff_classic_on($lang)) {
             bottext_extras_key_hint('users.affiliates.newReferralJoinedPlain');
             sendmessage($refId, strtr($a['newReferralJoinedPlain'], ['{username}' => $name]), null, 'html');
@@ -1924,6 +1929,19 @@ if (!function_exists('aff_classic_on')) {
             return false;
         }
         return aff_classic_on($lang) || affrw_live($lang) !== null;
+    }
+    // ...and with 💼 off, one who has used 🎁 up gets nothing but its «used up»
+    // message, which brings a sticker of its own: the button's would land
+    // right on top of it, so that one goes alone
+    function aff_tap_sticker_yields($uid, $lang)
+    {
+        if (aff_classic_on($lang) || affrw_live($lang) === null || !affrw_used_up(affrw_row($uid))) {
+            return false;
+        }
+        $setting = select("setting", "*", null, null, "select");
+        $layout = json_decode((string) ($setting['keyboardmain'] ?? ''), true);
+        $map = (is_array($layout) && is_array($layout['text_stickers'] ?? null)) ? $layout['text_stickers'] : [];
+        return bt_effective_sticker($map, 'users.affiliates.rewardLimitReached', $lang) !== '';
     }
 }
 if (!function_exists('refv_cfg')) {
@@ -1989,6 +2007,10 @@ if (!function_exists('refv_cfg')) {
         if (in_array((string) $inviterId, $cfg['vip'], true)) {
             return [];
         }
+        // an admin with no limit (🛡 دسترسی ادمین): nothing asked of their invites either
+        if ($plan === 'r' && affrw_admin_free($inviterId)) {
+            return [];
+        }
         $setting = select("setting", "*", null, null, "select");
         $needs = [];
         if ($cfg['phone'] && feature_value('get_number', $lang, $setting['get_number'] ?? '') == "onAuthenticationphone") {
@@ -2015,6 +2037,11 @@ if (!function_exists('refv_cfg')) {
     // what the newcomer has not done yet for $plan
     function refv_missing($userRow, $inviterId, $plan)
     {
+        // 🎁 does not count a member from before the count began - so they are
+        // not asked to join channels or send a number on its behalf either
+        if ($plan === 'r' && !affrw_member_counts($inviterId, $userRow['id'] ?? '')) {
+            return [];
+        }
         $needs = refv_needs($inviterId, $plan);
         $missing = [];
         if (in_array('phone', $needs, true)) {
@@ -2114,7 +2141,7 @@ if (!function_exists('refv_cfg')) {
         update("user", "aff_rw", (string) $inviterId, "id", $uid);
         // 🚪 a free config paused by a leave: this invite fills the gap
         affrw_refill($inviterId, $uid);
-        aff_notify_new_referral($inviterId, $display, 'r');
+        aff_notify_new_referral($inviterId, $display, 'r', $uid);
         affrw_check($inviterId);
     }
     // 👋 the newcomer, once they count for everything: the welcome of the
@@ -2171,6 +2198,54 @@ if (!function_exists('refv_cfg')) {
         update("user", "aff_pending", "", "id", (string) $uid);
         aff_welcome($u, $inviterId, $keyboard);
         return true;
+    }
+}
+if (!function_exists('aff_detach')) {
+    // 👤 مدیریت کاربر's «خارج کردن از زیرمجموعه»: $uid is nobody's referral any
+    // more - for 💼 (affiliates, and the inviter's affiliatescount), for 🎁
+    // (aff_rw) and for a 🛡 check still waiting (aff_pending). These buttons
+    // used to clear affiliates alone: the customer went on counting for 🎁 and
+    // could never be invited by anyone again. A join gift not claimed yet goes
+    // too; one already claimed stays on record, so it cannot be claimed twice.
+    function aff_detach($uid)
+    {
+        global $pdo;
+        refv_ensure_schema();
+        $id = (string) $uid;
+        $u = select("user", "*", "id", $id, "select", ['cache' => false]);
+        if (!is_array($u)) {
+            return;
+        }
+        $ref = (string) ($u['affiliates'] ?? '0');
+        if ($ref !== '' && $ref !== '0') {
+            $pdo->prepare("UPDATE user SET affiliatescount = GREATEST(CAST(affiliatescount AS SIGNED) - 1, 0) WHERE id = ?")->execute([$ref]);
+        }
+        $pdo->prepare("UPDATE user SET affiliates = '0', aff_rw = NULL, aff_pending = NULL WHERE id = ?")->execute([$id]);
+        $pdo->prepare("DELETE FROM reagent_report WHERE user_id = ? AND (get_gift = 0 OR get_gift IS NULL)")->execute([$id]);
+        clearSelectCache();
+    }
+    // ...«حذف زیرمجموعه های کاربر»: every referral of $uid, in both plans
+    function aff_detach_all($uid)
+    {
+        global $pdo;
+        refv_ensure_schema();
+        $id = (string) $uid;
+        $pdo->prepare("UPDATE user SET affiliates = '0' WHERE affiliates = ?")->execute([$id]);
+        $pdo->prepare("UPDATE user SET aff_rw = NULL WHERE aff_rw = ?")->execute([$id]);
+        $pdo->prepare("UPDATE user SET aff_pending = NULL WHERE aff_pending = ?")->execute([$id]);
+        $pdo->prepare("UPDATE user SET affiliatescount = '0' WHERE id = ?")->execute([$id]);
+        $pdo->prepare("DELETE FROM reagent_report WHERE reagent = ? AND (get_gift = 0 OR get_gift IS NULL)")->execute([$id]);
+        clearSelectCache();
+    }
+    // ...and «👥 زیرمجموعه های کاربر»: who came through $uid's link, for 💼
+    // or for 🎁 (each plan keeps its own)
+    function aff_referrals_of($uid)
+    {
+        global $pdo;
+        refv_ensure_schema();
+        $st = $pdo->prepare("SELECT id FROM user WHERE affiliates = ? OR aff_rw = ? ORDER BY CAST(register AS UNSIGNED)");
+        $st->execute([(string) $uid, (string) $uid]);
+        return array_map('strval', $st->fetchAll(PDO::FETCH_COLUMN));
     }
 }
 if (!function_exists('phone_required_for')) {
@@ -2354,6 +2429,105 @@ if (!function_exists('panel_texts')) {
     function panel_texts()
     {
         return lang_tab_texts('fa');
+    }
+}
+if (!function_exists('report_lang_tag')) {
+    // Every report to the report group ends with the language of the user it
+    // is about ("🌐 زبان کاربر: 🇬🇧 English"), so a purchase, a test account
+    // or a payment shows which language it came from. Called by telegram()
+    // for every call, so no report site has to remember it.
+    //
+    // Whose language: the first id in the message's buttons (manageuser_123)
+    // or text that is a user of this bot - reports name their user - else the
+    // user whose update this is, unless that is an admin: an admin's own
+    // panel action has no customer behind it. Nobody found: no line.
+    // A text or caption that would grow past Telegram's limit is left as it
+    // was, as is one that already carries the line (an edit of a report).
+    function report_lang_tag($method, $datas)
+    {
+        global $pdo;
+        $m = strtolower((string) $method);
+        if (in_array($m, ['sendmessage', 'editmessagetext'], true)) {
+            $field = 'text';
+            $max = 4096;
+        } elseif (in_array($m, ['sendphoto', 'senddocument', 'sendvideo', 'sendanimation', 'sendaudio', 'sendvoice', 'editmessagecaption'], true)) {
+            $field = 'caption';
+            $max = 1024;
+        } else {
+            return $datas;
+        }
+        if (!is_array($datas) || !isset($datas['chat_id']) || !($pdo instanceof PDO)) {
+            return $datas;
+        }
+        static $reportChat = null;
+        if ($reportChat === null) {
+            try {
+                $reportChat = (string) $pdo->query("SELECT Channel_Report FROM setting LIMIT 1")->fetchColumn();
+            } catch (Throwable $e) {
+                $reportChat = '';
+            }
+        }
+        $body = (string) ($datas[$field] ?? '');
+        if ($reportChat === '' || $reportChat === '0' || (string) $datas['chat_id'] !== $reportChat || $body === '') {
+            return $datas;
+        }
+        $tpl = panel_texts()['Admin']['reportgroup']['userLangLine'] ?? '🌐 زبان کاربر: %s';
+        if (mb_strpos($body, sprintf($tpl, '')) !== false) {
+            return $datas;
+        }
+
+        $ids = [];
+        $markup = $datas['reply_markup'] ?? '';
+        $markup = is_string($markup) ? $markup : (string) json_encode($markup);
+        if (preg_match_all('/"callback_data"\s*:\s*"([^"]*)"/', $markup, $cbs)) {
+            foreach ($cbs[1] as $cb) {
+                preg_match_all('/(?<!\d)\d{5,15}(?!\d)/', $cb, $n);
+                $ids = array_merge($ids, $n[0]);
+            }
+        }
+        preg_match_all('/(?<!\d)\d{5,15}(?!\d)/', $body, $n);
+        $ids = array_slice(array_values(array_unique(array_merge($ids, $n[0]))), 0, 20);
+
+        $lang = null;
+        try {
+            if ($ids) {
+                $stmt = $pdo->prepare("SELECT id, lang FROM user WHERE id IN (" . implode(',', array_fill(0, count($ids), '?')) . ")");
+                $stmt->execute($ids);
+                $found = [];
+                foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                    $found[(string) $row['id']] = (string) $row['lang'];
+                }
+                foreach ($ids as $id) {
+                    if (isset($found[$id])) {
+                        $lang = $found[$id];
+                        break;
+                    }
+                }
+            }
+            $sender = (string) ($GLOBALS['from_id'] ?? '');
+            if ($lang === null && preg_match('/^\d+$/', $sender)) {
+                $stmt = $pdo->prepare("SELECT lang FROM user u WHERE u.id = ? AND NOT EXISTS (SELECT 1 FROM admin a WHERE a.id_admin = u.id)");
+                $stmt->execute([$sender]);
+                $row = $stmt->fetch(PDO::FETCH_ASSOC);
+                if ($row) {
+                    $lang = (string) $row['lang'];
+                }
+            }
+        } catch (Throwable $e) {
+            return $datas;
+        }
+        if ($lang === null) {
+            return $datas;
+        }
+        // a language the bot no longer offers counts as Persian, as everywhere
+        // else in the panel (user_lang_where)
+        $code = in_array($lang, panel_langs(), true) ? $lang : 'fa';
+        $line = sprintf($tpl, panel_texts()['bottext']['langs'][$code] ?? $code);
+        if (mb_strlen($body) + mb_strlen($line) + 2 > $max) {
+            return $datas;
+        }
+        $datas[$field] = $body . "\n\n" . $line;
+        return $datas;
     }
 }
 if (!function_exists('payer_texts')) {
@@ -8540,7 +8714,7 @@ if (!function_exists('wallet_stash')) {
             return [];
         }
         $pdo->prepare("UPDATE user SET Balance = Balance + ?, wallets = ? WHERE id = ?")->execute([round($add, 2), empty($w) ? '{}' : json_encode($w), $userId]);
-        clearSelectCache('user');
+        clearSelectCache();
         return $folded;
     }
     // the currency a payment was asked in: recorded at a language switch,
@@ -8580,6 +8754,41 @@ if (!function_exists('user_lang_where')) {
             return ["1 = 1", []];
         }
         return ["({$col} IS NULL OR {$col} = '' OR {$col} NOT IN (" . implode(',', array_fill(0, count($others), '?')) . "))", $others];
+    }
+    // The rows of one language tab in a sales table (invoice, Payment_report,
+    // service_other), as SQL: a sale belongs to the language its buyer had
+    // when buying. A row stamped with a currency - its buyer has since moved
+    // to a language with another wallet (wallet_switch_lang) - goes by that
+    // currency; any other row by its buyer's language now. Persian also takes
+    // what belongs to no tab, as above. $byCurrency: the table has a currency
+    // column. [condition, positional params]
+    function stats_lang_where($lang, $alias = '', $byCurrency = true)
+    {
+        $a = $alias !== '' ? $alias . '.' : '';
+        [$uw, $up] = user_lang_where($lang);
+        $byUser = "{$a}id_user IN (SELECT id FROM user WHERE {$uw})";
+        if (!$byCurrency) {
+            return [$byUser, $up];
+        }
+        // each currency belongs to the first language using it
+        $owner = [];
+        foreach (panel_langs() as $l) {
+            $c = (string) currency_for_lang($l);
+            if (!isset($owner[$c])) {
+                $owner[$c] = $l;
+            }
+        }
+        $mine = array_map('strval', array_keys($owner, $lang, true));
+        $others = array_values(array_diff(array_map('strval', array_keys($owner)), $mine));
+        $set = $lang === 'fa' ? $others : $mine;
+        $in = implode(',', array_fill(0, count($set), '?'));
+        if ($lang === 'fa') {
+            $cur = $set ? "{$a}currency NOT IN ({$in})" : "1 = 1";
+        } else {
+            $cur = $set ? "{$a}currency IN ({$in})" : "1 = 0";
+        }
+        $stamped = "({$a}currency IS NOT NULL AND {$a}currency != '')";
+        return ["(({$stamped} AND {$cur}) OR (NOT {$stamped} AND {$byUser}))", array_merge($set, $up)];
     }
     // how many users each language tab has, and 'total'
     function um_lang_counts()
@@ -10422,8 +10631,8 @@ if (!function_exists('config_delivery_panel_payload')) {
         $info .= "📌 نحوه‌ی نمایش کانفیگ (هنگام {$kindLabel})\n➖➖➖➖➖➖➖➖➖➖\n";
         $info .= "بعد از اینکه سرویس تحویل داده شد، کاربر چی ببینه؟\n\n";
         $info .= "🔹 <b>حالت ۱ — فقط پیام کامل</b>\n";
-        $info .= "مشخصات سرویس (نام، لوکیشن، مدت، حجم) و لینک اتصال، توی یک پیام.\n";
-        $info .= "اگه طولانی‌تر از حد تلگرام بشه، چند تیکه فرستاده می‌شه.\n\n";
+        $info .= "مشخصات سرویس (نام، لوکیشن، مدت، حجم) و لینک اشتراک، توی یک پیام.\n";
+        $info .= "با «ارسال کانفیگ» این پنل روشن، بعدش هر کانفیگ جدا توی پیام خودش میاد - با QR خودش اگه QR روشن باشه، مثل «دریافت کانفیگ».\n\n";
         $info .= "🔹 <b>حالت ۲ — فقط صفحه‌ی کانفیگ</b>\n";
         $info .= "به‌جای پیام کامل، یه پیام با دکمه‌های انتخاب کانفیگ. بدون QR.\n";
         $info .= "مناسب سرویس‌هایی که چند تا کانفیگ دارن.\n";
@@ -10443,7 +10652,7 @@ if (!function_exists('config_delivery_panel_payload')) {
             $info .= "\n\n📷 <b>QR کد:</b> ❌ در حالت ۲ فرستاده نمی‌شه.";
         } else {
             $info .= "\n\n📷 <b>QR کد همراه پیام:</b> " . ($qrOn ? "روشن ✅" : "خاموش ❌") . "\n";
-            $info .= "QR لینک اشتراک رو نشون می‌ده. اگه لینک اشتراک این پنل خاموش باشه، فقط وقتی سرویس یک کانفیگ داره QR فرستاده می‌شه.";
+            $info .= "QR پیام اول، لینک اشتراک رو نشون می‌ده؛ با «ارسال کانفیگ» روشن، هر کانفیگ هم با QR خودش جدا میاد.";
         }
         $kb = ['inline_keyboard' => []];
         $kb['inline_keyboard'][] = [
@@ -16843,6 +17052,18 @@ if (!function_exists('backup_run_now')) {
     {
         global $dbhost, $usernamedb, $passworddb, $dbname;
         $setting = select("setting", "*", null, null, "select");
+        // backups go to the report group: with none set there is nowhere to
+        // send them, so say so and where to set it, instead of a false "sent"
+        $reportChat = trim((string) ($setting['Channel_Report'] ?? ''));
+        if ($reportChat === '' || $reportChat === '0') {
+            $tx = panel_texts();
+            telegram('sendmessage', [
+                'chat_id' => $fromAdminId,
+                'text' => sprintf($tx['Admin']['BackupSettings']['manualBackupNoGroup'], $tx['Admin']['panelAdmin'], $tx['keyboard']['generalSettings'], $tx['keyboard']['botReports']),
+                'parse_mode' => 'HTML',
+            ]);
+            return;
+        }
         $reportbackup = select("topicid", "idreport", "report", "backupfile", "select")['idreport'];
         $dbEnabled = ($setting['backup_db_enabled'] ?? '1') !== '0';
         $botEnabled = ($setting['backup_bot_enabled'] ?? '1') !== '0';
@@ -16877,13 +17098,13 @@ if (!function_exists('backup_run_now')) {
                 // with a password set, the bare dump is never the fallback - it
                 // is exactly what the password is there to keep from going out
                 if ($zipWhy === '' || $dbBackupPassword === '') {
-                    telegram('sendDocument', [
+                    $sent = telegram('sendDocument', [
                         'chat_id' => $setting['Channel_Report'],
                         'message_thread_id' => $reportbackup,
                         'document' => new CURLFile($zipWhy === '' ? $zipFileName : $backupFileName),
                         'caption' => $textbotlang['hardcoded']['backupDatabaseCaption'],
                     ]);
-                    $sentAny = true;
+                    $sentAny = $sentAny || !empty($sent['ok']);
                 } else {
                     telegram('sendmessage', [
                         'chat_id' => $setting['Channel_Report'],
@@ -16907,13 +17128,13 @@ if (!function_exists('backup_run_now')) {
             $botBackupPassword = $forceNoPassword ? '' : ($setting['backup_bot_password'] ?? '');
             $zipWhy = backup_zip_create($botFolderZipName, $botRootDir, ['.'], $botBackupPassword, ['.git/*', '*.bak_*']);
             if ($zipWhy === '') {
-                telegram('sendDocument', [
+                $sent = telegram('sendDocument', [
                     'chat_id' => $setting['Channel_Report'],
                     'message_thread_id' => $reportbackup,
                     'document' => new CURLFile($botFolderZipName),
                     'caption' => $textbotlang['hardcoded']['botFolderBackupCaption'],
                 ]);
-                $sentAny = true;
+                $sentAny = $sentAny || !empty($sent['ok']);
                 unlink($botFolderZipName);
             } else {
                 telegram('sendmessage', [
@@ -16925,10 +17146,19 @@ if (!function_exists('backup_run_now')) {
             }
         }
 
+        // only a file Telegram actually took counts as sent - a group the bot
+        // was removed from used to get "sent" all the same
         if ($sentAny) {
             telegram('sendmessage', [
                 'chat_id' => $fromAdminId,
                 'text' => $textbotlang['Admin']['BackupSettings']['manualBackupDone'],
+            ]);
+        } else {
+            $tx = panel_texts();
+            telegram('sendmessage', [
+                'chat_id' => $fromAdminId,
+                'text' => sprintf($tx['Admin']['BackupSettings']['manualBackupNotSent'], $tx['Admin']['panelAdmin'], $tx['keyboard']['generalSettings'], $tx['keyboard']['botReports']),
+                'parse_mode' => 'HTML',
             ]);
         }
     }
@@ -17170,14 +17400,15 @@ if (!function_exists('help_layout_save')) {
     }
 }
 if (!function_exists('admin_perm_payload')) {
-    // 🛡 دسترسی ادمین: what an admin's own test accounts and purchases are held
-    // to. Both switches are bot-wide, not per language - $lang only threads the
-    // customization screen's back button.
+    // 🛡 دسترسی ادمین: what an admin's own test accounts, purchases and free
+    // configs are held to. All the switches are bot-wide, not per language -
+    // $lang only threads the customization screen's back button.
     function admin_perm_payload($lang)
     {
         $setting = select("setting", "*", null, null, "select");
         $testFree = (string) ($setting['admin_test_unlimited'] ?? '1') !== '0';
         $buyFree = (string) ($setting['admin_buy_free'] ?? '0') === '1';
+        $rwFree = (string) ($setting['admin_affrw_unlimited'] ?? '0') === '1';
         $info = "🛡 <b>دسترسی ادمین</b>\n➖➖➖➖➖➖➖➖➖➖\n";
         $info .= "این تنظیمات فقط روی حساب ادمین‌ها اثر داره، نه کاربرها.\n";
         $info .= "📌 بین همه‌ی زبان‌ها مشترکه - از هر تبی باز بشه همین یکیه.\n\n";
@@ -17187,9 +17418,14 @@ if (!function_exists('admin_perm_payload')) {
         $info .= $buyFree
             ? "خرید سرویس، خرید چندتایی، تمدید و حجم/زمان اضافه برای ادمین رایگانه و از موجودیش چیزی کم نمی‌شه."
             : "ادمین هم مثل کاربرها هزینه‌ی خرید رو از موجودیش پرداخت می‌کنه.";
+        $info .= "\n\n🎁 <b>کانفیگ رایگان با دعوت بدون محدودیت:</b> " . ($rwFree ? "روشن ✅" : "خاموش ❌") . "\n";
+        $info .= $rwFree
+            ? "ادمین هر بار «👥 زیرمجموعه‌گیری» رو بزنه، همون لحظه یه کانفیگ رایگان (همونی که کاربرها با دعوت می‌گیرن) براش ساخته می‌شه - بدون دعوت و بدون تایید ادمین، چه تحویل «خودکار» باشه چه «با تایید ادمین». دعوت‌های خودش هم بدون راستی‌آزمایی حساب می‌شه. سقف «🔁 چند بار» (🎁 کانفیگ رایگان با دعوت) برای ادمین هم هست: وقتی به سقف رسید، این گزینه خودش خاموش می‌شه (برای همه‌ی ادمین‌ها) و دفعه‌ی بعد همون پیامی رو می‌گیره که کاربرها می‌گیرن. برای گرفتن دوباره: «🔄 صفر کردن دعوت‌های یک کاربر» با آیدی خودت، و دوباره روشنش کن. (طرح 🎁 باید برای زبان ادمین روشن باشه.)"
+            : "ادمین هم مثل کاربرها باید دعوت کنه و سقف «🔁 چند بار» و تایید ادمین روش هست.";
         $kb = ['inline_keyboard' => []];
         $kb['inline_keyboard'][] = [['text' => '🔑 اکانت تست بدون محدودیت: ' . ($testFree ? 'روشن ✅' : 'خاموش ❌'), 'callback_data' => "admperm|test|{$lang}", 'style' => $testFree ? 'success' : 'danger']];
         $kb['inline_keyboard'][] = [['text' => '🛍 خرید رایگان: ' . ($buyFree ? 'روشن ✅' : 'خاموش ❌'), 'callback_data' => "admperm|buy|{$lang}", 'style' => $buyFree ? 'success' : 'danger']];
+        $kb['inline_keyboard'][] = [['text' => '🎁 کانفیگ رایگان با دعوت بدون محدودیت: ' . ($rwFree ? 'روشن ✅' : 'خاموش ❌'), 'callback_data' => "admperm|affrw|{$lang}", 'style' => $rwFree ? 'success' : 'danger']];
         $kb['inline_keyboard'][] = [['text' => '🔙 برگشت به لیست', 'callback_data' => "btact|back|{$lang}", 'style' => 'danger']];
         $kb['inline_keyboard'][] = [['text' => '❌ بستن', 'callback_data' => 'bt_close', 'style' => 'danger']];
         return [$info, json_encode($kb)];
@@ -17876,6 +18112,75 @@ if (!function_exists('affrw_cfg')) {
         }
         return $cfg;
     }
+    // 🎨 ← 🛡 دسترسی و محدودیت‌های ادمین ← «🎁 کانفیگ رایگان با دعوت بدون
+    // محدودیت»: one switch for the whole bot, like that screen's other two.
+    // On, an admin gets the free config every time they open 👥 - no invites,
+    // nobody's approval, whichever way it is delivered (affrw_admin_give) -
+    // and their own invites skip 🛡's checks and approval too; up to the 🔁
+    // allowance, like a customer, and reaching it switches it off
+    // (affrw_admin_spent). Off, an admin is a customer like any other.
+    function affrw_admin_free($uid)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        if ((string) ($setting['admin_affrw_unlimited'] ?? '0') !== '1') {
+            return false;
+        }
+        return in_array((string) $uid, array_map('strval', (array) select("admin", "id_admin", null, null, "FETCH_COLUMN")), true);
+    }
+    // ...and the config itself: their language's 🎁 plan, made and sent the
+    // way a customer gets it, so the admin sees exactly that. It counts
+    // towards 🔁 چند بار like a customer's (affiliate_reward.times); nothing
+    // once that is used up. False when the plan is off for their language,
+    // the allowance is used up or the panel refused (the admin is told why).
+    function affrw_admin_give($uid)
+    {
+        global $pdo;
+        $u = select("user", "*", "id", (string) $uid, "select");
+        $lang = is_array($u) ? ($u['lang'] ?? 'fa') : 'fa';
+        $cfg = affrw_live($lang);
+        if ($cfg === null) {
+            return false;
+        }
+        $row = affrw_row($uid);
+        if (affrw_used_up($row)) {
+            return false;
+        }
+        $err = null;
+        $made = affrw_deliver($uid, $cfg, affrw_panel($cfg), is_array($u) ? $u : ['username' => ''], payer_texts($uid), $lang, $cfg['need'], $err);
+        if ($made === null) {
+            sendmessage($uid, strtr(lang_tab_texts('fa')['Admin']['AffTest']['realFailed'], ['{msg}' => htmlspecialchars(json_encode($err, JSON_UNESCAPED_UNICODE))]), null, 'HTML');
+            return false;
+        }
+        // no invitees behind it, so none of 🚪's to watch; a round of his
+        // own invites that is under way keeps its status
+        $times = affrw_times($row) + 1;
+        $done = $times >= $cfg['max'];
+        if ($row === null) {
+            $pdo->prepare("INSERT INTO affiliate_reward (user_id, lang, status, invites, since, time, times, id_invoice, members, left_ids, suspended) VALUES (?, ?, ?, 0, ?, ?, ?, ?, '[]', '[]', 0)")
+                ->execute([(string) $uid, $lang, $done ? 'done' : 'open', time(), time(), $times, $made['id_invoice']]);
+        } else {
+            $pdo->prepare("UPDATE affiliate_reward SET lang = ?, times = ?, id_invoice = ?, time = ?, members = '[]', left_ids = '[]', suspended = 0 WHERE user_id = ?")
+                ->execute([$lang, $times, $made['id_invoice'], time(), (string) $uid]);
+            $pdo->prepare("UPDATE affiliate_reward SET status = ?, since = ? WHERE user_id = ? AND status IN ('open', 'rejected', 'done')")
+                ->execute([$done ? 'done' : 'open', time(), (string) $uid]);
+        }
+        if ($done) {
+            affrw_admin_spent($uid, $cfg);
+        }
+        return true;
+    }
+    // 🛡 an admin with no limit who has now had it as many times as 🔁 چند بار
+    // allows: the switch goes off - it is one for every admin - and they are
+    // told; their next 👥 says the allowance is used up, as a customer's does
+    function affrw_admin_spent($uid, $cfg)
+    {
+        if (!affrw_admin_free($uid)) {
+            return;
+        }
+        update("setting", "admin_affrw_unlimited", "0", null, null);
+        clearSelectCache('setting');
+        sendmessage($uid, strtr(lang_tab_texts('fa')['Admin']['AffReward']['adminSpent'], ['{max}' => $cfg['max']]), null, 'HTML');
+    }
     // One row per customer who reached the count, and it is what makes the
     // gift once only: status pending (waiting for an admin), giving (being
     // made), done, or rejected. Also made here for a bot whose table.php has
@@ -18212,13 +18517,57 @@ if (!function_exists('affrw_cfg')) {
         $stmt = $pdo->prepare("SELECT * FROM affiliate_reward WHERE user_id = ?");
         $stmt->execute([(string) $uid]);
         $r = $stmt->fetch(PDO::FETCH_ASSOC);
-        return is_array($r) ? $r : null;
+        if (!is_array($r)) {
+            return null;
+        }
+        // 🔁 چند بار raised since a row reached the end of it: it goes on
+        // counting from here
+        $times = affrw_times($r);
+        if ($r['status'] === 'done' && $times < affrw_cfg($r['lang'])['max']) {
+            $pdo->prepare("UPDATE affiliate_reward SET status = 'open', times = ? WHERE user_id = ? AND status = 'done'")->execute([$times, (string) $uid]);
+            $r['status'] = 'open';
+            $r['times'] = $times;
+        }
+        return $r;
+    }
+    // how many times a customer has had it; a row from before that was
+    // counted says «done» only, which was once
+    function affrw_times($row)
+    {
+        if ($row === null) {
+            return 0;
+        }
+        $times = (int) ($row['times'] ?? 0);
+        return $row['status'] === 'done' ? max(1, $times) : $times;
+    }
+    // had it as many times as 🔁 چند بار allows - nothing more to earn (a
+    // round already under way still ends the way it would)
+    function affrw_used_up($row)
+    {
+        return $row !== null && in_array($row['status'], ['open', 'rejected', 'done'], true)
+            && affrw_times($row) >= affrw_cfg($row['lang'])['max'];
     }
     // counting starts when the offer was switched on - or, after a refusal,
     // at the refusal
     function affrw_since($cfg, $row)
     {
         return max($cfg['since'], is_array($row) ? (int) $row['since'] : 0);
+    }
+    // Whether $memberId, newly $inviterId's referral, counts for their free
+    // config: a newcomer to the bot since the count began, and not already
+    // behind their latest reward. Anyone counts while 🎁 is off for the
+    // inviter's language (there is nothing to count then).
+    function affrw_member_counts($inviterId, $memberId)
+    {
+        $inv = select("user", "*", "id", (string) $inviterId, "select");
+        $cfg = affrw_live(is_array($inv) ? ($inv['lang'] ?? 'fa') : 'fa');
+        if ($cfg === null) {
+            return true;
+        }
+        $row = affrw_row($inviterId);
+        $m = select("user", "*", "id", (string) $memberId, "select");
+        return is_array($m) && (int) ($m['register'] ?? 0) > affrw_since($cfg, $row)
+            && !in_array((string) $memberId, affrw_members($row), true);
     }
     // valid invites: people who joined the bot through this customer's link
     // since then
@@ -18261,9 +18610,31 @@ if (!function_exists('affrw_cfg')) {
     {
         return ['{need}' => $cfg['need'], '{volume}' => volume_num($cfg['gb']), '{days}' => $cfg['days'], '{count}' => min($count, $cfg['need'])];
     }
+    // A delivery that never finished - the request died half way (a crash, a
+    // timeout) - left its row at 'giving', and that blocked the customer for
+    // good: no config, no request to anyone, nothing on 👥 ever again. After
+    // five minutes such a row goes to the admins instead, as when the panel
+    // refuses, and the customer is told. Swept whenever an invite is counted
+    // or anyone opens 👥, so an old stuck one is found too.
+    function affrw_unstick()
+    {
+        global $pdo;
+        affrw_ensure_table();
+        $st = $pdo->prepare("SELECT user_id, lang, invites FROM affiliate_reward WHERE status = 'giving' AND time < ?");
+        $st->execute([time() - 300]);
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            if (!affrw_move($r['user_id'], 'giving', 'pending')) {
+                continue;
+            }
+            affrw_ask_admins($r['user_id'], true);
+            bottext_extras_key_hint('users.affiliates.rewardSentToAdmin');
+            sendmessage($r['user_id'], strtr(payer_texts($r['user_id'])['users']['affiliates']['rewardSentToAdmin'], affrw_vars(affrw_cfg($r['lang']), (int) $r['invites'])), null, 'HTML');
+        }
+    }
     // Called when someone joins through $uid's link, and when $uid opens 👥.
     function affrw_check($uid)
     {
+        affrw_unstick();
         $u = select("user", "*", "id", $uid, "select");
         if (!is_array($u)) {
             return;
@@ -18274,19 +18645,29 @@ if (!function_exists('affrw_cfg')) {
             return;
         }
         $row = affrw_row($uid);
-        if (!affrw_counting($row)) {
+        // 🔁 چند بار lowered below what they have had: no more either
+        if (!affrw_counting($row) || affrw_used_up($row)) {
             return;
         }
         $count = affrw_count($uid, affrw_since($cfg, $row));
         if ($count < $cfg['need']) {
             return;
         }
-        // 👑 inviters of 🎁's 🛡 never wait for an admin
-        if ($cfg['mode'] === 'auto' || in_array((string) $uid, refv_cfg($lang, 'r')['vip'], true)) {
+        // 👑 inviters of 🎁's 🛡 never wait for an admin - nor does an admin
+        // with no limit (🛡 دسترسی ادمین)
+        if ($cfg['mode'] === 'auto' || in_array((string) $uid, refv_cfg($lang, 'r')['vip'], true) || affrw_admin_free($uid)) {
             if (!affrw_claim($uid, $lang, 'giving', $count, affrw_since($cfg, $row))) {
                 return;
             }
-            if (affrw_give($uid)) {
+            // anything thrown on the way counts as the panel refusing, rather
+            // than ending the request with the row stuck at 'giving'
+            try {
+                $given = affrw_give($uid);
+            } catch (Throwable $e) {
+                error_log('affrw_give: ' . $e->getMessage());
+                $given = false;
+            }
+            if ($given) {
                 return;
             }
             // the panel refused - an admin gets it instead of nobody
@@ -18303,26 +18684,32 @@ if (!function_exists('affrw_cfg')) {
         sendmessage($uid, strtr($tx['users']['affiliates']['rewardSentToAdmin'], affrw_vars($cfg, $count)), null, 'HTML');
     }
     // the message under 👥 زیرمجموعه‌گیری, or null when this language has none
-    function affrw_info_text($user, $tx, $link)
+    // ($key: its 🎨 item) - once 🔁 چند بار is used up, a message saying so
+    // instead of a page inviting them to earn one
+    function affrw_info_text($user, $tx, $link, &$key = null)
     {
+        $key = 'rewardInfo';
         $cfg = affrw_live($user['lang'] ?? 'fa');
         if ($cfg === null) {
             return null;
         }
         $a = $tx['users']['affiliates'];
         $row = affrw_row($user['id']);
-        if ($row !== null && $row['status'] === 'done') {
-            $status = $a['rewardStatusDone'];
-            $count = $cfg['need'];
-        } elseif ($row !== null && $row['status'] === 'naming') {
+        if (affrw_used_up($row)) {
+            $key = 'rewardLimitReached';
+            return strtr($a['rewardLimitReached'], ['{max}' => affrw_cfg($row['lang'])['max']]);
+        }
+        if ($row !== null && $row['status'] === 'naming') {
             $status = $a['rewardStatusNaming'];
             $count = $cfg['need'];
         } elseif (!affrw_counting($row)) {
             $status = $a['rewardStatusPending'];
             $count = $cfg['need'];
         } else {
-            $status = $cfg['mode'] === 'auto' ? $a['rewardStatusAuto'] : $a['rewardStatusAdmin'];
-            $count = affrw_count($user['id'], affrw_since($cfg, $row));
+            $free = affrw_admin_free($user['id']);
+            $status = ($cfg['mode'] === 'auto' || $free) ? $a['rewardStatusAuto'] : $a['rewardStatusAdmin'];
+            // an admin with no limit gets it right after this page: shown full
+            $count = $free ? $cfg['need'] : affrw_count($user['id'], affrw_since($cfg, $row));
         }
         return strtr($a['rewardInfo'], affrw_vars($cfg, $count) + ['{link}' => $link, '{status}' => $status]);
     }
@@ -18500,6 +18887,9 @@ if (!function_exists('affrw_cfg')) {
         $more = $times < $cfg['max'];
         $stmt = $pdo->prepare("UPDATE affiliate_reward SET status = ?, id_invoice = ?, time = ?, times = ?, since = ?, members = ?, left_ids = '[]', suspended = 0 WHERE user_id = ?");
         $stmt->execute([$more ? 'open' : 'done', $id_invoice, time(), $times, $more ? time() : (int) ($row['since'] ?? 0), json_encode($members), (string) $uid]);
+        if (!$more) {
+            affrw_admin_spent($uid, $cfg);
+        }
         $report('porsantreport', strtr($fa['Admin']['AffReward']['report'], [
             '{id}' => $uid,
             '{username}' => (!empty($u['username']) && $u['username'] !== 'none') ? '@' . htmlspecialchars($u['username']) : '',
@@ -18533,7 +18923,6 @@ if (!function_exists('bt_nosticker_keys')) {
             'users.affiliates.rewardStatusAuto',
             'users.affiliates.rewardStatusAdmin',
             'users.affiliates.rewardStatusPending',
-            'users.affiliates.rewardStatusDone',
             'users.affiliates.rewardServiceName',
             // and the service name 🔗 واگذاری gives a handed-over service
             'users.status.assignedServiceName',
@@ -18999,6 +19388,7 @@ if (!function_exists('bt_default_stickers')) {
             'users.sell.noPaymentMethod' => 'CAACAgQAAxkBAAJyomqmL8XWREbwt2BPYfm8fToL4HqdAAKGDwACnQVRU0jlv2uEhl4wPQQ',
             'users.unknownMsg' => 'CAACAgQAAxkBAAJy5mqxYm-rS6jwNkdpdLI9_0J0GCQYAAJYDAACm6GYUo8o_EwMQ7lTPQQ',
             'users.text_start' => 'CAACAgQAAxkBAAJy6mqxY_xKWxtBsdsM_I8arNldDhf3AAKZEgACdnlZUW2qPBOT3zBNPQQ',
+            'users.affiliates.rewardLimitReached' => 'CAACAgQAAxkBAAJzzmrDaNPb4yRiifLUYnNjF0KDryttAAJEFQACKplIU4h3vf6E677mPQQ',
         ];
     }
     function bt_default_sticker($key)
@@ -19329,18 +19719,24 @@ function sendMessageService($panel_info, $config, $sub_link, $username_service, 
             unlink($urlimage);
         }
     } else {
-        // What the QR stands for: the subscription link covers every config, so
-        // it wins even when there are several - that case used to send no QR at
-        // all. A lone config works on its own; several configs with no
-        // subscription link have nothing a single QR could stand for.
-        $out_put_qrcode = "";
-        if ($panel_info['sublink'] == "onsublink") {
-            $out_put_qrcode = (string) $sub_link;
-        } elseif ($panel_info['config'] == "onconfig" && $configCount == 1) {
-            $out_put_qrcode = (string) $config[0];
+        // «ارسال کانفیگ» on: the message goes first WITHOUT the config links,
+        // then every config follows on a message of its own - a photo of its
+        // own QR with the link under it when the QR is on, as 🛍's «دریافت
+        // کانفیگ» sends it, the link alone when not. All of them in the one
+        // caption ran past Telegram's 1024 characters, and the photo then came
+        // apart from its text.
+        $cfgLinks = $panel_info['config'] == "onconfig" && is_array($config)
+            ? array_values(array_filter(array_map(fn($c) => trim((string) $c), $config), 'strlen'))
+            : [];
+        if ($cfgLinks) {
+            $caption = service_caption_without_configs($caption, $cfgLinks);
         }
+        $qrOn = config_delivery_qr_on($kind, $panel_info['code_panel'] ?? null, $sms_lang);
+        // The first message's QR is the subscription link, which covers every
+        // config; the configs bring their own.
+        $out_put_qrcode = $panel_info['sublink'] == "onsublink" ? (string) $sub_link : "";
         $captionSent = false;
-        if ($out_put_qrcode !== '' && config_delivery_qr_on($kind, $panel_info['code_panel'] ?? null, $sms_lang)) {
+        if ($out_put_qrcode !== '' && $qrOn) {
             $urlimage = "$user_id$invoice_id.png";
             try {
                 $qrCode = createqrcode($out_put_qrcode);
@@ -19368,6 +19764,56 @@ function sendMessageService($panel_info, $config, $sub_link, $username_service, 
         if (!$captionSent) {
             $sendFull($caption);
         }
+        foreach ($cfgLinks as $i => $link) {
+            config_send_one($user_id, $link, $qrOn, $image, "{$user_id}{$invoice_id}_{$i}.png");
+        }
+    }
+}
+if (!function_exists('service_caption_without_configs')) {
+    // A new service's message with its config links taken out - they follow on
+    // messages of their own (sendMessageService). What held them is tidied: an
+    // emptied <code></code>, and the blank lines left behind.
+    function service_caption_without_configs($caption, array $links)
+    {
+        $out = str_replace($links, '', (string) $caption);
+        $out = preg_replace('~<code>\s*</code>~u', '', $out);
+        $out = preg_replace("~[ \t]+\n~u", "\n", $out);
+        $out = preg_replace("~\n{3,}~u", "\n\n", $out);
+        return rtrim($out);
+    }
+}
+if (!function_exists('config_send_one')) {
+    // One config on a message of its own: a photo of its QR on $image with the
+    // link under it, exactly as 🛍's «دریافت کانفیگ» sends one - or the link
+    // alone, with the QR off or when the photo cannot be made or sent.
+    function config_send_one($chatId, $link, $withQr, $image, $file)
+    {
+        $caption = "<code>{$link}</code>";
+        if ($withQr) {
+            try {
+                $qrCode = createqrcode($link);
+                file_put_contents($file, $qrCode->getString());
+                addBackgroundImage($file, $qrCode, $image);
+                $res = telegram('sendphoto', [
+                    'chat_id' => $chatId,
+                    'photo' => new CURLFile($file),
+                    'caption' => $caption,
+                    'parse_mode' => "HTML",
+                ]);
+                if (is_file($file)) {
+                    unlink($file);
+                }
+                if (!empty($res['ok'])) {
+                    return;
+                }
+            } catch (\Throwable $e) {
+                error_log('config_send_one QR: ' . $e->getMessage());
+                if (is_file($file)) {
+                    unlink($file);
+                }
+            }
+        }
+        sendmessage($chatId, $caption, null, 'HTML');
     }
 }
 function isValidInvitationCode($setting, $fromId, $verfy_status, $lang = 'fa')

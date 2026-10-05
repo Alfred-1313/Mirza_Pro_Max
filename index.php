@@ -16,6 +16,13 @@ require_once 'panels.php';
 $textbotlang = ui_texts();
 if ($is_bot)
     return;
+// Before the join/leave updates below, not after: a join Telegram reports can
+// complete the invite that earns a free config (🎁's 🛡 channel check), and a
+// leave can pause one (🚪) - both talk to the panel. Made after them, the panel
+// object did not exist yet there: the request died right after the inviter's
+// «3 / 3» and the config was never made nor sent to anyone.
+$setting = select("setting", "*");
+$ManagePanel = new ManagePanel();
 if (isset($update['chat_member'])) {
     $status = $update['chat_member']['new_chat_member']['status'];
     $from_id = $update['chat_member']['new_chat_member']['user']['id'];
@@ -65,8 +72,6 @@ if (!in_array($Chat_type, ["private", "supergroup"]))
 if (isset($chat_member))
     return;
 $first_name = sanitizeUserName($first_name);
-$setting = select("setting", "*");
-$ManagePanel = new ManagePanel();
 $keyboard_check = json_decode($setting['keyboardmain'], true);
 if (is_array($keyboard_check) && preg_match('/[\x{600}-\x{6FF}\x{FB50}-\x{FDFF}]/u', $keyboard_check['keyboard'][0][0]['text'])) {
     // Same starting layout table.php installs - six on, the rest hidden. This
@@ -6383,10 +6388,16 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     }
     // 2️⃣ 🎁 کانفیگ رایگان با دعوت, when this customer's language has it
     affrw_check($from_id);
-    $affrw_text = affrw_info_text($user, $textbotlang, "https://t.me/$usernamebot?start=$from_id");
+    $affrw_key = 'rewardInfo';
+    $affrw_text = affrw_info_text($user, $textbotlang, "https://t.me/$usernamebot?start=$from_id", $affrw_key);
     if ($affrw_text !== null) {
-        bottext_extras_key_hint('users.affiliates.rewardInfo');
+        bottext_extras_key_hint("users.affiliates.{$affrw_key}");
         sendmessage($from_id, $affrw_text, (affrw_row($from_id)['status'] ?? '') === 'naming' ? affrw_name_kb($textbotlang) : null, 'HTML');
+        // 🛡 دسترسی ادمین: an admin with no limit gets the config right here,
+        // every tap - no invites, nobody's approval - until 🔁 چند بار is used up
+        if (affrw_admin_free($from_id)) {
+            affrw_admin_give($from_id);
+        }
     }
     // neither: say so, instead of a tap that answers nothing
     if (!$aff_classic && $affrw_text === null) {

@@ -354,6 +354,156 @@ if (!function_exists('um_tab')) {
         return $n;
     }
 }
+if (!function_exists('stats_keyboard')) {
+    // 📊 آمار ربات has a tab per language: every number on it is that
+    // language's users and sales, money in that language's currency - one
+    // total of tomans and dollars together would mean nothing. Each button
+    // carries its tab (today_stat:en); the tabs keep the view that is open.
+    function stats_keyboard($lang, $view, $textbotlang)
+    {
+        $k = $textbotlang['keyboard'];
+        return json_encode(['inline_keyboard' => [
+            panel_lang_tabs($lang, "{$view}:%s", null),
+            [['text' => $k['totalStats'], 'callback_data' => "stat_all_bot:{$lang}"]],
+            [['text' => $k['lastHourStats'], 'callback_data' => "hoursago_stat:{$lang}"]],
+            [['text' => $k['today'], 'callback_data' => "today_stat:{$lang}"], ['text' => $k['yesterday'], 'callback_data' => "yesterday_stat:{$lang}"]],
+            [['text' => $k['currentMonth'], 'callback_data' => "month_current_stat:{$lang}"], ['text' => $k['lastMonth'], 'callback_data' => "month_old_stat:{$lang}"]],
+            [['text' => $k['statsAtDate'], 'callback_data' => "view_stat_time:{$lang}"]],
+        ]]);
+    }
+    function stats_header($lang, $textbotlang)
+    {
+        return sprintf($textbotlang['Admin']['stats']['langHeader'], um_lang_name($lang, $textbotlang)) . "\n";
+    }
+    function stats_one($sql, array $params)
+    {
+        global $pdo;
+        $st = $pdo->prepare($sql);
+        $st->execute($params);
+        return $st->fetch(PDO::FETCH_ASSOC) ?: [];
+    }
+    // a period (unix times, both ends included) for one language: the
+    // $tplKey text (lastHour, today, yesterday, thisMonth, lastMonth,
+    // selectedRange) filled in
+    function stats_period_text($lang, $tplKey, $fromTs, $toTs, $textbotlang)
+    {
+        if (function_exists('wallet_ensure_schema')) {
+            wallet_ensure_schema();
+        }
+        $test = $textbotlang['common']['labels']['testServiceName'];
+        $cur = currency_for_lang($lang);
+        [$iw, $ip] = stats_lang_where($lang, 'i');
+        [$sw, $sp] = stats_lang_where($lang, 's', false);
+        [$uw, $up] = user_lang_where($lang);
+        // invoices and users keep unix times, service_other a 'Y/m/d H:i:s' text
+        $ts = [(string) $fromTs, (string) $toTs];
+        $dt = [date('Y/m/d H:i:s', $fromTs), date('Y/m/d H:i:s', $toTs)];
+        $orders = stats_one("SELECT COUNT(*) c, COALESCE(SUM(i.price_product), 0) s FROM invoice i WHERE i.time_sell BETWEEN ? AND ? AND i.Status != 'Unpaid' AND i.name_product != ? AND {$iw}", array_merge($ts, [$test], $ip));
+        $tests = stats_one("SELECT COUNT(*) c FROM invoice i WHERE i.time_sell BETWEEN ? AND ? AND i.name_product = ? AND {$iw}", array_merge($ts, [$test], $ip));
+        $other = [];
+        foreach (['extend_user', 'extra_user', 'extra_time_user', 'change_location'] as $type) {
+            $paid = $type === 'extend_user' ? " AND s.status != 'unpaid'" : '';
+            $other[$type] = stats_one("SELECT COUNT(*) c, COALESCE(SUM(s.price), 0) s FROM service_other s WHERE s.time BETWEEN ? AND ? AND s.type = ?{$paid} AND {$sw}", array_merge($dt, [$type], $sp));
+        }
+        $newUsers = stats_one("SELECT COUNT(*) c FROM user WHERE register BETWEEN ? AND ? AND register != 'none' AND {$uw}", array_merge($ts, $up));
+        $args = [
+            $orders['c'] ?? 0, money($orders['s'] ?? 0, $cur),
+            $other['extend_user']['c'] ?? 0, money($other['extend_user']['s'] ?? 0, $cur),
+            $other['extra_user']['c'] ?? 0, money($other['extra_user']['s'] ?? 0, $cur),
+            $other['extra_time_user']['c'] ?? 0, money($other['extra_time_user']['s'] ?? 0, $cur),
+            $other['change_location']['c'] ?? 0, money($other['change_location']['s'] ?? 0, $cur),
+            $tests['c'] ?? 0, $newUsers['c'] ?? 0,
+        ];
+        if ($tplKey !== 'lastHour') {
+            array_unshift($args, $dt[0], $dt[1]);
+        }
+        return stats_header($lang, $textbotlang) . vsprintf($textbotlang['Admin']['stats'][$tplKey], $args);
+    }
+    // [from, to] unix times of a named period
+    function stats_period_range($view)
+    {
+        switch ($view) {
+            case 'hoursago_stat':
+                return [time() - 3600, time()];
+            case 'yesterday_stat':
+                return [strtotime('yesterday'), strtotime('today') - 1];
+            case 'today_stat':
+                return [strtotime('today'), time()];
+            case 'month_old_stat':
+                return [strtotime('first day of last month 00:00:00'), strtotime('first day of this month 00:00:00') - 1];
+            default: // month_current_stat
+                return [strtotime('first day of this month 00:00:00'), strtotime('first day of next month 00:00:00') - 1];
+        }
+    }
+    function stats_overall_text($lang, $textbotlang)
+    {
+        global $pdo;
+        if (function_exists('wallet_ensure_schema')) {
+            wallet_ensure_schema();
+        }
+        $test = $textbotlang['common']['labels']['testServiceName'];
+        $cur = currency_for_lang($lang);
+        [$iw, $ip] = stats_lang_where($lang, 'i');
+        [$sw, $sp] = stats_lang_where($lang, 's', false);
+        [$pw, $pp] = stats_lang_where($lang, 'p');
+        [$uw, $up] = user_lang_where($lang);
+        $active = "i.Status IN ('active', 'end_of_time', 'end_of_volume', 'sendedwarn', 'send_on_hold')";
+        $users = (int) (um_lang_counts()[$lang] ?? 0);
+        // buyers are this tab's users, so the conversion rate stays a share of them
+        [$bw, $bp] = stats_lang_where($lang, 'i', false);
+        $buyers = (int) (stats_one("SELECT COUNT(DISTINCT i.id_user) c FROM invoice i WHERE i.Status != 'Unpaid' AND {$bw}", $bp)['c'] ?? 0);
+        $tests = (int) (stats_one("SELECT COUNT(*) c FROM invoice i WHERE i.name_product = ? AND {$iw}", array_merge([$test], $ip))['c'] ?? 0);
+        $all = stats_one("SELECT COUNT(*) c, COALESCE(SUM(i.price_product), 0) s FROM invoice i WHERE i.Status != 'Unpaid' AND i.name_product != ? AND {$iw}", array_merge([$test], $ip));
+        $act = stats_one("SELECT COUNT(*) c, COALESCE(SUM(i.price_product), 0) s FROM invoice i WHERE {$active} AND i.name_product != ? AND {$iw}", array_merge([$test], $ip));
+        $extendSum = (float) (stats_one("SELECT COALESCE(SUM(s.price), 0) s FROM service_other s WHERE s.type = 'extend_user' AND {$sw}", $sp)['s'] ?? 0);
+        // a month at yesterday's pace
+        $yesterday = (float) (stats_one("SELECT COALESCE(SUM(i.price_product), 0) s FROM invoice i WHERE i.time_sell BETWEEN ? AND ? AND {$active} AND i.name_product != ? AND {$iw}", array_merge([(string) strtotime('yesterday'), (string) (strtotime('today') - 1), $test], $ip))['s'] ?? 0);
+        $activeSum = (float) ($act['s'] ?? 0);
+        $agents = stats_one("SELECT SUM(agent != 'f') a, SUM(agent = 'n') n, SUM(agent = 'n2') n2 FROM user WHERE {$uw}", $up);
+        $panels = (int) $pdo->query("SELECT COUNT(*) FROM marzban_panel")->fetchColumn();
+        $gwNames = [
+            'cart to cart' => $textbotlang['textbot']['cartToCart'],
+            'aqayepardakht' => $textbotlang['textbot']['aqayePardakht'],
+            'zarinpal' => $textbotlang['textbot']['zarinPal'],
+            'plisio' => $textbotlang['textbot']['nowPayment'],
+            'arze digital offline' => $textbotlang['textbot']['nowPaymentTron'],
+            'Currency Rial 1' => $textbotlang['textbot']['iranPay2'],
+            'Currency Rial 2' => $textbotlang['textbot']['iranPay3'],
+            'Currency Rial 3' => $textbotlang['textbot']['iranPay1'],
+            'paymentnotverify' => $textbotlang['textbot']['paymentNotVerify'],
+            'Star Telegram' => $textbotlang['textbot']['starTelegram'],
+            'USDT-BEP20' => $textbotlang['textbot']['usdtbepPayment'],
+        ];
+        $st = $pdo->prepare("SELECT p.Payment_Method m, COUNT(*) c, COALESCE(SUM(p.price), 0) s FROM Payment_report p WHERE p.payment_Status = 'paid' AND p.Payment_Method NOT IN ('add balance by admin', 'low balance by admin') AND {$pw} GROUP BY p.Payment_Method");
+        $st->execute($pp);
+        $gateways = '';
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $g) {
+            $gateways .= sprintf($textbotlang['Admin']['report']['gatewayRow'], $gwNames[$g['m']] ?? $g['m'], $g['c'], money($g['s'], $cur));
+        }
+        $extendPct = $activeSum > 0 ? min(100, round($extendSum / $activeSum * 100, 2)) : 0;
+        return stats_header($lang, $textbotlang) . sprintf(
+            $textbotlang['Admin']['stats']['overall'],
+            number_format($users),
+            number_format($buyers),
+            number_format($tests),
+            money(um_lang_wallet_sum($lang), $cur),
+            number_format((int) ($all['c'] ?? 0)),
+            number_format((int) ($act['c'] ?? 0)),
+            money($all['s'] ?? 0, $cur),
+            money($activeSum, $cur),
+            money($extendSum, $cur),
+            $users > 0 ? round($buyers / $users * 100, 2) : 0,
+            money($buyers > 0 ? $activeSum / $buyers : 0, $cur),
+            money($yesterday * 30, $cur),
+            $extendPct,
+            number_format((int) ($agents['a'] ?? 0)),
+            number_format((int) ($agents['n'] ?? 0)),
+            number_format((int) ($agents['n2'] ?? 0)),
+            number_format($panels),
+            $gateways
+        );
+    }
+}
 if (!function_exists('lang_scope_display')) {
     function lang_scope_display($lang, $textbotlang)
     {
@@ -922,7 +1072,10 @@ if (!function_exists('bottext_item_menu_payload')) {
         $info = "📝 <b>{$bt_label}</b>\n➖➖➖➖➖➖➖➖➖➖\n{$bt_extra_note}";
         $info .= "✏️ متن: " . ($bt_custom ? "سفارشی ✅" : "پیش‌فرض") . "\n";
         if (!$bt_nosticker) {
-            $info .= "🖼 استیکر: " . ($bt_sticker !== '' ? "ست شده ✅" : "ندارد ❌") . "\n";
+            // one the message ships with (bt_default_stickers) is sent until the
+            // admin's own replaces it - «ندارد» read as if it sent none
+            $bt_def_st = function_exists('bt_default_sticker') && bt_default_sticker($bt_key) !== '';
+            $info .= "🖼 استیکر: " . ($bt_sticker !== '' ? "ست شده ✅" : ($bt_def_st ? "پیش‌فرض 🔹" : "ندارد ❌")) . "\n";
         }
         if ($bt_can_react && !$bt_nosticker) {
             $info .= "❤️ ری‌اکشن: " . ($bt_react !== '' ? $bt_react : "ندارد ❌") . "\n";
@@ -5035,6 +5188,7 @@ if (!function_exists('feature_section_of_key')) {
             'affrw_gb' => 'affr',
             'affrw_days' => 'affr',
             'affrw_max' => 'affr',
+            'affrw_reset' => 'affr',
         ];
         return $map[$key] ?? null;
     }
@@ -5375,6 +5529,7 @@ if (!function_exists('aff_section_rows')) {
                 [$val(strtr($s['affrwPanelBtn'], ['{panel}' => $rwPanel !== null ? $rwPanel['name_panel'] : $s['affrwNoPanel']]), "flsaffrw:{$lang}:panel")],
                 [$val(strtr($s['affrwModeBtn'], ['{mode}' => $rw['mode'] === 'auto' ? $s['affrwModeAuto'] : $s['affrwModeAdmin']]), "flsaffrw:{$lang}:mode")],
                 [$tog(feature_setting_value('affrw_leave', $lang, '0') === '1', $s['affrwLeaveBtn'], "flsaffrw:{$lang}:leave")],
+                [$val($s['affrwResetUserBtn'], "flsask:{$lang}:affrw_reset")],
                 [$go(strtr($s['refvOpenBtn'], ['{state}' => refv_state_text($lang, 'r', $s, true)]), "flsec:{$lang}:refvr")],
                 [$go($s['affTestRewardBtn'], "afftest:{$lang}:r")],
                 [$go($s['back'], "flsec:{$lang}:aff")],
@@ -5654,6 +5809,7 @@ if (!function_exists('afftest_send')) {
         afftest_verify($to, $lang, 'r', '@' . $me);
         afftest_send($to, $lang, $t['wWelcomeR'], 'users.affiliates.welcomeInvitedReward', strtr(text_fill_s($a['welcomeInvitedReward'], $me), ['{inviter}' => '@' . $me]));
         afftest_send($to, $lang, $t['wNewRef'], 'users.affiliates.newReferralJoinedReward', strtr($a['newReferralJoinedReward'], ['{username}' => '@' . $new, '{count}' => 1, '{need}' => $cfg['need']]));
+        afftest_send($to, $lang, $t['wWasMember'], 'users.affiliates.newReferralWasMember', strtr($a['newReferralWasMember'], ['{username}' => '@' . $t['sampleOld'], '{count}' => 1, '{need}' => $cfg['need']]));
         if ($cfg['mode'] !== 'auto') {
             afftest_send($to, $lang, strtr($t['wReached'], ['{need}' => $cfg['need']]), 'users.affiliates.rewardSentToAdmin', strtr($a['rewardSentToAdmin'], affrw_vars($cfg, $cfg['need'])));
             $r = $fa['Admin']['AffReward'];
@@ -5705,6 +5861,7 @@ if (!function_exists('afftest_send')) {
             [$svcText] = affrw_service_text($sample, $cfg, $tx, ['username' => $service, 'subscription_url' => "https://example.com/sub/{$service}", 'configs' => ["vless://{$service}@example.com:443"]]);
             afftest_send($to, $lang, $t['wService'], 'users.affiliates.rewardAfterPay', $svcText, affrw_help_kb($lang, $tx));
         }
+        afftest_send($to, $lang, strtr($t['wLimit'], ['{max}' => $cfg['max']]), 'users.affiliates.rewardLimitReached', strtr($a['rewardLimitReached'], ['{max}' => $cfg['max']]));
         if (feature_setting_value('affrw_leave', $lang, '0') === '1') {
             $ch = refv_channel_rows(refv_cfg($lang, 'r'));
             $pv = ['{name}' => '@' . $new, '{channel}' => htmlspecialchars((string) ($ch[0]['remark'] ?? '—')), '{service}' => htmlspecialchars($service), '{missing}' => 1];
@@ -6521,12 +6678,14 @@ if (preg_match('/^cfgdeliv\|set\|([a-z]{2})\|([^|]+)\|(purchase|usertest|affrw)\
     Editmessagetext($from_id, $message_id, $cd_text, $cd_kb, 'HTML');
     return;
 }
-if (preg_match('/^admperm\|(open|test|buy)\|([a-z]{2})$/', $datain, $ap_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^admperm\|(open|test|buy|affrw)\|([a-z]{2})$/', $datain, $ap_m) && $adminrulecheck['rule'] == "administrator") {
     $ap_setting = select("setting", "*", null, null, "select");
     if ($ap_m[1] === 'test') {
         update("setting", "admin_test_unlimited", ((string) ($ap_setting['admin_test_unlimited'] ?? '1') !== '0') ? '0' : '1', null, null);
     } elseif ($ap_m[1] === 'buy') {
         update("setting", "admin_buy_free", ((string) ($ap_setting['admin_buy_free'] ?? '0') === '1') ? '0' : '1', null, null);
+    } elseif ($ap_m[1] === 'affrw') {
+        update("setting", "admin_affrw_unlimited", ((string) ($ap_setting['admin_affrw_unlimited'] ?? '0') === '1') ? '0' : '1', null, null);
     }
     list($ap_text, $ap_kb) = admin_perm_payload($ap_m[2]);
     Editmessagetext($from_id, $message_id, $ap_text, $ap_kb, 'HTML');
@@ -8160,7 +8319,8 @@ if (preg_match('/^btact\|delst\|([a-z]{2})\|(.+)$/', $datain, $btm) && $adminrul
     }
     step('home', $from_id);
     list($btm_text, $btm_kb) = bottext_item_menu_payload($btm[2], $btm[1], $textbotlang);
-    Editmessagetext($from_id, $message_id, "🗑 استیکر حذف شد.\n\n" . $btm_text, $btm_kb, 'HTML');
+    $btm_def = function_exists('bt_default_sticker') && bt_default_sticker($btm[2]) !== '';
+    Editmessagetext($from_id, $message_id, ($btm_def ? "🗑 استیکر خودت حذف شد و استیکر پیش‌فرض این پیام برگشت 🔹" : "🗑 استیکر حذف شد.") . "\n\n" . $btm_text, $btm_kb, 'HTML');
     return;
 }
 if (preg_match('/^btact\|delre\|([a-z]{2})\|(.+)$/', $datain, $btm) && $adminrulecheck['rule'] == "administrator") {
@@ -9567,10 +9727,8 @@ if (preg_match('/^cfgcoltxtrw-([a-z]{2})-([0123])$/', (string) $user['step'], $c
 
 if (in_array($text, $textadmin) || $datain == "admin") {    if ($datain == "admin")
         deletemessage($from_id, $message_id);
-    if ($buyreport == "0" || $otherservice == "0" || $otherreport == "0" || $paymentreports == "0" || $reporttest == "0" || $errorreport == "0") {
-        sendmessage($from_id, $textbotlang['Admin']['activeBotText'], $active_panell, 'HTML');
-        return;
-    }
+    // The report group is optional: without one the panel opens all the same
+    // and reports are simply not sent (⚙️ Settings > Bot reports sets it up).
     $version_mini_app = miniapp_version($textbotlang);
     activecron();
     $text_admin = sprintf($text_panel_admin_login_template, $version, $version_mini_app);
@@ -9582,10 +9740,6 @@ if (in_array($text, $textadmin) || $datain == "admin") {    if ($datain == "admi
     // below is kept so the dismiss button on any message already sent still
     // works.
 } elseif ($text == $textbotlang['Admin']['backAdminBtn']) {
-    if ($buyreport == "0" || $otherservice == "0" || $otherreport == "0" || $paymentreports == "0" || $reporttest == "0" || $errorreport == "0") {
-        sendmessage($from_id, $textbotlang['Admin']['activeBotText'], $active_panell, 'HTML');
-        return;
-    }
     $version_mini_app = miniapp_version($textbotlang);
     $text_admin = sprintf($text_panel_admin_login_template, $version, $version_mini_app);
     sendmessage($from_id, $text_admin, $keyboardadmin, 'HTML');
@@ -9603,10 +9757,6 @@ if (in_array($text, $textadmin) || $datain == "admin") {    if ($datain == "admi
     Editmessagetext($from_id, $message_id, $confirmationText, $confirmationKeyboard, 'HTML');
     return;
 } elseif ($text == $textbotlang['Admin']['backMenuBtn']) {
-    if ($buyreport == "0" || $otherservice == "0" || $otherreport == "0" || $paymentreports == "0" || $reporttest == "0" || $errorreport == "0") {
-        sendmessage($from_id, $textbotlang['Admin']['activeBotText'], $setting_panel, 'HTML');
-        return;
-    }
     step('home', $from_id);
     if (in_array($user['step'], ["updatetime", "val_usertest", "del_usertest", "getlimitnew", "GetusernameNew", "GeturlNew", "protocolset", "updatemethodusername", "GetNameNew", "getprotocol", "getprotocolremove", "GetpaawordNew", "updateextendmethod", "setpricechangelocation"])) {
         $typepanel = select("marzban_panel", "*", "name_panel", $user['Processing_value'], "select");
@@ -9884,376 +10034,27 @@ if (in_array($text, $textadmin) || $datain == "admin") {    if ($datain == "admi
     // closest logical place for the button-customization tool's entry point:
     // right where the admin is already managing which channels exist
     sendmessage($from_id, "🎨 رنگ/ایموجی/چیدمان/نام دکمه‌های کانال‌ها رو هم می‌تونی از اینجا تنظیم کنی 👇\n🎯 و اینکه عضویت هر کانال برای کی اجباری باشه.", json_encode(['inline_keyboard' => [[['text' => '📯 دکمه‌های کانال', 'callback_data' => 'chnbtn_hub', 'style' => 'primary']], [['text' => $textbotlang['Admin']['channel']['gateBtn'], 'callback_data' => 'chngate:fa', 'style' => 'primary']]]]), 'HTML');
-} elseif ($text == $textbotlang['Admin']['Status']['btn'] || $datain == "stat_all_bot") {
-    $Balanceall = select("user", "SUM(Balance)", null, null, "select")['SUM(Balance)'];
-    $statistics = select("user", "*", null, null, "count");
-    $sumpanel = select("marzban_panel", "*", null, null, "count");
-    $sql1 = "SELECT COUNT(id) AS count FROM user WHERE agent != 'f'";
-    $stmt1 = $pdo->query($sql1);
-    $agentsum = $stmt1->fetch(PDO::FETCH_ASSOC)['count'];
-    $agentsumn = select("user", "COUNT(id)", "agent", "n", "select")['COUNT(id)'];
-    $agentsumn2 = select("user", "COUNT(id)", "agent", "n2", "select")['COUNT(id)'];
-    $sql1 = "SELECT COUNT(*) AS invoice_count FROM invoice WHERE (status = 'active' OR status = 'end_of_time' OR status = 'end_of_volume' OR status = 'sendedwarn' OR status = 'send_on_hold') AND name_product != '{$textbotlang['common']['labels']['testServiceName']}'";
-    $stmt1 = $pdo->query($sql1);
-    $invoiceactive = $stmt1->fetch(PDO::FETCH_ASSOC)['invoice_count'];
-    $sqlall = "SELECT COUNT(*) AS invoice_count FROM invoice WHERE status != 'Unpaid' AND name_product != '{$textbotlang['common']['labels']['testServiceName']}'";
-    $sqlall = $pdo->query($sqlall);
-    $invoice = $sqlall->fetch(PDO::FETCH_ASSOC)['invoice_count'];
-    $sql2 = "SELECT SUM(price_product) AS total_price FROM invoice WHERE (status = 'active' OR status = 'end_of_time' OR status = 'end_of_volume' OR status = 'sendedwarn' OR status = 'send_on_hold') AND name_product != '{$textbotlang['common']['labels']['testServiceName']}'";
-    $stmt2 = $pdo->query($sql2);
-    $invoicesum = $stmt2->fetch(PDO::FETCH_ASSOC)['total_price'];
-    $sql33 = "SELECT SUM(price_product) AS total_price FROM invoice WHERE status!= 'Unpaid' AND name_product != '{$textbotlang['common']['labels']['testServiceName']}'";
-    $sql33 = $pdo->query($sql33);
-    $invoiceSumRow = $sql33->fetch(PDO::FETCH_ASSOC);
-    $invoiceTotal = isset($invoiceSumRow['total_price']) ? (float) $invoiceSumRow['total_price'] : 0;
-    $invoicesumall = number_format($invoiceTotal, 0);
-    $sql3 = "SELECT SUM(price) AS total_extend FROM service_other WHERE type = 'extend_user'";
-    $stmt3 = $pdo->query($sql3);
-    $extendSumRow = $stmt3->fetch(PDO::FETCH_ASSOC);
-    $extendsum = isset($extendSumRow['total_extend']) ? (float) $extendSumRow['total_extend'] : 0;
-    $count_usertest = select("invoice", "*", "name_product", $textbotlang['common']['labels']['testServiceName'], "count");
-    $timeacc = jdate('H:i:s', time());
-    $stmt2 = $pdo->prepare("SELECT COUNT(DISTINCT id_user) as count FROM `invoice` WHERE Status != 'Unpaid'");
-    $stmt2->execute();
-    $statisticsorder = $stmt2->fetch(PDO::FETCH_ASSOC)['count'];
-    $sqlsum = "SELECT SUM(price) AS sumpay , Payment_Method,COUNT(price) AS countpay FROM Payment_report WHERE payment_Status = 'paid' AND Payment_Method NOT IN ('add balance by admin','low balance by admin') GROUP BY  Payment_Method;";
-    $stmt = $pdo->prepare($sqlsum);
-    $stmt->execute();
-    $statispay = $stmt->fetchAll();
-    $date = date("Y-m-d");
-    $timeacc = jdate('H:i:s', time());
-    $start_time = date('d.m.Y', strtotime("-1 days")) . " 00:00:00";
-    $end_time = date('d.m.Y', strtotime("-1 days")) . " 23:59:59";
-    $start_time_timestamp = strtotime($start_time);
-    $end_time_timestamp = strtotime($end_time);
-    $sql = "SELECT SUM(price_product) FROM invoice WHERE (time_sell BETWEEN :requestedDate AND :requestedDateend) AND (status = 'active' OR status = 'end_of_time'  OR status = 'end_of_volume' OR Status = 'send_on_hold' OR Status = 'sendedwarn') AND name_product != '{$textbotlang['common']['labels']['testServiceName']}'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time_timestamp);
-    $stmt->bindParam(':requestedDateend', $end_time_timestamp);
-    $stmt->execute();
-    $suminvoiceday = $stmt->fetch(PDO::FETCH_ASSOC)['SUM(price_product)'];
-    $invoicesum = (float) ($invoicesum ?? 0);
-    $extendsum = (float) ($extendsum ?? 0);
-    $suminvoiceday = (float) ($suminvoiceday ?? 0);
-    $statistics = (int) ($statistics ?? 0);
-    $statisticsorder = (int) ($statisticsorder ?? 0);
-    $paycount = "";
-    $ratecustomer = $statistics > 0 ? round(($statisticsorder / $statistics) * 100, 2) : 0;
-    $avgbuy_customer = $statisticsorder > 0 ? number_format($invoicesum / $statisticsorder) : '0';
-    $monthe_buy = number_format($suminvoiceday * 30);
-    $percent_of_extend = $invoicesum > 0 ? round(($extendsum / $invoicesum) * 100, 2) : 0;
-    $percent_of_extend = $percent_of_extend > 100 ? 100 : $percent_of_extend;
-    $extendsum = number_format($extendsum, 0);
-    if (count($statispay) != 0) {
-        foreach ($statispay as $tracepay) {
-            $status_var = [
-                'cart to cart' => $textbotlang['textbot']['cartToCart'],
-                'aqayepardakht' => $textbotlang['textbot']['aqayePardakht'],
-                'zarinpal' => $textbotlang['textbot']['zarinPal'],
-                'plisio' => $textbotlang['textbot']['nowPayment'],
-                'arze digital offline' => $textbotlang['textbot']['nowPaymentTron'],
-                'Currency Rial 1' => $textbotlang['textbot']['iranPay2'],
-                'Currency Rial 2' => $textbotlang['textbot']['iranPay3'],
-                'Currency Rial 3' => $textbotlang['textbot']['iranPay1'],
-                'paymentnotverify' => $textbotlang['textbot']['paymentNotVerify'],
-                'Star Telegram' => $textbotlang['textbot']['starTelegram'],
-                'USDT-BEP20' => $textbotlang['textbot']['usdtbepPayment']
-
-            ][$tracepay['Payment_Method']];
-            $paycount .= sprintf($textbotlang['Admin']['report']['gatewayRow'], $status_var, $tracepay['countpay'], $tracepay['sumpay']);
-        }
-    }
-    $statisticsall = sprintf($textbotlang['Admin']['stats']['overall'], $statistics, $statisticsorder, $count_usertest, $Balanceall, $invoice, $invoiceactive, $invoicesumall, $invoicesum, $extendsum, $ratecustomer, $avgbuy_customer, $monthe_buy, $percent_of_extend, $agentsum, $agentsumn, $agentsumn2, $sumpanel, $paycount);
-    if ($datain == "stat_all_bot") {
-        Editmessagetext($from_id, $message_id, $statisticsall, $keyboard_stat, 'HTML');
+} elseif ($text == $textbotlang['Admin']['Status']['btn'] || preg_match('/^(stat_all_bot|hoursago_stat|today_stat|yesterday_stat|month_current_stat|month_old_stat)(?::([a-z]{2}))?$/', (string) $datain, $stat_m)) {
+    // one language at a time (stats_keyboard); a button from before the tabs
+    // carries no language and opens the Persian one
+    $stat_view = $stat_m[1] ?? 'stat_all_bot';
+    $stat_lang = in_array($stat_m[2] ?? '', panel_langs(), true) ? $stat_m[2] : 'fa';
+    if ($stat_view === 'stat_all_bot') {
+        $stat_text = stats_overall_text($stat_lang, $textbotlang);
     } else {
-        sendmessage($from_id, $statisticsall, $keyboard_stat, 'HTML');
+        [$stat_from, $stat_to] = stats_period_range($stat_view);
+        $stat_tpl = ['hoursago_stat' => 'lastHour', 'today_stat' => 'today', 'yesterday_stat' => 'yesterday', 'month_current_stat' => 'thisMonth', 'month_old_stat' => 'lastMonth'][$stat_view];
+        $stat_text = stats_period_text($stat_lang, $stat_tpl, $stat_from, $stat_to, $textbotlang);
     }
-} elseif ($datain == "hoursago_stat") {
-    $desired_date_time_start = time() - 3600;
-    $sql = "SELECT COUNT(*) AS count,SUM(price_product) as sum FROM invoice WHERE (time_sell BETWEEN :requestedDate AND :requestedDateend) AND Status != 'Unpaid'  AND name_product != '{$textbotlang['common']['labels']['testServiceName']}'";
-    $stmt = $pdo->prepare($sql);
-    $time_current = time();
-    $stmt->bindParam(':requestedDate', $desired_date_time_start);
-    $stmt->bindParam(':requestedDateend', $time_current);
-    $stmt->execute();
-    $statorder = $stmt->fetch(PDO::FETCH_ASSOC);
-    $count_order = $statorder['count'];
-    $sum_order = number_format($statorder['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count FROM invoice WHERE (time_sell BETWEEN :requestedDate AND :requestedDateend)  AND name_product = '{$textbotlang['common']['labels']['testServiceName']}'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $desired_date_time_start);
-    $stmt->bindParam(':requestedDateend', $time_current);
-    $stmt->execute();
-    $count_test = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  time  >= NOW() - INTERVAL 1 HOUR AND type = 'extend_user' AND status != 'unpaid'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute();
-    $extend_stat = $stmt->fetch(PDO::FETCH_ASSOC);
-    $count_extend = $extend_stat['count'];
-    $sum_extend = number_format($extend_stat['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  time  >= NOW() - INTERVAL 1 HOUR AND type = 'extra_user'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute();
-    $extra_volume_stat = $stmt->fetch(PDO::FETCH_ASSOC);
-    $count_extra_volume = $extra_volume_stat['count'];
-    $sum_extra_volume = number_format($extra_volume_stat['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  time  >= NOW() - INTERVAL 1 HOUR AND type = 'extra_time_user'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute();
-    $extra_time_stat = $stmt->fetch(PDO::FETCH_ASSOC);
-    $count_extra_time = $extra_time_stat['count'];
-    $sum_extrat_time = number_format($extra_time_stat['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  time  >= NOW() - INTERVAL 1 HOUR AND type = 'change_location'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute();
-    $change_location_stat = $stmt->fetch(PDO::FETCH_ASSOC);
-    $count_change_location = $extra_time_stat['count'];
-    $sum_change_location = number_format($extra_time_stat['sum'], 0);
-    $stmt = $pdo->prepare("SELECT * FROM user WHERE  (register BETWEEN :requestedDate AND :requestedDateend)  AND register != 'none'");
-    $stmt->bindParam(':requestedDate', $desired_date_time_start);
-    $stmt->bindParam(':requestedDateend', $time_current);
-    $stmt->execute();
-    $countextendday = $stmt->rowCount();
-    $statisticsall = sprintf($textbotlang['Admin']['stats']['lastHour'], $count_order, $sum_order, $count_extend, $sum_extend, $count_extra_volume, $sum_extra_volume, $count_extra_time, $sum_extrat_time, $count_change_location, $sum_change_location, $count_test, $countextendday);
-    Editmessagetext($from_id, $message_id, $statisticsall, $keyboard_stat, 'HTML');
-} elseif ($datain == "yesterday_stat") {
-    $start_time = date('Y/m/d', strtotime("-1 days")) . " 00:00:00";
-    $end_time = date('Y/m/d', strtotime("-1 days")) . " 23:59:59";
-    $start_time_timestamp = strtotime($start_time);
-    $end_time_timestamp = strtotime($end_time);
-    $sql = "SELECT COUNT(*) AS count,SUM(price_product) as sum FROM invoice WHERE (time_sell BETWEEN :requestedDate AND :requestedDateend) AND Status != 'Unpaid'  AND name_product != '{$textbotlang['common']['labels']['testServiceName']}'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time_timestamp);
-    $stmt->bindParam(':requestedDateend', $end_time_timestamp);
-    $stmt->execute();
-    $statorder = $stmt->fetch(PDO::FETCH_ASSOC);
-    $count_order = $statorder['count'];
-    $sum_order = number_format($statorder['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count FROM invoice WHERE (time_sell BETWEEN :requestedDate AND :requestedDateend)  AND name_product = '{$textbotlang['common']['labels']['testServiceName']}'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time_timestamp);
-    $stmt->bindParam(':requestedDateend', $end_time_timestamp);
-    $stmt->execute();
-    $count_test = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extend_user' AND status != 'unpaid'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time);
-    $stmt->bindParam(':requestedDateend', $end_time);
-    $stmt->execute();
-    $extend_stat = $stmt->fetch(PDO::FETCH_ASSOC);
-    $count_extend = $extend_stat['count'];
-    $sum_extend = number_format($extend_stat['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extra_user'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time);
-    $stmt->bindParam(':requestedDateend', $end_time);
-    $stmt->execute();
-    $extra_volume_stat = $stmt->fetch(PDO::FETCH_ASSOC);
-    $count_extra_volume = $extra_volume_stat['count'];
-    $sum_extra_volume = number_format($extra_volume_stat['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extra_time_user'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time);
-    $stmt->bindParam(':requestedDateend', $end_time);
-    $stmt->execute();
-    $extra_time_stat = $stmt->fetch(PDO::FETCH_ASSOC);
-    $count_extra_time = $extra_time_stat['count'];
-    $sum_extrat_time = number_format($extra_time_stat['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'change_location'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time);
-    $stmt->bindParam(':requestedDateend', $end_time);
-    $stmt->execute();
-    $change_location_stat = $stmt->fetch(PDO::FETCH_ASSOC);
-    $count_change_location = $change_location_stat['count'];
-    $sum_change_location = number_format($change_location_stat['sum'], 0);
-    $stmt = $pdo->prepare("SELECT * FROM user WHERE  (register BETWEEN :requestedDate AND :requestedDateend)  AND register != 'none'");
-    $stmt->bindParam(':requestedDate', $start_time_timestamp);
-    $stmt->bindParam(':requestedDateend', $end_time_timestamp);
-    $stmt->execute();
-    $countuser_new = $stmt->rowCount();
-    $statisticsall = sprintf($textbotlang['Admin']['stats']['yesterday'], $start_time, $end_time, $count_order, $sum_order, $count_extend, $sum_extend, $count_extra_volume, $sum_extra_volume, $count_extra_time, $sum_extrat_time, $count_change_location, $sum_change_location, $count_test, $countuser_new);
-    Editmessagetext($from_id, $message_id, $statisticsall, $keyboard_stat, 'HTML');
-} elseif ($datain == "today_stat") {
-    $start_time = date('Y/m/d') . " 00:00:00";
-    $end_time = date('Y/m/d H:i:s');
-    $start_time_timestamp = strtotime($start_time);
-    $end_time_timestamp = strtotime($end_time);
-    $sql = "SELECT COUNT(*) AS count,SUM(price_product) as sum FROM invoice WHERE (time_sell BETWEEN :requestedDate AND :requestedDateend) AND Status != 'Unpaid' AND name_product != '{$textbotlang['common']['labels']['testServiceName']}'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time_timestamp);
-    $stmt->bindParam(':requestedDateend', $end_time_timestamp);
-    $stmt->execute();
-    $statorder = $stmt->fetch(PDO::FETCH_ASSOC);
-    $count_order = $statorder['count'];
-    $sum_order = number_format($statorder['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count FROM invoice WHERE (time_sell BETWEEN :requestedDate AND :requestedDateend)  AND name_product = '{$textbotlang['common']['labels']['testServiceName']}'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time_timestamp);
-    $stmt->bindParam(':requestedDateend', $end_time_timestamp);
-    $stmt->execute();
-    $count_test = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extend_user' AND status != 'unpaid'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time);
-    $stmt->bindParam(':requestedDateend', $end_time);
-    $stmt->execute();
-    $extend_stat = $stmt->fetch(PDO::FETCH_ASSOC);
-    $count_extend = $extend_stat['count'];
-    $sum_extend = number_format($extend_stat['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extra_user'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time);
-    $stmt->bindParam(':requestedDateend', $end_time);
-    $stmt->execute();
-    $extra_volume_stat = $stmt->fetch(PDO::FETCH_ASSOC);
-    $count_extra_volume = $extra_volume_stat['count'];
-    $sum_extra_volume = number_format($extra_volume_stat['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extra_time_user'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time);
-    $stmt->bindParam(':requestedDateend', $end_time);
-    $stmt->execute();
-    $extra_time_stat = $stmt->fetch(PDO::FETCH_ASSOC);
-    $count_extra_time = $extra_time_stat['count'];
-    $sum_extrat_time = number_format($extra_time_stat['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'change_location'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time);
-    $stmt->bindParam(':requestedDateend', $end_time);
-    $stmt->execute();
-    $change_location_stat = $stmt->fetch(PDO::FETCH_ASSOC);
-    $count_change_location = $change_location_stat['count'];
-    $sum_change_location = number_format($change_location_stat['sum'], 0);
-    $stmt = $pdo->prepare("SELECT * FROM user WHERE  (register BETWEEN :requestedDate AND :requestedDateend)  AND register != 'none'");
-    $stmt->bindParam(':requestedDate', $start_time_timestamp);
-    $stmt->bindParam(':requestedDateend', $end_time_timestamp);
-    $stmt->execute();
-    $countuser_new = $stmt->rowCount();
-    $statisticsall = sprintf($textbotlang['Admin']['stats']['today'], $start_time, $end_time, $count_order, $sum_order, $count_extend, $sum_extend, $count_extra_volume, $sum_extra_volume, $count_extra_time, $sum_extrat_time, $count_change_location, $sum_change_location, $count_test, $countuser_new);
-    Editmessagetext($from_id, $message_id, $statisticsall, $keyboard_stat, 'HTML');
-} elseif ($datain == "month_old_stat") {
-    $firstDayLastMonth = new DateTime('first day of last month');
-    $lastDayLastMonth = new DateTime('last day of last month');
-    $start_time = $firstDayLastMonth->format('Y/m/d');
-    $end_time = $lastDayLastMonth->format('Y/m/d');
-    $start_time_timestamp = strtotime($start_time);
-    $end_time_timestamp = strtotime($end_time);
-    $sql = "SELECT COUNT(*) AS count,SUM(price_product) as sum FROM invoice WHERE (time_sell BETWEEN :requestedDate AND :requestedDateend) AND Status != 'Unpaid'  AND name_product != '{$textbotlang['common']['labels']['testServiceName']}'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time_timestamp);
-    $stmt->bindParam(':requestedDateend', $end_time_timestamp);
-    $stmt->execute();
-    $statorder = $stmt->fetch(PDO::FETCH_ASSOC);
-    $count_order = $statorder['count'];
-    $sum_order = number_format($statorder['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count FROM invoice WHERE (time_sell BETWEEN :requestedDate AND :requestedDateend)  AND name_product = '{$textbotlang['common']['labels']['testServiceName']}'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time_timestamp);
-    $stmt->bindParam(':requestedDateend', $end_time_timestamp);
-    $stmt->execute();
-    $count_test = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extend_user' AND status != 'unpaid'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time);
-    $stmt->bindParam(':requestedDateend', $end_time);
-    $stmt->execute();
-    $extend_stat = $stmt->fetch(PDO::FETCH_ASSOC);
-    $count_extend = $extend_stat['count'];
-    $sum_extend = number_format($extend_stat['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extra_user'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time);
-    $stmt->bindParam(':requestedDateend', $end_time);
-    $stmt->execute();
-    $extra_volume_stat = $stmt->fetch(PDO::FETCH_ASSOC);
-    $count_extra_volume = $extra_volume_stat['count'];
-    $sum_extra_volume = number_format($extra_volume_stat['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extra_time_user'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time);
-    $stmt->bindParam(':requestedDateend', $end_time);
-    $stmt->execute();
-    $extra_time_stat = $stmt->fetch(PDO::FETCH_ASSOC);
-    $count_extra_time = $extra_time_stat['count'];
-    $sum_extrat_time = number_format($extra_time_stat['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'change_location'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time);
-    $stmt->bindParam(':requestedDateend', $end_time);
-    $stmt->execute();
-    $change_location_stat = $stmt->fetch(PDO::FETCH_ASSOC);
-    $count_change_location = $change_location_stat['count'];
-    $sum_change_location = number_format($change_location_stat['sum'], 0);
-    $stmt = $pdo->prepare("SELECT * FROM user WHERE  (register BETWEEN :requestedDate AND :requestedDateend)  AND register != 'none'");
-    $stmt->bindParam(':requestedDate', $start_time_timestamp);
-    $stmt->bindParam(':requestedDateend', $end_time_timestamp);
-    $stmt->execute();
-    $countuser_new = $stmt->rowCount();
-    $statisticsall = sprintf($textbotlang['Admin']['stats']['lastMonth'], $start_time, $end_time, $count_order, $sum_order, $count_extend, $sum_extend, $count_extra_volume, $sum_extra_volume, $count_extra_time, $sum_extrat_time, $count_change_location, $sum_change_location, $count_test, $countuser_new);
-    Editmessagetext($from_id, $message_id, $statisticsall, $keyboard_stat, 'HTML');
-} elseif ($datain == "month_current_stat") {
-    $firstDayLastMonth = new DateTime('first day of this month');
-    $lastDayLastMonth = new DateTime('last day of this month');
-    $start_time = $firstDayLastMonth->format('Y/m/d');
-    $end_time = $lastDayLastMonth->format('Y/m/d');
-    $start_time_timestamp = strtotime($start_time);
-    $end_time_timestamp = strtotime($end_time);
-    $sql = "SELECT COUNT(*) AS count,SUM(price_product) as sum FROM invoice WHERE (time_sell BETWEEN :requestedDate AND :requestedDateend) AND Status != 'Unpaid'  AND name_product != '{$textbotlang['common']['labels']['testServiceName']}'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time_timestamp);
-    $stmt->bindParam(':requestedDateend', $end_time_timestamp);
-    $stmt->execute();
-    $statorder = $stmt->fetch(PDO::FETCH_ASSOC);
-    $count_order = $statorder['count'];
-    $sum_order = number_format($statorder['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count FROM invoice WHERE (time_sell BETWEEN :requestedDate AND :requestedDateend)  AND name_product = '{$textbotlang['common']['labels']['testServiceName']}'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time_timestamp);
-    $stmt->bindParam(':requestedDateend', $end_time_timestamp);
-    $stmt->execute();
-    $count_test = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extend_user' AND status != 'unpaid'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time);
-    $stmt->bindParam(':requestedDateend', $end_time);
-    $stmt->execute();
-    $extend_stat = $stmt->fetch(PDO::FETCH_ASSOC);
-    $count_extend = $extend_stat['count'];
-    $sum_extend = number_format($extend_stat['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extra_user'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time);
-    $stmt->bindParam(':requestedDateend', $end_time);
-    $stmt->execute();
-    $extra_volume_stat = $stmt->fetch(PDO::FETCH_ASSOC);
-    $count_extra_volume = $extra_volume_stat['count'];
-    $sum_extra_volume = number_format($extra_volume_stat['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extra_time_user'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time);
-    $stmt->bindParam(':requestedDateend', $end_time);
-    $stmt->execute();
-    $extra_time_stat = $stmt->fetch(PDO::FETCH_ASSOC);
-    $count_extra_time = $extra_time_stat['count'];
-    $sum_extrat_time = number_format($extra_time_stat['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'change_location'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time);
-    $stmt->bindParam(':requestedDateend', $end_time);
-    $stmt->execute();
-    $change_location_stat = $stmt->fetch(PDO::FETCH_ASSOC);
-    $count_change_location = $change_location_stat['count'];
-    $sum_change_location = number_format($change_location_stat['sum'], 0);
-    $stmt = $pdo->prepare("SELECT * FROM user WHERE  (register BETWEEN :requestedDate AND :requestedDateend)  AND register != 'none'");
-    $stmt->bindParam(':requestedDate', $start_time_timestamp);
-    $stmt->bindParam(':requestedDateend', $end_time_timestamp);
-    $stmt->execute();
-    $countuser_new = $stmt->rowCount();
-    $statisticsall = sprintf($textbotlang['Admin']['stats']['thisMonth'], $start_time, $end_time, $count_order, $sum_order, $count_extend, $sum_extend, $count_extra_volume, $sum_extra_volume, $count_extra_time, $sum_extrat_time, $count_change_location, $sum_change_location, $count_test, $countuser_new);
-    Editmessagetext($from_id, $message_id, $statisticsall, $keyboard_stat, 'HTML');
-} elseif ($datain == "view_stat_time") {
+    $stat_kb = stats_keyboard($stat_lang, $stat_view, $textbotlang);
+    if (isset($stat_m[1])) {
+        Editmessagetext($from_id, $message_id, $stat_text, $stat_kb, 'HTML');
+    } else {
+        sendmessage($from_id, $stat_text, $stat_kb, 'HTML');
+    }
+} elseif (preg_match('/^view_stat_time(?::([a-z]{2}))?$/', (string) $datain, $stat_m)) {
+    // the tab it was asked from, for the range at the end
+    savedata("clear", "stat_lang", in_array($stat_m[1] ?? '', panel_langs(), true) ? $stat_m[1] : 'fa');
     sendmessage($from_id, sprintf($textbotlang['Admin']['getStats'], date('Y/m/d')), $backadmin, 'HTML');
     step("get_time_start", $from_id);
 } elseif ($user['step'] == "get_time_start") {
@@ -10261,7 +10062,7 @@ if (in_array($text, $textadmin) || $datain == "admin") {    if ($datain == "admi
         sendmessage($from_id, $textbotlang['Admin']['stats']['invalidDate'], null, 'HTML');
         return;
     }
-    savedata("clear", "start_time", $text);
+    savedata("save", "start_time", $text);
     sendmessage($from_id, $textbotlang['Admin']['stats']['askDate'], $backadmin, 'HTML');
     step("get_time_end", $from_id);
 } elseif ($user['step'] == "get_time_end") {
@@ -10270,64 +10071,10 @@ if (in_array($text, $textadmin) || $datain == "admin") {    if ($datain == "admi
         return;
     }
     $userdata = json_decode($user['Processing_value'], true);
-    $start_time = $userdata['start_time'] . "00:00:00";
-    $end_time = $text . "23:59:00";
-    $start_time_timestamp = strtotime($start_time);
-    $end_time_timestamp = strtotime($end_time);
-    $sql = "SELECT COUNT(*) AS count,SUM(price_product) as sum FROM invoice WHERE (time_sell BETWEEN :requestedDate AND :requestedDateend)  AND  Status != 'Unpaid' AND name_product != '{$textbotlang['common']['labels']['testServiceName']}'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time_timestamp);
-    $stmt->bindParam(':requestedDateend', $end_time_timestamp);
-    $stmt->execute();
-    $statorder = $stmt->fetch(PDO::FETCH_ASSOC);
-    $count_order = $statorder['count'];
-    $sum_order = number_format($statorder['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count FROM invoice WHERE (time_sell BETWEEN :requestedDate AND :requestedDateend)  AND name_product = '{$textbotlang['common']['labels']['testServiceName']}'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time_timestamp);
-    $stmt->bindParam(':requestedDateend', $end_time_timestamp);
-    $stmt->execute();
-    $count_test = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extend_user' AND status != 'unpaid'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time);
-    $stmt->bindParam(':requestedDateend', $end_time);
-    $stmt->execute();
-    $extend_stat = $stmt->fetch(PDO::FETCH_ASSOC);
-    $count_extend = $extend_stat['count'];
-    $sum_extend = number_format($extend_stat['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extra_user'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time);
-    $stmt->bindParam(':requestedDateend', $end_time);
-    $stmt->execute();
-    $extra_volume_stat = $stmt->fetch(PDO::FETCH_ASSOC);
-    $count_extra_volume = $extra_volume_stat['count'];
-    $sum_extra_volume = number_format($extra_volume_stat['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extra_time_user'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time);
-    $stmt->bindParam(':requestedDateend', $end_time);
-    $stmt->execute();
-    $extra_time_stat = $stmt->fetch(PDO::FETCH_ASSOC);
-    $count_extra_time = $extra_time_stat['count'];
-    $sum_extrat_time = number_format($extra_time_stat['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'change_location'";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindParam(':requestedDate', $start_time);
-    $stmt->bindParam(':requestedDateend', $end_time);
-    $stmt->execute();
-    $change_location_stat = $stmt->fetch(PDO::FETCH_ASSOC);
-    $count_change_location = $change_location_stat['count'];
-    $sum_change_location = number_format($change_location_stat['sum'], 0);
-    $stmt = $pdo->prepare("SELECT * FROM user WHERE  (register BETWEEN :requestedDate AND :requestedDateend)  AND register != 'none'");
-    $stmt->bindParam(':requestedDate', $start_time_timestamp);
-    $stmt->bindParam(':requestedDateend', $end_time_timestamp);
-    $stmt->execute();
-    $countuser_new = $stmt->rowCount();
-    $statisticsall = sprintf($textbotlang['Admin']['stats']['selectedRange'], $start_time, $end_time, $count_order, $sum_order, $count_extend, $sum_extend, $count_extra_volume, $sum_extra_volume, $count_extra_time, $sum_extrat_time, $count_change_location, $sum_change_location, $count_test, $countuser_new);
+    $stat_lang = in_array($userdata['stat_lang'] ?? '', panel_langs(), true) ? $userdata['stat_lang'] : 'fa';
+    $stat_text = stats_period_text($stat_lang, 'selectedRange', strtotime($userdata['start_time'] . ' 00:00:00'), strtotime($text . ' 23:59:59'), $textbotlang);
     step('home', $from_id);
-    sendmessage($from_id, $statisticsall, $keyboardadmin, 'HTML');
+    sendmessage($from_id, $stat_text, $keyboardadmin, 'HTML');
 } elseif ($datain == "settingaffiliatesf") {
     sendmessage($from_id, $textbotlang['users']['selectoption'], $affiliates, 'HTML');
 } elseif ($text == $textbotlang['Admin']['btnKeyboard']['addPanel'] && $adminrulecheck['rule'] == "administrator") {
@@ -11675,6 +11422,18 @@ elseif ($datain == "systemsms") {
             return;
         }
         feature_setting_set($fs_key, $fs_lang, (string) intval($text));
+    } elseif ($fs_key === 'affrw_reset') {
+        // 🔄 one customer's free config from the start: count and 🔁 چند بار
+        $fs_u = svcgive_find_user($text);
+        if ($fs_u === null) {
+            sendmessage($from_id, strtr($fs_tx['Admin']['UserMgmt']['assignNoUser'], ['{id}' => htmlspecialchars(trim((string) $text))]), null, 'HTML');
+            return;
+        }
+        affrw_reset($fs_u['id']);
+        sendmessage($from_id, strtr($fs_tx['Admin']['FeatureSection']['affrwResetUserDone'], [
+            '{id}' => $fs_u['id'],
+            '{name}' => (!empty($fs_u['username']) && $fs_u['username'] !== 'none') ? '@' . htmlspecialchars($fs_u['username']) : '',
+        ]), null, 'HTML');
     } elseif ($fs_key === 'wheel_price' || $fs_key === 'aff_giftamount') {
         // an amount in this language's currency - USD/CNY/RUB/TMT carry
         // decimals, so "12.5" has to be accepted, not just whole numbers
@@ -15725,16 +15484,16 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     sendmessage($from_id, $textbotlang['Admin']['manageUser']['sendPaymentList'], $keyboardadmin, 'HTML');
 } elseif (preg_match('/affiliates-(\w+)/', $datain, $dataget)) {
     $iduser = $dataget[1];
-    $affiliatesUsers = select("user", "*", "affiliates", $iduser, "count");
-    if ($affiliatesUsers == 0) {
+    // 💼's (user.affiliates) and 🎁's (user.aff_rw) - this listed 💼's only
+    $affiliatesUsers = aff_referrals_of($iduser);
+    if (count($affiliatesUsers) == 0) {
         sendmessage($from_id, $textbotlang['Admin']['affiliates']['noReferrals'], null, 'HTML');
         return;
     }
-    $affiliatesUsers = select("user", "*", "affiliates", $iduser, "fetchAll");
     $count = 0;
     $text_affiliates = "";
     foreach ($affiliatesUsers as $affiliatesUser) {
-        $text_affiliates .= "<code>{$affiliatesUser['id']}</code>\n\r";
+        $text_affiliates .= "<code>{$affiliatesUser}</code>\n\r";
         $count++;
         if ($count == 10) {
             sendmessage($from_id, $text_affiliates, null, 'HTML');
@@ -15745,17 +15504,12 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     sendmessage($from_id, $text_affiliates, null, 'HTML');
     sendmessage($from_id, $textbotlang['Admin']['affiliates']['idsSent'], $keyboardadmin, 'HTML');
 } elseif (preg_match('/removeaffiliate-(\w+)/', $datain, $dataget)) {
-    $iduser = $dataget[1];
-    $user2 = select("user", "*", "id", $iduser, "select");
-    $user2 = select("user", "*", "id", $user2['affiliates'], "select");
-    $affiliatescount = intval($user2['affiliatescount']) - 1;
-    update("user", "affiliatescount", $affiliatescount, "id", $user2['id']);
-    update("user", "affiliates", "0", "id", $iduser);
+    // clearing user.affiliates alone left 🎁's aff_rw: still counted, and
+    // never invitable again
+    aff_detach($dataget[1]);
     sendmessage($from_id, $textbotlang['Admin']['affiliates']['userRemoved'], $keyboardadmin, 'HTML');
 } elseif (preg_match('/removeaffiliateuser-(\w+)/', $datain, $dataget)) {
-    $iduser = $dataget[1];
-    update("user", "affiliatescount", "0", "id", $iduser);
-    update("user", "affiliates", "0", "affiliates", $iduser);
+    aff_detach_all($dataget[1]);
     sendmessage($from_id, $textbotlang['Admin']['affiliates']['referralsDeleted'], $keyboardadmin, 'HTML');
 } elseif (preg_match('/removeservice-(.*)/', $datain, $dataget)) {
     $username = $dataget[1];
