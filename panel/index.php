@@ -1,49 +1,63 @@
 <?php
 require_once __DIR__ . '/inc/config.php';
 require_once __DIR__ . '/inc/icons.php';
+require_once __DIR__ . '/inc/langsync.php';
 require_auth();
+
+// a language tab ('' = all): its users, orders and payments, the way the bot's 📊 splits them
+$lang = web_lang_pick('lang', '');
+[$uw, $up] = $lang !== '' ? user_lang_where($lang) : ['1 = 1', []];
+[$iw, $ip] = $lang !== '' ? stats_lang_where($lang, 'i') : ['1 = 1', []];
+[$pw, $pp] = $lang !== '' ? stats_lang_where($lang, 'p') : ['1 = 1', []];
 
 $totalUsers = 0;
 $newToday = 0;
-$totalRevenue = 0;
+$totalRevenue = [];
 $activeNow = 0;
 $pendingPay = 0;
 $txToday = 0;
+$langCounts = [];
 
 try {
-    $totalUsers = db_count($pdo, "SELECT COUNT(*) FROM user");
-    $newToday = db_count($pdo, "SELECT COUNT(*) FROM user WHERE register > ?", [strtotime('today')]);
+    $totalUsers = db_count($pdo, "SELECT COUNT(*) FROM user WHERE $uw", $up);
+    $newToday = db_count($pdo, "SELECT COUNT(*) FROM user WHERE register > ? AND $uw", array_merge([strtotime('today')], $up));
+    $cnt = um_lang_counts();
+    $langCounts = ['' => $cnt['total']] + array_intersect_key($cnt, array_flip(panel_langs()));
 } catch (Exception $e) {
 }
 
 try {
-    $totalRevenue = (int) db_query($pdo, "SELECT COALESCE(SUM(price_product),0) FROM invoice WHERE Status IN ('active','end_of_time','end_of_volume','sendedwarn','send_on_hold')")->fetchColumn();
-    $activeNow = db_count($pdo, "SELECT COUNT(*) FROM invoice WHERE Status='active'");
+    $totalRevenue = web_sum_by_currency("SELECT COALESCE(SUM(i.price_product),0) FROM invoice i WHERE i.Status IN ('active','end_of_time','end_of_volume','sendedwarn','send_on_hold') AND {lang}", [], 'i', $lang);
+    $activeNow = db_count($pdo, "SELECT COUNT(*) FROM invoice i WHERE i.Status='active' AND $iw", $ip);
 } catch (Exception $e) {
 }
 
 try {
-    $pendingPay = db_count($pdo, "SELECT COUNT(*) FROM Payment_report WHERE payment_Status='waiting'");
-    $txToday = db_count($pdo, "SELECT COUNT(*) FROM Payment_report WHERE time > ?", [strtotime('today')]);
+    $pendingPay = db_count($pdo, "SELECT COUNT(*) FROM Payment_report p WHERE p.payment_Status='waiting' AND $pw", $pp);
+    $txToday = db_count($pdo, "SELECT COUNT(*) FROM Payment_report p WHERE p.time > ? AND $pw", array_merge([strtotime('today')], $pp));
 } catch (Exception $e) {
 }
 
 $recentInvoices = [];
 $recentUsers = [];
 try {
-    $recentInvoices = db_fetchAll($pdo, "SELECT * FROM invoice ORDER BY time_sell DESC LIMIT 8");
+    $recentInvoices = db_fetchAll($pdo, "SELECT * FROM invoice i WHERE $iw ORDER BY time_sell DESC LIMIT 8", $ip);
 } catch (Exception $e) {
 }
 try {
-    $recentUsers = db_fetchAll($pdo, "SELECT * FROM user ORDER BY register DESC LIMIT 8");
+    $recentUsers = db_fetchAll($pdo, "SELECT * FROM user WHERE $uw ORDER BY register DESC LIMIT 8", $up);
 } catch (Exception $e) {
 }
+$langQ = $lang !== '' ? '?lang=' . urlencode($lang) : '';
 
 $pageTitle = $textbotlang['panel']['dashboardTitle'];
 $activeNav = 'dashboard';
 $showPageHead = false;
 include __DIR__ . '/inc/layout_head.php';
+echo web_lang_assets();
 ?>
+
+<?= web_lang_tabs($lang, fn($c) => 'index.php?' . http_build_query(['lang' => $c ?: null]), true, $langCounts) ?>
 
 <div class="stats fade-up">
     <div class="stat">
@@ -54,11 +68,7 @@ include __DIR__ . '/inc/layout_head.php';
     </div>
     <div class="stat ok">
         <div class="stat-label"><?= $textbotlang['panel']['dashTotalRevenue'] ?></div>
-        <div class="stat-num">
-            <?= $totalRevenue >= 1_000_000
-                ? number_format($totalRevenue / 1_000_000, 1) . $textbotlang['panel']['dashUnitMillionToman']
-                : number_format($totalRevenue) . $textbotlang['panel']['dashUnitToman'] ?>
-        </div>
+        <div class="stat-num"<?= count($totalRevenue) > 1 ? ' style="font-size:1.15rem;line-height:1.6"' : '' ?>><?= web_money_lines($totalRevenue) ?></div>
         <div class="stat-meta"><?= $textbotlang['panel']['dashTotalSales'] ?></div>
     </div>
     <div class="stat warn">
@@ -83,7 +93,7 @@ include __DIR__ . '/inc/layout_head.php';
                 <div class="card-title"><?= $textbotlang['panel']['dashRecentOrders'] ?></div>
                 <div class="card-subtitle"><?= count($recentInvoices) ?> <?= $textbotlang['panel']['dashRecentItem'] ?></div>
             </div>
-            <a href="invoice.php" class="btn-link" style="font-size:.78rem"><?= $textbotlang['panel']['dashViewAll'] ?></a>
+            <a href="invoice.php<?= $langQ ?>" class="btn-link" style="font-size:.78rem"><?= $textbotlang['panel']['dashViewAll'] ?></a>
         </div>
         <div class="tbl-wrap">
             <table class="tbl-sm">
@@ -122,7 +132,7 @@ include __DIR__ . '/inc/layout_head.php';
                                     <?= htmlspecialchars(trunc($inv['name_product'] ?? '—', 20)) ?>
                                 </td>
                                 <td class="cn" style="white-space:nowrap">
-                                    <?= number_format((int) ($inv['price_product'] ?? 0)) ?> <span class="cf"><?= $textbotlang['panel']['dashTomanShort'] ?></span>
+                                    <?= htmlspecialchars(money($inv['price_product'] ?? 0, invoice_currency($inv))) ?>
                                 </td>
                                 <td><span class="tag <?= $tagClass ?>"><?= $label ?></span></td>
                             </tr>
@@ -138,7 +148,7 @@ include __DIR__ . '/inc/layout_head.php';
                 <div class="card-title"><?= $textbotlang['panel']['dashRecentUsers'] ?></div>
                 <div class="card-subtitle"><?= count($recentUsers) ?> <?= $textbotlang['panel']['dashRecentItem2'] ?></div>
             </div>
-            <a href="users.php" class="btn-link" style="font-size:.78rem"><?= $textbotlang['panel']['dashViewAll2'] ?></a>
+            <a href="users.php<?= $langQ ?>" class="btn-link" style="font-size:.78rem"><?= $textbotlang['panel']['dashViewAll2'] ?></a>
         </div>
         <div class="tbl-wrap">
             <table class="tbl-sm">
@@ -182,7 +192,7 @@ include __DIR__ . '/inc/layout_head.php';
                                     <?php endif; ?>
                                 </td>
                                 <td class="cn" style="white-space:nowrap">
-                                    <?= number_format((int) ($u['Balance'] ?? 0)) ?> <span class="cf"><?= $textbotlang['panel']['dashTomanShort2'] ?></span>
+                                    <?= htmlspecialchars(money($u['Balance'] ?? 0, currency_for_user($u))) ?>
                                 </td>
                                 <td>
                                     <?php if ($isBlocked): ?>

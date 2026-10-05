@@ -1,10 +1,14 @@
 <?php
 require_once __DIR__ . '/inc/config.php';
 require_once __DIR__ . '/inc/icons.php';
+require_once __DIR__ . '/inc/langsync.php';
 require_auth();
 
 $search = trim($_GET['q'] ?? '');
 $status = $_GET['status'] ?? '';
+// a language tab ('' = all): its payments, the way the bot's 📊 counts them
+$lang = web_lang_pick('lang', '');
+[$langSQL, $langParams] = $lang !== '' ? stats_lang_where($lang, 'p') : ['1 = 1', []];
 $page = max(1, (int) ($_GET['page'] ?? 1));
 $perPage = 30;
 $offset = ($page - 1) * $perPage;
@@ -19,13 +23,23 @@ if ($status !== '') {
   $where[] = "payment_Status = ?";
   $params[] = $status;
 }
+if ($lang !== '') {
+  $where[] = $langSQL;
+  $params = array_merge($params, $langParams);
+}
 $whereSQL = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
 $orderSQL = "ORDER BY time DESC";
 
+$langCounts = [];
 try {
-  $total = db_count($pdo, "SELECT COUNT(*) FROM Payment_report $whereSQL", $params);
-  $payments = db_fetchAll($pdo, "SELECT * FROM Payment_report $whereSQL $orderSQL LIMIT $perPage OFFSET $offset", $params);
+  $total = db_count($pdo, "SELECT COUNT(*) FROM Payment_report p $whereSQL", $params);
+  $payments = db_fetchAll($pdo, "SELECT * FROM Payment_report p $whereSQL $orderSQL LIMIT $perPage OFFSET $offset", $params);
+  $langCounts[''] = db_count($pdo, "SELECT COUNT(*) FROM Payment_report");
+  foreach (panel_langs() as $l) {
+    [$lw, $lp] = stats_lang_where($l, 'p');
+    $langCounts[$l] = db_count($pdo, "SELECT COUNT(*) FROM Payment_report p WHERE $lw", $lp);
+  }
 } catch (Exception $e) {
   $total = 0;
   $payments = [];
@@ -33,11 +47,11 @@ try {
 }
 $totalPages = max(1, (int) ceil($total / $perPage));
 
-$totalSuccess = 0;
+$totalSuccess = [];
 $todayCount = 0;
 try {
-  $totalSuccess = (int) db_query($pdo, "SELECT COALESCE(SUM(price),0) FROM Payment_report WHERE payment_Status ='paid'")->fetchColumn();
-  $todayCount = db_count($pdo, "SELECT COUNT(*) FROM Payment_report WHERE time > ?", [strtotime('today')]);
+  $totalSuccess = web_sum_by_currency("SELECT COALESCE(SUM(p.price),0) FROM Payment_report p WHERE p.payment_Status = 'paid' AND {lang}", [], 'p', $lang);
+  $todayCount = db_count($pdo, "SELECT COUNT(*) FROM Payment_report p WHERE p.time > ? AND $langSQL", array_merge([strtotime('today')], $langParams));
 } catch (Exception $e) {
 }
 
@@ -71,12 +85,15 @@ $pageTitle = $textbotlang['panel']['paymentTransactionsTitle'];
 $pageLede = $textbotlang['panel']['paymentTransactionsSubtitle'];
 $activeNav = 'payment';
 include __DIR__ . '/inc/layout_head.php';
+echo web_lang_assets();
 ?>
+
+<?= web_lang_tabs($lang, fn($c) => 'payment.php?' . http_build_query(['lang' => $c ?: null]), true, $langCounts) ?>
 
 <div class="stats" style="grid-template-columns:repeat(3,1fr);margin-bottom:24px">
   <div class="stat success">
     <div class="stat-label"><?= $textbotlang['panel']['paymentTransactionsHeading'] ?></div>
-    <div class="stat-num"><?= number_format($totalSuccess) ?><small><?= $textbotlang['panel']['paymentAllStatuses'] ?></small></div>
+    <div class="stat-num"<?= count($totalSuccess) > 1 ? ' style="font-size:1.15rem;line-height:1.6"' : '' ?>><?= web_money_lines($totalSuccess) ?></div>
     <div class="stat-meta"><?= $textbotlang['panel']['paymentAllMethods'] ?></div>
   </div>
   <div class="stat">
@@ -95,6 +112,7 @@ include __DIR__ . '/inc/layout_head.php';
   <div class="toolbar">
     <div class="toolbar-title"><?= $textbotlang['panel']['paymentColMethod'] ?> <small>(<?= number_format($total) ?>)</small></div>
     <form method="GET" class="toolbar-end">
+      <?php if ($lang !== ''): ?><input type="hidden" name="lang" value="<?= htmlspecialchars($lang) ?>"><?php endif; ?>
       <select name="status" class="select" style="width:auto" onchange="this.form.submit()">
         <option value=""><?= $textbotlang['panel']['paymentColStatus'] ?></option>
         <?php foreach ($statusMap as $k => [$_, $lbl]): ?>
@@ -109,7 +127,7 @@ include __DIR__ . '/inc/layout_head.php';
         <button type="submit" class="search-btn"><?= $textbotlang['panel']['paymentColTrackingCode'] ?></button>
       </div>
       <?php if ($search || $status): ?>
-        <a href="payment.php" class="btn-link" style="font-size:.78rem"><?= $textbotlang['panel']['paymentColDate'] ?></a>
+        <a href="payment.php<?= $lang !== '' ? '?lang=' . urlencode($lang) : '' ?>" class="btn-link" style="font-size:.78rem"><?= $textbotlang['panel']['paymentColDate'] ?></a>
       <?php endif; ?>
     </form>
   </div>
@@ -151,8 +169,7 @@ include __DIR__ . '/inc/layout_head.php';
               <td class="cell-mono" style="color:var(--accent)">
                 <?= htmlspecialchars(trunc((string) ($p['id_order'] ?? '—'), 18)) ?>
               </td>
-              <td class="cell-strong cell-num"><?= number_format((int) ($p['price'] ?? 0)) ?> <span
-                  style="color:var(--text-dim);font-weight:400;font-size:.72rem"><?= $textbotlang['panel']['paymentDetailTrackingCode'] ?></span></td>
+              <td class="cell-strong cell-num"><?= htmlspecialchars(money($p['price'] ?? 0, payment_currency($p))) ?></td>
               <td style="font-size:.8rem"><?= htmlspecialchars($method) ?></td>
               <td style="font-size:.78rem;color:var(--text-dim);white-space:nowrap">
                 <?= safe_date($p['time'] ?? null, 'Y/m/d H:i') ?>
@@ -167,7 +184,7 @@ include __DIR__ . '/inc/layout_head.php';
   <div class="tbl-foot">
     <span><?= number_format($total) ?> <?= $textbotlang['panel']['paymentDetailDate'] ?> <?= $page ?> <?= $textbotlang['panel']['paymentCloseBtn'] ?> <?= $totalPages ?></span>
     <div class="pager">
-      <?php $qs = fn($p) => '?q=' . urlencode($search) . '&status=' . urlencode($status) . '&page=' . $p; ?>
+      <?php $qs = fn($p) => '?q=' . urlencode($search) . '&status=' . urlencode($status) . ($lang !== '' ? '&lang=' . urlencode($lang) : '') . '&page=' . $p; ?>
       <a class="<?= $page <= 1 ? 'disabled' : '' ?>" href="<?= $qs(max(1, $page - 1)) ?>">‹</a>
       <?php for ($p2 = max(1, $page - 2); $p2 <= min($totalPages, $page + 2); $p2++): ?>
         <a class="<?= $p2 === $page ? 'active' : '' ?>" href="<?= $qs($p2) ?>"><?= $p2 ?></a>

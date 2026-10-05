@@ -33,6 +33,63 @@ if ($datain === 'btpromptcancel' && $adminrulecheck['rule'] == "administrator") 
     return;
 }
 
+//----------------[  ✅ web panel: address, login, a password of the admin's own  ]----------------
+// ✅ فعالسازی پنل تحت وب used to make a new password on every tap, so a second
+// tap locked the admin out of a panel he was logged into. It makes one only
+// the first time now; after that it shows the address and username with
+// 🌐 ورود and 🔐 تغییر رمز under them, and the password stays until he sets
+// one himself - his message with it and the ask are then deleted and the
+// details message shows the new one.
+if (!function_exists('webpanel_info')) {
+    // the details message and its two glass buttons; $pass: the password to
+    // show (just made or just set), null: the one he already has
+    function webpanel_info($adminId, $pass, $title, $textbotlang)
+    {
+        global $domainhosts;
+        $w = $textbotlang['Admin']['webpanel'];
+        $passLine = $pass !== null ? '<code>' . htmlspecialchars($pass) . '</code>' : $w['passKept'];
+        $text = $title . sprintf($w['details'], htmlspecialchars($domainhosts), $adminId, $passLine);
+        $kb = json_encode(['inline_keyboard' => [
+            [['text' => $w['loginBtn'], 'url' => "https://{$domainhosts}/panel/", 'style' => 'primary']],
+            [['text' => $w['changePassBtn'], 'callback_data' => 'webpanel_pass', 'style' => 'danger']],
+        ]]);
+        return [$text, $kb];
+    }
+}
+if ($datain === 'webpanel_pass' && $adminrulecheck['rule'] == "administrator") {
+    $wp_ask = sendmessage($from_id, $textbotlang['Admin']['webpanel']['askPass'], $btpromptcancel, 'HTML');
+    update("user", "Processing_value", json_encode(['wp_msgid' => (int) $message_id, 'wp_ask' => (int) ($wp_ask['result']['message_id'] ?? 0)]), "id", $from_id);
+    step('webpanel_pass', $from_id);
+    return;
+}
+if ($user['step'] === 'webpanel_pass' && $datain == '' && $adminrulecheck['rule'] == "administrator") {
+    $wp = json_decode((string) ($user['Processing_value'] ?? ''), true);
+    $wp = is_array($wp) ? $wp : [];
+    $wp_pass = trim((string) $text);
+    // whatever he sent leaves the chat - a password, or a wrong try at one
+    deletemessage($from_id, $message_id);
+    if ($wp_pass === '' || preg_match('/\s/u', $wp_pass) || mb_strlen($wp_pass) < 6 || mb_strlen($wp_pass) > 64) {
+        // the ask says why (a second wrong try leaves it as it is: "not modified")
+        $wp_res = !empty($wp['wp_ask']) ? Editmessagetext($from_id, (int) $wp['wp_ask'], $textbotlang['Admin']['webpanel']['passInvalid'], $btpromptcancel, 'HTML') : null;
+        if (empty($wp_res['ok']) && strpos((string) ($wp_res['description'] ?? ''), 'not modified') === false) {
+            sendmessage($from_id, $textbotlang['Admin']['webpanel']['passInvalid'], $btpromptcancel, 'HTML');
+        }
+        return;
+    }
+    update("admin", "username", $from_id, "id_admin", $from_id);
+    update("admin", "password", password_hash($wp_pass, PASSWORD_BCRYPT, ['cost' => 12]), "id_admin", $from_id);
+    step('home', $from_id);
+    if (!empty($wp['wp_ask'])) {
+        deletemessage($from_id, (int) $wp['wp_ask']);
+    }
+    [$wp_text, $wp_kb] = webpanel_info($from_id, $wp_pass, $textbotlang['Admin']['webpanel']['passChanged'], $textbotlang);
+    $wp_res = !empty($wp['wp_msgid']) ? Editmessagetext($from_id, (int) $wp['wp_msgid'], $wp_text, $wp_kb, 'HTML') : null;
+    if (empty($wp_res['ok']) && strpos((string) ($wp_res['description'] ?? ''), 'not modified') === false) {
+        sendmessage($from_id, $wp_text, $wp_kb, 'HTML');
+    }
+    return;
+}
+
 //----------------[  main-menu button settings: glass hub screens  ]----------------
 // top hub + the color/emoji sub-hubs, converted from the old reply-keyboard
 // chain to inline so every screen in this tree carries its own back/close
@@ -5846,6 +5903,9 @@ if (!function_exists('afftest_send')) {
             });
             if ($made === null) {
                 sendmessage($to, strtr($t['realFailed'], ['{msg}' => htmlspecialchars(json_encode($err, JSON_UNESCAPED_UNICODE))]), null, 'HTML');
+            } else {
+                // a real config, so in the report group too - under the tab tested
+                affrw_report_made($to, $user, $cfg, $panel, $made, '—', $lang, "\n\n" . $fa['Admin']['AffReward']['reportTest']);
             }
             $service = $made['username'] ?? 'test_ab12cd';
         } else {
@@ -16656,11 +16716,19 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     $apiDocsUrl = "https://$domainhostsEscaped/api/index.html";
     sendmessage($from_id, sprintf($textbotlang['Admin']['api']['docsLink'], $apiDocsUrl), null, 'HTML');
 } elseif ($text == $textbotlang['keyboard']['activateWebPanel'] && $adminrulecheck['rule'] == "administrator") {
+    // a password only the first time: while the login is still the install's
+    // ('admin' with a plain random one) or has no hash - never on a later tap
     $admin_select = select("admin", "*", "id_admin", $from_id, "select");
-    $randomString = bin2hex(random_bytes(6));
-    update("admin", "username", $from_id, "id_admin", $from_id);
-    update("admin", "password", password_hash($randomString, PASSWORD_BCRYPT, ['cost' => 12]), "id_admin", $from_id);
-    sendmessage($from_id, sprintf($textbotlang['Admin']['webpanel']['activated'], $domainhosts, $from_id, $randomString), null, 'HTML');
+    $wp_pass = null;
+    $wp_title = $textbotlang['Admin']['webpanel']['activeNow'];
+    if ((string) ($admin_select['username'] ?? '') !== (string) $from_id || !str_starts_with((string) ($admin_select['password'] ?? ''), '$2')) {
+        $wp_pass = bin2hex(random_bytes(6));
+        update("admin", "username", $from_id, "id_admin", $from_id);
+        update("admin", "password", password_hash($wp_pass, PASSWORD_BCRYPT, ['cost' => 12]), "id_admin", $from_id);
+        $wp_title = $textbotlang['Admin']['webpanel']['activated'];
+    }
+    [$wp_text, $wp_kb] = webpanel_info($from_id, $wp_pass, $wp_title, $textbotlang);
+    sendmessage($from_id, $wp_text, $wp_kb, 'HTML');
 } elseif (preg_match('/addordermanualـ(\w+)/', $datain, $dataget)) {
     $iduser = $dataget[1];
     update("user", "Processing_value", $iduser, "id", $from_id);

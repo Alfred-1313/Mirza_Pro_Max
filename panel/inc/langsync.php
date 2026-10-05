@@ -76,17 +76,45 @@ function web_lang_checkboxes(string $name, $value, string $idPrefix): string
     return $h . '</div>';
 }
 
-// the language tabs over a page; $url builds a tab's link from its code ('' = all)
-function web_lang_tabs(string $current, callable $url, bool $withAll = false): string
+// the language tabs over a page; $url builds a tab's link from its code ('' = all),
+// $counts (code => n) puts how many there are beside a tab's name
+function web_lang_tabs(string $current, callable $url, bool $withAll = false, array $counts = []): string
 {
     global $textbotlang;
     $tabs = $withAll ? ['' => $textbotlang['panel']['langAllTab']] + web_langs() : web_langs();
     $h = '<div class="lang-tabs fade-up">';
     foreach ($tabs as $code => $label) {
         $on = (string) $current === (string) $code;
-        $h .= '<a href="' . htmlspecialchars($url((string) $code)) . '" class="lang-tab' . ($on ? ' on' : '') . '">' . htmlspecialchars($label) . '</a>';
+        $n = isset($counts[$code]) ? ' <small style="opacity:.75">(' . number_format((int) $counts[$code]) . ')</small>' : '';
+        $h .= '<a href="' . htmlspecialchars($url((string) $code)) . '" class="lang-tab' . ($on ? ' on' : '') . '">' . htmlspecialchars($label) . $n . '</a>';
     }
     return $h . '</div>';
+}
+
+// A sum over a sales table (invoice, Payment_report) for one language tab, or
+// for all of them ($lang '') - one figure per currency, since tomans and
+// dollars never add up. $sql has {lang} where the tab's condition goes
+// (stats_lang_where on $alias, the way the bot's 📊 splits sales).
+function web_sum_by_currency(string $sql, array $params, string $alias, string $lang = ''): array
+{
+    global $pdo;
+    $out = [];
+    foreach ($lang !== '' ? [$lang] : panel_langs() as $l) {
+        [$w, $p] = stats_lang_where($l, $alias);
+        $code = currency_for_lang($l);
+        $out[$code] = ($out[$code] ?? 0) + (float) db_query($pdo, str_replace('{lang}', $w, $sql), array_merge($params, $p))->fetchColumn();
+    }
+    return $out;
+}
+
+// ...shown one currency to a line
+function web_money_lines(array $byCurrency): string
+{
+    $lines = [];
+    foreach ($byCurrency as $code => $sum) {
+        $lines[] = htmlspecialchars(money($sum, $code));
+    }
+    return $lines ? implode('<br>', $lines) : '0';
 }
 
 // Telegram reads the text as HTML: its own tags only, a bare «<» breaks the
@@ -124,22 +152,23 @@ function web_lang_assets(): string
 .kb-slot,.kb-newrow{flex:1;border:2px dashed var(--bd);border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--mute);cursor:pointer;min-height:40px;font-size:.84rem}
 /* a phone: tabs wrap instead of hiding past the edge, and every table row
    becomes a card - its name on top, each field under its column's name -
-   instead of a table four phones wide to swipe through */
+   instead of a table four phones wide to swipe through (the tables the
+   script below marks .stk-wrap: a .tbl-xl one, not a .no-stack list) */
 @media (max-width:640px){
 .lang-tabs,.bt-groups{flex-wrap:wrap;overflow-x:visible!important}
-.tbl-wrap{overflow:visible!important;background:none!important}
-.card>.tbl-wrap{padding:12px 12px 2px}
-.tbl-wrap>table.tbl-xl{min-width:0!important}
-.tbl-wrap>table.tbl-xl thead{display:none}
-.tbl-wrap>table.tbl-xl,.tbl-wrap>table.tbl-xl tbody{display:block;width:100%}
-.tbl-wrap>table.tbl-xl tr{display:grid;grid-template-columns:1fr 1fr;column-gap:12px;border:1px solid var(--bd);border-radius:10px;padding:2px 12px 6px;margin-bottom:10px;background:var(--sf2)}
-.tbl-wrap>table.tbl-xl td{display:block;min-width:0;border:0!important;padding:7px 0!important;white-space:normal!important;text-align:right!important}
-.tbl-wrap>table.tbl-xl td[data-label]::before{content:attr(data-label);display:block;font-size:.7rem;font-weight:700;color:var(--dim);margin-bottom:4px}
-.tbl-wrap>table.tbl-xl td.stk-title,.tbl-wrap>table.tbl-xl td.stk-wide{grid-column:1/-1}
-.tbl-wrap>table.tbl-xl td.stk-title{order:-1;font-size:.92rem;border-bottom:1px solid var(--bd)!important;padding:9px 0!important}
-.tbl-wrap>table.tbl-xl td .select{max-width:100%}
-.tbl-wrap>table.tbl-xl td.stk-title::before,.tbl-wrap>table.tbl-xl td[data-label="#"]{display:none}
-.tbl-wrap>table.tbl-xl tbody tr:hover td{background:none}
+.tbl-wrap.stk-wrap{overflow:visible!important;background:none!important}
+.card>.tbl-wrap.stk-wrap{padding:12px 12px 2px}
+.stk-wrap>table{min-width:0!important}
+.stk-wrap>table thead{display:none}
+.stk-wrap>table,.stk-wrap>table tbody{display:block;width:100%}
+.stk-wrap>table tr{display:grid;grid-template-columns:1fr 1fr;column-gap:12px;border:1px solid var(--bd);border-radius:10px;padding:2px 12px 6px;margin-bottom:10px;background:var(--sf2)}
+.stk-wrap>table td{display:block;min-width:0;border:0!important;padding:7px 0!important;white-space:normal!important;text-align:right!important}
+.stk-wrap>table td[data-label]::before{content:attr(data-label);display:block;font-size:.7rem;font-weight:700;color:var(--dim);margin-bottom:4px}
+.stk-wrap>table td.stk-title,.stk-wrap>table td.stk-wide{grid-column:1/-1}
+.stk-wrap>table td.stk-title{order:-1;font-size:.92rem;border-bottom:1px solid var(--bd)!important;padding:9px 0!important}
+.stk-wrap>table td .select{max-width:100%}
+.stk-wrap>table td.stk-title::before,.stk-wrap>table td[data-label="#"]{display:none}
+.stk-wrap>table tbody tr:hover td{background:none}
 }
 </style>
 <script>
@@ -162,7 +191,8 @@ document.addEventListener('change', function (e) {
 // a text to type (or a row of boxes) the card's full width - the small ones
 // (emoji, side, colour, a switch) two to a line
 document.addEventListener('DOMContentLoaded', function () {
-  document.querySelectorAll('.tbl-wrap > table.tbl-xl').forEach(function (t) {
+  document.querySelectorAll('.tbl-wrap > table.tbl-xl:not(.no-stack)').forEach(function (t) {
+    t.parentElement.classList.add('stk-wrap');
     var heads = Array.prototype.map.call(t.querySelectorAll('thead th'), function (th) { return th.textContent.trim(); });
     t.querySelectorAll('tbody tr').forEach(function (tr) {
       var col = 0, title = tr.querySelector('td.cs');

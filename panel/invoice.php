@@ -1,9 +1,12 @@
 <?php
 require_once __DIR__ . '/inc/config.php';
 require_once __DIR__ . '/inc/icons.php';
+require_once __DIR__ . '/inc/langsync.php';
 require_auth();
 
 $search = trim($_GET['q'] ?? '');
+// a language tab ('' = all): its orders, the way the bot's 📊 counts them
+$lang = web_lang_pick('lang', '');
 
 $status = $_GET['status'] ?? '';
 $page = max(1, (int) ($_GET['page'] ?? 1));
@@ -21,11 +24,22 @@ if ($status !== '') {
   $where[] = "Status = ?";
   $params[] = $status;
 }
+if ($lang !== '') {
+  [$lw, $lp] = stats_lang_where($lang, 'i');
+  $where[] = $lw;
+  $params = array_merge($params, $lp);
+}
 $whereSQL = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
+$langCounts = [];
 try {
-  $total = db_count($pdo, "SELECT COUNT(*) FROM invoice $whereSQL", $params);
-  $invoices = db_fetchAll($pdo, "SELECT * FROM invoice $whereSQL ORDER BY time_sell DESC LIMIT $perPage OFFSET $offset", $params);
+  $total = db_count($pdo, "SELECT COUNT(*) FROM invoice i $whereSQL", $params);
+  $invoices = db_fetchAll($pdo, "SELECT * FROM invoice i $whereSQL ORDER BY time_sell DESC LIMIT $perPage OFFSET $offset", $params);
+  $langCounts[''] = db_count($pdo, "SELECT COUNT(*) FROM invoice");
+  foreach (panel_langs() as $l) {
+    [$lw, $lp] = stats_lang_where($l, 'i');
+    $langCounts[$l] = db_count($pdo, "SELECT COUNT(*) FROM invoice i WHERE $lw", $lp);
+  }
 } catch (Exception $e) {
   $total = 0;
   $invoices = [];
@@ -47,12 +61,16 @@ $pageTitle = $textbotlang['panel']['invoiceOrdersTitle'];
 $pageLede = $textbotlang['panel']['invoiceOrdersSubtitle'];
 $activeNav = 'invoice';
 include __DIR__ . '/inc/layout_head.php';
+echo web_lang_assets();
 ?>
+
+<?= web_lang_tabs($lang, fn($c) => 'invoice.php?' . http_build_query(['lang' => $c ?: null]), true, $langCounts) ?>
 
 <div class="card fade-up">
   <div class="toolbar">
     <div class="toolbar-title"><?= $textbotlang['panel']['invoiceOrdersHeading'] ?> <small>(<?= number_format($total) ?>)</small></div>
     <form method="GET" id="invoiceForm" class="toolbar-end">
+      <?php if ($lang !== ''): ?><input type="hidden" name="lang" value="<?= htmlspecialchars($lang) ?>"><?php endif; ?>
       <select name="status" class="select" style="width:auto"
         onchange="document.getElementById('invoiceForm').submit()">
         <option value=""><?= $textbotlang['panel']['invoiceAllStatuses'] ?></option>
@@ -68,7 +86,7 @@ include __DIR__ . '/inc/layout_head.php';
         <button type="submit" class="search-btn"><?= $textbotlang['panel']['invoiceSearchBtn'] ?></button>
       </div>
       <?php if ($search || $status): ?>
-        <a href="invoice.php" class="btn-link" style="font-size:.78rem"><?= $textbotlang['panel']['invoiceClearBtn'] ?></a>
+        <a href="invoice.php<?= $lang !== '' ? '?lang=' . urlencode($lang) : '' ?>" class="btn-link" style="font-size:.78rem"><?= $textbotlang['panel']['invoiceClearBtn'] ?></a>
       <?php endif; ?>
     </form>
   </div>
@@ -111,7 +129,7 @@ include __DIR__ . '/inc/layout_head.php';
               <td class="cf"><?= $i++ ?></td>
               <td class="cm"><?= htmlspecialchars($inv['id_user'] ?? '—') ?></td>
               <td class="cs"><?= htmlspecialchars(trunc($inv['name_product'] ?? '—', 28)) ?></td>
-              <td class="cn cs"><?= number_format((int) ($inv['price_product'] ?? 0)) ?> <span class="cf"><?= $textbotlang['panel']['invoiceColTrackingCode'] ?></span></td>
+              <td class="cn cs"><?= htmlspecialchars(money($inv['price_product'] ?? 0, invoice_currency($inv))) ?></td>
               <td class="cf"><?= safe_date($inv['time_sell'] ?? null, 'Y/m/d') ?></td>
               <td><span class="tag <?= $cls ?>"><?= $lbl ?></span></td>
             </tr>
@@ -123,7 +141,7 @@ include __DIR__ . '/inc/layout_head.php';
   <div class="tbl-foot">
     <span><?= number_format($total) ?> <?= $textbotlang['panel']['invoiceColService'] ?> <?= $page ?> <?= $textbotlang['panel']['invoiceColPanel'] ?> <?= $totalPages ?></span>
     <div class="pager">
-      <?php $qs = fn($p) => '?q=' . urlencode($search) . '&status=' . urlencode($status) . '&page=' . $p; ?>
+      <?php $qs = fn($p) => '?q=' . urlencode($search) . '&status=' . urlencode($status) . ($lang !== '' ? '&lang=' . urlencode($lang) : '') . '&page=' . $p; ?>
       <a class="<?= $page <= 1 ? 'dis' : '' ?>" href="<?= $qs(max(1, $page - 1)) ?>">‹</a>
       <?php for ($p = max(1, $page - 2); $p <= min($totalPages, $page + 2); $p++): ?>
         <a class="<?= $p === $page ? 'cur' : '' ?>" href="<?= $qs($p) ?>"><?= $p ?></a>

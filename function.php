@@ -18146,11 +18146,14 @@ if (!function_exists('affrw_cfg')) {
             return false;
         }
         $err = null;
-        $made = affrw_deliver($uid, $cfg, affrw_panel($cfg), is_array($u) ? $u : ['username' => ''], payer_texts($uid), $lang, $cfg['need'], $err);
+        $panel = affrw_panel($cfg);
+        $made = affrw_deliver($uid, $cfg, $panel, is_array($u) ? $u : ['username' => ''], payer_texts($uid), $lang, $cfg['need'], $err);
         if ($made === null) {
             sendmessage($uid, strtr(lang_tab_texts('fa')['Admin']['AffTest']['realFailed'], ['{msg}' => htmlspecialchars(json_encode($err, JSON_UNESCAPED_UNICODE))]), null, 'HTML');
             return false;
         }
+        // in the report group like a customer's, said to be an admin's own
+        affrw_report_made($uid, $u, $cfg, $panel, $made, '—', $lang, "\n\n" . lang_tab_texts('fa')['Admin']['AffReward']['reportAdmin']);
         // no invitees behind it, so none of 🚪's to watch; a round of his
         // own invites that is under way keeps its status
         $times = affrw_times($row) + 1;
@@ -18837,10 +18840,44 @@ if (!function_exists('affrw_cfg')) {
     // (or open for the next round) on success and is left for the caller
     // otherwise. With «کاربر انتخاب کنه» and no $name yet, the customer is
     // asked for one instead ('naming') - made once they send it.
+    // A message to one topic of the report group (errorreport, porsantreport);
+    // nothing when the bot has none. The line with the language of the user it
+    // names is added by report_lang_tag(), unless the text carries its own.
+    function affrw_report($topic, $text)
+    {
+        $setting = select("setting", "*", null, null, "select");
+        if (strlen((string) ($setting['Channel_Report'] ?? '')) > 0) {
+            telegram('sendmessage', [
+                'chat_id' => $setting['Channel_Report'],
+                'message_thread_id' => select("topicid", "idreport", "report", $topic, "select")['idreport'],
+                'text' => $text,
+                'parse_mode' => "HTML",
+            ]);
+        }
+    }
+    // 🎁's report of a config made (affrw_deliver's $made) - for a customer's
+    // invites, an admin's own and an admin's 🧪 real test alike; $count: the
+    // invites behind it, $extra: a line under it saying where it came from.
+    // It ends with the language whose 🎁 plan made it ($lang) - written here
+    // rather than left to report_lang_tag(), which guesses from the user and
+    // would name an admin's own language for his 🧪 test of another tab.
+    function affrw_report_made($uid, $u, $cfg, $panel, $made, $count, $lang, $extra = '')
+    {
+        $pt = panel_texts();
+        $code = in_array($lang, panel_langs(), true) ? $lang : 'fa';
+        affrw_report('porsantreport', strtr(lang_tab_texts('fa')['Admin']['AffReward']['report'], [
+            '{id}' => $uid,
+            '{username}' => (is_array($u) && !empty($u['username']) && $u['username'] !== 'none') ? '@' . htmlspecialchars($u['username']) : '',
+            '{count}' => $count,
+            '{volume}' => volume_num($cfg['gb']),
+            '{days}' => $cfg['days'],
+            '{panel}' => $panel['name_panel'],
+            '{service}' => $made['username'],
+        ]) . $extra . "\n\n" . sprintf($pt['Admin']['reportgroup']['userLangLine'], $pt['bottext']['langs'][$code] ?? $code));
+    }
     function affrw_give($uid, $name = null)
     {
         global $pdo;
-        $setting = select("setting", "*", null, null, "select");
         $fa = lang_tab_texts('fa');
         $row = affrw_row($uid);
         $u = select("user", "*", "id", $uid, "select");
@@ -18856,20 +18893,10 @@ if (!function_exists('affrw_cfg')) {
             sendmessage($uid, strtr($tx['users']['affiliates']['rewardNameAsk'], affrw_vars($cfg, (int) $row['invites'])), affrw_name_kb($tx), 'HTML');
             return true;
         }
-        $report = static function ($topic, $text) use ($setting) {
-            if (strlen((string) $setting['Channel_Report']) > 0) {
-                telegram('sendmessage', [
-                    'chat_id' => $setting['Channel_Report'],
-                    'message_thread_id' => select("topicid", "idreport", "report", $topic, "select")['idreport'],
-                    'text' => $text,
-                    'parse_mode' => "HTML",
-                ]);
-            }
-        };
         $err = null;
         $made = affrw_deliver($uid, $cfg, $panel, $u, payer_texts($uid), $u['lang'] ?? 'fa', (int) $row['invites'], $err, $name);
         if ($made === null) {
-            $report('errorreport', strtr($fa['Admin']['AffReward']['error'], [
+            affrw_report('errorreport', strtr($fa['Admin']['AffReward']['error'], [
                 '{id}' => $uid,
                 '{panel}' => $panel['name_panel'] ?? '—',
                 '{msg}' => htmlspecialchars(json_encode($err, JSON_UNESCAPED_UNICODE)),
@@ -18890,15 +18917,7 @@ if (!function_exists('affrw_cfg')) {
         if (!$more) {
             affrw_admin_spent($uid, $cfg);
         }
-        $report('porsantreport', strtr($fa['Admin']['AffReward']['report'], [
-            '{id}' => $uid,
-            '{username}' => (!empty($u['username']) && $u['username'] !== 'none') ? '@' . htmlspecialchars($u['username']) : '',
-            '{count}' => $row['invites'],
-            '{volume}' => volume_num($cfg['gb']),
-            '{days}' => $cfg['days'],
-            '{panel}' => $panel['name_panel'],
-            '{service}' => $made['username'],
-        ]));
+        affrw_report_made($uid, $u, $cfg, $panel, $made, $row['invites'], $row['lang']);
         return true;
     }
 }

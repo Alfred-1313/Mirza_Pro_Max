@@ -1,11 +1,15 @@
 <?php
 require_once __DIR__ . '/inc/config.php';
 require_once __DIR__ . '/inc/icons.php';
+require_once __DIR__ . '/inc/langsync.php';
 require_auth();
 
 $search = trim($_GET['q'] ?? '');
 $status = $_GET['status'] ?? '';
 $role = $_GET['role'] ?? '';
+// a language tab ('' = all): its users, the way the bot counts them
+$lang = web_lang_pick('lang', '');
+[$langSQL, $langParams] = $lang !== '' ? user_lang_where($lang) : ['1 = 1', []];
 $page = max(1, (int) ($_GET['page'] ?? 1));
 $perPage = 25;
 $offset = ($page - 1) * $perPage;
@@ -28,6 +32,11 @@ if ($role !== '') {
     $params[] = $role;
 }
 
+if ($lang !== '') {
+    $where[] = $langSQL;
+    $params = array_merge($params, $langParams);
+}
+
 $whereSQL = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
 try {
@@ -45,18 +54,26 @@ $blockedCount = 0;
 $agentCount = 0;
 $agentAdvCount = 0;
 
+$langCounts = [];
 try {
-    $blockedCount = db_count($pdo, "SELECT COUNT(*) FROM user WHERE User_Status='block'");
-    $agentCount = db_count($pdo, "SELECT COUNT(*) FROM user WHERE agent='n'");
-    $agentAdvCount = db_count($pdo, "SELECT COUNT(*) FROM user WHERE agent='n2'");
+    $blockedCount = db_count($pdo, "SELECT COUNT(*) FROM user WHERE User_Status='block' AND $langSQL", $langParams);
+    $agentCount = db_count($pdo, "SELECT COUNT(*) FROM user WHERE agent='n' AND $langSQL", $langParams);
+    $agentAdvCount = db_count($pdo, "SELECT COUNT(*) FROM user WHERE agent='n2' AND $langSQL", $langParams);
+    $cnt = um_lang_counts();
+    $langCounts = ['' => $cnt['total']] + array_intersect_key($cnt, array_flip(panel_langs()));
 } catch (Exception $e) {
 }
+// a link of this page that keeps the language tab
+$here = fn(array $q = []) => 'users.php?' . http_build_query(array_filter(['lang' => $lang] + $q, fn($v) => $v !== '' && $v !== null));
 
 $pageTitle = $textbotlang['panel']['usersTitle'];
 $pageLede = $textbotlang['panel']['usersSubtitle'];
 $activeNav = 'users';
 include __DIR__ . '/inc/layout_head.php';
+echo web_lang_assets();
 ?>
+
+<?= web_lang_tabs($lang, fn($c) => 'users.php?' . http_build_query(['lang' => $c ?: null]), true, $langCounts) ?>
 
 <div class="card fade-up">
     <div class="toolbar">
@@ -64,17 +81,18 @@ include __DIR__ . '/inc/layout_head.php';
             <div class="toolbar-title"><?= $textbotlang['panel']['usersHeading'] ?> <small>(<?= number_format($total) ?>)</small></div>
 
             <?php if ($blockedCount > 0): ?>
-                <a href="?status=block" class="tag tag-no" style="cursor:pointer"><?= $blockedCount ?> <?= $textbotlang['panel']['usersColId'] ?></a>
+                <a href="<?= htmlspecialchars($here(['status' => 'block'])) ?>" class="tag tag-no" style="cursor:pointer"><?= $blockedCount ?> <?= $textbotlang['panel']['usersColId'] ?></a>
             <?php endif; ?>
             <?php if ($agentCount > 0): ?>
-                <a href="?role=n" class="tag tag-info" style="cursor:pointer"><?= $agentCount ?> <?= $textbotlang['panel']['usersColName'] ?></a>
+                <a href="<?= htmlspecialchars($here(['role' => 'n'])) ?>" class="tag tag-info" style="cursor:pointer"><?= $agentCount ?> <?= $textbotlang['panel']['usersColName'] ?></a>
             <?php endif; ?>
             <?php if ($agentAdvCount > 0): ?>
-                <a href="?role=n2" class="tag tag-warn" style="cursor:pointer"><?= $agentAdvCount ?> <?= $textbotlang['panel']['usersColUsername'] ?></a>
+                <a href="<?= htmlspecialchars($here(['role' => 'n2'])) ?>" class="tag tag-warn" style="cursor:pointer"><?= $agentAdvCount ?> <?= $textbotlang['panel']['usersColUsername'] ?></a>
             <?php endif; ?>
         </div>
 
         <form method="GET" id="usersForm" class="toolbar-end">
+            <?php if ($lang !== ''): ?><input type="hidden" name="lang" value="<?= htmlspecialchars($lang) ?>"><?php endif; ?>
             <select name="status" class="select" style="width:auto"
                 onchange="document.getElementById('usersForm').submit()">
                 <option value=""><?= $textbotlang['panel']['usersColBalance'] ?></option>
@@ -99,13 +117,13 @@ include __DIR__ . '/inc/layout_head.php';
             </div>
 
             <?php if ($search || $status || $role): ?>
-                <a href="users.php" class="btn-link" style="font-size:.78rem;white-space:nowrap"><?= $textbotlang['panel']['usersAllStatuses'] ?></a>
+                <a href="<?= htmlspecialchars($here()) ?>" class="btn-link" style="font-size:.78rem;white-space:nowrap"><?= $textbotlang['panel']['usersAllStatuses'] ?></a>
             <?php endif; ?>
         </form>
     </div>
 
     <div class="tbl-wrap">
-        <table class="tbl-xl">
+        <table class="tbl-xl no-stack">
             <thead>
                 <tr>
                     <th style="width:36px">#</th>
@@ -162,7 +180,7 @@ include __DIR__ . '/inc/layout_head.php';
                                 <?= (!empty($u['number']) && $u['number'] !== 'none') ? htmlspecialchars($u['number']) : '—' ?>
                             </td>
                             <td class="cn cs" style="white-space:nowrap">
-                                <?= number_format((int) ($u['Balance'] ?? 0)) ?> <span class="cf"><?= $textbotlang['panel']['usersPaginationNext'] ?></span>
+                                <?= htmlspecialchars(money($u['Balance'] ?? 0, currency_for_user($u))) ?>
                             </td>
                             <td class="cn">
                                 <?= (int) ($u['score'] ?? 0) > 0
@@ -213,6 +231,7 @@ include __DIR__ . '/inc/layout_head.php';
             $qs = fn($p) => '?q=' . urlencode($search)
                 . '&status=' . urlencode($status)
                 . '&role=' . urlencode($role)
+                . ($lang !== '' ? '&lang=' . urlencode($lang) : '')
                 . '&page=' . $p;
             ?>
             <a class="<?= $page <= 1 ? 'dis' : '' ?>" href="<?= $qs(max(1, $page - 1)) ?>">‹</a>

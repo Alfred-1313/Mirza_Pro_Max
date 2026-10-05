@@ -5340,14 +5340,24 @@ f,n.n2',
     ),
     'webpanel' => 
     array (
-      'activated' => '✅  پنل تحت وب شما با موفقیت فعال گردید.
+      'activated' => '✅  پنل تحت وب شما با موفقیت فعال گردید.',
+      'activeNow' => '✅  پنل تحت وب شما فعال است.',
+      'passChanged' => '✅  رمز عبور پنل تحت وب عوض شد.',
+      'details' => '
 
 
 🔗آدرس ورود : https://%s/panel
 👤نام کاربری :  <code>%s</code>
-🔑رمز عبور :  <code>%s</code>
+🔑رمز عبور :  %s',
+      'passKept' => 'همان رمز قبلی 🔒
 
-⚠️ در صورت کلیک مجدد دکمه فعالسازی پنل رمز جدید دریافت خواهید کرد.',
+💡 برای عوض کردنش «🔐 تغییر رمز عبور» رو بزن.',
+      'loginBtn' => '🌐 ورود به پنل تحت وب',
+      'changePassBtn' => '🔐 تغییر رمز عبور',
+      'askPass' => '🔐 رمز عبور جدید پنل تحت وب رو بفرست ✍️
+
+۶ تا ۶۴ حرف، بدون فاصله.',
+      'passInvalid' => '⚠️ رمز عبور باید ۶ تا ۶۴ حرف و بدون فاصله باشه؛ دوباره بفرست 😅',
       'miniAppHelp' => '📌 آموزش فعالسازی مینی اپ در ربات BotFather
 
 /mybots > Select Bot > Bot Setting >  Configure Mini App > Enable Mini App  > Edit Mini App URL
@@ -6690,6 +6700,8 @@ nowpayments.io
       'failed' => '⚠️ ساخت کانفیگ روی پنل انجام نشد؛ جزئیاتش توی گروه گزارش خطاهاست. درخواست هنوز منتظره و می‌تونی دوباره «✅ تایید» رو بزنی.',
       'report' => "🎁 <b>کانفیگ رایگان دعوت ساخته شد</b>\n\n👤 کاربر: <code>{id}</code> {username}\n👥 دعوت‌ها: {count}\n📦 {volume} گیگ · {days} روز\n🖥 پنل: {panel}\n🔑 نام کاربری سرویس: <code>{service}</code>",
       'error' => "❌ <b>خطا در ساخت کانفیگ رایگان دعوت</b>\n\n👤 کاربر: <code>{id}</code>\n🖥 پنل: {panel}\nخطا: {msg}",
+      'reportAdmin' => '🛡 برای خود ادمین («کانفیگ رایگان با دعوت بدون محدودیت»)',
+      'reportTest' => '🧪 از «🧪 تست واقعی (یه کانفیگ برای خودم)» ادمین',
       'adminSpent' => "🛡 به سقف «🔁 چند بار» کانفیگ رایگان (<b>{max}</b> بار) رسیدی، برای همین «🎁 کانفیگ رایگان با دعوت بدون محدودیت» خاموش شد (برای همه‌ی ادمین‌ها).\n\nبرای گرفتن دوباره: 🎁 کانفیگ رایگان با دعوت ← «🔄 صفر کردن دعوت‌های یک کاربر» ← آیدی خودت، بعد از «🛡 دسترسی ادمین» دوباره روشنش کن.",
     ),
     'WalletConvert' =>
@@ -8845,13 +8857,9 @@ nowpayments.io
     'dashStatusWarning' => 'اخطار',
     'dashTodaySpan' => ' امروز</span>',
     'dashTodayTransaction' => 'تراکنش امروز',
-    'dashTomanShort' => 'ت',
-    'dashTomanShort2' => 'ت',
     'dashTotalRevenue' => 'درآمد کل',
     'dashTotalSales' => 'مجموع فروش',
     'dashTotalUsers' => 'کل کاربران',
-    'dashUnitMillionToman' => '<small>M ت</small>',
-    'dashUnitToman' => '<small>ت</small>',
     'dashViewAll' => 'همه ←',
     'dashViewAll2' => 'همه ←',
     'dashboardTitle' => 'داشبورد',
@@ -8863,7 +8871,6 @@ nowpayments.io
     'invoiceColProduct' => 'محصول',
     'invoiceColService' => 'رکورد · صفحه',
     'invoiceColStatus' => 'تاریخ',
-    'invoiceColTrackingCode' => 'ت',
     'invoiceColUser' => 'کاربر',
     'invoiceDataFetchError' => 'خطا دریافت اطلاعات',
     'invoiceDbError' => 'خطای پایگاه داده: ',
@@ -8945,7 +8952,6 @@ nowpayments.io
     'loginWelcomeBack' => 'خوش آمدید، ',
     'loginWrongCredentials' => 'نام کاربری یا رمز عبور اشتباه است.',
     'paymentAllMethods' => 'از ابتدای فعالیت',
-    'paymentAllStatuses' => 'تومان',
     'paymentClearBtn' => 'رکورد تراکنش',
     'paymentCloseBtn' => 'از',
     'paymentColAmount' => 'تراکنش جدید امروز',
@@ -8961,7 +8967,6 @@ nowpayments.io
     'paymentDetailDate' => 'رکورد · صفحه',
     'paymentDetailMethod' => 'وضعیت',
     'paymentDetailStatus' => 'تراکنشی یافت نشد',
-    'paymentDetailTrackingCode' => 'ت',
     'paymentDetailUser' => 'روش پرداخت',
     'paymentDetailsTitle' => 'مبلغ',
     'paymentMethodAdminAdd' => 'افزایش توسط ادمین',
@@ -9267,7 +9272,6 @@ nowpayments.io
     'usersHeading' => 'کاربران',
     'usersNoResultFound' => 'نتیجه‌ای یافت نشد',
     'usersNoUserYet' => 'هنوز کاربری ثبت نشده',
-    'usersPaginationNext' => 'ت',
     'usersPaginationPrev' => 'گروه',
     'usersSearchBtn' => 'آیدی',
     'usersSearchUserPlaceholder' => 'آیدی، یوزرنیم، نام سفارشی، شماره...',

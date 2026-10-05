@@ -4244,14 +4244,24 @@ User group:%s
                         'day' => 'day',
                 ],
                 'webpanel' => [
-                        'activated' => '✅  Your web panel was activated successfully.
+                        'activated' => '✅  Your web panel was activated successfully.',
+                        'activeNow' => '✅  Your web panel is active.',
+                        'passChanged' => '✅  Your web panel password was changed.',
+                        'details' => '
 
 
 🔗Login address: https://%s/panel
 👤Username:  <code>%s</code>
-🔑Password:  <code>%s</code>
+🔑Password:  %s',
+                        'passKept' => 'the same as before 🔒
 
-⚠️ If you click the panel activation button again, you will receive a new password.',
+💡 To change it, tap «🔐 Change password».',
+                        'loginBtn' => '🌐 Open the web panel',
+                        'changePassBtn' => '🔐 Change password',
+                        'askPass' => '🔐 Send the new web panel password ✍️
+
+6 to 64 characters, no spaces.',
+                        'passInvalid' => '⚠️ The password must be 6 to 64 characters with no spaces; send it again 😅',
                         'miniAppHelp' => '📌 Tutorial for activating the mini app in the BotFather bot
 
 /mybots > Select Bot > Bot Setting >  Configure Mini App > Enable Mini App  > Edit Mini App URL
@@ -5409,13 +5419,9 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'dashStatusWarning' => 'Warning',
                 'dashTodaySpan' => ' Today</span>',
                 'dashTodayTransaction' => 'Today\'s transactions',
-                'dashTomanShort' => '$',
-                'dashTomanShort2' => '$',
                 'dashTotalRevenue' => 'Total revenue',
                 'dashTotalSales' => 'Total sales',
                 'dashTotalUsers' => 'Total users',
-                'dashUnitMillionToman' => '<small>M $</small>',
-                'dashUnitToman' => '<small>$</small>',
                 'dashViewAll' => 'All ←',
                 'dashViewAll2' => 'All ←',
                 'dashboardTitle' => 'Dashboard',
@@ -5427,7 +5433,6 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'invoiceColProduct' => 'Product',
                 'invoiceColService' => 'records · page',
                 'invoiceColStatus' => 'Date',
-                'invoiceColTrackingCode' => 'T',
                 'invoiceColUser' => 'User',
                 'invoiceDataFetchError' => 'Error retrieving information',
                 'invoiceDbError' => 'Database error: ',
@@ -5509,7 +5514,6 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'loginWelcomeBack' => 'Welcome, ',
                 'loginWrongCredentials' => 'The username or password is incorrect.',
                 'paymentAllMethods' => 'Since the start of activity',
-                'paymentAllStatuses' => 'Dollar',
                 'paymentClearBtn' => 'Transaction record',
                 'paymentCloseBtn' => 'From',
                 'paymentColAmount' => 'New transaction today',
@@ -5525,7 +5529,6 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'paymentDetailDate' => 'records · page',
                 'paymentDetailMethod' => 'Status',
                 'paymentDetailStatus' => 'No transaction found',
-                'paymentDetailTrackingCode' => 'T',
                 'paymentDetailUser' => 'Payment method',
                 'paymentDetailsTitle' => 'Amount',
                 'paymentMethodAdminAdd' => 'Increase by admin',
@@ -5831,7 +5834,6 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'usersHeading' => 'Users',
                 'usersNoResultFound' => 'No result found',
                 'usersNoUserYet' => 'No user registered yet',
-                'usersPaginationNext' => 'T',
                 'usersPaginationPrev' => 'Group',
                 'usersSearchBtn' => 'ID',
                 'usersSearchUserPlaceholder' => 'ID, username, custom name, number...',
