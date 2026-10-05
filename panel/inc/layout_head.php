@@ -17,7 +17,7 @@ $initials = mb_strtoupper(mb_substr($currentUser, 0, 1, 'UTF-8'), 'UTF-8');
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title><?= $textbotlang['panel']['layoutBrandName'] ?></title>
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=<?= (int) @filemtime(__DIR__ . '/../css/style.css') ?>">
   <script>
     (function () {
       var t = localStorage.getItem('panel-theme') || 'navy';
