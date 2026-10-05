@@ -986,7 +986,12 @@ and get a free <b>{volume} GB · {days}-day</b> subscription!
                         'rewardStatusAuto' => '☑️ Once complete, the config is created automatically and shows up in «🛍 My services».',
                         'rewardStatusAdmin' => '☑️ Once complete and approved by the admin, the config is created and shows up in «🛍 My services».',
                         'rewardStatusPending' => '⏳ Your invites are complete! Your request is waiting for the admin\'s approval.',
-                        'rewardStatusDone' => '✅ You got your free config; it is in «🛍 My services».',
+                        'rewardLimitReached' => '<blockquote>🎁 Free config</blockquote>
+
+🔒 The invite free config is limited to <b>{max}</b> per user, and you have reached that limit, so new invites will not earn you another one.
+
+✅ The configs you got are in «🛍 My services».
+🙏 Thanks for introducing the bot to your friends!',
                         'rewardSentToAdmin' => '🎉 Your invites reached {need}!
 Your free config request was sent to the admin; it will be created once approved.',
                         'rewardGiven' => '🎁 Congratulations! For inviting {need} people, a free <b>{volume} GB · {days}-day</b> config was created for you 👇',

@@ -5572,6 +5572,7 @@ if (!function_exists('feature_section_of_key')) {
             'affrw_gb' => 'affr',
             'affrw_days' => 'affr',
             'affrw_max' => 'affr',
+            'affrw_reset' => 'affr',
         ];
         return $map[$key] ?? null;
     }
@@ -5912,6 +5913,7 @@ if (!function_exists('aff_section_rows')) {
                 [$val(strtr($s['affrwPanelBtn'], ['{panel}' => $rwPanel !== null ? $rwPanel['name_panel'] : $s['affrwNoPanel']]), "flsaffrw:{$lang}:panel")],
                 [$val(strtr($s['affrwModeBtn'], ['{mode}' => $rw['mode'] === 'auto' ? $s['affrwModeAuto'] : $s['affrwModeAdmin']]), "flsaffrw:{$lang}:mode")],
                 [$tog(feature_setting_value('affrw_leave', $lang, '0') === '1', $s['affrwLeaveBtn'], "flsaffrw:{$lang}:leave")],
+                [$val($s['affrwResetUserBtn'], "flsask:{$lang}:affrw_reset")],
                 [$go(strtr($s['refvOpenBtn'], ['{state}' => refv_state_text($lang, 'r', $s, true)]), "flsec:{$lang}:refvr")],
                 [$go($s['affTestRewardBtn'], "afftest:{$lang}:r")],
                 [$go($s['back'], "flsec:{$lang}:aff")],
@@ -6243,6 +6245,7 @@ if (!function_exists('afftest_send')) {
             [$svcText] = affrw_service_text($sample, $cfg, $tx, ['username' => $service, 'subscription_url' => "https://example.com/sub/{$service}", 'configs' => ["vless://{$service}@example.com:443"]]);
             afftest_send($to, $lang, $t['wService'], 'users.affiliates.rewardAfterPay', $svcText, affrw_help_kb($lang, $tx));
         }
+        afftest_send($to, $lang, strtr($t['wLimit'], ['{max}' => $cfg['max']]), 'users.affiliates.rewardLimitReached', strtr($a['rewardLimitReached'], ['{max}' => $cfg['max']]));
         if (feature_setting_value('affrw_leave', $lang, '0') === '1') {
             $ch = refv_channel_rows(refv_cfg($lang, 'r'));
             $pv = ['{name}' => '@' . $new, '{channel}' => htmlspecialchars((string) ($ch[0]['remark'] ?? '—')), '{service}' => htmlspecialchars($service), '{missing}' => 1];
@@ -11840,6 +11843,18 @@ elseif ($datain == "systemsms") {
             return;
         }
         feature_setting_set($fs_key, $fs_lang, (string) intval($text));
+    } elseif ($fs_key === 'affrw_reset') {
+        // 🔄 one customer's free config from the start: count and 🔁 چند بار
+        $fs_u = svcgive_find_user($text);
+        if ($fs_u === null) {
+            sendmessage($from_id, strtr($fs_tx['Admin']['UserMgmt']['assignNoUser'], ['{id}' => htmlspecialchars(trim((string) $text))]), null, 'HTML');
+            return;
+        }
+        affrw_reset($fs_u['id']);
+        sendmessage($from_id, strtr($fs_tx['Admin']['FeatureSection']['affrwResetUserDone'], [
+            '{id}' => $fs_u['id'],
+            '{name}' => (!empty($fs_u['username']) && $fs_u['username'] !== 'none') ? '@' . htmlspecialchars($fs_u['username']) : '',
+        ]), null, 'HTML');
     } elseif ($fs_key === 'wheel_price' || $fs_key === 'aff_giftamount') {
         // an amount in this language's currency - USD/CNY/RUB/TMT carry
         // decimals, so "12.5" has to be accepted, not just whole numbers

@@ -6370,12 +6370,13 @@ if (preg_match('/^sendresidcart-(.*)/', $datain, $dataget)) {
     }
     // 2️⃣ 🎁 کانفیگ رایگان با دعوت, when this customer's language has it
     affrw_check($from_id);
-    $affrw_text = affrw_info_text($user, $textbotlang, "https://t.me/$usernamebot?start=$from_id");
+    $affrw_key = 'rewardInfo';
+    $affrw_text = affrw_info_text($user, $textbotlang, "https://t.me/$usernamebot?start=$from_id", $affrw_key);
     if ($affrw_text !== null) {
-        bottext_extras_key_hint('users.affiliates.rewardInfo');
+        bottext_extras_key_hint("users.affiliates.{$affrw_key}");
         sendmessage($from_id, $affrw_text, (affrw_row($from_id)['status'] ?? '') === 'naming' ? affrw_name_kb($textbotlang) : null, 'HTML');
         // 🛡 دسترسی ادمین: an admin with no limit gets the config right here,
-        // every tap - no invites, nobody's approval
+        // every tap - no invites, nobody's approval - until 🔁 چند بار is used up
         if (affrw_admin_free($from_id)) {
             affrw_admin_give($from_id);
         }

@@ -16859,7 +16859,7 @@ if (!function_exists('admin_perm_payload')) {
             : "ادمین هم مثل کاربرها هزینه‌ی خرید رو از موجودیش پرداخت می‌کنه.";
         $info .= "\n\n🎁 <b>کانفیگ رایگان با دعوت بدون محدودیت:</b> " . ($rwFree ? "روشن ✅" : "خاموش ❌") . "\n";
         $info .= $rwFree
-            ? "ادمین هر بار «👥 زیرمجموعه‌گیری» رو بزنه، همون لحظه یه کانفیگ رایگان (همونی که کاربرها با دعوت می‌گیرن) براش ساخته می‌شه - بدون دعوت و بدون تایید ادمین، هر چند بار که بخواد، چه تحویل «خودکار» باشه چه «با تایید ادمین». دعوت‌های خودش هم بدون راستی‌آزمایی و بدون سقف «🔁 چند بار» حساب می‌شه. (طرح 🎁 باید برای زبان ادمین روشن باشه.)"
+            ? "ادمین هر بار «👥 زیرمجموعه‌گیری» رو بزنه، همون لحظه یه کانفیگ رایگان (همونی که کاربرها با دعوت می‌گیرن) براش ساخته می‌شه - بدون دعوت و بدون تایید ادمین، چه تحویل «خودکار» باشه چه «با تایید ادمین». دعوت‌های خودش هم بدون راستی‌آزمایی حساب می‌شه. سقف «🔁 چند بار» (🎁 کانفیگ رایگان با دعوت) برای ادمین هم هست: وقتی به سقف رسید، این گزینه خودش خاموش می‌شه (برای همه‌ی ادمین‌ها) و دفعه‌ی بعد همون پیامی رو می‌گیره که کاربرها می‌گیرن. برای گرفتن دوباره: «🔄 صفر کردن دعوت‌های یک کاربر» با آیدی خودت، و دوباره روشنش کن. (طرح 🎁 باید برای زبان ادمین روشن باشه.)"
             : "ادمین هم مثل کاربرها باید دعوت کنه و سقف «🔁 چند بار» و تایید ادمین روش هست.";
         $kb = ['inline_keyboard' => []];
         $kb['inline_keyboard'][] = [['text' => '🔑 اکانت تست بدون محدودیت: ' . ($testFree ? 'روشن ✅' : 'خاموش ❌'), 'callback_data' => "admperm|test|{$lang}", 'style' => $testFree ? 'success' : 'danger']];
@@ -17555,8 +17555,9 @@ if (!function_exists('affrw_cfg')) {
     // محدودیت»: one switch for the whole bot, like that screen's other two.
     // On, an admin gets the free config every time they open 👥 - no invites,
     // nobody's approval, whichever way it is delivered (affrw_admin_give) -
-    // and their own invites skip the 🔁 allowance, 🛡's checks and approval
-    // too. Off, an admin is a customer like any other.
+    // and their own invites skip 🛡's checks and approval too; up to the 🔁
+    // allowance, like a customer, and reaching it switches it off
+    // (affrw_admin_spent). Off, an admin is a customer like any other.
     function affrw_admin_free($uid)
     {
         $setting = select("setting", "*", null, null, "select");
@@ -17566,16 +17567,21 @@ if (!function_exists('affrw_cfg')) {
         return in_array((string) $uid, array_map('strval', (array) select("admin", "id_admin", null, null, "FETCH_COLUMN")), true);
     }
     // ...and the config itself: their language's 🎁 plan, made and sent the
-    // way a customer gets it, so the admin sees exactly that. The reward's
-    // own bookkeeping (affiliate_reward) is left alone, as 🧪 تست واقعی does.
-    // False when the plan is off for their language or the panel refused
-    // (the admin is told why).
+    // way a customer gets it, so the admin sees exactly that. It counts
+    // towards 🔁 چند بار like a customer's (affiliate_reward.times); nothing
+    // once that is used up. False when the plan is off for their language,
+    // the allowance is used up or the panel refused (the admin is told why).
     function affrw_admin_give($uid)
     {
+        global $pdo;
         $u = select("user", "*", "id", (string) $uid, "select");
         $lang = is_array($u) ? ($u['lang'] ?? 'fa') : 'fa';
         $cfg = affrw_live($lang);
         if ($cfg === null) {
+            return false;
+        }
+        $row = affrw_row($uid);
+        if (affrw_used_up($row)) {
             return false;
         }
         $err = null;
@@ -17584,7 +17590,35 @@ if (!function_exists('affrw_cfg')) {
             sendmessage($uid, strtr(lang_tab_texts('fa')['Admin']['AffTest']['realFailed'], ['{msg}' => htmlspecialchars(json_encode($err, JSON_UNESCAPED_UNICODE))]), null, 'HTML');
             return false;
         }
+        // no invitees behind it, so none of 🚪's to watch; a round of his
+        // own invites that is under way keeps its status
+        $times = affrw_times($row) + 1;
+        $done = $times >= $cfg['max'];
+        if ($row === null) {
+            $pdo->prepare("INSERT INTO affiliate_reward (user_id, lang, status, invites, since, time, times, id_invoice, members, left_ids, suspended) VALUES (?, ?, ?, 0, ?, ?, ?, ?, '[]', '[]', 0)")
+                ->execute([(string) $uid, $lang, $done ? 'done' : 'open', time(), time(), $times, $made['id_invoice']]);
+        } else {
+            $pdo->prepare("UPDATE affiliate_reward SET lang = ?, times = ?, id_invoice = ?, time = ?, members = '[]', left_ids = '[]', suspended = 0 WHERE user_id = ?")
+                ->execute([$lang, $times, $made['id_invoice'], time(), (string) $uid]);
+            $pdo->prepare("UPDATE affiliate_reward SET status = ?, since = ? WHERE user_id = ? AND status IN ('open', 'rejected', 'done')")
+                ->execute([$done ? 'done' : 'open', time(), (string) $uid]);
+        }
+        if ($done) {
+            affrw_admin_spent($uid, $cfg);
+        }
         return true;
+    }
+    // 🛡 an admin with no limit who has now had it as many times as 🔁 چند بار
+    // allows: the switch goes off - it is one for every admin - and they are
+    // told; their next 👥 says the allowance is used up, as a customer's does
+    function affrw_admin_spent($uid, $cfg)
+    {
+        if (!affrw_admin_free($uid)) {
+            return;
+        }
+        update("setting", "admin_affrw_unlimited", "0", null, null);
+        clearSelectCache('setting');
+        sendmessage($uid, strtr(lang_tab_texts('fa')['Admin']['AffReward']['adminSpent'], ['{max}' => $cfg['max']]), null, 'HTML');
     }
     // One row per customer who reached the count, and it is what makes the
     // gift once only: status pending (waiting for an admin), giving (being
@@ -17925,13 +17959,32 @@ if (!function_exists('affrw_cfg')) {
         if (!is_array($r)) {
             return null;
         }
-        // 🛡 an admin with no limit never reaches the end of it: a row that
-        // did, before that was switched on, goes on counting from here
-        if ($r['status'] === 'done' && affrw_admin_free($uid)) {
-            $pdo->prepare("UPDATE affiliate_reward SET status = 'open' WHERE user_id = ? AND status = 'done'")->execute([(string) $uid]);
+        // 🔁 چند بار raised since a row reached the end of it: it goes on
+        // counting from here
+        $times = affrw_times($r);
+        if ($r['status'] === 'done' && $times < affrw_cfg($r['lang'])['max']) {
+            $pdo->prepare("UPDATE affiliate_reward SET status = 'open', times = ? WHERE user_id = ? AND status = 'done'")->execute([$times, (string) $uid]);
             $r['status'] = 'open';
+            $r['times'] = $times;
         }
         return $r;
+    }
+    // how many times a customer has had it; a row from before that was
+    // counted says «done» only, which was once
+    function affrw_times($row)
+    {
+        if ($row === null) {
+            return 0;
+        }
+        $times = (int) ($row['times'] ?? 0);
+        return $row['status'] === 'done' ? max(1, $times) : $times;
+    }
+    // had it as many times as 🔁 چند بار allows - nothing more to earn (a
+    // round already under way still ends the way it would)
+    function affrw_used_up($row)
+    {
+        return $row !== null && in_array($row['status'], ['open', 'rejected', 'done'], true)
+            && affrw_times($row) >= affrw_cfg($row['lang'])['max'];
     }
     // counting starts when the offer was switched on - or, after a refusal,
     // at the refusal
@@ -18031,7 +18084,8 @@ if (!function_exists('affrw_cfg')) {
             return;
         }
         $row = affrw_row($uid);
-        if (!affrw_counting($row)) {
+        // 🔁 چند بار lowered below what they have had: no more either
+        if (!affrw_counting($row) || affrw_used_up($row)) {
             return;
         }
         $count = affrw_count($uid, affrw_since($cfg, $row));
@@ -18069,18 +18123,22 @@ if (!function_exists('affrw_cfg')) {
         sendmessage($uid, strtr($tx['users']['affiliates']['rewardSentToAdmin'], affrw_vars($cfg, $count)), null, 'HTML');
     }
     // the message under 👥 زیرمجموعه‌گیری, or null when this language has none
-    function affrw_info_text($user, $tx, $link)
+    // ($key: its 🎨 item) - once 🔁 چند بار is used up, a message saying so
+    // instead of a page inviting them to earn one
+    function affrw_info_text($user, $tx, $link, &$key = null)
     {
+        $key = 'rewardInfo';
         $cfg = affrw_live($user['lang'] ?? 'fa');
         if ($cfg === null) {
             return null;
         }
         $a = $tx['users']['affiliates'];
         $row = affrw_row($user['id']);
-        if ($row !== null && $row['status'] === 'done') {
-            $status = $a['rewardStatusDone'];
-            $count = $cfg['need'];
-        } elseif ($row !== null && $row['status'] === 'naming') {
+        if (affrw_used_up($row)) {
+            $key = 'rewardLimitReached';
+            return strtr($a['rewardLimitReached'], ['{max}' => affrw_cfg($row['lang'])['max']]);
+        }
+        if ($row !== null && $row['status'] === 'naming') {
             $status = $a['rewardStatusNaming'];
             $count = $cfg['need'];
         } elseif (!affrw_counting($row)) {
@@ -18265,9 +18323,12 @@ if (!function_exists('affrw_cfg')) {
         $st->execute([(string) $uid, (string) $uid, (int) $since]);
         $members = array_values(array_diff(array_map('strval', $st->fetchAll(PDO::FETCH_COLUMN)), affrw_members($row)));
         $times = (int) ($row['times'] ?? 0) + 1;
-        $more = $times < $cfg['max'] || affrw_admin_free($uid);
+        $more = $times < $cfg['max'];
         $stmt = $pdo->prepare("UPDATE affiliate_reward SET status = ?, id_invoice = ?, time = ?, times = ?, since = ?, members = ?, left_ids = '[]', suspended = 0 WHERE user_id = ?");
         $stmt->execute([$more ? 'open' : 'done', $id_invoice, time(), $times, $more ? time() : (int) ($row['since'] ?? 0), json_encode($members), (string) $uid]);
+        if (!$more) {
+            affrw_admin_spent($uid, $cfg);
+        }
         $report('porsantreport', strtr($fa['Admin']['AffReward']['report'], [
             '{id}' => $uid,
             '{username}' => (!empty($u['username']) && $u['username'] !== 'none') ? '@' . htmlspecialchars($u['username']) : '',
@@ -18299,7 +18360,6 @@ if (!function_exists('bt_nosticker_keys')) {
             'users.affiliates.rewardStatusAuto',
             'users.affiliates.rewardStatusAdmin',
             'users.affiliates.rewardStatusPending',
-            'users.affiliates.rewardStatusDone',
             'users.affiliates.rewardServiceName',
             // and the service name 🔗 واگذاری gives a handed-over service
             'users.status.assignedServiceName',
