@@ -261,6 +261,8 @@ timeauto_not_verify,status_keyboard_config,cron_status
         addFieldToTable("setting", "admin_buy_free", "0", "VARCHAR(1)");
         // ...and earn 🎁's free config by inviting, like everyone, until it is on
         addFieldToTable("setting", "admin_affrw_unlimited", "0", "VARCHAR(1)");
+        // «🤖 پنل تحت وب: روشن ✅ / خاموش ❌» - on, as every bot's panel has been
+        addFieldToTable("setting", "web_panel_status", "on", "VARCHAR(10)");
         addFieldToTable("setting", "configGetBtnStyle", null, "VARCHAR(20)");
         // the automatic language picker is off on a fresh install - it used to
         // rely on this column being NULL and the reader defaulting to '0', which

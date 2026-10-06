@@ -42,6 +42,13 @@ function require_auth(): void
     if (session_status() === PHP_SESSION_NONE)
         session_start();
     global $pdo;
+    // «🤖 پنل تحت وب: خاموش ❌» in the bot: nobody in, a session already open included
+    if (!webpanel_enabled()) {
+        $_SESSION = [];
+        session_destroy();
+        header('Location: login.php');
+        exit;
+    }
     if (empty($_SESSION['admin_user'])) {
         header('Location: login.php');
         exit;

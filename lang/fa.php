@@ -5358,6 +5358,12 @@ f,n.n2',
 
 ۶ تا ۶۴ حرف، بدون فاصله.',
       'passInvalid' => '⚠️ رمز عبور باید ۶ تا ۶۴ حرف و بدون فاصله باشه؛ دوباره بفرست 😅',
+      'offNow' => '⛔️  پنل تحت وب ربات خاموش است؛ تا روشنش نکنی کسی نمی‌تونه واردش بشه.',
+      'turnedOn' => '🟢  پنل تحت وب ربات روشن شد.',
+      'turnedOff' => '🔴  پنل تحت وب ربات خاموش شد؛ تا روشنش نکنی کسی نمی‌تونه واردش بشه.',
+      'toggleBtn' => '🤖 پنل تحت وب: %s',
+      'stateOn' => 'روشن ✅',
+      'stateOff' => 'خاموش ❌',
       'miniAppHelp' => '📌 آموزش فعالسازی مینی اپ در ربات BotFather
 
 /mybots > Select Bot > Bot Setting >  Configure Mini App > Enable Mini App  > Edit Mini App URL
@@ -7832,7 +7838,7 @@ nowpayments.io
     'activateAccount' => '💡 روشن کردن اکانت',
     'activateCard' => '💳 فعالسازی شماره کارت',
     'activateSalesBot' => '🤖 فعالسازی ربات فروش',
-    'activateWebPanel' => '✅ فعالسازی پنل تحت وب',
+    'activateWebPanel' => 'پنل تحت وب ربات 🤖',
     'activeCardUserList' => 'لیست کاربران شماره کارت فعال.',
     'addAdmin' => '👨‍💻 اضافه کردن ادمین',
     'addApp' => '🔗 اضافه کردن برنامه',
@@ -8951,6 +8957,7 @@ nowpayments.io
           دونیت دهید',
     'loginWelcomeBack' => 'خوش آمدید، ',
     'loginWrongCredentials' => 'نام کاربری یا رمز عبور اشتباه است.',
+    'loginPanelOff' => '⛔️ پنل تحت وب ربات خاموش است. برای روشن کردنش، داخل ربات بزن: «پنل تحت وب ربات 🤖» ← «🤖 پنل تحت وب: خاموش ❌».',
     'paymentAllMethods' => 'از ابتدای فعالیت',
     'paymentClearBtn' => 'رکورد تراکنش',
     'paymentCloseBtn' => 'از',

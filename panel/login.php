@@ -2,14 +2,16 @@
 require_once __DIR__ . '/inc/config.php';
 require_once __DIR__ . '/inc/icons.php';
 session_start();
+// «🤖 پنل تحت وب: خاموش ❌» in the bot: no form and no login, only how to turn it on
+$panelOff = !webpanel_enabled();
 
-if (!empty($_SESSION['admin_user'])) {
+if (!$panelOff && !empty($_SESSION['admin_user'])) {
   header('Location: index.php');
   exit;
 }
 
 $error = '';
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if (!$panelOff && $_SERVER['REQUEST_METHOD'] === 'POST') {
   $username = trim($_POST['username'] ?? '');
   $password = $_POST['password'] ?? '';
   $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
@@ -88,6 +90,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <div class="auth-box" style="animation:fadeUp .5s ease-out">
         <h1><?= $textbotlang['panel']['loginButton'] ?></h1>
         <p class="lede"><?= $textbotlang['panel']['loginRememberMe'] ?></p>
+        <?php if ($panelOff): ?>
+          <div class="notice notice-no" style="margin-bottom:20px"><?= htmlspecialchars($textbotlang['panel']['loginPanelOff']) ?></div>
+        <?php else: ?>
         <?php if ($error): ?>
           <div class="notice notice-no" style="margin-bottom:20px"><?= htmlspecialchars($error) ?></div>
         <?php endif; ?>
@@ -111,11 +116,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               style="display:none;width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite"></span>
           </button>
         </form>
+        <?php endif; ?>
         <div class="auth-bottom"><?= $textbotlang['panel']['loginHidePassword'] ?></div>
       </div>
     </main>
   </div>
-  <script src="js/login.js"></script>
+  <?php if (!$panelOff): ?><script src="js/login.js"></script><?php endif; ?>
 </body>
 
 </html>

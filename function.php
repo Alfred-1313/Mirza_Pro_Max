@@ -18921,6 +18921,17 @@ if (!function_exists('affrw_cfg')) {
         return true;
     }
 }
+if (!function_exists('webpanel_enabled')) {
+    // «🤖 پنل تحت وب: روشن ✅ / خاموش ❌» under «پنل تحت وب ربات 🤖» - one switch
+    // for the whole bot. Off, the web panel takes no login and lets no open
+    // session in (panel/inc/config.php, panel/login.php). On by default, so a
+    // bot that has never set it keeps its panel.
+    function webpanel_enabled()
+    {
+        $s = select("setting", "*", null, null, "select");
+        return (string) (is_array($s) ? ($s['web_panel_status'] ?? 'on') : 'on') !== 'off';
+    }
+}
 if (!function_exists('bt_react_keys')) {
     // the messages a ❤️ reaction can go on: the bot puts it on the customer's
     // own message that called them up, and only these have one

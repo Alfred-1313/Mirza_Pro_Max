@@ -33,28 +33,52 @@ if ($datain === 'btpromptcancel' && $adminrulecheck['rule'] == "administrator") 
     return;
 }
 
-//----------------[  ✅ web panel: address, login, a password of the admin's own  ]----------------
-// ✅ فعالسازی پنل تحت وب used to make a new password on every tap, so a second
-// tap locked the admin out of a panel he was logged into. It makes one only
-// the first time now; after that it shows the address and username with
-// 🌐 ورود and 🔐 تغییر رمز under them, and the password stays until he sets
-// one himself - his message with it and the ask are then deleted and the
-// details message shows the new one.
+//----------------[  🤖 web panel: address, login, a password of the admin's own, on/off  ]----------------
+// «پنل تحت وب ربات 🤖» (it was «✅ فعالسازی پنل تحت وب») used to make a new
+// password on every tap, so a second tap locked the admin out of a panel he
+// was logged into. It makes one only the first time now; after that it shows
+// the address and username with 🌐 ورود, 🔐 تغییر رمز and the panel's on/off
+// switch under them, and the password stays until he sets one himself - his
+// message with it and the ask are then deleted and the details message shows
+// the new one. Off (webpanel_enabled), the panel takes no login at all.
 if (!function_exists('webpanel_info')) {
-    // the details message and its two glass buttons; $pass: the password to
-    // show (just made or just set), null: the one he already has
+    // the details message and its glass buttons; $pass: the password to show
+    // (just made or just set), null: the one he already has. Off, there is no
+    // 🌐 ورود - the panel would only turn him away.
     function webpanel_info($adminId, $pass, $title, $textbotlang)
     {
         global $domainhosts;
         $w = $textbotlang['Admin']['webpanel'];
+        $on = webpanel_enabled();
         $passLine = $pass !== null ? '<code>' . htmlspecialchars($pass) . '</code>' : $w['passKept'];
         $text = $title . sprintf($w['details'], htmlspecialchars($domainhosts), $adminId, $passLine);
-        $kb = json_encode(['inline_keyboard' => [
-            [['text' => $w['loginBtn'], 'url' => "https://{$domainhosts}/panel/", 'style' => 'primary']],
-            [['text' => $w['changePassBtn'], 'callback_data' => 'webpanel_pass', 'style' => 'danger']],
-        ]]);
-        return [$text, $kb];
+        $rows = [];
+        if ($on) {
+            $rows[] = [['text' => $w['loginBtn'], 'url' => "https://{$domainhosts}/panel/", 'style' => 'primary']];
+        }
+        $rows[] = [['text' => $w['changePassBtn'], 'callback_data' => 'webpanel_pass', 'style' => 'danger']];
+        $rows[] = [['text' => sprintf($w['toggleBtn'], $on ? $w['stateOn'] : $w['stateOff']), 'callback_data' => 'webpanel_toggle', 'style' => $on ? 'success' : 'danger']];
+        return [$text, json_encode(['inline_keyboard' => $rows])];
     }
+}
+if ($datain === 'webpanel_toggle' && $adminrulecheck['rule'] == "administrator") {
+    $wp_on = !webpanel_enabled();
+    update("setting", "web_panel_status", $wp_on ? 'on' : 'off', null, null);
+    clearSelectCache('setting');
+    // a password this message already shows stays on it - only while it is
+    // still his (checked against the saved hash), never anything else
+    $wp_shown = null;
+    if (preg_match('/🔑[^:\n]*:\s*(\S+)\s*$/mu', (string) $text_inline, $wp_m)) {
+        $wp_admin = select("admin", "*", "id_admin", $from_id, "select");
+        if (is_array($wp_admin) && password_verify($wp_m[1], (string) $wp_admin['password'])) {
+            $wp_shown = $wp_m[1];
+        }
+    }
+    $wp_title = $textbotlang['Admin']['webpanel'][$wp_on ? 'turnedOn' : 'turnedOff'];
+    [$wp_text, $wp_kb] = webpanel_info($from_id, $wp_shown, $wp_title, $textbotlang);
+    Editmessagetext($from_id, $message_id, $wp_text, $wp_kb, 'HTML');
+    telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => trim($wp_title)]);
+    return;
 }
 if ($datain === 'webpanel_pass' && $adminrulecheck['rule'] == "administrator") {
     $wp_ask = sendmessage($from_id, $textbotlang['Admin']['webpanel']['askPass'], $btpromptcancel, 'HTML');
@@ -16715,7 +16739,8 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     sendmessage($from_id, sprintf($textbotlang['Admin']['api']['token'], $token), null, 'HTML');
     $apiDocsUrl = "https://$domainhostsEscaped/api/index.html";
     sendmessage($from_id, sprintf($textbotlang['Admin']['api']['docsLink'], $apiDocsUrl), null, 'HTML');
-} elseif ($text == $textbotlang['keyboard']['activateWebPanel'] && $adminrulecheck['rule'] == "administrator") {
+} elseif (in_array($text, [$textbotlang['keyboard']['activateWebPanel'], '✅ فعالسازی پنل تحت وب'], true) && $adminrulecheck['rule'] == "administrator") {
+    // (the second: the button's old name, still on an admin keyboard sent before it was renamed)
     // a password only the first time: while the login is still the install's
     // ('admin' with a plain random one) or has no hash - never on a later tap
     $admin_select = select("admin", "*", "id_admin", $from_id, "select");
@@ -16726,6 +16751,9 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         update("admin", "username", $from_id, "id_admin", $from_id);
         update("admin", "password", password_hash($wp_pass, PASSWORD_BCRYPT, ['cost' => 12]), "id_admin", $from_id);
         $wp_title = $textbotlang['Admin']['webpanel']['activated'];
+    }
+    if (!webpanel_enabled()) {
+        $wp_title = $textbotlang['Admin']['webpanel']['offNow'];
     }
     [$wp_text, $wp_kb] = webpanel_info($from_id, $wp_pass, $wp_title, $textbotlang);
     sendmessage($from_id, $wp_text, $wp_kb, 'HTML');

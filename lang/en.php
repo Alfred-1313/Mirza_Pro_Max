@@ -4262,6 +4262,12 @@ User group:%s
 
 6 to 64 characters, no spaces.',
                         'passInvalid' => '⚠️ The password must be 6 to 64 characters with no spaces; send it again 😅',
+                        'offNow' => '⛔️  The bot\'s web panel is off; nobody can log in until you turn it on.',
+                        'turnedOn' => '🟢  The bot\'s web panel was turned on.',
+                        'turnedOff' => '🔴  The bot\'s web panel was turned off; nobody can log in until you turn it on.',
+                        'toggleBtn' => '🤖 Web panel: %s',
+                        'stateOn' => 'on ✅',
+                        'stateOff' => 'off ❌',
                         'miniAppHelp' => '📌 Tutorial for activating the mini app in the BotFather bot
 
 /mybots > Select Bot > Bot Setting >  Configure Mini App > Enable Mini App  > Edit Mini App URL
@@ -4456,7 +4462,7 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'activateAccount' => '💡 Turn on account',
                 'activateCard' => '💳 Activate card number',
                 'activateSalesBot' => '🤖 Activate sales bot',
-                'activateWebPanel' => '✅ Activate web panel',
+                'activateWebPanel' => 'Bot web panel 🤖',
                 'activeCardUserList' => 'List of users with active card number.',
                 'addAdmin' => '👨‍💻 Add admin',
                 'addApp' => '🔗 Add app',
@@ -5513,6 +5519,7 @@ We hope you had a good experience with the ease and speed of your service. If yo
           donate',
                 'loginWelcomeBack' => 'Welcome, ',
                 'loginWrongCredentials' => 'The username or password is incorrect.',
+                'loginPanelOff' => '⛔️ The bot\'s web panel is off. To turn it on, in the bot tap «پنل تحت وب ربات 🤖» → «🤖 پنل تحت وب: خاموش ❌».',
                 'paymentAllMethods' => 'Since the start of activity',
                 'paymentClearBtn' => 'Transaction record',
                 'paymentCloseBtn' => 'From',
