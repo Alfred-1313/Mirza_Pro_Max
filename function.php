@@ -2248,27 +2248,61 @@ if (!function_exists('aff_detach')) {
         $st->execute([(string) $uid, (string) $uid]);
         return array_map('strval', $st->fetchAll(PDO::FETCH_COLUMN));
     }
-    // 👥 how the referral reports name someone: their Telegram name (a link
-    // to them), @username and id - the first two when known ($row: their
-    // user row; first_name is kept by index.php)
+    // A value in a Persian line of a report, kept in place: Telegram lays a
+    // mixed line out by the letters it meets, so a Latin name or @username -
+    // or one starting with "-" - jumped about. A Latin one gets a
+    // left-to-right mark in front; every one a right-to-left mark after it,
+    // so what follows stays in the line's order. ($plain decides, $html is
+    // what is shown.)
+    function aff_bidi($plain, $html)
+    {
+        return (preg_match('/^[^\p{L}]*[\p{Latin}\p{Cyrillic}\p{Greek}]/u', (string) $plain) ? "\u{200E}" : '') . $html . "\u{200F}";
+    }
+    // 👥 the name (in bold, a link to them) and @username a report shows for
+    // someone - '' when not known ($row: their user row; first_name is kept
+    // by index.php)
+    function aff_name_parts($id, $row = null)
+    {
+        $name = trim((string) (is_array($row) ? ($row['first_name'] ?? '') : ''));
+        $u = (string) (is_array($row) ? ($row['username'] ?? '') : '');
+        $u = ($u !== '' && $u !== 'none' && $u !== 'NOT_USERNAME') ? $u : '';
+        return [
+            $name === '' ? '' : aff_bidi($name, '<a href="tg://user?id=' . htmlspecialchars((string) $id) . '"><b>' . htmlspecialchars($name) . '</b></a>'),
+            $u === '' ? '' : aff_bidi('@' . $u, '@' . htmlspecialchars($u)),
+        ];
+    }
+    // ...on one line: name · @username · id
     function aff_label($id, $row = null)
     {
-        $id = (string) $id;
-        $parts = [];
-        $name = trim((string) (is_array($row) ? ($row['first_name'] ?? '') : ''));
-        if ($name !== '') {
-            $parts[] = '<a href="tg://user?id=' . htmlspecialchars($id) . '">' . htmlspecialchars($name) . '</a>';
-        }
-        $u = (string) (is_array($row) ? ($row['username'] ?? '') : '');
-        if ($u !== '' && $u !== 'none' && $u !== 'NOT_USERNAME') {
-            $parts[] = '@' . htmlspecialchars($u);
-        }
-        $parts[] = '<code>' . htmlspecialchars($id) . '</code>';
+        $parts = array_values(array_filter(aff_name_parts($id, $row), 'strlen'));
+        $parts[] = '<code>' . htmlspecialchars((string) $id) . '</code>';
         return implode(' · ', $parts);
     }
-    // ...a list of them, one line each in the order given, with when they
-    // joined; the first $max, then «… و N نفر دیگه»
-    function aff_label_lines(array $ids, $max = 15)
+    // ...one per line, for a report's 👤 block
+    function aff_user_block($id, $row = null)
+    {
+        $t = panel_texts()['Admin']['AffReward'];
+        [$name, $u] = aff_name_parts($id, $row);
+        $out = [];
+        if ($name !== '') {
+            $out[] = strtr($t['lineName'], ['{v}' => $name]);
+        }
+        if ($u !== '') {
+            $out[] = strtr($t['lineUsername'], ['{v}' => $u]);
+        }
+        $out[] = strtr($t['lineId'], ['{v}' => '<code>' . htmlspecialchars((string) $id) . '</code>']);
+        return implode("\n", $out);
+    }
+    // ...as one line of a list ($date: when they joined, or ''); it starts
+    // with a right-to-left mark so every line is laid out the same way,
+    // whatever script the name is in
+    function aff_list_line($id, $row = null, $date = '')
+    {
+        return "\u{200F}• " . aff_label($id, $row) . ($date !== '' ? ' · 🕓 ' . $date : '');
+    }
+    // ...a list of them in the order given; the first $max, then «… و N نفر
+    // دیگه». $withDate: when each joined (the admins' request).
+    function aff_label_lines(array $ids, $max = 15, $withDate = false)
     {
         global $pdo;
         $ids = array_values(array_unique(array_map('strval', $ids)));
@@ -2284,7 +2318,7 @@ if (!function_exists('aff_detach')) {
         $out = '';
         foreach ($shown as $id) {
             $reg = (int) ($rows[$id]['register'] ?? 0);
-            $out .= '• ' . aff_label($id, $rows[$id] ?? null) . ($reg > 0 ? ' — ' . jdate('Y/m/d H:i', $reg) : '') . "\n";
+            $out .= aff_list_line($id, $rows[$id] ?? null, ($withDate && $reg > 0) ? jdate('Y/m/d H:i', $reg) : '') . "\n";
         }
         if (count($ids) > $max) {
             $out .= strtr(panel_texts()['Admin']['AffReward']['listMore'], ['{n}' => count($ids) - $max]) . "\n";
@@ -2313,8 +2347,8 @@ if (!function_exists('aff_detach')) {
             $pt = panel_texts();
             $code = in_array($lang, panel_langs(), true) ? $lang : 'fa';
             affrw_report('porsantreport', strtr($pt['Admin']['AffReward']['newReferral'], [
-                '{inviter}' => aff_label($inviterId, $inv),
-                '{member}' => aff_label($memberId, select("user", "*", "id", (string) $memberId, "select")),
+                '{inviter}' => aff_user_block($inviterId, $inv),
+                '{member}' => aff_user_block($memberId, select("user", "*", "id", (string) $memberId, "select")),
                 '{n}' => (int) $n,
                 '{buys}' => $buys,
                 '{list}' => aff_label_lines($st->fetchAll(PDO::FETCH_COLUMN), 10),
@@ -18858,8 +18892,9 @@ if (!function_exists('affrw_cfg')) {
         $stmt = $pdo->prepare("SELECT id FROM user WHERE aff_rw = ? AND id != ? AND CAST(register AS UNSIGNED) > ? ORDER BY CAST(register AS UNSIGNED) DESC");
         $stmt->execute([(string) $uid, (string) $uid, (int) $since]);
         $ids = array_values(array_diff(array_map('strval', $stmt->fetchAll(PDO::FETCH_COLUMN)), affrw_members($row)));
+        $panelName = is_array($panel) ? (string) $panel['name_panel'] : $fa['Admin']['FeatureSection']['affrwNoPanel'];
         return strtr($t['request'], [
-            '{user}' => aff_label($uid, $u),
+            '{user}' => aff_user_block($uid, $u),
             '{lang}' => $fa['bottext']['langs'][$lang] ?? $lang,
             '{round}' => affrw_times($row) + 1,
             '{max}' => $cfg['max'],
@@ -18868,8 +18903,8 @@ if (!function_exists('affrw_cfg')) {
             '{services}' => affrw_services_text($uid),
             '{volume}' => volume_num($cfg['gb']),
             '{days}' => $cfg['days'],
-            '{panel}' => is_array($panel) ? $panel['name_panel'] : $fa['Admin']['FeatureSection']['affrwNoPanel'],
-            '{list}' => aff_label_lines($ids),
+            '{panel}' => aff_bidi($panelName, htmlspecialchars($panelName)),
+            '{list}' => aff_label_lines($ids, 15, true),
         ]);
     }
     function affrw_ask_admins($uid, $autoFailed = false)
@@ -19022,10 +19057,10 @@ if (!function_exists('affrw_cfg')) {
         try {
             $t = panel_texts()['Admin']['AffReward'];
             affrw_topic($lang, strtr($t['report'], [
-                '{user}' => aff_label($uid, $u),
+                '{user}' => aff_user_block($uid, $u),
                 '{volume}' => volume_num($cfg['gb']),
                 '{days}' => $cfg['days'],
-                '{panel}' => $panel['name_panel'],
+                '{panel}' => aff_bidi($panel['name_panel'], htmlspecialchars((string) $panel['name_panel'])),
                 '{service}' => htmlspecialchars((string) $made['username']),
                 '{round}' => $round === null ? '' : strtr($t['reportRound'], ['{round}' => (int) $round, '{max}' => $cfg['max']]),
                 '{services}' => affrw_services_text($uid),

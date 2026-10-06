@@ -5897,13 +5897,13 @@ if (!function_exists('afftest_send')) {
             $r = $fa['Admin']['AffReward'];
             $list = '';
             for ($i = 1; $i <= min(3, $cfg['need']); $i++) {
-                $list .= '• ' . aff_label("10000000{$i}", ['username' => $new . $i]) . ' — ' . jdate('Y/m/d H:i', time()) . "\n";
+                $list .= aff_list_line("10000000{$i}", ['username' => $new . $i], jdate('Y/m/d H:i', time())) . "\n";
             }
             if ($cfg['need'] > 3) {
                 $list .= strtr($r['listMore'], ['{n}' => $cfg['need'] - 3]) . "\n";
             }
             $req = strtr($r['request'], [
-                '{user}' => aff_label($to, ['first_name' => $user['first_name'] ?? '', 'username' => $me]),
+                '{user}' => aff_user_block($to, ['first_name' => $user['first_name'] ?? '', 'username' => $me]),
                 '{lang}' => $langName,
                 '{round}' => 1,
                 '{max}' => $cfg['max'],
@@ -5912,7 +5912,7 @@ if (!function_exists('afftest_send')) {
                 '{need}' => $cfg['need'],
                 '{volume}' => volume_num($cfg['gb']),
                 '{days}' => $cfg['days'],
-                '{panel}' => $panel['name_panel'] ?? $fa['Admin']['FeatureSection']['affrwNoPanel'],
+                '{panel}' => aff_bidi($panel['name_panel'] ?? '', htmlspecialchars((string) ($panel['name_panel'] ?? $fa['Admin']['FeatureSection']['affrwNoPanel']))),
                 '{list}' => rtrim($list),
             ]);
             $kb = json_encode(['inline_keyboard' => [
@@ -7965,7 +7965,7 @@ if (preg_match('/^affrw\|(ok|no)\|(\d+)$/', $datain, $rw_m)) {
         Editmessagetext($from_id, $message_id, $rw_req . $rw_t['rejected'], null);
         // ❌ in the report group's 🎁 topic too, under its ⏳
         affrw_topic($rw_row['lang'] ?? 'fa', strtr($rw_t['reportRejected'], [
-            '{user}' => aff_label($rw_uid, select("user", "*", "id", $rw_uid, "select")),
+            '{user}' => aff_user_block($rw_uid, select("user", "*", "id", $rw_uid, "select")),
             '{round}' => affrw_times($rw_row) + 1,
             '{max}' => affrw_cfg($rw_row['lang'] ?? 'fa')['max'],
             '{admin}' => $rw_admin,

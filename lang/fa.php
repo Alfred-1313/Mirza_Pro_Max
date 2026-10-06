@@ -6843,15 +6843,19 @@ nowpayments.io
     // 🎁 کانفیگ رایگان با دعوت: what the admins get to approve
     'AffReward' =>
     array (
-      'request' => "🎁 <b>درخواست کانفیگ رایگان دعوت</b>\n\n👤 کاربر: {user}\n🌐 زبان: {lang}\n🔁 بار چندم: <b>{round}</b> از {max}\n👥 دعوت‌های معتبر: <b>{count}</b> از {need}\n🗂 کانفیگ‌های رایگانی که تا حالا گرفته: {services}\n📦 جایزه: {volume} گیگ · {days} روز — پنل {panel}\n\n📋 دعوت‌شده‌ها (جدیدترها اول):\n{list}",
+      'request' => "🎁 <b>درخواست کانفیگ رایگان دعوت</b>\n➖➖➖➖➖➖➖➖➖➖\n\n👤 <b>کاربر</b>\n{user}\n▫️ زبان: {lang}\n\n📊 <b>وضعیت</b>\n▫️ بار چندم: <b>{round}</b> از {max}\n▫️ دعوت‌های معتبر: <b>{count}</b> از {need}\n▫️ کانفیگ‌های رایگانش: {services}\n\n📦 <b>جایزه</b>\n▫️ حجم: <b>{volume} گیگ</b> · زمان: <b>{days} روز</b>\n▫️ پنل: <b>{panel}</b>\n\n📋 <b>دعوت‌شده‌ها</b> (جدیدترها اول)\n{list}",
       'listMore' => '… و {n} نفر دیگه',
+      // a person in a report, one line each (aff_user_block)
+      'lineName' => '▫️ اسم: {v}',
+      'lineUsername' => '▫️ یوزرنیم: {v}',
+      'lineId' => '▫️ آیدی: {v}',
       // 🗂 a customer's free configs: all they have had, and how many of
       // those are still among their services
-      'services' => '<b>{all}</b> تا ({have} تاش هنوز توی سرویس‌هاشه)',
+      'services' => '<b>{all}</b> تا گرفته · <b>{have}</b> تا هنوز داره',
       'servicesNone' => 'هنوز هیچی',
       // the report group's 🎁 topic: a request waiting for an admin, and one refused
-      'statusPending' => '⏳ <b>وضعیت: منتظر تایید ادمین</b>',
-      'reportRejected' => "❌ <b>درخواست کانفیگ رایگان دعوت رد شد</b>\n\n👤 کاربر: {user}\n🔁 بار چندم: <b>{round}</b> از {max}\n🛡 ادمین: {admin}\n\nدعوت‌هاش از الان دوباره از صفر شمرده می‌شن.",
+      'statusPending' => '⏳ <b>منتظر تایید ادمین</b>',
+      'reportRejected' => "❌ <b>درخواست کانفیگ رایگان دعوت رد شد</b>\n➖➖➖➖➖➖➖➖➖➖\n\n👤 <b>کاربر</b>\n{user}\n\n▫️ بار چندم: <b>{round}</b> از {max}\n▫️ رد کرد: {admin}\n\n♻️ دعوت‌هاش از الان دوباره از صفر شمرده می‌شن.",
       'autoFailed' => "\n\n⚠️ تحویل روی «خودکار» بود ولی ساختن کانفیگ روی پنل خطا داد؛ برای همین برای تایید اومده.",
       'approveBtn' => '✅ تایید و ساخت کانفیگ',
       'rejectBtn' => '❌ رد',
@@ -6859,18 +6863,18 @@ nowpayments.io
       'rejected' => "\n\n❌ رد شد؛ دعوت‌های این کاربر از الان دوباره از صفر شمرده می‌شن.",
       'handled' => 'این درخواست قبلاً بررسی شده.',
       'failed' => '⚠️ ساخت کانفیگ روی پنل انجام نشد؛ جزئیاتش توی گروه گزارش خطاهاست. درخواست هنوز منتظره و می‌تونی دوباره «✅ تایید» رو بزنی.',
-      'report' => "🎁 <b>کانفیگ رایگان دعوت تحویل داده شد</b>\n\n👤 کاربر: {user}\n🔑 اسم سرویس: <code>{service}</code>\n📦 {volume} گیگ · {days} روز — پنل {panel}{round}\n🗂 کانفیگ‌های رایگان این کاربر (با همین): {services}{list}",
-      'reportRound' => "\n🔁 بار چندم: <b>{round}</b> از {max}",
-      'reportList' => "\n\n👥 زیرمجموعه‌هایی که این بار آورده ({n} نفر):\n{list}",
-      'reportApproved' => '✅ با تایید ادمین: {admin}',
+      'report' => "🎁 <b>کانفیگ رایگان دعوت تحویل داده شد</b> ✅\n➖➖➖➖➖➖➖➖➖➖\n\n👤 <b>کاربر</b>\n{user}\n\n📦 <b>سرویس</b>\n▫️ اسم سرویس: <code>{service}</code>\n▫️ حجم: <b>{volume} گیگ</b> · زمان: <b>{days} روز</b>\n▫️ پنل: <b>{panel}</b>\n\n📊 <b>آمار</b>{round}\n▫️ کانفیگ‌های رایگانش: {services}{list}",
+      'reportRound' => "\n▫️ بار چندم: <b>{round}</b> از {max}",
+      'reportList' => "\n\n👥 <b>زیرمجموعه‌های این بار</b> ({n} نفر)\n{list}",
+      'reportApproved' => '✅ <b>تایید کرد:</b> {admin}',
       'error' => "❌ <b>خطا در ساخت کانفیگ رایگان دعوت</b>\n\n👤 کاربر: <code>{id}</code>\n🖥 پنل: {panel}\nخطا: {msg}",
-      'reportAdmin' => '🛡 برای خود ادمین («کانفیگ رایگان با دعوت بدون محدودیت»)',
-      'reportTest' => '🧪 از «🧪 تست واقعی (یه کانفیگ برای خودم)» ادمین',
+      'reportAdmin' => '🛡 <b>برای خود ادمین</b> — «کانفیگ رایگان با دعوت بدون محدودیت»',
+      'reportTest' => '🧪 <b>تست واقعی ادمین</b> — «🧪 تست واقعی (یه کانفیگ برای خودم)»',
       'adminSpent' => "🛡 به سقف «🔁 چند بار» کانفیگ رایگان (<b>{max}</b> بار) رسیدی، برای همین «🎁 کانفیگ رایگان با دعوت بدون محدودیت» خاموش شد (برای همه‌ی ادمین‌ها).\n\nبرای گرفتن دوباره: 🎁 کانفیگ رایگان با دعوت ← «🔄 صفر کردن دعوت‌های یک کاربر» ← آیدی خودت، بعد از «🛡 دسترسی ادمین» دوباره روشنش کن.",
       // the report group's own topic for these (made when first needed)
       'topicName' => '🎁 کانفیگ رایگان زیرمجموعه',
       // 💼 a new referral counted, in the report group's 💰 پورسانت topic
-      'newReferral' => "💼 <b>زیرمجموعه‌ی جدید</b> — زیرمجموعه‌گیری و هدیه خوش‌آمد\n\n👤 معرف: {inviter}\n🆕 زیرمجموعه: {member}\n🔢 زیرمجموعه‌ی شماره‌ی <b>{n}</b> این معرف\n🛍 سرویس‌هایی که زیرمجموعه‌هاش خریدن: <b>{buys}</b>\n\n👥 آخرین زیرمجموعه‌هاش (جدیدترها اول):\n{list}",
+      'newReferral' => "💼 <b>زیرمجموعه‌ی جدید</b> — زیرمجموعه‌گیری و هدیه خوش‌آمد\n➖➖➖➖➖➖➖➖➖➖\n\n👤 <b>معرف</b>\n{inviter}\n\n🆕 <b>زیرمجموعه‌ی جدید</b>\n{member}\n\n📊 <b>آمار معرف</b>\n▫️ زیرمجموعه‌ی شماره‌ی <b>{n}</b>\n▫️ سرویس‌هایی که زیرمجموعه‌هاش خریدن: <b>{buys}</b>\n\n👥 <b>آخرین زیرمجموعه‌هاش</b> (جدیدترها اول)\n{list}",
     ),
     // ⏱ اکانت ساعتی: the admin's screens and the report group's ⏱ topic (payg.php)
     'Payg' =>
