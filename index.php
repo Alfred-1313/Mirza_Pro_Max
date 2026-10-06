@@ -270,6 +270,13 @@ $date_start = jdate('H:i:s', time());
 if ($user['username'] == "none" || $user['username'] == null || $user['username'] != $username) {
     update("user", "username", $username, "id", $from_id);
 }
+// 👥 their Telegram name, for the referral reports (affrw_ensure_table()
+// makes the column - update() would otherwise make it with this value as
+// everyone's default)
+if (array_key_exists('first_name', $user) && (string) $user['first_name'] !== (string) $first_name) {
+    update("user", "first_name", (string) $first_name, "id", $from_id);
+    $user['first_name'] = (string) $first_name;
+}
 $lang_array = panel_langs();
 if (!in_array($user['lang'], $lang_array)) {
     wallet_switch_lang($from_id, 'fa');

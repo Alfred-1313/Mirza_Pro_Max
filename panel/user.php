@@ -55,7 +55,19 @@ try {
 }
 
 try {
-    $referrals = db_fetchAll($pdo, "SELECT id, username, namecustom, Balance, register, agent FROM user WHERE affiliates = ? ORDER BY register DESC LIMIT 20", [$id]);
+    // both plans' referrals: 💼 (affiliates) and 🎁 (aff_rw)
+    $referrals = db_fetchAll($pdo, "SELECT * FROM user WHERE affiliates = ? OR aff_rw = ? ORDER BY register DESC LIMIT 20", [$id, $id]);
+} catch (Exception $e) {
+}
+
+// 🎁 the free configs they have had (and still have), and 💼 what their
+// referrals have bought - the numbers the report group gets
+$affrwAll = $affrwLive = $refBuys = 0;
+try {
+    $affrwRow = db_fetch($pdo, "SELECT COUNT(*) AS n, COALESCE(SUM(Status IN ('active', 'end_of_time', 'end_of_volume', 'sendedwarn', 'send_on_hold')), 0) AS live FROM invoice WHERE id_user = ? AND affrw IN (1, 2)", [$id]);
+    $affrwAll = (int) ($affrwRow['n'] ?? 0);
+    $affrwLive = (int) ($affrwRow['live'] ?? 0);
+    $refBuys = db_count($pdo, "SELECT COUNT(*) FROM invoice WHERE refral = ? AND Status IN ('active', 'end_of_time', 'sendedwarn', 'send_on_hold')", [$id]);
 } catch (Exception $e) {
 }
 
@@ -68,7 +80,11 @@ $convRate = count($payments) > 0 ? round($paidCount / count($payments) * 100) : 
 
 $agent = $user['agent'] ?? 'f';
 $isBlocked = ($user['User_Status'] ?? '') === 'block';
-$fullName = $user['namecustom'] ?? '';
+// their Telegram name (kept by the bot since the referral reports), else the
+// name they gave
+$fullName = trim((string) ($user['first_name'] ?? ''));
+if ($fullName === '')
+    $fullName = $user['namecustom'] ?? '';
 if ($fullName === 'none')
     $fullName = '';
 $username = $user['username'] ?? '';
@@ -184,6 +200,18 @@ include __DIR__ . '/inc/layout_head.php';
                     <div class="kv">
                         <span class="kv-key"><?= $textbotlang['panel']['userOrdersTabLabel'] ?></span>
                         <span class="kv-val"><?= number_format((int) $user['affiliatescount']) ?> <?= $textbotlang['panel']['userColService'] ?></span>
+                    </div>
+                <?php endif; ?>
+                <?php if ($refBuys > 0): ?>
+                    <div class="kv">
+                        <span class="kv-key"><?= $textbotlang['panel']['userRefBuysLabel'] ?></span>
+                        <span class="kv-val"><?= number_format($refBuys) ?></span>
+                    </div>
+                <?php endif; ?>
+                <?php if ($affrwAll > 0): ?>
+                    <div class="kv">
+                        <span class="kv-key"><?= $textbotlang['panel']['userAffrwLabel'] ?></span>
+                        <span class="kv-val"><?= strtr($textbotlang['panel']['userAffrwValue'], ['{all}' => number_format($affrwAll), '{have}' => number_format($affrwLive)]) ?></span>
                     </div>
                 <?php endif; ?>
                 <?php if ((int) ($user['score'] ?? 0) > 0): ?>
@@ -405,9 +433,13 @@ include __DIR__ . '/inc/layout_head.php';
                             </thead>
                             <tbody>
                                 <?php foreach ($referrals as $ref):
-                                    $refName = $ref['namecustom'] ?? '';
+                                    $refName = trim((string) ($ref['first_name'] ?? ''));
+                                    if ($refName === '')
+                                        $refName = $ref['namecustom'] ?? '';
                                     if ($refName === 'none')
                                         $refName = '';
+                                    // which plan they count for: 💼, 🎁 or both
+                                    $refPlans = ((string) ($ref['affiliates'] ?? '') === (string) $id ? '💼' : '') . ((string) ($ref['aff_rw'] ?? '') === (string) $id ? '🎁' : '');
                                     $refUname = $ref['username'] ?? '';
                                     if ($refUname === 'none')
                                         $refUname = '';
@@ -418,6 +450,7 @@ include __DIR__ . '/inc/layout_head.php';
                                             <a href="user.php?id=<?= (int) $ref['id'] ?>" class="cm" style="color:var(--ac)">
                                                 <?= htmlspecialchars($ref['id']) ?>
                                             </a>
+                                            <span style="font-size:.72rem"><?= $refPlans ?></span>
                                         </td>
                                         <td>
                                             <?php if ($refName): ?>

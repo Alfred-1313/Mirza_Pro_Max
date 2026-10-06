@@ -2136,6 +2136,7 @@ if (!function_exists('refv_cfg')) {
             update("user", "affiliatescount", intval($inv['affiliatescount'] ?? 0) + 1, "id", (string) $inviterId);
             $stmt = $pdo->prepare("INSERT IGNORE INTO reagent_report (user_id, get_gift,time,reagent) VALUES (?, ?,?, ?)");
             $stmt->execute([$uid, false, date('Y/m/d H:i:s'), (string) $inviterId]);
+            aff_report_classic($inviterId, $uid, intval($inv['affiliatescount'] ?? 0) + 1);
             return;
         }
         update("user", "aff_rw", (string) $inviterId, "id", $uid);
@@ -2246,6 +2247,81 @@ if (!function_exists('aff_detach')) {
         $st = $pdo->prepare("SELECT id FROM user WHERE affiliates = ? OR aff_rw = ? ORDER BY CAST(register AS UNSIGNED)");
         $st->execute([(string) $uid, (string) $uid]);
         return array_map('strval', $st->fetchAll(PDO::FETCH_COLUMN));
+    }
+    // 👥 how the referral reports name someone: their Telegram name (a link
+    // to them), @username and id - the first two when known ($row: their
+    // user row; first_name is kept by index.php)
+    function aff_label($id, $row = null)
+    {
+        $id = (string) $id;
+        $parts = [];
+        $name = trim((string) (is_array($row) ? ($row['first_name'] ?? '') : ''));
+        if ($name !== '') {
+            $parts[] = '<a href="tg://user?id=' . htmlspecialchars($id) . '">' . htmlspecialchars($name) . '</a>';
+        }
+        $u = (string) (is_array($row) ? ($row['username'] ?? '') : '');
+        if ($u !== '' && $u !== 'none' && $u !== 'NOT_USERNAME') {
+            $parts[] = '@' . htmlspecialchars($u);
+        }
+        $parts[] = '<code>' . htmlspecialchars($id) . '</code>';
+        return implode(' · ', $parts);
+    }
+    // ...a list of them, one line each in the order given, with when they
+    // joined; the first $max, then «… و N نفر دیگه»
+    function aff_label_lines(array $ids, $max = 15)
+    {
+        global $pdo;
+        $ids = array_values(array_unique(array_map('strval', $ids)));
+        $shown = array_slice($ids, 0, $max);
+        $rows = [];
+        if ($shown) {
+            $st = $pdo->prepare("SELECT * FROM user WHERE id IN (" . implode(',', array_fill(0, count($shown), '?')) . ")");
+            $st->execute($shown);
+            foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                $rows[(string) $r['id']] = $r;
+            }
+        }
+        $out = '';
+        foreach ($shown as $id) {
+            $reg = (int) ($rows[$id]['register'] ?? 0);
+            $out .= '• ' . aff_label($id, $rows[$id] ?? null) . ($reg > 0 ? ' — ' . jdate('Y/m/d H:i', $reg) : '') . "\n";
+        }
+        if (count($ids) > $max) {
+            $out .= strtr(panel_texts()['Admin']['AffReward']['listMore'], ['{n}' => count($ids) - $max]) . "\n";
+        }
+        return rtrim($out);
+    }
+    // 💼 a new referral counted, in the report group's 💰 پورسانت topic: the
+    // inviter, the newcomer, which referral of theirs this is ($n), how many
+    // services their referrals have bought (as their 👥 page counts them) and
+    // the latest of them. Only while 💼 is on for the inviter's language.
+    function aff_report_classic($inviterId, $memberId, $n)
+    {
+        global $pdo;
+        $inv = select("user", "*", "id", (string) $inviterId, "select");
+        $lang = is_array($inv) ? ($inv['lang'] ?? 'fa') : 'fa';
+        if (!aff_classic_on($lang)) {
+            return;
+        }
+        // only a report: the referral is counted whatever happens here
+        try {
+            $st = $pdo->prepare("SELECT COUNT(*) FROM invoice WHERE refral = ? AND Status IN ('active', 'end_of_time', 'sendedwarn', 'send_on_hold')");
+            $st->execute([(string) $inviterId]);
+            $buys = (int) $st->fetchColumn();
+            $st = $pdo->prepare("SELECT id FROM user WHERE affiliates = ? AND id != ? ORDER BY CAST(register AS UNSIGNED) DESC");
+            $st->execute([(string) $inviterId, (string) $inviterId]);
+            $pt = panel_texts();
+            $code = in_array($lang, panel_langs(), true) ? $lang : 'fa';
+            affrw_report('porsantreport', strtr($pt['Admin']['AffReward']['newReferral'], [
+                '{inviter}' => aff_label($inviterId, $inv),
+                '{member}' => aff_label($memberId, select("user", "*", "id", (string) $memberId, "select")),
+                '{n}' => (int) $n,
+                '{buys}' => $buys,
+                '{list}' => aff_label_lines($st->fetchAll(PDO::FETCH_COLUMN), 10),
+            ]) . "\n\n" . sprintf($pt['Admin']['reportgroup']['userLangLine'], $pt['bottext']['langs'][$code] ?? $code));
+        } catch (Throwable $e) {
+            error_log('aff_report_classic: ' . $e->getMessage());
+        }
     }
 }
 if (!function_exists('phone_required_for')) {
@@ -18189,11 +18265,11 @@ if (!function_exists('affrw_cfg')) {
             sendmessage($uid, strtr(lang_tab_texts('fa')['Admin']['AffTest']['realFailed'], ['{msg}' => htmlspecialchars(json_encode($err, JSON_UNESCAPED_UNICODE))]), null, 'HTML');
             return false;
         }
+        $times = affrw_times($row) + 1;
         // in the report group like a customer's, said to be an admin's own
-        affrw_report_made($uid, $u, $cfg, $panel, $made, '—', $lang, "\n\n" . lang_tab_texts('fa')['Admin']['AffReward']['reportAdmin']);
+        affrw_report_made($uid, $u, $cfg, $panel, $made, $lang, "\n\n" . lang_tab_texts('fa')['Admin']['AffReward']['reportAdmin'], $times);
         // no invitees behind it, so none of 🚪's to watch; a round of his
         // own invites that is under way keeps its status
-        $times = affrw_times($row) + 1;
         $done = $times >= $cfg['max'];
         if ($row === null) {
             $pdo->prepare("INSERT INTO affiliate_reward (user_id, lang, status, invites, since, time, times, id_invoice, members, left_ids, suspended) VALUES (?, ?, ?, 0, ?, ?, ?, ?, '[]', '[]', 0)")
@@ -18249,6 +18325,9 @@ if (!function_exists('affrw_cfg')) {
         addFieldToTable('affiliate_reward', 'members', null, 'TEXT NULL');
         addFieldToTable('affiliate_reward', 'left_ids', null, 'TEXT NULL');
         addFieldToTable('affiliate_reward', 'suspended', null, 'INT NOT NULL DEFAULT 0');
+        // user.first_name: the name the referral reports show next to an id
+        // (index.php keeps it up to date) - empty until the user writes again
+        addFieldToTable('user', 'first_name', null, 'VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL');
         // user.aff_rw: whose free-config count a customer is in - apart from
         // 💼's link (affiliates), each plan having its own 🛡 check. Everyone
         // counted before that was counted for both.
@@ -18762,7 +18841,8 @@ if (!function_exists('affrw_cfg')) {
         }
         return strtr($a['rewardInfo'], affrw_vars($cfg, $count) + ['{link}' => $link, '{status}' => $status]);
     }
-    // what the admins get: who, how many, and who they invited
+    // what the admins get: who (name, @username, id), which time this is,
+    // how many, the free configs they have had, and who they invited
     function affrw_request_text($uid)
     {
         global $pdo;
@@ -18774,28 +18854,22 @@ if (!function_exists('affrw_cfg')) {
         $fa = lang_tab_texts('fa');
         $t = $fa['Admin']['AffReward'];
         $since = affrw_since($cfg, $row);
-        $total = affrw_count($uid, $since);
-        $stmt = $pdo->prepare("SELECT id, username, register FROM user WHERE aff_rw = ? AND id != ? AND CAST(register AS UNSIGNED) > ? ORDER BY CAST(register AS UNSIGNED) DESC LIMIT 15");
+        // the invites affrw_count() counts, newest first
+        $stmt = $pdo->prepare("SELECT id FROM user WHERE aff_rw = ? AND id != ? AND CAST(register AS UNSIGNED) > ? ORDER BY CAST(register AS UNSIGNED) DESC");
         $stmt->execute([(string) $uid, (string) $uid, (int) $since]);
-        $list = '';
-        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
-            $name = (!empty($r['username']) && $r['username'] !== 'none') ? ' @' . htmlspecialchars($r['username']) : '';
-            $list .= "• <code>{$r['id']}</code>{$name} — " . jdate('Y/m/d H:i', (int) $r['register']) . "\n";
-        }
-        if ($total > 15) {
-            $list .= strtr($t['listMore'], ['{n}' => $total - 15]) . "\n";
-        }
-        $username = (is_array($u) && !empty($u['username']) && $u['username'] !== 'none') ? '@' . htmlspecialchars($u['username']) : '';
+        $ids = array_values(array_diff(array_map('strval', $stmt->fetchAll(PDO::FETCH_COLUMN)), affrw_members($row)));
         return strtr($t['request'], [
-            '{id}' => $uid,
-            '{username}' => $username,
+            '{user}' => aff_label($uid, $u),
             '{lang}' => $fa['bottext']['langs'][$lang] ?? $lang,
-            '{count}' => $total,
+            '{round}' => affrw_times($row) + 1,
+            '{max}' => $cfg['max'],
+            '{count}' => count($ids),
             '{need}' => $cfg['need'],
+            '{services}' => affrw_services_text($uid),
             '{volume}' => volume_num($cfg['gb']),
             '{days}' => $cfg['days'],
             '{panel}' => is_array($panel) ? $panel['name_panel'] : $fa['Admin']['FeatureSection']['affrwNoPanel'],
-            '{list}' => rtrim($list),
+            '{list}' => aff_label_lines($ids),
         ]);
     }
     function affrw_ask_admins($uid, $autoFailed = false)
@@ -18812,6 +18886,14 @@ if (!function_exists('affrw_cfg')) {
         $text = affrw_request_text($uid) . ($autoFailed ? $t['autoFailed'] : '');
         foreach (select("admin", "id_admin", null, null, "FETCH_COLUMN") as $aid) {
             sendmessage($aid, $text, $kb, 'HTML');
+        }
+        // ⏳ and in the report group's 🎁 topic, as its status - the
+        // buttons stay with the admins; only a report, so nothing it hits
+        // stops the customer being told
+        try {
+            affrw_topic(affrw_row($uid)['lang'] ?? 'fa', $text . "\n\n" . $t['statusPending']);
+        } catch (Throwable $e) {
+            error_log('affrw_topic: ' . $e->getMessage());
         }
     }
     // the config message, worded like a bought one's; [text, its sub link]
@@ -18901,30 +18983,61 @@ if (!function_exists('affrw_cfg')) {
             ]);
         }
     }
-    // 🎁's report of a config made (affrw_deliver's $made) - for a customer's
-    // invites, an admin's own and an admin's 🧪 real test alike; $count: the
-    // invites behind it, $extra: a line under it saying where it came from.
-    // It ends with the language whose 🎁 plan made it ($lang) - written here
-    // rather than left to report_lang_tag(), which guesses from the user and
-    // would name an admin's own language for his 🧪 test of another tab.
-    function affrw_report_made($uid, $u, $cfg, $panel, $made, $count, $lang, $extra = '')
+    // A message to the report group's 🎁 topic - a topic of its own (made
+    // when first needed, also in a group set up before it existed); it used
+    // to share 💰 پورسانت's. It ends with the language whose 🎁 plan it is
+    // about ($lang) - written here rather than left to report_lang_tag(),
+    // which guesses from the ids in it and would name an admin's own language
+    // for his 🧪 test of another tab, or an invitee's.
+    function affrw_topic($lang, $text)
     {
         $pt = panel_texts();
         $code = in_array($lang, panel_langs(), true) ? $lang : 'fa';
-        // a topic of its own in the report group (made when first needed,
-        // also in a group set up before it existed) - it used to share 💰
-        // پورسانت's
-        report_to_topic('affrwreport', $pt['Admin']['AffReward']['topicName'], strtr($pt['Admin']['AffReward']['report'], [
-            '{id}' => $uid,
-            '{username}' => (is_array($u) && !empty($u['username']) && $u['username'] !== 'none') ? '@' . htmlspecialchars($u['username']) : '',
-            '{count}' => $count,
-            '{volume}' => volume_num($cfg['gb']),
-            '{days}' => $cfg['days'],
-            '{panel}' => $panel['name_panel'],
-            '{service}' => $made['username'],
-        ]) . $extra . "\n\n" . sprintf($pt['Admin']['reportgroup']['userLangLine'], $pt['bottext']['langs'][$code] ?? $code));
+        report_to_topic('affrwreport', $pt['Admin']['AffReward']['topicName'], $text . "\n\n" . sprintf($pt['Admin']['reportgroup']['userLangLine'], $pt['bottext']['langs'][$code] ?? $code));
     }
-    function affrw_give($uid, $name = null)
+    // 🗂 the free configs a customer has had, and how many of them are still
+    // among their services (a renewed one too)
+    function affrw_services_text($uid)
+    {
+        global $pdo;
+        affrw_ensure_table();
+        $st = $pdo->prepare("SELECT COUNT(*) AS n, COALESCE(SUM(Status IN ('active', 'end_of_time', 'end_of_volume', 'sendedwarn', 'send_on_hold')), 0) AS live FROM invoice WHERE id_user = ? AND affrw IN (1, 2)");
+        $st->execute([(string) $uid]);
+        $r = $st->fetch(PDO::FETCH_ASSOC);
+        $t = panel_texts()['Admin']['AffReward'];
+        if (!is_array($r) || (int) $r['n'] === 0) {
+            return $t['servicesNone'];
+        }
+        return strtr($t['services'], ['{all}' => (int) $r['n'], '{have}' => (int) $r['live']]);
+    }
+    // 🎁's report of a config made (affrw_deliver's $made) - for a customer's
+    // invites, an admin's own and an admin's 🧪 real test alike: who got it,
+    // its account, which time this is ($round; none for a test), their free
+    // configs so far and the invitees behind it ($members); $extra: a line
+    // under it saying where it came from.
+    function affrw_report_made($uid, $u, $cfg, $panel, $made, $lang, $extra = '', $round = null, array $members = [])
+    {
+        // only a report: whatever goes wrong here must not undo a config
+        // already made (affrw_check would take it for the panel refusing)
+        try {
+            $t = panel_texts()['Admin']['AffReward'];
+            affrw_topic($lang, strtr($t['report'], [
+                '{user}' => aff_label($uid, $u),
+                '{volume}' => volume_num($cfg['gb']),
+                '{days}' => $cfg['days'],
+                '{panel}' => $panel['name_panel'],
+                '{service}' => htmlspecialchars((string) $made['username']),
+                '{round}' => $round === null ? '' : strtr($t['reportRound'], ['{round}' => (int) $round, '{max}' => $cfg['max']]),
+                '{services}' => affrw_services_text($uid),
+                // newest first, as in the request
+                '{list}' => $members ? strtr($t['reportList'], ['{n}' => count($members), '{list}' => aff_label_lines(array_reverse($members))]) : '',
+            ]) . $extra);
+        } catch (Throwable $e) {
+            error_log('affrw_report_made: ' . $e->getMessage());
+        }
+    }
+    // $extra: a line for the report (who approved it)
+    function affrw_give($uid, $name = null, $extra = '')
     {
         global $pdo;
         $fa = lang_tab_texts('fa');
@@ -18966,7 +19079,7 @@ if (!function_exists('affrw_cfg')) {
         if (!$more) {
             affrw_admin_spent($uid, $cfg);
         }
-        affrw_report_made($uid, $u, $cfg, $panel, $made, $row['invites'], $row['lang']);
+        affrw_report_made($uid, $u, $cfg, $panel, $made, $row['lang'], $extra, $times, $members);
         return true;
     }
 }

@@ -5897,15 +5897,17 @@ if (!function_exists('afftest_send')) {
             $r = $fa['Admin']['AffReward'];
             $list = '';
             for ($i = 1; $i <= min(3, $cfg['need']); $i++) {
-                $list .= "• <code>10000000{$i}</code> @{$new}{$i} — " . jdate('Y/m/d H:i', time()) . "\n";
+                $list .= '• ' . aff_label("10000000{$i}", ['username' => $new . $i]) . ' — ' . jdate('Y/m/d H:i', time()) . "\n";
             }
             if ($cfg['need'] > 3) {
                 $list .= strtr($r['listMore'], ['{n}' => $cfg['need'] - 3]) . "\n";
             }
             $req = strtr($r['request'], [
-                '{id}' => $to,
-                '{username}' => '@' . $me,
+                '{user}' => aff_label($to, ['first_name' => $user['first_name'] ?? '', 'username' => $me]),
                 '{lang}' => $langName,
+                '{round}' => 1,
+                '{max}' => $cfg['max'],
+                '{services}' => $r['servicesNone'],
                 '{count}' => $cfg['need'],
                 '{need}' => $cfg['need'],
                 '{volume}' => volume_num($cfg['gb']),
@@ -5930,7 +5932,7 @@ if (!function_exists('afftest_send')) {
                 sendmessage($to, strtr($t['realFailed'], ['{msg}' => htmlspecialchars(json_encode($err, JSON_UNESCAPED_UNICODE))]), null, 'HTML');
             } else {
                 // a real config, so in the report group too - under the tab tested
-                affrw_report_made($to, $user, $cfg, $panel, $made, '—', $lang, "\n\n" . $fa['Admin']['AffReward']['reportTest']);
+                affrw_report_made($to, $user, $cfg, $panel, $made, $lang, "\n\n" . $fa['Admin']['AffReward']['reportTest']);
             }
             $service = $made['username'] ?? 'test_ab12cd';
         } else {
@@ -7935,6 +7937,11 @@ if (preg_match('/^flsaffrw:([a-z]{2}):(on|mode|panel|leave|p:(\d+))$/', $datain,
 if (preg_match('/^affrw\|(ok|no)\|(\d+)$/', $datain, $rw_m)) {
     $rw_t = lang_tab_texts('fa')['Admin']['AffReward'];
     $rw_uid = $rw_m[2];
+    // the request as it stands before this tap moves it on - afterwards its
+    // count starts again, and the invitees and the time it was would be gone
+    $rw_req = affrw_request_text($rw_uid);
+    $rw_row = affrw_row($rw_uid);
+    $rw_admin = aff_label($from_id, select("user", "*", "id", $from_id, "select"));
     if ($rw_m[1] === 'ok') {
         // one config however many admins tap: only the tap that moves the
         // request on makes it
@@ -7942,12 +7949,12 @@ if (preg_match('/^affrw\|(ok|no)\|(\d+)$/', $datain, $rw_m)) {
             telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $rw_t['handled'], 'show_alert' => true]);
             return;
         }
-        if (!affrw_give($rw_uid)) {
+        if (!affrw_give($rw_uid, null, "\n\n" . strtr($rw_t['reportApproved'], ['{admin}' => $rw_admin]))) {
             affrw_move($rw_uid, 'giving', 'pending');
             telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $rw_t['failed'], 'show_alert' => true]);
             return;
         }
-        Editmessagetext($from_id, $message_id, affrw_request_text($rw_uid) . $rw_t['approved'], null);
+        Editmessagetext($from_id, $message_id, $rw_req . $rw_t['approved'], null);
     } else {
         if (!affrw_move($rw_uid, 'pending', 'rejected')) {
             telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $rw_t['handled'], 'show_alert' => true]);
@@ -7955,7 +7962,14 @@ if (preg_match('/^affrw\|(ok|no)\|(\d+)$/', $datain, $rw_m)) {
         }
         bottext_extras_key_hint('users.affiliates.rewardRejected');
         sendmessage($rw_uid, payer_texts($rw_uid)['users']['affiliates']['rewardRejected'], null, 'HTML');
-        Editmessagetext($from_id, $message_id, affrw_request_text($rw_uid) . $rw_t['rejected'], null);
+        Editmessagetext($from_id, $message_id, $rw_req . $rw_t['rejected'], null);
+        // ❌ in the report group's 🎁 topic too, under its ⏳
+        affrw_topic($rw_row['lang'] ?? 'fa', strtr($rw_t['reportRejected'], [
+            '{user}' => aff_label($rw_uid, select("user", "*", "id", $rw_uid, "select")),
+            '{round}' => affrw_times($rw_row) + 1,
+            '{max}' => affrw_cfg($rw_row['lang'] ?? 'fa')['max'],
+            '{admin}' => $rw_admin,
+        ]));
     }
     return;
 }

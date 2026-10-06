@@ -5946,6 +5946,10 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'userTotalPurchaseLabel' => 'Date',
                 'userTotalServicesLabel' => 'Status',
                 'userTransactionsTabLabel' => 'Referrer',
+                // 🎁 / 💼 on a user's page - the same numbers the report group gets
+                'userAffrwLabel' => '🎁 Free config for invites',
+                'userAffrwValue' => '{all} received · {have} among their services',
+                'userRefBuysLabel' => '🛍 Referrals\' purchases',
                 'userUnblockUserBtn' => 'User group',
                 'userUnitMillionToman' => '<small>M $</small>',
                 'userUnitToman' => '<small>$</small>',
