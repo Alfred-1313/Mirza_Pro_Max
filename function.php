@@ -9258,6 +9258,9 @@ function bot_cron_commands()
         "*/1 * * * * flock -n /tmp/mz_croncard.lock curl -s --max-time 55 https://$domainhosts/cronbot/croncard.php > /dev/null 2>&1",
         "*/1 * * * * flock -n /tmp/mz_iranpay1.lock curl -s --max-time 55 https://$domainhosts/cronbot/iranpay1.php > /dev/null 2>&1",
         "*/1 * * * * flock -n /tmp/mz_sendmessage.lock curl -s --max-time 55 https://$domainhosts/cronbot/sendmessage.php > /dev/null 2>&1",
+        // ⏱ اکانت ساعتی: what each hourly service used this minute, out of its
+        // wallet - it stops nothing when no language has the feature on
+        "*/1 * * * * flock -n /tmp/mz_payg.lock curl -s --max-time 58 https://$domainhosts/cronbot/payg.php > /dev/null 2>&1",
         // TON, TRX and USDT-BEP20 are settled by reading the chain, so nothing
         // credits a customer until these run - they are the whole gateway, not
         // an extra
@@ -10462,7 +10465,7 @@ if (!function_exists('config_delivery_view_save')) {
                 }
             }
         }
-        foreach (['purchase', 'usertest', 'affrw'] as $k) {
+        foreach (['purchase', 'usertest', 'affrw', 'payg'] as $k) {
             if (isset($view[$k]) && empty($view[$k])) {
                 unset($view[$k]);
             }
@@ -10536,7 +10539,7 @@ if (!function_exists('config_delivery_panel_reset')) {
     function config_delivery_panel_reset($codePanel, $kind = null, $lang = 'fa')
     {
         $view = config_delivery_view($lang);
-        $kinds = ($kind === null) ? ['purchase', 'usertest', 'affrw'] : [$kind];
+        $kinds = ($kind === null) ? ['purchase', 'usertest', 'affrw', 'payg'] : [$kind];
         foreach ($kinds as $k) {
             unset($view[$k][$codePanel], $view['qroff'][$k][$codePanel]);
         }
@@ -10550,7 +10553,7 @@ if (!function_exists('config_delivery_touched')) {
         if ($kind !== null) {
             return !empty($view[$kind]);
         }
-        return !empty($view['purchase']) || !empty($view['usertest']) || !empty($view['affrw']);
+        return !empty($view['purchase']) || !empty($view['usertest']) || !empty($view['affrw']) || !empty($view['payg']);
     }
 }
 if (!function_exists('config_delivery_mode_fa')) {
@@ -10568,6 +10571,10 @@ if (!function_exists('config_delivery_back_cb')) {
         if ($origin === 'r') {
             return "bt_group|{$lang}|referral";
         }
+        // ⏱ opened from the hourly account's own 🎨 group
+        if ($origin === 'h') {
+            return "bt_group|{$lang}|payg";
+        }
         return ($origin === 'u')
             ? "bt_edit|{$lang}|users.usertest.selectUsernamePrompt"
             : "bt_group|{$lang}|buyflow";
@@ -10578,11 +10585,11 @@ if (!function_exists('config_delivery_origin_kind')) {
     // account, 'r' the 🎁 referral gift, anything else a purchase
     function config_delivery_origin_kind($origin)
     {
-        return ['u' => 'usertest', 'r' => 'affrw'][$origin] ?? 'purchase';
+        return ['u' => 'usertest', 'r' => 'affrw', 'h' => 'payg'][$origin] ?? 'purchase';
     }
     function config_delivery_kind_label($kind)
     {
-        return ['usertest' => 'اکانت تست', 'affrw' => 'هدیه‌ی دعوت'][$kind] ?? 'خرید';
+        return ['usertest' => 'اکانت تست', 'affrw' => 'هدیه‌ی دعوت', 'payg' => 'اکانت ساعتی'][$kind] ?? 'خرید';
     }
 }
 if (!function_exists('config_delivery_panels_payload')) {
@@ -10595,12 +10602,16 @@ if (!function_exists('config_delivery_panels_payload')) {
             $panels = [];
         }
         $info = "📌 <b>نحوه‌ی نمایش کانفیگ (هنگام {$kindLabel})</b>" . mainmenu_tab_note($lang) . "\n➖➖➖➖➖➖➖➖➖➖\n";
-        $info .= "تعیین می‌کنه وقتی کاربر " . (['usertest' => 'اکانت تست می‌گیره', 'affrw' => 'کانفیگ هدیه‌ی دعوت می‌گیره'][$kind] ?? 'سرویس می‌خره') . "، بعد از تحویل چی ببینه.\n";
+        $info .= "تعیین می‌کنه وقتی کاربر " . (['usertest' => 'اکانت تست می‌گیره', 'affrw' => 'کانفیگ هدیه‌ی دعوت می‌گیره', 'payg' => 'اکانت ساعتی می‌سازه'][$kind] ?? 'سرویس می‌خره') . "، بعد از تحویل چی ببینه.\n";
         $info .= "برای هر پنل و هر زبان جداست - کاربر، تنظیم زبان خودش رو می‌گیره.\n";
         if ($kind === 'affrw') {
             $rwPanel = affrw_panel(affrw_cfg($lang));
             $info .= "🎁 پنل کانفیگ هدیه‌ی این زبان: <b>" . ($rwPanel !== null ? htmlspecialchars((string) $rwPanel['name_panel'], ENT_QUOTES) : 'انتخاب نشده') . "</b> (🌐 وضعیت قابلیت‌ها ← 👥 طرح‌های زیرمجموعه‌گیری)\n";
             $info .= "📌 این تنظیمات برای لحظه‌ی تحویل کانفیگ هدیه‌ست؛ بعدش توی «🛍 سرویس‌های من» مثل سرویس‌های خریده‌شده نشون داده می‌شه.\n";
+        }
+        if ($kind === 'payg') {
+            $info .= "⏱ پنل‌هایی که ⏱ کنارشونه، پنل‌های اکانت ساعتیِ این زبانن (🌐 وضعیت قابلیت‌ها ← ⏱ اکانت ساعتی ← 🖥 انتخاب پنل‌ها).\n";
+            $info .= "📌 این تنظیمات برای لحظه‌ی تحویل اکانت ساعتیه؛ بعدش توی «🛍 سرویس‌های من» صفحه‌ی خودش رو داره.\n";
         }
         $info .= "➖➖➖➖➖➖➖➖➖➖\n";
         $info .= empty($panels) ? "⚠️ هنوز هیچ پنلی اضافه نشده." : "👇 اول پنل رو انتخاب کن:";
@@ -10611,6 +10622,9 @@ if (!function_exists('config_delivery_panels_payload')) {
             $label = "🖥 {$p['name_panel']}  •  حالت " . config_delivery_mode_fa($m);
             if ($kind === 'affrw' && (string) $code === affrw_cfg($lang)['panel']) {
                 $label .= '  •  🎁';
+            }
+            if ($kind === 'payg' && in_array((string) $code, payg_cfg($lang)['panels'], true)) {
+                $label .= '  •  ⏱';
             }
             $kb['inline_keyboard'][] = [['text' => $label, 'callback_data' => "cfgdeliv|p|{$lang}|{$code}|{$origin}", 'style' => 'primary']];
         }
@@ -10674,6 +10688,9 @@ if (!function_exists('config_delivery_panel_payload')) {
         } elseif ($kind === 'affrw') {
             $kb['inline_keyboard'][] = [['text' => '📝 پیام کامل (حالت ۱)', 'callback_data' => "cfgdeliv|msg|{$lang}|{$codePanel}|{$origin}|ar", 'style' => 'primary']];
             $kb['inline_keyboard'][] = [['text' => '📝 کپشن صفحه‌ی کانفیگ (حالت ۲)', 'callback_data' => "cfgdeliv|msg|{$lang}|{$codePanel}|{$origin}|cr", 'style' => 'primary']];
+        } elseif ($kind === 'payg') {
+            $kb['inline_keyboard'][] = [['text' => '📝 پیام کامل (حالت ۱)', 'callback_data' => "cfgdeliv|msg|{$lang}|{$codePanel}|{$origin}|ah", 'style' => 'primary']];
+            $kb['inline_keyboard'][] = [['text' => '📝 کپشن صفحه‌ی کانفیگ (حالت ۲)', 'callback_data' => "cfgdeliv|msg|{$lang}|{$codePanel}|{$origin}|ch", 'style' => 'primary']];
         } else {
             $kb['inline_keyboard'][] = [['text' => '📝 پیام کامل (حالت ۱)', 'callback_data' => "cfgdeliv|msg|{$lang}|{$codePanel}|{$origin}|at", 'style' => 'primary']];
             $kb['inline_keyboard'][] = [['text' => '📝 کپشن صفحه‌ی کانفیگ (حالت ۲)', 'callback_data' => "cfgdeliv|msg|{$lang}|{$codePanel}|{$origin}|ct", 'style' => 'primary']];
@@ -12129,7 +12146,7 @@ if (!function_exists('bt_section_meta')) {
             ],
             'home_features' => [
                 'label' => '🎯 قابلیت‌های ربات',
-                'alert' => 'پیام‌ها و دکمه‌های قابلیت‌هایی که از «🌐 وضعیت قابلیت‌ها (هر زبان)» روشن/خاموش می‌شن: احراز شماره و قوانین، گردونه شانس، و زیرمجموعه‌گیری.',
+                'alert' => 'پیام‌ها و دکمه‌های قابلیت‌هایی که از «🌐 وضعیت قابلیت‌ها (هر زبان)» روشن/خاموش می‌شن: احراز شماره و قوانین، گردونه شانس، زیرمجموعه‌گیری و اکانت ساعتی.',
             ],
             'verify_flow' => [
                 'label' => '📞 احراز شماره و قوانین',
@@ -12162,6 +12179,26 @@ if (!function_exists('bt_section_meta')) {
             'referral_cfg' => [
                 'label' => '📦 نمایش و اکانت کانفیگ هدیه',
                 'alert' => '📌 نحوه‌ی نمایش کانفیگ: برای هر پنل جدا - حالت ۱ (پیام کامل، با QR اختیاری) یا حالت ۲ (صفحه‌ی کانفیگ با دکمه‌ها)، متن هر دو حالت و دکمه‌ها و ترتیبشون. ⚙️ قوانین اکانت: پاک شدن بعد از تموم شدن، تمدید و نام اکانت.',
+            ],
+            'payg_buy' => [
+                'label' => '🛒 خرید اشتراک ساعتی',
+                'alert' => 'از «🔐 خرید اشتراک» تا ساخته شدن: صفحه‌ی انتخاب «📅 معمولی / ⏱ ساعتی»، لوکیشن، صفحه‌ی تعرفه و دکمه‌ی ساختن، پیام‌های خطا و پیام تحویل سرویس.',
+            ],
+            'payg_service' => [
+                'label' => '📊 صفحه‌ی سرویس و تعرفه',
+                'alert' => 'صفحه‌ی اکانت ساعتی توی «🛍 سرویس‌های من»: وضعیت، هزینه تا الان، خط‌های تعرفه و تخمین، کلمه‌های روز/ساعت/دقیقه، اسم سرویس و دکمه‌هاش.',
+            ],
+            'payg_delete' => [
+                'label' => '🗑 حذف و ⏩ تبدیل به ماهانه',
+                'alert' => 'وقتی کاربر خودش اکانت ساعتی رو حذف می‌کنه یا به یه بسته‌ی ماهانه تبدیلش می‌کنه: سؤال‌ها، دکمه‌ها و پیام‌های بعدش.',
+            ],
+            'payg_notify' => [
+                'label' => '🔔 اعلان‌های موجودی',
+                'alert' => 'پیام‌هایی که خود ربات می‌فرسته: هشدار کم شدن موجودی، تموم شدن موجودی و غیرفعال شدن، یادآوری قبل از حذف، روشن شدن دوباره بعد از شارژ، و حذف شدن.',
+            ],
+            'payg_cfg' => [
+                'label' => '📦 نمایش کانفیگ و تنظیمات اکانت ساعتی',
+                'alert' => '📌 نحوه‌ی نمایش کانفیگ: برای هر پنل جدا - حالت ۱ (پیام کامل، با QR اختیاری) یا حالت ۲ (صفحه‌ی کانفیگ با دکمه‌ها). ⚙️ تنظیمات: روشن/خاموش، پنل‌ها، قیمت‌ها و قانون‌ها - همون صفحه‌ی «🌐 وضعیت قابلیت‌ها ← ⏱ اکانت ساعتی».',
             ],
             'home_other' => [
                 'label' => '💬 سایر پیام‌ها',
@@ -18293,6 +18330,10 @@ if (!function_exists('affrw_cfg')) {
     // 🔄 a free config its owner's language does not let be renewed
     function affrw_renew_blocked($inv)
     {
+        // ⏱ an hourly service is never renewed: it is paid as it goes
+        if (is_array($inv) && (int) ($inv['payg'] ?? 0) === 1) {
+            return true;
+        }
         if (!is_array($inv) || (int) ($inv['affrw'] ?? 0) !== 1) {
             return false;
         }
@@ -18315,6 +18356,11 @@ if (!function_exists('affrw_cfg')) {
     {
         global $pdo;
         static $ids = [];
+        // every list of «🛍 سرویس‌های من» asks here, so ⏱'s label rides along
+        $pg = payg_list_label($row, $tx);
+        if ($pg !== null) {
+            return $pg;
+        }
         if (!is_array($row) || (int) ($row['affrw'] ?? 0) !== 1) {
             return null;
         }
@@ -18865,7 +18911,10 @@ if (!function_exists('affrw_cfg')) {
     {
         $pt = panel_texts();
         $code = in_array($lang, panel_langs(), true) ? $lang : 'fa';
-        affrw_report('porsantreport', strtr(lang_tab_texts('fa')['Admin']['AffReward']['report'], [
+        // a topic of its own in the report group (made when first needed,
+        // also in a group set up before it existed) - it used to share 💰
+        // پورسانت's
+        report_to_topic('affrwreport', $pt['Admin']['AffReward']['topicName'], strtr($pt['Admin']['AffReward']['report'], [
             '{id}' => $uid,
             '{username}' => (is_array($u) && !empty($u['username']) && $u['username'] !== 'none') ? '@' . htmlspecialchars($u['username']) : '',
             '{count}' => $count,
@@ -18971,6 +19020,17 @@ if (!function_exists('bt_nosticker_keys')) {
             'users.sell.creating',
             // temporary too, and reworded per gateway so it rarely even matched
             'users.Balance.linkpayments',
+            // ⏱'s buttons, the lines and words pasted into its screens, its
+            // popups and its temporary «در حال ساخت»
+            'users.payg.btnNormal', 'users.payg.btnPayg', 'users.payg.btnBack', 'users.payg.btnCreate', 'users.payg.btnRefresh',
+            'users.payg.btnConvert', 'users.payg.btnDelete', 'users.payg.btnRemoveFully', 'users.payg.btnTopup', 'users.payg.btnNo',
+            'users.payg.btnDeleteYes', 'users.payg.btnConvertYes', 'users.payg.startCreate', 'users.payg.startConnect',
+            'users.payg.creating', 'users.payg.serviceName', 'users.payg.listLabel', 'users.payg.rateHour', 'users.payg.rateMinute',
+            'users.payg.rateTimeFree', 'users.payg.rateGb', 'users.payg.rateVolFree', 'users.payg.estimateTime', 'users.payg.estimateVolume',
+            'users.payg.unitDay', 'users.payg.unitDay1', 'users.payg.unitHour', 'users.payg.unitHour1', 'users.payg.unitMinute',
+            'users.payg.unitMinute1', 'users.payg.and', 'users.payg.statusWaiting', 'users.payg.statusActive', 'users.payg.statusStopped',
+            'users.payg.statusEnded', 'users.payg.notStarted', 'users.payg.sinceLast', 'users.payg.deleteTooEarly',
+            'users.payg.notActive', 'users.payg.notAllowed',
         ];
     }
 }
@@ -19163,7 +19223,9 @@ if (!function_exists('service_button_invoice_id')) {
         if (preg_match('/extends_\w*_([A-Za-z0-9]+)$/', $datain, $m)) {
             return $m[1];
         }
-        foreach (['updateproduct_', 'product_', 'subscriptionurl_', 'config_', 'extend_', 'changelink_', 'confirmchange_',
+        // ⏱'s own: paygcp_{id}_{product} and paygcpok_ carry the id first
+        foreach (['paygref_', 'paygdel_', 'paygdelok_', 'paygconv_', 'paygcp_', 'paygcpok_', 'paygrm_', 'paygrmok_',
+            'updateproduct_', 'product_', 'subscriptionurl_', 'config_', 'extend_', 'changelink_', 'confirmchange_',
             'removeserviceuser_', 'changenote_', 'Extra_volume_', 'Extra_time_', 'changestatus_', 'confirmaccountdisable_',
             'transfer_', 'changeloc_', 'confirmchangeloccha_', 'disorder-', 'confirmdisorders-', 'usagereport_', 'removeauto-'] as $p) {
             if (preg_match('/' . preg_quote($p, '/') . '([A-Za-z0-9]+)/', $datain, $m)) {
@@ -19712,13 +19774,15 @@ function sendMessageService($panel_info, $config, $sub_link, $username_service, 
     // nothing. No QR either way in mode 2.
     if ($panel_info['config'] == "onconfig" && $configCount > 0
         && config_delivery_mode($kind, $panel_info['code_panel'] ?? null, $sms_lang) === "2") {
-        $cd_hintKey = ['usertest' => 'textbot.getConfigHintTest', 'affrw' => 'users.affiliates.rewardConfigHint'][$kind] ?? 'textbot.getConfigHintBuy';
+        $cd_hintKey = ['usertest' => 'textbot.getConfigHintTest', 'affrw' => 'users.affiliates.rewardConfigHint', 'payg' => 'users.payg.configHint'][$kind] ?? 'textbot.getConfigHintBuy';
         // an admin can be the one approving a 🎁 gift, so it is worded in the
-        // recipient's language rather than the reader's
-        $cd_hintText = bottext_resolve_key($cd_hintKey, $kind === 'affrw' ? $sms_lang : null);
+        // recipient's language rather than the reader's (⏱ the same: the cron
+        // and the panel never read in the customer's own)
+        $cd_hintText = bottext_resolve_key($cd_hintKey, in_array($kind, ['affrw', 'payg'], true) ? $sms_lang : null);
         // sendMessageService's own $kind is 'purchase'|'usertest' - keyboard_config()'s
         // is 'usertest'|'buy', so normalize rather than let 'purchase' silently
-        // fall through to the usertest column/button settings below
+        // fall through to the usertest column/button settings below. ⏱ shares
+        // the purchase's config buttons
         $cc_kbKind = ['usertest' => 'usertest', 'affrw' => 'affrw'][$kind] ?? 'buy';
         $cd_kb = json_decode(keyboard_config($config, $invoice_id, false, $cc_kbKind, $sms_lang), true);
         // the 📚 tutorial button the full message carried comes along underneath
@@ -20237,3 +20301,6 @@ function parseConfigs($input)
 
     return $configs;
 }
+
+// ⏱ اکانت ساعتی - its own file, needed by the bot, the crons and the web panel alike
+require_once __DIR__ . '/payg.php';

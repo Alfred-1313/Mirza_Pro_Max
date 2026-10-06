@@ -1281,6 +1281,12 @@ try {
 } catch (Exception $e) {
     file_put_contents('error_log affiliate_reward', $e->getMessage());
 }
+// ⏱ اکانت ساعتی: payg_service, payg_charge and invoice.payg
+try {
+    payg_ensure_schema();
+} catch (Exception $e) {
+    file_put_contents('error_log payg', $e->getMessage());
+}
 //-----------------------------------------------------------------
 try {
 

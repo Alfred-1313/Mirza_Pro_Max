@@ -212,6 +212,15 @@ if (is_string($datain) && $datain !== '' && !in_array((string) $from_id, array_m
         return;
     }
 }
+// ⏱ an hourly service has only its own buttons: a renewal, an extra or a
+// hand-made on/off would fight the minute-by-minute caps (payg_blocked_action)
+if (is_string($datain) && $datain !== '' && payg_blocked_action($datain)) {
+    $pg_bid = service_button_invoice_id($datain);
+    if ($pg_bid !== null && payg_invoice_of($pg_bid) !== null) {
+        telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $textbotlang['users']['payg']['notAllowed'], 'show_alert' => true]);
+        return;
+    }
+}
 // 🛡 دسترسی ادمین (🎨 شخصی‌سازی): an admin's own test accounts skip the
 // per-user limit (default on) and their purchases cost nothing (default off)
 $admin_test_free = in_array($from_id, $admin_ids) && (string) ($setting['admin_test_unlimited'] ?? '1') !== '0';
@@ -1267,6 +1276,22 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $username = $nameloc['id_invoice'];
     if (!in_array($nameloc['Status'], ['active', 'end_of_time', 'end_of_volume', 'sendedwarn', 'send_on_hold'])) {
         sendmessage($from_id, $textbotlang['users']['status']['infoUnavailable'], $keyboard, 'html');
+        step('home', $from_id);
+        return;
+    }
+    // ⏱ an hourly service has a screen of its own: what it has cost, its
+    // rates, the wallet behind it (payg_service_screen)
+    if ((int) ($nameloc['payg'] ?? 0) === 1 && ($pg_svc = payg_row($nameloc['id_invoice'])) !== null) {
+        $pg_d = payg_panel_data(select("marzban_panel", "*", "name_panel", $pg_svc['panel'], "select"), $pg_svc['username']);
+        // what 🔄 will call «since you last looked» starts from here
+        payg_set($pg_svc['id_invoice'], ['seen_charged' => $pg_svc['charged']]);
+        [$pg_text, $pg_kb] = payg_service_screen($pg_svc, $textbotlang, $pg_d);
+        $pg_sub = is_array($pg_d['data'] ?? null) ? (string) ($pg_d['data']['subscription_url'] ?? '') : '';
+        if ($user['step'] == "getuseragnetservice") {
+            svc_send_status_screen($from_id, 0, $pg_text, $pg_kb, $pg_sub, true);
+        } else {
+            svc_send_status_screen($from_id, $message_id, $pg_text, $pg_kb, $pg_sub, true);
+        }
         step('home', $from_id);
         return;
     }
@@ -3567,6 +3592,240 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             update("user", "bt_sticker_id", (string) $usertestLocationMsg['_sticker_message_id'], "id", $from_id);
         }
     }
+}
+#-----------⏱ اکانت ساعتی (payg.php): «🔐 خرید اشتراک»'s first screen and its own flow------------#
+// Here, between the two chains, so a purchase resumed after the phone check
+// ($verify_resume) meets the type screen too.
+// «📅 اشتراک معمولی» is the ordinary purchase from its first step, exactly as
+// if the type screen had never been there.
+$pg_normal = false;
+if ($datain === 'buytype_normal') {
+    $datain = 'buy';
+    $pg_normal = true;
+}
+if (!$pg_normal && ($text == $textbotlang['textbot']['sell'] || $datain == "buy" || $datain == "buyfresh" || $text == "/buy" || $text == "buy" || $verify_resume === 'verifybuy') && payg_offer($user)) {
+    if (!mainmenu_btn_active($user['lang'] ?? 'fa', "text_sell")) {
+        sendmessage($from_id, $textbotlang['users']['buttonDisabled'], null, 'HTML');
+        return;
+    }
+    if (phone_required_for($user) && $user['number'] == "none") {
+        sendmessage($from_id, $textbotlang['users']['number']['confirming'], $request_contact, 'HTML');
+        update("user", "Processing_value", "verifybuy", "id", $from_id);
+        step('get_number', $from_id);
+        return;
+    }
+    step('home', $from_id);
+    if ($datain == "buyfresh") {
+        deletemessage($from_id, $message_id);
+    }
+    sell_screen($from_id, $datain == "buy" ? $message_id : 0, $textbotlang['users']['payg']['typeChoice'], payg_type_kb($textbotlang));
+    return;
+}
+// ⏱ اشتراک ساعتی: the panels, or straight to the only one's rates
+if ($datain === 'buytype_payg' || preg_match('/^paygpanel_(.+)$/', (string) $datain, $pg_m)) {
+    $pg_w = $textbotlang['users']['payg'];
+    $pg_panels = payg_user_panels($user);
+    if (!$pg_panels) {
+        telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $pg_w['off'], 'show_alert' => true]);
+        return;
+    }
+    $pg_panel = null;
+    if ($datain === 'buytype_payg') {
+        if (count($pg_panels) > 1) {
+            sell_screen($from_id, $message_id, $pg_w['selectPanel'], payg_panels_kb($pg_panels, $textbotlang));
+            return;
+        }
+        $pg_panel = $pg_panels[0];
+    } else {
+        foreach ($pg_panels as $pg_p) {
+            if ((string) $pg_p['code_panel'] === (string) $pg_m[1]) {
+                $pg_panel = $pg_p;
+            }
+        }
+        if ($pg_panel === null) {
+            telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $pg_w['noPanel'], 'show_alert' => true]);
+            return;
+        }
+    }
+    [$pg_text, $pg_kb] = payg_offer_screen($user, $pg_panel, $textbotlang, count($pg_panels) === 1);
+    sell_screen($from_id, $message_id, $pg_text, $pg_kb);
+    return;
+}
+// ✅ بساز: made, and delivered like a purchase (📌 نحوه‌ی نمایش کانفیگ's ⏱ kind)
+if (preg_match('/^paygmk_(.+)$/', (string) $datain, $pg_m)) {
+    $pg_w = $textbotlang['users']['payg'];
+    Editmessagetext($from_id, $message_id, $pg_w['creating'], null);
+    // a second tap while the first is still being made waits for it, and
+    // then meets the 🔢 count and the wallet as the first one left them
+    $pg_res = payg_locked('create_' . $from_id, fn() => payg_create($from_id, $pg_m[1]));
+    if (!is_array($pg_res)) {
+        $pg_res = ['error' => 'panel'];
+    }
+    if (empty($pg_res['ok'])) {
+        $pg_err = (string) ($pg_res['error'] ?? 'panel');
+        $pg_back = json_encode(['inline_keyboard' => [[['text' => $pg_w['btnBack'], 'callback_data' => 'buytype_payg', 'style' => 'danger']]]]);
+        if ($pg_err === 'lowbal') {
+            $pg_cur = $pg_res['cur'] ?? currency_for_lang($user['lang'] ?? 'fa');
+            Editmessagetext($from_id, $message_id, strtr($pg_w['lowBalance'], ['{need}' => money($pg_res['need'], $pg_cur), '{balance}' => money($pg_res['have'], $pg_cur)]), payg_topup_kb($textbotlang));
+        } else {
+            $pg_msg = ['max' => strtr($pg_w['maxReached'], ['{max}' => (string) ($pg_res['max'] ?? 1)]), 'full' => $pg_w['panelFull'], 'off' => $pg_w['off']][$pg_err] ?? $pg_w['createFailed'];
+            Editmessagetext($from_id, $message_id, $pg_msg, $pg_back);
+        }
+        return;
+    }
+    deletemessage($from_id, $message_id);
+    // a 🔐 sticker still up from the screens before goes with them
+    sell_sticker_retire($from_id);
+    $pg_panel = $pg_res['panel'];
+    $pg_sub = ($pg_panel['sublink'] ?? '') === 'onsublink' ? (string) ($pg_res['out']['subscription_url'] ?? '') : '';
+    sendMessageService($pg_panel, $pg_res['out']['configs'] ?? [], $pg_sub, $pg_res['username'], afterpay_help_kb($user['lang'] ?? 'fa', $textbotlang), payg_created_text($pg_res['svc'], $pg_res['out'], $pg_panel, $textbotlang), $pg_res['id_invoice'], $from_id, 'images.jpg', 'payg');
+    return;
+}
+// the service's own buttons: 🔄 ⏩ 🗑 - each for its owner only (the check at
+// the top, service_button_invoice_id), each on the service's lock
+if (preg_match('/^(paygref|paygdel|paygdelok|paygconv|paygrm|paygrmok)_([A-Za-z0-9]+)$/', (string) $datain, $pg_m) || preg_match('/^(paygcp|paygcpok)_([A-Za-z0-9]+)_(.+)$/', (string) $datain, $pg_m)) {
+    $pg_w = $textbotlang['users']['payg'];
+    $pg_act = $pg_m[1];
+    $pg_id = $pg_m[2];
+    $pg_alert = function ($t) use ($callback_query_id) {
+        telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $t, 'show_alert' => true]);
+    };
+    $pg_svc = payg_invoice_of($pg_id) !== null ? payg_row($pg_id) : null;
+    $pg_open = $pg_svc !== null && in_array($pg_svc['status'], ['waiting', 'active', 'stopped'], true);
+    $pg_toList = json_encode(['inline_keyboard' => [[['text' => $textbotlang['users']['status']['backlist'], 'callback_data' => 'backorder', 'style' => 'danger']]]]);
+    if ($pg_act === 'paygref') {
+        if ($pg_svc === null) {
+            $pg_alert($pg_w['notActive']);
+            return;
+        }
+        $pg_res = payg_locked($pg_id, function () use ($pg_id) {
+            $svc = payg_row($pg_id);
+            $r = payg_settle($svc);
+            $svc = payg_row($pg_id);
+            payg_set($pg_id, ['seen_charged' => $svc['charged']]);
+            return [$svc, $r, (float) $svc['charged'] - (float) $svc['seen_charged']];
+        });
+        if (!is_array($pg_res)) {
+            $pg_alert($pg_w['notActive']);
+            return;
+        }
+        [$pg_svc, $pg_r, $pg_since] = $pg_res;
+        telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $textbotlang['keyboard']['infoRefreshed'], 'show_alert' => false, 'cache_time' => 5]);
+        [$pg_text, $pg_kb] = payg_service_screen($pg_svc, $textbotlang, $pg_r['data'] ?? null, $pg_since);
+        $pg_sub = is_array($pg_r['data']['data'] ?? null) ? (string) ($pg_r['data']['data']['subscription_url'] ?? '') : '';
+        svc_send_status_screen($from_id, $message_id, $pg_text, $pg_kb, $pg_sub, false);
+        return;
+    }
+    if ($pg_act === 'paygdel' || $pg_act === 'paygdelok') {
+        if (!$pg_open) {
+            $pg_alert($pg_w['notActive']);
+            return;
+        }
+        [$pg_can, $pg_left] = payg_can_delete($pg_svc);
+        if (!$pg_can) {
+            // a part of a minute counts as a minute: «30» while 29:59 is left
+            $pg_alert(strtr($pg_w['deleteTooEarly'], ['{left}' => payg_duration_text((int) ceil($pg_left / 60) * 60, $textbotlang)]));
+            return;
+        }
+        if ($pg_act === 'paygdel') {
+            [$pg_text, $pg_kb] = payg_delete_confirm($pg_svc, $textbotlang);
+            Editmessagetext($from_id, $message_id, $pg_text, $pg_kb);
+            return;
+        }
+        // what it used up to now is taken first; nothing after it
+        $pg_done = payg_locked($pg_id, function () use ($pg_id) {
+            $svc = payg_row($pg_id);
+            if ($svc === null || !in_array($svc['status'], ['waiting', 'active', 'stopped'], true)) {
+                return null;
+            }
+            payg_settle($svc);
+            return payg_delete(payg_row($pg_id), 'user');
+        });
+        if (!is_array($pg_done)) {
+            $pg_alert($pg_w['notActive']);
+            return;
+        }
+        Editmessagetext($from_id, $message_id, strtr($pg_done['status'] === 'ended' ? $pg_w['deletedKept'] : $pg_w['deleted'], [
+            '{username}' => htmlspecialchars($pg_done['username']),
+            '{charged}' => money((float) $pg_done['charged'], $pg_done['currency']),
+        ]), $pg_toList);
+        return;
+    }
+    if ($pg_act === 'paygconv' || $pg_act === 'paygcp' || $pg_act === 'paygcpok') {
+        if ($pg_svc === null || !in_array($pg_svc['status'], ['waiting', 'active'], true)) {
+            $pg_alert($pg_w['notActive']);
+            return;
+        }
+        if (!payg_cfg($pg_svc['lang'])['convert']) {
+            $pg_alert($pg_w['notAllowed']);
+            return;
+        }
+        if ($pg_act === 'paygconv') {
+            [$pg_text, $pg_kb] = payg_convert_list($pg_svc, $textbotlang);
+            Editmessagetext($from_id, $message_id, $pg_text, $pg_kb);
+            return;
+        }
+        if ($pg_act === 'paygcp') {
+            $pg_prod = null;
+            foreach (payg_panel_products($pg_svc['lang'], $pg_svc['panel'], payg_group_of($user)) as $pg_p) {
+                if ((string) $pg_p['code_product'] === (string) $pg_m[3]) {
+                    $pg_prod = $pg_p;
+                }
+            }
+            if ($pg_prod === null) {
+                $pg_alert($pg_w['convertNoProduct']);
+                return;
+            }
+            [$pg_text, $pg_kb] = payg_convert_confirm($pg_svc, $pg_prod, $textbotlang);
+            Editmessagetext($from_id, $message_id, $pg_text, $pg_kb);
+            return;
+        }
+        $pg_res = payg_locked($pg_id, function () use ($pg_id, $pg_m) {
+            $svc = payg_row($pg_id);
+            return $svc === null ? ['error' => 'off'] : payg_convert($svc, $pg_m[3]);
+        });
+        if (!is_array($pg_res)) {
+            $pg_res = ['error' => 'panel'];
+        }
+        if (!empty($pg_res['ok'])) {
+            Editmessagetext($from_id, $message_id, strtr($pg_w['converted'], [
+                '{username}' => htmlspecialchars($pg_svc['username']),
+                '{product}' => htmlspecialchars((string) $pg_res['product']['name_product']),
+            ]), json_encode(['inline_keyboard' => [[['text' => $pg_w['btnBack'], 'callback_data' => 'product_' . $pg_id, 'style' => 'primary']]]]));
+            return;
+        }
+        if (($pg_res['error'] ?? '') === 'lowbal') {
+            Editmessagetext($from_id, $message_id, strtr($pg_w['convertLowBalance'], [
+                '{need}' => money($pg_res['need'], $pg_svc['currency']),
+                '{balance}' => money($pg_res['have'], $pg_svc['currency']),
+            ]), payg_topup_kb($textbotlang));
+            return;
+        }
+        $pg_alert(['product' => $pg_w['convertNoProduct'], 'off' => $pg_w['notActive']][$pg_res['error'] ?? ''] ?? $pg_w['convertFailed']);
+        return;
+    }
+    // 🗑 حذف کامل: one its owner had deleted and kept switched off
+    if ($pg_svc === null || $pg_svc['status'] !== 'ended') {
+        $pg_alert($pg_w['notActive']);
+        return;
+    }
+    if ($pg_act === 'paygrm') {
+        Editmessagetext($from_id, $message_id, strtr($pg_w['removeConfirm'], ['{username}' => htmlspecialchars($pg_svc['username'])]), json_encode(['inline_keyboard' => [
+            [['text' => $pg_w['btnDeleteYes'], 'callback_data' => 'paygrmok_' . $pg_id, 'style' => 'danger']],
+            [['text' => $pg_w['btnNo'], 'callback_data' => 'product_' . $pg_id, 'style' => 'primary']],
+        ]]));
+        return;
+    }
+    $pg_done = payg_locked($pg_id, function () use ($pg_id) {
+        $svc = payg_row($pg_id);
+        return ($svc !== null && $svc['status'] === 'ended') ? payg_delete($svc, 'purge') : null;
+    });
+    if (!is_array($pg_done)) {
+        $pg_alert($pg_w['notActive']);
+        return;
+    }
+    Editmessagetext($from_id, $message_id, strtr($pg_w['removedFully'], ['{username}' => htmlspecialchars($pg_done['username'])]), $pg_toList);
+    return;
 }
 if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $datain, $dataget) || ($text == $textbotlang['textbot']['userTest'] || $datain == "usertestbtn" || $text == "usertest")) {
     if ($datain == "ucancel") {

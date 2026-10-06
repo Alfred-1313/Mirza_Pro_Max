@@ -38,6 +38,22 @@ try {
 } catch (Exception $e) {
 }
 
+// ⏱ what hourly services brought in: their invoices cost nothing, the money
+// comes by the minute (payg_charge) - shown once the feature has been used
+$paygEver = 0;
+$paygOpen = 0;
+$paygIncome = [];
+try {
+    payg_ensure_schema();
+    [$pgW, $pgP] = $lang !== '' ? ['lang = ?', [$lang]] : ['1 = 1', []];
+    $paygEver = db_count($pdo, "SELECT COUNT(*) FROM payg_service WHERE $pgW", $pgP);
+    $paygOpen = db_count($pdo, "SELECT COUNT(*) FROM payg_service WHERE status IN ('waiting', 'active', 'stopped') AND $pgW", $pgP);
+    foreach (db_fetchAll($pdo, "SELECT currency, SUM(amount) s FROM payg_charge WHERE $pgW GROUP BY currency", $pgP) as $pgRow) {
+        $paygIncome[$pgRow['currency']] = (float) $pgRow['s'];
+    }
+} catch (Exception $e) {
+}
+
 $recentInvoices = [];
 $recentUsers = [];
 try {
@@ -84,6 +100,13 @@ echo web_lang_assets();
             <?= $pendingPay > 0 ? $textbotlang['panel']['dashReviewLink'] : $textbotlang['panel']['dashStatusRegistered'] ?>
         </div>
     </div>
+    <?php if ($paygEver > 0): ?>
+    <div class="stat">
+        <div class="stat-label"><a href="payg.php<?= $langQ ?>" style="color:inherit"><?= htmlspecialchars($textbotlang['panel']['pgPageTitle']) ?></a></div>
+        <div class="stat-num"<?= count($paygIncome) > 1 ? ' style="font-size:1.15rem;line-height:1.6"' : '' ?>><?= web_money_lines($paygIncome) ?></div>
+        <div class="stat-meta"><?= htmlspecialchars(sprintf($textbotlang['panel']['pgDashMeta'], number_format($paygOpen))) ?></div>
+    </div>
+    <?php endif; ?>
 </div>
 
 <div class="two-col">

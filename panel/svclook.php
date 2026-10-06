@@ -16,11 +16,12 @@ $tx = lang_tab_texts($lang);
 $parts = ['status' => '🔘 ' . $t['svcStatus'], 'delivery' => '📦 ' . $t['svcDelivery'], 'tiers' => '🔋 ' . $t['svcTiers'], 'close' => '🖼 ' . $t['svcClose']];
 $part = (string) ($_GET['part'] ?? $_POST['part'] ?? '');
 $part = isset($parts[$part]) ? $part : 'status';
-$kinds = ['purchase' => '🛒 ' . $t['svcKindBuy'], 'usertest' => '🎁 ' . $t['svcKindTest'], 'affrw' => '👥 ' . $t['svcKindReward']];
+$kinds = ['purchase' => '🛒 ' . $t['svcKindBuy'], 'usertest' => '🎁 ' . $t['svcKindTest'], 'affrw' => '👥 ' . $t['svcKindReward'], 'payg' => $t['pgPageTitle']];
 $kind = (string) ($_GET['kind'] ?? $_POST['kind'] ?? '');
 $kind = isset($kinds[$kind]) ? $kind : 'purchase';
-// the config-columns store names the purchase kind «buy»
-$cdKind = ['purchase' => 'buy', 'usertest' => 'usertest', 'affrw' => 'affrw'][$kind];
+// the config-columns store names the purchase kind «buy»; ⏱'s config
+// buttons are the purchase's own
+$cdKind = ['purchase' => 'buy', 'usertest' => 'usertest', 'affrw' => 'affrw', 'payg' => 'buy'][$kind];
 $here = 'svclook.php?' . http_build_query(['lang' => $lang, 'part' => $part, 'kind' => $part === 'delivery' ? $kind : null]);
 $colorNames = ['primary' => '🔵 ' . $t['menuColorBlue'], 'success' => '🟢 ' . $t['menuColorGreen'], 'danger' => '🔴 ' . $t['menuColorRed']];
 $emojiOk = fn($e) => $e === '' || (preg_match('/^\X$/u', $e) && !preg_match('/^[0-9a-zA-Z]$/', $e));

@@ -132,7 +132,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // each group named as its screen in the bot names it
 $captionOf = ['myservices' => 'groupServicesCaption', 'topup' => 'groupTopupCaption', 'topupdisc' => 'groupTopupDiscCaption', 'account' => 'groupAccountCaption',
-    'help' => 'groupHelpCaption', 'verify' => 'groupVerifyCaption', 'wheel' => 'groupWheelCaption', 'referral' => 'groupReferralCaption', 'usermgmt' => 'groupUserMgmtCaption', 'buyflow' => 'groupBuyflowCaption'];
+    'help' => 'groupHelpCaption', 'verify' => 'groupVerifyCaption', 'wheel' => 'groupWheelCaption', 'referral' => 'groupReferralCaption', 'usermgmt' => 'groupUserMgmtCaption', 'buyflow' => 'groupBuyflowCaption',
+    'payg' => 'groupPaygCaption'];
 $groupName = function ($g) use ($bt, $captionOf, $t) {
     if ($g === '') {
         return $t['bottextHomeGroup'];

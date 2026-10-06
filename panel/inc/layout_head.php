@@ -139,6 +139,11 @@ $initials = mb_strtoupper(mb_substr($currentUser, 0, 1, 'UTF-8'), 'UTF-8');
             <span class="nav-icon"><?= icon('users') ?></span><span
               class="nav-label"><?= $textbotlang['panel']['refPageTitle'] ?></span>
           </a>
+          <a href="payg.php" class="nav-item <?= $activeNav === 'payg' ? 'active' : '' ?>"
+            title="<?= $textbotlang['panel']['pgPageTitle'] ?>">
+            <span class="nav-icon"><?= icon('chart') ?></span><span
+              class="nav-label"><?= $textbotlang['panel']['pgPageTitle'] ?></span>
+          </a>
           <a href="payment.php" class="nav-item <?= $activeNav === 'payment' ? 'active' : '' ?>"
             title="<?= $textbotlang['panel']['layoutPageTitlePayment'] ?>">
             <span class="nav-icon"><?= icon('card') ?></span><span

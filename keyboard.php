@@ -2523,6 +2523,17 @@ function keyboard_list_text($lang, $groupFilter = null)
             }
             // a button item shows the button itself, as this tab has it now
             $bt_live = in_array($data['key'], bt_btnitem_keys(), true) ? genbtn_row_label($data['key'], $lang) : null;
+            // ...and so does a button whose only store is its text ('live'):
+            // its words in this tab, edits included
+            if ($bt_live === null && !empty($data['live'])) {
+                $bt_cur = lang_tab_texts($lang);
+                foreach (explode('.', $data['key']) as $bt_part) {
+                    $bt_cur = is_array($bt_cur) ? ($bt_cur[$bt_part] ?? null) : null;
+                }
+                if (is_string($bt_cur) && trim($bt_cur) !== '') {
+                    $bt_live = ['🔘 ' . $bt_cur, ''];
+                }
+            }
             list($bt_label, $bt_style) = $bt_decorate($data['key'], $bt_live !== null ? $bt_live[0] : $data['label']);
             // blue by default, green (from $bt_decorate) once something is customized
             $bt_btn = ['text' => $bt_label, 'callback_data' => "bt_edit|$lang|{$data['key']}", 'style' => ($bt_style !== '' ? $bt_style : 'primary')];
@@ -2570,6 +2581,12 @@ function keyboard_list_text($lang, $groupFilter = null)
         if ($groupFilter === 'buyflow') {
             $keyboard_text['inline_keyboard'][] = [['text' => bt_section_meta('cfgdeliv_link')['label'], 'callback_data' => 'bt_sep|cfgdeliv_link']];
             $keyboard_text['inline_keyboard'][] = [['text' => '📌 نحوه‌ی نمایش کانفیگ', 'callback_data' => "cfgdeliv|list|{$lang}|b", 'style' => 'primary']];
+        }
+        if ($groupFilter === 'payg') {
+            // ⏱'s config on delivery, and its own settings, under one heading
+            $keyboard_text['inline_keyboard'][] = [['text' => bt_section_meta('payg_cfg')['label'], 'callback_data' => 'bt_sep|payg_cfg']];
+            $keyboard_text['inline_keyboard'][] = [['text' => '📌 نحوه‌ی نمایش کانفیگ (اکانت ساعتی)', 'callback_data' => "cfgdeliv|list|{$lang}|h", 'style' => 'primary']];
+            $keyboard_text['inline_keyboard'][] = [['text' => '⚙️ تنظیمات اکانت ساعتی', 'callback_data' => "paygsec:{$lang}", 'style' => 'primary']];
         }
         if ($groupFilter === 'topup') {
             // The card-to-card caption/button rows, moved here from
@@ -2655,6 +2672,7 @@ function keyboard_list_text($lang, $groupFilter = null)
             'wheel' => 'groupWheelCaption',
             'referral' => 'groupReferralCaption',
             'usermgmt' => 'groupUserMgmtCaption',
+            'payg' => 'groupPaygCaption',
         ][$groupFilter] ?? 'groupBuyflowCaption';
         $bt_caption_tpl = $textbotlang['bottext'][$bt_captionKey];
         $bt_caption = strtr($bt_caption_tpl, ['{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang]);
@@ -2756,6 +2774,7 @@ function keyboard_list_text($lang, $groupFilter = null)
             'home_features:verify' => ['verify', 'groupVerifyLabel'],
             'home_features:wheel' => ['wheel', 'groupWheelLabel'],
             'home_features:referral' => ['referral', 'groupReferralLabel'],
+            'home_features:payg' => ['payg', 'groupPaygLabel'],
         ] as $bt_sec_owner => $bt_sec_group) {
             // one section may own several group rows, so the key carries the
             // section before the ":" and stays unique in this map

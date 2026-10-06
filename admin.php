@@ -498,7 +498,8 @@ if (!function_exists('stats_keyboard')) {
         if ($tplKey !== 'lastHour') {
             array_unshift($args, $dt[0], $dt[1]);
         }
-        return stats_header($lang, $textbotlang) . vsprintf($textbotlang['Admin']['stats'][$tplKey], $args);
+        // ⏱ what the hourly services brought in over the same period
+        return stats_header($lang, $textbotlang) . vsprintf($textbotlang['Admin']['stats'][$tplKey], $args) . payg_stats_line($lang, $fromTs, $toTs);
     }
     // [from, to] unix times of a named period
     function stats_period_range($view)
@@ -582,7 +583,7 @@ if (!function_exists('stats_keyboard')) {
             number_format((int) ($agents['n2'] ?? 0)),
             number_format($panels),
             $gateways
-        );
+        ) . payg_stats_line($lang);
     }
 }
 if (!function_exists('lang_scope_display')) {
@@ -5203,6 +5204,14 @@ if (!function_exists('feature_status_lang_payload')) {
             ['text' => $scorestatus_v == '1' ? $on : $off, 'callback_data' => $tog('score', $scorestatus_v)],
             ['text' => $tx['keyboard']['nightLottery'], 'callback_data' => "none"],
         ];
+        // ⏱ اکانت ساعتی (payg.php): its switch here refuses to turn on until
+        // its ⚙️ has a panel and prices
+        $paygOn = payg_cfg($lang)['on'];
+        $rows[] = [
+            ['text' => $tx['keyboard']['settings'], 'callback_data' => "paygsec:{$lang}"],
+            ['text' => $paygOn ? $on : $off, 'callback_data' => "paygtog:{$lang}:on:f"],
+            ['text' => $tx['Admin']['Payg']['rowLabel'], 'callback_data' => "paygsec:{$lang}"],
+        ];
         return json_encode(['inline_keyboard' => $rows]);
     }
 }
@@ -6739,24 +6748,24 @@ if (preg_match('/^cfgcolbtrw-(getfirst|namefirst)-([a-z]{2})$/', $datain, $cc_m)
     Editmessagetext($from_id, $message_id, $cc_info, $cc_kb, 'HTML');
     return;
 }
-if (preg_match('/^cfgdeliv\|msg\|([a-z]{2})\|([^|]+)\|([bur])\|(ap|at|cb|ct|ar|cr)$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
-    $cd_keyMap = ['ap' => 'textbot.afterPay', 'at' => 'textbot.afterText', 'cb' => 'textbot.getConfigHintBuy', 'ct' => 'textbot.getConfigHintTest', 'ar' => 'users.affiliates.rewardAfterPay', 'cr' => 'users.affiliates.rewardConfigHint'];
+if (preg_match('/^cfgdeliv\|msg\|([a-z]{2})\|([^|]+)\|([burh])\|(ap|at|cb|ct|ar|cr|ah|ch)$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
+    $cd_keyMap = ['ap' => 'textbot.afterPay', 'at' => 'textbot.afterText', 'cb' => 'textbot.getConfigHintBuy', 'ct' => 'textbot.getConfigHintTest', 'ar' => 'users.affiliates.rewardAfterPay', 'cr' => 'users.affiliates.rewardConfigHint', 'ah' => 'users.payg.created', 'ch' => 'users.payg.configHint'];
     $cd_back = "cfgdeliv|p|{$cd_m[1]}|{$cd_m[2]}|{$cd_m[3]}";
     list($cd_text, $cd_kb) = bottext_item_menu_payload($cd_keyMap[$cd_m[4]], $cd_m[1], $textbotlang, $cd_back);
     Editmessagetext($from_id, $message_id, $cd_text, $cd_kb, 'HTML');
     return;
 }
-if (preg_match('/^cfgdeliv\|list\|([a-z]{2})\|([bur])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^cfgdeliv\|list\|([a-z]{2})\|([burh])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
     list($cd_text, $cd_kb) = config_delivery_panels_payload($cd_m[1], $cd_m[2]);
     Editmessagetext($from_id, $message_id, $cd_text, $cd_kb, 'HTML');
     return;
 }
-if (preg_match('/^cfgdeliv\|p\|([a-z]{2})\|([^|]+)\|([bur])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^cfgdeliv\|p\|([a-z]{2})\|([^|]+)\|([burh])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
     list($cd_text, $cd_kb) = config_delivery_panel_payload($cd_m[1], $cd_m[2], $cd_m[3]);
     Editmessagetext($from_id, $message_id, $cd_text, $cd_kb, 'HTML');
     return;
 }
-if (preg_match('/^cfgdeliv\|set\|([a-z]{2})\|([^|]+)\|(purchase|usertest|affrw)\|(1|2)\|([bur])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^cfgdeliv\|set\|([a-z]{2})\|([^|]+)\|(purchase|usertest|affrw|payg)\|(1|2)\|([burh])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
     config_delivery_set_mode($cd_m[3], $cd_m[2], $cd_m[4], $cd_m[1]);
     list($cd_text, $cd_kb) = config_delivery_panel_payload($cd_m[1], $cd_m[2], $cd_m[5]);
     Editmessagetext($from_id, $message_id, $cd_text, $cd_kb, 'HTML');
@@ -6775,7 +6784,7 @@ if (preg_match('/^admperm\|(open|test|buy|affrw)\|([a-z]{2})$/', $datain, $ap_m)
     Editmessagetext($from_id, $message_id, $ap_text, $ap_kb, 'HTML');
     return;
 }
-if (preg_match('/^cfgdeliv\|qr\|([a-z]{2})\|([^|]+)\|(purchase|usertest|affrw)\|([bur])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^cfgdeliv\|qr\|([a-z]{2})\|([^|]+)\|(purchase|usertest|affrw|payg)\|([burh])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
     // mode 2 sends the config page only - there is no message for a QR to ride
     // on, so it cannot be switched on there (only off, if an old setting has it)
     if (config_delivery_mode($cd_m[3], $cd_m[2], $cd_m[1]) === '2' && !config_delivery_qr_on($cd_m[3], $cd_m[2], $cd_m[1])) {
@@ -6792,7 +6801,7 @@ if (preg_match('/^cfgdeliv\|qr\|([a-z]{2})\|([^|]+)\|(purchase|usertest|affrw)\|
     Editmessagetext($from_id, $message_id, $cd_text, $cd_kb, 'HTML');
     return;
 }
-if (preg_match('/^cfgdeliv\|rst\|([a-z]{2})\|([^|]+)\|(purchase|usertest|affrw)\|([bur])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^cfgdeliv\|rst\|([a-z]{2})\|([^|]+)\|(purchase|usertest|affrw|payg)\|([burh])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
     config_delivery_panel_reset($cd_m[2], $cd_m[3], $cd_m[1]);
     list($cd_text, $cd_kb) = config_delivery_panel_payload($cd_m[1], $cd_m[2], $cd_m[4]);
     // names the mode the reset actually restores - config_delivery_default_mode()
@@ -6801,7 +6810,7 @@ if (preg_match('/^cfgdeliv\|rst\|([a-z]{2})\|([^|]+)\|(purchase|usertest|affrw)\
     Editmessagetext($from_id, $message_id, "🔁 این پنل به حالت پیش‌فرض (حالت " . config_delivery_mode_fa(config_delivery_default_mode()) . "، QR کد روشن) برگشت.\n\n" . $cd_text, $cd_kb, 'HTML');
     return;
 }
-if (preg_match('/^cfgdeliv\|cfgcol\|([a-z]{2})\|([^|]+)\|([bur])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^cfgdeliv\|cfgcol\|([a-z]{2})\|([^|]+)\|([burh])$/', $datain, $cd_m) && $adminrulecheck['rule'] == "administrator") {
     // the flow this screen belongs to: test account ('u'), 🎁 gift ('r') or purchase
     $cd_colKind = ['u' => 'usertest', 'r' => 'affrw'][$cd_m[3]] ?? 'buy';
     list($cd_text, $cd_kb) = config_col_order_payload($textbotlang, $cd_m[1], null, "cfgdeliv|p|{$cd_m[1]}|{$cd_m[2]}|{$cd_m[3]}", $cd_colKind === 'affrw' ? 'users.affiliates.rewardConfigHint' : null, $cd_colKind);
@@ -11340,6 +11349,139 @@ elseif ($datain == "systemsms") {
     feature_set($featureKey, $fls_lang, $valuenew);
     $Bot_Status = feature_status_lang_payload($textbotlang, $fls_lang);
     Editmessagetext($from_id, $message_id, feature_status_lang_caption($textbotlang, $fls_lang), $Bot_Status);
+} elseif (preg_match('/^paygsec:([a-z]{2})$/', $datain, $pg_m) && $adminrulecheck['rule'] == "administrator") {
+    // ⏱ اکانت ساعتی of one language - payg.php builds all of its screens
+    step("home", $from_id);
+    [$pg_text, $pg_kb] = payg_admin_screen($pg_m[1]);
+    Editmessagetext($from_id, $message_id, $pg_text, $pg_kb, 'HTML');
+} elseif (preg_match('/^paygtog:([a-z]{2}):(on|unit|start|delmode|convert)(:f)?$/', $datain, $pg_m) && $adminrulecheck['rule'] == "administrator") {
+    $pg_err = payg_admin_toggle($pg_m[1], $pg_m[2]);
+    if ($pg_err !== null) {
+        telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => mb_substr($pg_err, 0, 195), 'show_alert' => true]);
+        return;
+    }
+    if (!empty($pg_m[3])) {
+        // switched from 🌐 وضعیت قابلیت‌ها itself: that list again
+        Editmessagetext($from_id, $message_id, feature_status_lang_caption($textbotlang, $pg_m[1]), feature_status_lang_payload($textbotlang, $pg_m[1]));
+        return;
+    }
+    [$pg_text, $pg_kb] = payg_admin_screen($pg_m[1]);
+    Editmessagetext($from_id, $message_id, $pg_text, $pg_kb, 'HTML');
+} elseif (preg_match('/^paygprice:([a-z]{2}):([tv])$/', $datain, $pg_m) && $adminrulecheck['rule'] == "administrator") {
+    step("home", $from_id);
+    [$pg_text, $pg_kb] = payg_admin_price_screen($pg_m[1], $pg_m[2]);
+    Editmessagetext($from_id, $message_id, $pg_text, $pg_kb, 'HTML');
+} elseif (preg_match('/^paygset:([a-z]{2}):([tv]_(?:f|n|n2)):([us])$/', $datain, $pg_m) && $adminrulecheck['rule'] == "administrator") {
+    // ♾ no charge for that side / ↩️ a reseller group back on the customers' price
+    $pg_err = payg_admin_set($pg_m[1], $pg_m[2], $pg_m[3] === 'u' ? 'u' : '');
+    if ($pg_err !== null) {
+        telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => mb_substr($pg_err, 0, 195), 'show_alert' => true]);
+        return;
+    }
+    [$pg_text, $pg_kb] = payg_admin_price_screen($pg_m[1], $pg_m[2][0]);
+    Editmessagetext($from_id, $message_id, $pg_text, $pg_kb, 'HTML');
+} elseif (preg_match('/^paygok:([a-z]{2}):([tv]_(?:f|n|n2)):(\d+(?:\.\d+)?)$/', $datain, $pg_m) && $adminrulecheck['rule'] == "administrator") {
+    // the calculator's «✅ آره، ذخیره کن»
+    $pg_err = payg_admin_set($pg_m[1], $pg_m[2], $pg_m[3]);
+    if ($pg_err !== null) {
+        telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => mb_substr($pg_err, 0, 195), 'show_alert' => true]);
+        return;
+    }
+    [$pg_text, $pg_kb] = payg_admin_price_screen($pg_m[1], $pg_m[2][0]);
+    Editmessagetext($from_id, $message_id, payg_admin_texts()['saved'] . "\n\n" . $pg_text, $pg_kb, 'HTML');
+} elseif (preg_match('/^paygask:([a-z]{2}):([tv]_(?:f|n|n2)|minbal|max|minage|warn|grace)$/', $datain, $pg_m) && $adminrulecheck['rule'] == "administrator") {
+    $pg_lang = $pg_m[1];
+    $pg_key = $pg_m[2];
+    $pg_r = payg_admin_texts();
+    $pg_cur = currency_for_lang($pg_lang);
+    $pg_price = in_array($pg_key, payg_price_keys(), true);
+    savedata("clear", "pg_key", $pg_key);
+    savedata("save", "pg_lang", $pg_lang);
+    step("paygval", $from_id);
+    // the prompt takes the screen's place, with its own way back out
+    $pg_cancel = json_encode(['inline_keyboard' => [[
+        ['text' => $pg_r['cancel'], 'callback_data' => $pg_price ? "paygprice:{$pg_lang}:{$pg_key[0]}" : "paygsec:{$pg_lang}", 'style' => 'danger'],
+    ]]]);
+    $pg_irt = strtoupper($pg_cur) === 'IRT';
+    Editmessagetext($from_id, $message_id, strtr($pg_r[$pg_price ? 'ask_' . $pg_key[0] : 'ask_' . $pg_key], [
+        '{lang}' => payg_lang_name($pg_lang),
+        '{group}' => $pg_price ? payg_group_names()[substr($pg_key, 2)] : '',
+        '{currency}' => currency_get($pg_cur)['title'] ?? $pg_cur,
+        '{unit}' => payg_cfg($pg_lang)['unit'] === 'minute' ? $pg_r['unitMinuteWord'] : $pg_r['unitHourWord'],
+        '{hint}' => $pg_irt ? $pg_r['hintRial'] : $pg_r['hintCent'],
+        '{example}' => $pg_irt ? $pg_r['warnExampleIrt'] : $pg_r['warnExampleCent'],
+    ]), $pg_cancel, 'HTML');
+} elseif ($user['step'] == "paygval" && $adminrulecheck['rule'] == "administrator") {
+    $pg_data = json_decode((string) $user['Processing_value'], true);
+    $pg_key = (string) ($pg_data['pg_key'] ?? '');
+    $pg_lang = (string) ($pg_data['pg_lang'] ?? 'fa');
+    $pg_r = payg_admin_texts();
+    $pg_res = payg_admin_parse($pg_lang, $pg_key, (string) $text);
+    if (isset($pg_res['error'])) {
+        sendmessage($from_id, $pg_res['error'], null, 'HTML');
+        return;
+    }
+    if (in_array($pg_key, payg_price_keys(), true)) {
+        // a price goes past the calculator first: «مطمئنی؟»
+        step("home", $from_id);
+        $pg_kb = json_encode(['inline_keyboard' => [
+            [['text' => $pg_r['btnSave'], 'callback_data' => "paygok:{$pg_lang}:{$pg_key}:{$pg_res['ok']}", 'style' => 'success']],
+            [['text' => $pg_r['btnNo'], 'callback_data' => "paygprice:{$pg_lang}:{$pg_key[0]}", 'style' => 'danger']],
+        ]]);
+        sendmessage($from_id, payg_admin_calc($pg_lang, $pg_key, (float) $pg_res['ok']), $pg_kb, 'HTML');
+        return;
+    }
+    $pg_err = payg_admin_set($pg_lang, $pg_key, $pg_res['ok']);
+    if ($pg_err !== null) {
+        sendmessage($from_id, $pg_err, null, 'HTML');
+        return;
+    }
+    step("home", $from_id);
+    [$pg_text, $pg_kb] = payg_admin_screen($pg_lang);
+    sendmessage($from_id, $pg_r['saved'] . "\n\n" . $pg_text, $pg_kb, 'HTML');
+} elseif (preg_match('/^paygpan:([a-z]{2})$/', $datain, $pg_m) && $adminrulecheck['rule'] == "administrator") {
+    [$pg_text, $pg_kb] = payg_admin_panels_screen($pg_m[1]);
+    Editmessagetext($from_id, $message_id, $pg_text, $pg_kb, 'HTML');
+} elseif (preg_match('/^paygpt:([a-z]{2}):(.+)$/', $datain, $pg_m) && $adminrulecheck['rule'] == "administrator") {
+    $pg_err = payg_admin_panel_toggle($pg_m[1], $pg_m[2]);
+    if ($pg_err !== null) {
+        telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => mb_substr($pg_err, 0, 195), 'show_alert' => true]);
+        return;
+    }
+    [$pg_text, $pg_kb] = payg_admin_panels_screen($pg_m[1]);
+    Editmessagetext($from_id, $message_id, $pg_text, $pg_kb, 'HTML');
+} elseif (preg_match('/^payglist:([a-z]{2}):(\d+)$/', $datain, $pg_m) && $adminrulecheck['rule'] == "administrator") {
+    [$pg_text, $pg_kb] = payg_admin_list_screen($pg_m[1], (int) $pg_m[2]);
+    Editmessagetext($from_id, $message_id, $pg_text, $pg_kb, 'HTML');
+} elseif (preg_match('/^paygadel:([A-Za-z0-9]+)$/', $datain, $pg_m) && $adminrulecheck['rule'] == "administrator") {
+    $pg_r = payg_admin_texts();
+    $pg_svc = payg_row($pg_m[1]);
+    if ($pg_svc === null || !in_array($pg_svc['status'], ['waiting', 'active', 'stopped'], true)) {
+        telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $pg_r['gone'], 'show_alert' => true]);
+        return;
+    }
+    Editmessagetext($from_id, $message_id, strtr($pg_r['adminDelConfirm'], ['{service}' => htmlspecialchars($pg_svc['username']), '{id}' => $pg_svc['user_id']]), json_encode(['inline_keyboard' => [
+        [['text' => $pg_r['adminDelBtn'], 'callback_data' => "paygadelok:{$pg_svc['id_invoice']}", 'style' => 'danger']],
+        [['text' => $pg_r['back'], 'callback_data' => "payglist:{$pg_svc['lang']}:1", 'style' => 'primary']],
+    ]]), 'HTML');
+} elseif (preg_match('/^paygadelok:([A-Za-z0-9]+)$/', $datain, $pg_m) && $adminrulecheck['rule'] == "administrator") {
+    // what it used up to now is settled first, then it is gone from the
+    // panel and its owner is told
+    $pg_r = payg_admin_texts();
+    $pg_done = payg_locked($pg_m[1], function () use ($pg_m) {
+        $svc = payg_row($pg_m[1]);
+        if ($svc === null || !in_array($svc['status'], ['waiting', 'active', 'stopped'], true)) {
+            return null;
+        }
+        payg_settle($svc);
+        return payg_delete(payg_row($pg_m[1]), 'admin');
+    });
+    if (!is_array($pg_done)) {
+        telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $pg_r['gone'], 'show_alert' => true]);
+        return;
+    }
+    [$pg_text, $pg_kb] = payg_admin_list_screen($pg_done['lang'], 1);
+    Editmessagetext($from_id, $message_id, strtr($pg_r['adminDeleted'], ['{service}' => htmlspecialchars($pg_done['username'])]) . "\n\n" . $pg_text, $pg_kb, 'HTML');
 } elseif (preg_match('/^flsec:([a-z]{2}):(linkapp|wheel|aff|affrw|affc|affr|refvc|refvr|loc|phone|lottery)$/', $datain, $fs_m) && $adminrulecheck['rule'] == "administrator") {
     // ⚙️ تنظیمات - opens the section inline, in the same message, in the same
     // language, instead of the old reply-keyboard screen
@@ -11735,6 +11877,9 @@ elseif ($datain == "systemsms") {
     if ($reportbackup != $createForumTopic['result']['message_thread_id']) {
         update("topicid", "idreport", $createForumTopic['result']['message_thread_id'], "report", "backupfile");
     }
+    // the topics made when first needed (⏱ اکانت ساعتی, 🎁 کانفیگ رایگان)
+    // belonged to the old group: made again, in this one, on their next report
+    report_topic_reset(['paygreport', 'affrwreport']);
     sendmessage($from_id, $textbotlang['Admin']['Channel']['setChannelReport'], $setting_panel, 'HTML');
     update("setting", "Channel_Report", $text);
     step('home', $from_id);
