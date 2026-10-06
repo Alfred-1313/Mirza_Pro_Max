@@ -1,8 +1,8 @@
 <?php
 // ⏱ اکانت ساعتی (pay as you go): a service paid for as it is used - by the
 // minute and/or by the gigabyte - out of the wallet of its language. Every
-// setting is per language (🌐 وضعیت قابلیت‌ها (هر زبان) ← ⏱ اکانت ساعتی, and
-// the web panel's ⏱ page), every price per user group.
+// setting is per language (🏬 تنظیمات فروشگاه ← ⏱ اکانت ساعتی, and the web
+// panel's ⏱ page), every price per user group.
 //
 // Money: cronbot/payg.php runs every minute and takes what the time (and the
 // traffic, read from the panel every two minutes) has cost since the last
@@ -1433,7 +1433,7 @@ if (!function_exists('payg_admin_screen')) {
         }
         return $out;
     }
-    // 🌐 وضعیت قابلیت‌ها (هر زبان) ← ⏱ اکانت ساعتی, for one language
+    // 🏬 تنظیمات فروشگاه ← ⏱ اکانت ساعتی, for one language
     function payg_admin_screen($lang)
     {
         $r = payg_admin_texts();
@@ -1491,7 +1491,8 @@ if (!function_exists('payg_admin_screen')) {
         $rows[] = [$btn(strtr($r['btnConvert'], ['{v}' => $cfg['convert'] ? $r['convertOn'] : $r['convertOff']]), "paygtog:{$lang}:convert", $cfg['convert'] ? 'success' : 'danger')];
         $rows[] = [$btn(strtr($r['btnList'], ['{n}' => number_format($stats['open'])]), "payglist:{$lang}:1")];
         $rows[] = [$btn($r['btnDelivery'], "cfgdeliv|list|{$lang}|h"), $btn($r['btnTexts'], "bt_group|{$lang}|payg")];
-        $rows[] = [$btn($r['back'], "fls_lang:{$lang}", 'danger')];
+        // opened from 🏬 تنظیمات فروشگاه's own keyboard: nothing inline to go back to
+        $rows[] = [$btn($r['close'], 'paygclose', 'danger')];
         return [$text, json_encode(['inline_keyboard' => $rows])];
     }
     // 💵 / 📦: one row per group - the price, ♾ for free, ↩️ for the customers' price

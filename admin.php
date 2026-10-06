@@ -5204,14 +5204,6 @@ if (!function_exists('feature_status_lang_payload')) {
             ['text' => $scorestatus_v == '1' ? $on : $off, 'callback_data' => $tog('score', $scorestatus_v)],
             ['text' => $tx['keyboard']['nightLottery'], 'callback_data' => "none"],
         ];
-        // ⏱ اکانت ساعتی (payg.php): its switch here refuses to turn on until
-        // its ⚙️ has a panel and prices
-        $paygOn = payg_cfg($lang)['on'];
-        $rows[] = [
-            ['text' => $tx['keyboard']['settings'], 'callback_data' => "paygsec:{$lang}"],
-            ['text' => $paygOn ? $on : $off, 'callback_data' => "paygtog:{$lang}:on:f"],
-            ['text' => $tx['Admin']['Payg']['rowLabel'], 'callback_data' => "paygsec:{$lang}"],
-        ];
         return json_encode(['inline_keyboard' => $rows]);
     }
 }
@@ -11349,20 +11341,22 @@ elseif ($datain == "systemsms") {
     feature_set($featureKey, $fls_lang, $valuenew);
     $Bot_Status = feature_status_lang_payload($textbotlang, $fls_lang);
     Editmessagetext($from_id, $message_id, feature_status_lang_caption($textbotlang, $fls_lang), $Bot_Status);
+} elseif ($text == $textbotlang['Admin']['Payg']['rowLabel'] && $adminrulecheck['rule'] == "administrator") {
+    // 🏬 تنظیمات فروشگاه ← ⏱ اکانت ساعتی: opens on fa, like every per-language hub
+    step("home", $from_id);
+    [$pg_text, $pg_kb] = payg_admin_screen('fa');
+    sendmessage($from_id, $pg_text, $pg_kb, 'HTML');
+} elseif ($datain == "paygclose" && $adminrulecheck['rule'] == "administrator") {
+    deletemessage($from_id, $message_id);
 } elseif (preg_match('/^paygsec:([a-z]{2})$/', $datain, $pg_m) && $adminrulecheck['rule'] == "administrator") {
     // ⏱ اکانت ساعتی of one language - payg.php builds all of its screens
     step("home", $from_id);
     [$pg_text, $pg_kb] = payg_admin_screen($pg_m[1]);
     Editmessagetext($from_id, $message_id, $pg_text, $pg_kb, 'HTML');
-} elseif (preg_match('/^paygtog:([a-z]{2}):(on|unit|start|delmode|convert)(:f)?$/', $datain, $pg_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^paygtog:([a-z]{2}):(on|unit|start|delmode|convert)$/', $datain, $pg_m) && $adminrulecheck['rule'] == "administrator") {
     $pg_err = payg_admin_toggle($pg_m[1], $pg_m[2]);
     if ($pg_err !== null) {
         telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => mb_substr($pg_err, 0, 195), 'show_alert' => true]);
-        return;
-    }
-    if (!empty($pg_m[3])) {
-        // switched from 🌐 وضعیت قابلیت‌ها itself: that list again
-        Editmessagetext($from_id, $message_id, feature_status_lang_caption($textbotlang, $pg_m[1]), feature_status_lang_payload($textbotlang, $pg_m[1]));
         return;
     }
     [$pg_text, $pg_kb] = payg_admin_screen($pg_m[1]);

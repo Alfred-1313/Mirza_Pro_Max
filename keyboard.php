@@ -631,7 +631,8 @@ $shopkeyboard = json_encode([
         [['text' => $textbotlang['keyboard']['shopFeatureStatus']]],
         [['text' => $textbotlang['keyboard']['manageProducts']], ['text' => $textbotlang['keyboard']['manageCategory']]],
         [['text' => $textbotlang['keyboard']['financial']], ['text' => $textbotlang['Admin']['LangScope']['hubBtn']]],
-        [['text' => $textbotlang['keyboard']['topupPackages']]],
+        // ⏱ اکانت ساعتی is a way of selling, so its settings live with the shop's
+        [['text' => $textbotlang['keyboard']['topupPackages']], ['text' => $textbotlang['Admin']['Payg']['rowLabel']]],
         [['text' => $textbotlang['Admin']['backAdminBtn']], ['text' => $textbotlang['Admin']['backMenuBtn']]]
     ],
     'resize_keyboard' => true
@@ -2756,6 +2757,19 @@ function keyboard_list_text($lang, $groupFilter = null)
                 }
                 $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['groupServicesLabel'], 'callback_data' => "bt_group|$lang|myservices", 'style' => 'primary']];
             }
+            // ⏱ اکانت ساعتی: a way of buying (its settings are in 🏬 تنظیمات
+            // فروشگاه), so its messages sit with the purchase's
+            if (!empty($bt_grouped['payg'])) {
+                $bt_pg_custom = false;
+                foreach ($bt_grouped['payg'] as $bt_g) {
+                    list(, $bt_g_style) = $bt_decorate($bt_g['key'], $bt_g['label']);
+                    if ($bt_g_style !== '') {
+                        $bt_pg_custom = true;
+                        break;
+                    }
+                }
+                $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['groupPaygLabel'], 'callback_data' => "bt_group|$lang|payg", 'style' => $bt_pg_custom ? 'success' : 'primary']];
+            }
             // 💰 افزایش موجودی gets its own divider + entry directly under the
             // services row: its messages used to sit inside 🛒 مراحل خرید even
             // though topping the wallet up is a separate journey from buying a
@@ -2774,7 +2788,6 @@ function keyboard_list_text($lang, $groupFilter = null)
             'home_features:verify' => ['verify', 'groupVerifyLabel'],
             'home_features:wheel' => ['wheel', 'groupWheelLabel'],
             'home_features:referral' => ['referral', 'groupReferralLabel'],
-            'home_features:payg' => ['payg', 'groupPaygLabel'],
         ] as $bt_sec_owner => $bt_sec_group) {
             // one section may own several group rows, so the key carries the
             // section before the ":" and stays unique in this map

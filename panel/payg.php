@@ -5,7 +5,7 @@ require_once __DIR__ . '/inc/langsync.php';
 require_auth();
 
 // ⏱ اکانت ساعتی, one language at a time - the very settings of the bot's
-// 🌐 وضعیت قابلیت‌ها ← ⏱ اکانت ساعتی (feature_lang_settings), checked by the
+// 🏬 تنظیمات فروشگاه ← ⏱ اکانت ساعتی (feature_lang_settings), checked by the
 // same rules (payg.php): it does not go on without a panel and prices, no
 // group may be free on both sides, and only panels the bot can bill on.
 $t = $textbotlang['panel'];

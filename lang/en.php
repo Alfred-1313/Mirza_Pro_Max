@@ -37,7 +37,7 @@ Current language: <b>{lang}</b>',
                 'groupWheelCaption' => "🎲 <b>Wheel of fortune messages</b>\n\nWhich one do you want to edit?\n\n📌 The prize amount is set in «🌐 Feature status (per language)» → ⚙️ wheel settings.\n\nCurrent language: <b>{lang}</b>",
                 'groupReferralCaption' => "🎁 <b>Referral messages & buttons</b>\n\nWhich one do you want to edit?\n\n📌 The commission, gift amount and banner are set in «🌐 Feature status (per language)» → ⚙️ referral settings.\n\nCurrent language: <b>{lang}</b>",
                 'groupPaygLabel' => '⏱ Hourly subscription messages & buttons',
-                'groupPaygCaption' => "⏱ <b>Hourly subscription messages & buttons</b>\n\nWhich one do you want to edit? Buttons are shown with the same name and emoji this language's users see.\n\n📌 On/off, panels, prices and rules are set in «🌐 Feature status (per language)» → ⚙️ next to «⏱ Hourly subscription» (its button is also at the bottom of this screen).\n\nCurrent language: <b>{lang}</b>",
+                'groupPaygCaption' => "⏱ <b>Hourly subscription messages & buttons</b>\n\nWhich one do you want to edit? Buttons are shown with the same name and emoji this language's users see.\n\n📌 On/off, panels, prices and rules are set in «🏬 Store settings» → «⏱ Hourly subscription» (its button is also at the bottom of this screen).\n\nCurrent language: <b>{lang}</b>",
                 'msg_closed' => 'Closed.',
                 'langs' => [
                         'fa' => '🇮🇷 فارسی',
@@ -5472,7 +5472,7 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'refVipMissing' => 'These users were not found: %s',
                 // ⏱ hourly subscription (panel/payg.php)
                 'pgPageTitle' => '⏱ Hourly subscription',
-                'pgPageLede' => 'The bot\'s ⏱ hourly subscription (🌐 Feature status), per language',
+                'pgPageLede' => 'The bot\'s ⏱ hourly subscription (🏬 Store settings), per language',
                 'pgStatusTitle' => 'Status',
                 'pgStatusSub' => 'Hourly subscriptions for %s users',
                 'pgOn' => 'Hourly subscriptions on',
