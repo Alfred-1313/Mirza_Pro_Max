@@ -22465,8 +22465,10 @@ if ($datain == "linkappsetting") {
     if (!in_array($bt_lang, panel_langs(), true)) {
         $bt_lang = 'fa';
     }
-    $bt_group_keys = array_column(array_filter($textbotlang['bottext']['items'], function ($it) use ($bt_group) {
-        return ($it['group'] ?? '') === $bt_group;
+    // ⏱'s index owns no items itself: «reset all» there means all of its sub-screens'
+    $bt_reset_groups = $bt_group === 'payg' ? array_keys($textbotlang['bottext']['paygSubs'] ?? []) : [$bt_group];
+    $bt_group_keys = array_column(array_filter($textbotlang['bottext']['items'], function ($it) use ($bt_reset_groups) {
+        return in_array($it['group'] ?? '', $bt_reset_groups, true);
     }), 'key');
     bottext_reset_keys($bt_group_keys, $bt_lang);
     $textbotlang = panel_texts();

@@ -2583,11 +2583,27 @@ function keyboard_list_text($lang, $groupFilter = null)
             $keyboard_text['inline_keyboard'][] = [['text' => bt_section_meta('cfgdeliv_link')['label'], 'callback_data' => 'bt_sep|cfgdeliv_link']];
             $keyboard_text['inline_keyboard'][] = [['text' => '📌 نحوه‌ی نمایش کانفیگ', 'callback_data' => "cfgdeliv|list|{$lang}|b", 'style' => 'primary']];
         }
+        // ⏱'s screen is only an index - its 71 items on one screen were too
+        // many to find anything in. One row per sub-screen (each a group of
+        // its own), green once anything on it is customized
+        $bt_payg_subs = $textbotlang['bottext']['paygSubs'] ?? [];
         if ($groupFilter === 'payg') {
-            // ⏱'s config on delivery, and its own settings, under one heading
-            $keyboard_text['inline_keyboard'][] = [['text' => bt_section_meta('payg_cfg')['label'], 'callback_data' => 'bt_sep|payg_cfg']];
-            $keyboard_text['inline_keyboard'][] = [['text' => '📌 نحوه‌ی نمایش کانفیگ (اکانت ساعتی)', 'callback_data' => "cfgdeliv|list|{$lang}|h", 'style' => 'primary']];
+            foreach ($bt_payg_subs as $bt_sub => $bt_sub_meta) {
+                $bt_sub_custom = false;
+                foreach (($bt_grouped[$bt_sub] ?? []) as $bt_g) {
+                    list(, $bt_g_style) = $bt_decorate($bt_g['key'], $bt_g['label']);
+                    if ($bt_g_style !== '') {
+                        $bt_sub_custom = true;
+                        break;
+                    }
+                }
+                $keyboard_text['inline_keyboard'][] = [['text' => $bt_sub_meta['label'], 'callback_data' => "bt_group|$lang|$bt_sub", 'style' => $bt_sub_custom ? 'success' : 'primary']];
+            }
             $keyboard_text['inline_keyboard'][] = [['text' => '⚙️ تنظیمات اکانت ساعتی', 'callback_data' => "paygsec:{$lang}", 'style' => 'primary']];
+        }
+        if ($groupFilter === 'paygdeliver') {
+            // decides which of the two texts above the customer gets
+            $keyboard_text['inline_keyboard'][] = [['text' => '📌 نحوه‌ی نمایش کانفیگ', 'callback_data' => "cfgdeliv|list|{$lang}|h", 'style' => 'primary']];
         }
         if ($groupFilter === 'topup') {
             // The card-to-card caption/button rows, moved here from
@@ -2658,10 +2674,15 @@ function keyboard_list_text($lang, $groupFilter = null)
         if ($groupFilter === 'topupdisc') {
             $keyboard_text['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "bt_group|$lang|topup", 'style' => 'danger']];
         }
-        // 👤's screen goes back to 👤 مدیریت کاربر, on this same tab
-        $keyboard_text['inline_keyboard'][] = $groupFilter === 'usermgmt'
-            ? [['text' => '🔙 بازگشت به مدیریت کاربر', 'callback_data' => "umlang:$lang", 'style' => 'danger']]
-            : [['text' => $textbotlang['bottext']['backToListLabel'], 'callback_data' => "btact|back|$lang", 'style' => 'danger']];
+        // ⏱'s sub-screens go back to its index only - the index has the way out
+        if (isset($bt_payg_subs[$groupFilter])) {
+            $keyboard_text['inline_keyboard'][] = [['text' => '🔙 بازگشت به منوی قبل', 'callback_data' => "bt_group|$lang|payg", 'style' => 'danger']];
+        } else {
+            // 👤's screen goes back to 👤 مدیریت کاربر, on this same tab
+            $keyboard_text['inline_keyboard'][] = $groupFilter === 'usermgmt'
+                ? [['text' => '🔙 بازگشت به مدیریت کاربر', 'callback_data' => "umlang:$lang", 'style' => 'danger']]
+                : [['text' => $textbotlang['bottext']['backToListLabel'], 'callback_data' => "btact|back|$lang", 'style' => 'danger']];
+        }
         $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['btn_close'], 'callback_data' => 'bt_close', 'style' => 'danger']];
         $bt_captionKey = [
             'myservices' => 'groupServicesCaption',
@@ -2675,7 +2696,7 @@ function keyboard_list_text($lang, $groupFilter = null)
             'usermgmt' => 'groupUserMgmtCaption',
             'payg' => 'groupPaygCaption',
         ][$groupFilter] ?? 'groupBuyflowCaption';
-        $bt_caption_tpl = $textbotlang['bottext'][$bt_captionKey];
+        $bt_caption_tpl = isset($bt_payg_subs[$groupFilter]) ? $bt_payg_subs[$groupFilter]['caption'] : $textbotlang['bottext'][$bt_captionKey];
         $bt_caption = strtr($bt_caption_tpl, ['{lang}' => $textbotlang['bottext']['langs'][$lang] ?? $lang]);
         // the card-to-card previews moved onto that gateway's own screen, next
         // to the buttons that actually edit them
@@ -2758,10 +2779,15 @@ function keyboard_list_text($lang, $groupFilter = null)
                 $keyboard_text['inline_keyboard'][] = [['text' => $textbotlang['bottext']['groupServicesLabel'], 'callback_data' => "bt_group|$lang|myservices", 'style' => 'primary']];
             }
             // ⏱ اکانت ساعتی: a way of buying (its settings are in 🏬 تنظیمات
-            // فروشگاه), so its messages sit with the purchase's
-            if (!empty($bt_grouped['payg'])) {
+            // فروشگاه), so its messages sit with the purchase's. They live on
+            // its sub-screens (bottext.paygSubs), so the row answers for those
+            $bt_pg_items = [];
+            foreach (array_keys($textbotlang['bottext']['paygSubs'] ?? []) as $bt_sub) {
+                $bt_pg_items = array_merge($bt_pg_items, $bt_grouped[$bt_sub] ?? []);
+            }
+            if ($bt_pg_items) {
                 $bt_pg_custom = false;
-                foreach ($bt_grouped['payg'] as $bt_g) {
+                foreach ($bt_pg_items as $bt_g) {
                     list(, $bt_g_style) = $bt_decorate($bt_g['key'], $bt_g['label']);
                     if ($bt_g_style !== '') {
                         $bt_pg_custom = true;

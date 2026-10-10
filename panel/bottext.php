@@ -13,14 +13,18 @@ $t = $textbotlang['panel'];
 $bt = $textbotlang['bottext'];
 $lang = web_lang_pick();
 
+// ⏱'s items sit on sub-screens of its 🎨 screen in the bot; here they stay
+// one tab, each sub-screen a heading of its own
+$paygSubs = $bt['paygSubs'] ?? [];
 $labels = [];
 foreach ($bt['items'] as $it) {
     if (!empty($it['key'])) {
-        $labels[$it['key']] = ['label' => $it['label'] ?? $it['key'], 'group' => $it['group'] ?? ''];
+        $g = $it['group'] ?? '';
+        $labels[$it['key']] = ['label' => $it['label'] ?? $it['key'], 'group' => isset($paygSubs[$g]) ? 'payg' : $g, 'sub' => isset($paygSubs[$g]) ? $g : ''];
     }
 }
 foreach (bottext_all_item_keys($textbotlang) as $key) {
-    $labels[$key] = $labels[$key] ?? ['label' => $key, 'group' => ''];
+    $labels[$key] = $labels[$key] ?? ['label' => $key, 'group' => '', 'sub' => ''];
 }
 // what the language says before any change: its own file, Persian where it has no word
 $defaults = require dirname(__DIR__) . '/lang/' . $lang . '.php';
@@ -165,7 +169,7 @@ foreach ($labels as $key => $meta) {
     }
     $groupCounts[$meta['group']] = ($groupCounts[$meta['group']] ?? 0) + 1;
     if ($group === '*' || $meta['group'] === $group) {
-        $visible[$key] = ['label' => $meta['label'], 'current' => $current, 'default' => $default, 'textChanged' => $own !== null, 'changed' => $changed,
+        $visible[$key] = ['label' => $meta['label'], 'sub' => $meta['sub'], 'current' => $current, 'default' => $default, 'textChanged' => $own !== null, 'changed' => $changed,
             'sticker' => $ownSticker, 'reaction' => $ownReaction];
     }
 }
@@ -230,7 +234,10 @@ echo web_lang_assets();
                         </div>
                     </div>
                 <?php endif; ?>
-                <?php foreach ($visible as $key => $v): $k = htmlspecialchars($key); ?>
+                <?php $sub = ''; foreach ($visible as $key => $v): $k = htmlspecialchars($key); ?>
+                    <?php if ($v['sub'] !== '' && $v['sub'] !== $sub): $sub = $v['sub']; ?>
+                        <h3 style="margin:6px 2px -6px;font-size:.95rem"><?= htmlspecialchars($paygSubs[$sub]['label']) ?></h3>
+                    <?php endif; ?>
                     <div class="field">
                         <label style="display:flex;justify-content:space-between;align-items:center;gap:8px">
                             <span><?= htmlspecialchars($v['label']) ?> <span class="cm" dir="ltr" style="font-size:.7rem;opacity:.6"><?= $k ?></span></span>
