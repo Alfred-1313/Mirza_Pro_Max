@@ -1032,7 +1032,7 @@ if (!function_exists('bottext_item_menu_payload')) {
             $bt_extra_note = "\nℹ️ این پیام وقتی نشون داده می‌شه که کاربر برای تمدید یه سرویس، محصول/مدت رو انتخاب کرده و آماده‌ی تأیید نهاییه.\n💡 دکمه‌ی «افزایش موجودی» بین دکمه‌های این صفحه از تنظیمات مشترک همون دکمه (پیام «موجودی کافی نیست») میاد - جدا نیست.\n💡 اگه موجودی کاربر کافی نباشه، این پیام دست‌نخورده می‌مونه و فقط یه هشدار Alert نشون داده می‌شه (⚠️ هشدار موجودی ناکافی (تمدید)) - با زدن «افزایش موجودی»، این پیام با لیست روش‌های پرداخت جایگزین می‌شه و دکمه‌ی سومِ «بازگشت» (رنگ/متن قابل تنظیم از همین‌جا) دوباره برمی‌گردونتش به همینجا.\n";
         }
         if ($bt_key === 'users.invalidusername') {
-            $bt_extra_note = "\nℹ️ این پیام وقتی نشون داده می‌شه که کاربر اسم دلخواه سرویسش رو بفرسته و قابل قبول نباشه - توی خرید سرویس، اکانت تست و اسم دلخواه نماینده؛ همین یک متن همه‌جا استفاده می‌شه.\n📌 اسم قابل قبول: فقط حرف انگلیسی، عدد و _ ، با حرف شروع بشه، با _ تموم نشه و ۳ تا ۳۳ حرف باشه.\n";
+            $bt_extra_note = "\nℹ️ این پیام وقتی نشون داده می‌شه که کاربر اسم دلخواه سرویسش رو بفرسته و قابل قبول نباشه - توی خرید سرویس، اکانت تست، اکانت ساعتی و اسم دلخواه نماینده؛ همین یک متن همه‌جا استفاده می‌شه.\n📌 اسم قابل قبول: فقط حرف انگلیسی، عدد و _ ، با حرف شروع بشه، با _ تموم نشه و ۳ تا ۳۳ حرف باشه.\n";
         }
         if ($bt_key === 'users.sell.noCredit') {
             $bt_extra_note = "\nℹ️ این پیام وقتی نشون داده می‌شه که کاربر توی هر مرحله‌ی پرداختی (خرید، حجم/زمان اضافه، شارژ کیف پول) موجودی کافی نداشته باشه و باید یه روش پرداخت انتخاب کنه - یه پیام مشترکه، همه‌جا با هم عوض می‌شه. (تمدید سرویس دیگه از این پیام استفاده نمی‌کنه - به ⚠️ هشدار موجودی ناکافی (تمدید) نگاه کن.)\n";
@@ -3960,15 +3960,8 @@ if (!function_exists('card_invoice_btnlayout_payload')) {
         $btns = [];
         foreach ($cards as $i => $c) {
             $which = card_invoice_copy_key($i + 1);
-            $style = card_invoice_btnstyle_for($lang, $which);
-            $label = trim((string) ($style['label'] ?? '')) !== ''
-                ? $style['label']
-                : card_invoice_copy_label($i + 1, $total, lang_tab_texts($lang));
-            $btn = ['text' => $label];
-            $color = card_invoice_btnstyle_color($lang, $which);
-            if ($color !== '') {
-                $btn['style'] = $color;
-            }
+            // the button as the invoice draws it - name, emoji, colour
+            $btn = topup_styled_button(card_invoice_copy_label($i + 1, $total, lang_tab_texts($lang)), card_invoice_btnstyle_for($lang, $which), '', card_invoice_btnstyle_default_color($which));
             if ($sel !== null && $i === $sel) {
                 $btn['text'] = '🔵 ' . $btn['text'];
                 $btn['callback_data'] = "cardbtnlaycancel:{$lang}";
@@ -11447,6 +11440,16 @@ elseif ($datain == "systemsms") {
     step("home", $from_id);
     [$pg_text, $pg_kb] = payg_admin_screen($pg_lang);
     sendmessage($from_id, $pg_r['saved'] . "\n\n" . $pg_text, $pg_kb, 'HTML');
+} elseif (preg_match('/^paygun:([a-z]{2})$/', $datain, $pg_m) && $adminrulecheck['rule'] == "administrator") {
+    // 💡 روش ساخت نام کاربری of ⏱
+    [$pg_text, $pg_kb] = payg_admin_uname_screen($pg_m[1]);
+    Editmessagetext($from_id, $message_id, $pg_text, $pg_kb, 'HTML');
+} elseif (preg_match('/^paygunset:([a-z]{2}):([a-z]+)$/', $datain, $pg_m) && $adminrulecheck['rule'] == "administrator") {
+    if (array_key_exists($pg_m[2], payg_uname_modes())) {
+        feature_setting_set('payg_uname', $pg_m[1], $pg_m[2]);
+    }
+    [$pg_text, $pg_kb] = payg_admin_uname_screen($pg_m[1]);
+    Editmessagetext($from_id, $message_id, $pg_text, $pg_kb, 'HTML');
 } elseif (preg_match('/^paygpan:([a-z]{2})$/', $datain, $pg_m) && $adminrulecheck['rule'] == "administrator") {
     [$pg_text, $pg_kb] = payg_admin_panels_screen($pg_m[1]);
     Editmessagetext($from_id, $message_id, $pg_text, $pg_kb, 'HTML');
@@ -12432,7 +12435,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['GatewayLang']['cardBtnStyleCaption'], card_invoice_btnstyle_hub_payload($cb_m[1], $textbotlang), 'HTML');
 } elseif (preg_match('/^cardbtncol:([a-z]{2})$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['colorCaption'], card_invoice_btncolor_payload($cb_m[1], $textbotlang), 'HTML');
-} elseif (preg_match('/^cardbtncolpick:([a-z]{2}):(copyamt|copyCard\d*|paidReceipt|reissue)$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^cardbtncolpick:([a-z]{2}):(copyamt|copyCard\d*|paidReceipt|reissue|paid)$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
     $cb_colorOrder = ['', 'primary', 'success', 'danger'];
     $cb_style = card_invoice_btnstyle_for($cb_m[1], $cb_m[2]);
     $cb_curPos = array_search((string) ($cb_style['color'] ?? ''), $cb_colorOrder, true);
@@ -12463,7 +12466,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['layoutCaption'], card_invoice_btnlayout_payload($cb_m[1], $textbotlang), 'HTML');
 } elseif (preg_match('/^cardbtnren:([a-z]{2})$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['BtnStyle']['renameCaption'], card_invoice_btnrename_payload($cb_m[1], $textbotlang), 'HTML');
-} elseif (preg_match('/^cardbtnrenpick:([a-z]{2}):(copyamt|copyCard\d*|paidReceipt|reissue)$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^cardbtnrenpick:([a-z]{2}):(copyamt|copyCard\d*|paidReceipt|reissue|paid)$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
     $cb_style = card_invoice_btnstyle_for($cb_m[1], $cb_m[2]);
     $cb_items = card_invoice_btnstyle_items($textbotlang, $cb_m[1]);
     $cb_label = topup_styled_button($cb_items[$cb_m[2]] ?? $cb_m[2], $cb_style, '')['text'];
@@ -12473,11 +12476,11 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     $cb_prompt = sendmessage($from_id, sprintf($textbotlang['Admin']['BtnStyle']['askRenameForItem'], $cb_label), $cb_cancelKb, 'HTML');
     $cb_promptId = (int) ($cb_prompt['result']['message_id'] ?? 0);
     step("cardbtnreni:{$cb_m[1]}:{$cb_m[2]}:{$message_id}:{$cb_promptId}", $from_id);
-} elseif (preg_match('/^cardbtnrencancel:([a-z]{2}):(copyamt|copyCard\d*|paidReceipt|reissue):([0-9]+)$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^cardbtnrencancel:([a-z]{2}):(copyamt|copyCard\d*|paidReceipt|reissue|paid):([0-9]+)$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
     step('home', $from_id);
     deletemessage($from_id, $message_id);
     Editmessagetext($from_id, (int) $cb_m[3], $textbotlang['Admin']['BtnStyle']['renameCaption'], card_invoice_btnrename_payload($cb_m[1], $textbotlang), 'HTML');
-} elseif (preg_match('/^cardbtnreni:([a-z]{2}):(copyamt|copyCard\d*|paidReceipt|reissue):([0-9]+):([0-9]+)$/', (string) $user['step'], $cb_m) && $datain == '') {
+} elseif (preg_match('/^cardbtnreni:([a-z]{2}):(copyamt|copyCard\d*|paidReceipt|reissue|paid):([0-9]+):([0-9]+)$/', (string) $user['step'], $cb_m) && $datain == '') {
     deletemessage($from_id, $message_id);
     $cb_newName = trim((string) $text) === '0' ? '' : trim((string) $text);
     $cb_style = card_invoice_btnstyle_for($cb_m[1], $cb_m[2]);
@@ -12487,7 +12490,8 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     deletemessage($from_id, (int) $cb_m[4]);
     Editmessagetext($from_id, (int) $cb_m[3], $textbotlang['Admin']['BtnStyle']['renameCaption'], card_invoice_btnrename_payload($cb_m[1], $textbotlang), 'HTML');
 } elseif (preg_match('/^cardbtnrenreset:([a-z]{2})$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
-    foreach (['copyamt', 'copyCard', 'paidReceipt'] as $cb_which) {
+    // every button the screen lists - the later cards, reissue and paid too
+    foreach (array_keys(card_invoice_btnstyle_items($textbotlang, $cb_m[1])) as $cb_which) {
         $cb_style = card_invoice_btnstyle_for($cb_m[1], $cb_which);
         $cb_style['label'] = '';
         card_invoice_btnstyle_set($cb_m[1], $cb_which, $cb_style);
@@ -12525,7 +12529,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
 } elseif (preg_match('/^gwinvbtnemo:([a-z]{2}):([a-z0-9]+)$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     // ---- 🎭 emoji on the invoice buttons ----
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['emojiCaption'], topup_invoice_btnemoji_payload($gb_m[1], $gb_m[2], $textbotlang), 'HTML');
-} elseif (preg_match('/^gwinvbtnemopick:([a-z]{2}):([a-z0-9]+):([a-z0-9]+)$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^gwinvbtnemopick:([a-z]{2}):([a-z0-9]+):([A-Za-z0-9]+)$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     $gb_items = topup_invoice_btnstyle_items($gb_m[2], $textbotlang, $gb_m[1]);
     if (!isset($gb_items[$gb_m[3]])) {
         return;
@@ -12536,11 +12540,11 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     ]]);
     $gb_prompt = sendmessage($from_id, sprintf($textbotlang['Admin']['TopupPkg']['askEmojiForItemTopup'], $gb_label), $gb_cancelKb, 'HTML');
     step("gwinvbtnemoi:{$gb_m[1]}:{$gb_m[2]}:{$gb_m[3]}:{$message_id}:" . (int) ($gb_prompt['result']['message_id'] ?? 0), $from_id);
-} elseif (preg_match('/^gwinvbtnemocancel:([a-z]{2}):([a-z0-9]+):([a-z0-9]+):([0-9]+)$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^gwinvbtnemocancel:([a-z]{2}):([a-z0-9]+):([A-Za-z0-9]+):([0-9]+)$/', $datain, $gb_m) && $adminrulecheck['rule'] == "administrator") {
     step('home', $from_id);
     deletemessage($from_id, $message_id);
     Editmessagetext($from_id, (int) $gb_m[4], $textbotlang['Admin']['Help']['emojiCaption'], topup_invoice_btnemoji_payload($gb_m[1], $gb_m[2], $textbotlang), 'HTML');
-} elseif (preg_match('/^gwinvbtnemoi:([a-z]{2}):([a-z0-9]+):([a-z0-9]+):([0-9]+):([0-9]+)$/', (string) $user['step'], $gb_m) && $datain == '') {
+} elseif (preg_match('/^gwinvbtnemoi:([a-z]{2}):([a-z0-9]+):([A-Za-z0-9]+):([0-9]+):([0-9]+)$/', (string) $user['step'], $gb_m) && $datain == '') {
     deletemessage($from_id, $message_id);
     $gb_style = topup_invoice_btnstyle_for($gb_m[1], $gb_m[2], $gb_m[3]);
     if (trim((string) $text) === '0') {

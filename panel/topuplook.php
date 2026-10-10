@@ -119,7 +119,7 @@ if (in_array('btnstyle', $has, true)) {
     if ($key === 'card') {
         // the ones the bot's card-invoice screens restyle
         foreach (card_invoice_btnstyle_items($tx, $lang) as $which => $name) {
-            if (preg_match('/^(copyamt|copyCard\d*|paidReceipt|reissue)$/', (string) $which)) {
+            if (preg_match('/^(copyamt|copyCard\d*|paidReceipt|reissue|paid)$/', (string) $which)) {
                 $invItems[$which] = [$name, card_invoice_btnstyle_default_color($which), card_invoice_btnstyle_for($lang, $which)];
             }
         }
@@ -214,14 +214,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $err = $t['menuNameInvalid'];
             break;
         }
-        if ($key === 'card') {
-            // label and colour only, as the bot's card screens offer
-            $new = tl_btn_style($cur, $p, false, false);
-            if ($new != $cur) {
-                $writes[] = fn() => card_invoice_btnstyle_set($lang, $which, $new);
-            }
-            continue;
-        }
+        // card-to-card too: name, emoji and colour, as the bot's screens offer
+        // (topup_invoice_btnstyle_set saves card's in its own store)
         if (!$emojiOk(trim((string) ($p['emoji'] ?? '')))) {
             $err = $t['menuEmojiInvalid'];
             break;
@@ -344,13 +338,13 @@ $chk = fn($name, $on, $label) => '<label class="lang-chip"><input type="checkbox
     <div class="card-head"><div><div class="card-title">🧾 <?= $t['tlInvoice'] ?></div><div class="card-subtitle"><?= $key === 'card' ? $t['tlInvoiceCardSub'] : $t['tlInvoiceSub'] ?></div></div></div>
     <div class="card-body">
       <div class="tbl-wrap"><table class="tbl-xl">
-        <thead><tr><th><?= $t['menuColButton'] ?></th><th><?= $t['menuColName'] ?></th><?php if ($key !== 'card'): ?><th><?= $t['menuColEmoji'] ?></th><?php endif; ?><th><?= $t['menuColColor'] ?></th></tr></thead>
+        <thead><tr><th><?= $t['menuColButton'] ?></th><th><?= $t['menuColName'] ?></th><th><?= $t['menuColEmoji'] ?></th><th><?= $t['menuColColor'] ?></th></tr></thead>
         <tbody>
         <?php foreach ($invItems as $which => [$name, $defColor, $st]): $n = "inv[$which]"; ?>
           <tr>
             <td class="cs"><?= htmlspecialchars((string) $name) ?></td>
             <td><input type="text" class="input" name="<?= $n ?>[name]" value="<?= htmlspecialchars((string) ($st['label'] ?? '')) ?>" placeholder="<?= htmlspecialchars((string) $name) ?>" maxlength="64"></td>
-            <?php if ($key !== 'card'): ?><td style="white-space:nowrap"><?= $emojiIn($n, $st) ?></td><?php endif; ?>
+            <td style="white-space:nowrap"><?= $emojiIn($n, $st) ?></td>
             <td><?= $colorSel($n . '[color]', (string) ($st['color'] ?? ''), (string) $defColor) ?></td>
           </tr>
         <?php endforeach; ?>

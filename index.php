@@ -3639,6 +3639,10 @@ if (!$pg_normal && ($text == $textbotlang['textbot']['sell'] || $datain == "buy"
 // ⏱ اشتراک ساعتی: the panels, or straight to the only one's rates
 if ($datain === 'buytype_payg' || preg_match('/^paygpanel_(.+)$/', (string) $datain, $pg_m)) {
     $pg_w = $textbotlang['users']['payg'];
+    // ↩️ from the 💡 name's ask: it waits for nothing any more
+    if (str_starts_with((string) $user['step'], 'paygname|')) {
+        step('home', $from_id);
+    }
     $pg_panels = payg_user_panels($user);
     if (!$pg_panels) {
         telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $pg_w['off'], 'show_alert' => true]);
@@ -3666,13 +3670,39 @@ if ($datain === 'buytype_payg' || preg_match('/^paygpanel_(.+)$/', (string) $dat
     sell_screen($from_id, $message_id, $pg_text, $pg_kb);
     return;
 }
+// 💡 «نام کاربری دلخواه»: the name the customer sent (step paygname|<panel>|
+// <the ask's message>) - on to ✅ بساز with it; a /command is not a try at one
+$pg_typed = null;
+if ((string) $datain === '' && preg_match('/^paygname\|(.+)\|(\d+)$/', (string) $user['step'], $pg_nm)) {
+    $pg_try = trim((string) $text);
+    if ($pg_try !== '' && $pg_try[0] === '/') {
+        step('home', $from_id);
+        $user['step'] = 'home';
+    } elseif (!payg_name_ok($pg_try)) {
+        sendmessage($from_id, $textbotlang['users']['invalidusername'], null, 'HTML');
+        return;
+    } else {
+        step('home', $from_id);
+        $user['step'] = 'home';
+        $pg_typed = strtolower($pg_try);
+        $datain = 'paygmk_' . $pg_nm[1];
+        $message_id = (int) $pg_nm[2];
+    }
+}
 // ✅ بساز: made, and delivered like a purchase (📌 نحوه‌ی نمایش کانفیگ's ⏱ kind)
 if (preg_match('/^paygmk_(.+)$/', (string) $datain, $pg_m)) {
     $pg_w = $textbotlang['users']['payg'];
-    Editmessagetext($from_id, $message_id, $pg_w['creating'], null);
-    // a second tap while the first is still being made waits for it, and
-    // then meets the 🔢 count and the wallet as the first one left them
-    $pg_res = payg_locked('create_' . $from_id, fn() => payg_create($from_id, $pg_m[1]));
+    // 💡 «نام کاربری دلخواه»: the name is asked for first - once the wallet,
+    // the 🔢 count and the panel are known to be fine
+    $pg_ask = $pg_typed === null && payg_uname_asks($user['lang'] ?? 'fa');
+    if ($pg_ask) {
+        $pg_res = payg_create($from_id, $pg_m[1], null, true);
+    } else {
+        Editmessagetext($from_id, $message_id, $pg_w['creating'], null);
+        // a second tap while the first is still being made waits for it, and
+        // then meets the 🔢 count and the wallet as the first one left them
+        $pg_res = payg_locked('create_' . $from_id, fn() => payg_create($from_id, $pg_m[1], $pg_typed));
+    }
     if (!is_array($pg_res)) {
         $pg_res = ['error' => 'panel'];
     }
@@ -3686,6 +3716,11 @@ if (preg_match('/^paygmk_(.+)$/', (string) $datain, $pg_m)) {
             $pg_msg = ['max' => strtr($pg_w['maxReached'], ['{max}' => (string) ($pg_res['max'] ?? 1)]), 'full' => $pg_w['panelFull'], 'off' => $pg_w['off']][$pg_err] ?? $pg_w['createFailed'];
             Editmessagetext($from_id, $message_id, $pg_msg, $pg_back);
         }
+        return;
+    }
+    if ($pg_ask) {
+        Editmessagetext($from_id, $message_id, $pg_w['askUsername'], json_encode(['inline_keyboard' => [[['text' => $pg_w['btnBack'], 'callback_data' => 'buytype_payg', 'style' => 'danger']]]]));
+        step("paygname|{$pg_m[1]}|{$message_id}", $from_id);
         return;
     }
     deletemessage($from_id, $message_id);

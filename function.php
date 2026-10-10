@@ -2799,9 +2799,8 @@ if (!function_exists('card_invoice_btnstyle_save')) {
     }
 }
 if (!function_exists('card_invoice_btnstyle_for')) {
-    // $which: 'copyCard' or 'paidReceipt' - the 2 fixed buttons under the
-    // invoice. Same {label, color} shape as topup_btnstyle, no emoji (never
-    // asked for on these two).
+    // $which: a button under the card invoice (card_invoice_btnstyle_items).
+    // Same {label, color, emoji…} shape as topup_btnstyle.
     function card_invoice_btnstyle_for($lang, $which)
     {
         $m = card_invoice_btnstyle_map();
@@ -2976,6 +2975,19 @@ if (!function_exists('card_invoice_btnstyle_set')) {
         $color = (string) ($style['color'] ?? '');
         if (in_array($color, ['success', 'danger', 'primary'], true)) {
             $clean['color'] = $color;
+        }
+        // the shared 😀 tool's emoji, premium emoji, «no emoji» and its side
+        foreach (['emoji', 'emojiIcon'] as $k) {
+            $v = trim((string) ($style[$k] ?? ''));
+            if ($v !== '') {
+                $clean[$k] = $v;
+            }
+        }
+        if (!empty($style['noEmoji'])) {
+            $clean['noEmoji'] = true;
+        }
+        if (in_array($style['pos'] ?? '', ['left', 'right'], true)) {
+            $clean['pos'] = $style['pos'];
         }
         // the reserved '_layout' slot carries no label/colour, just how many
         // copy buttons share a row - without this it would be sanitised away
@@ -4594,15 +4606,9 @@ if (!function_exists('topup_card_invoice_generate')) {
             $copyBtns = [];
             foreach (array_values($cardList) as $idx => $c) {
                 $which = card_invoice_copy_key($idx + 1);
-                $style = card_invoice_btnstyle_for($lang, $which);
-                $label = trim((string) ($style['label'] ?? '')) !== ''
-                    ? $style['label']
-                    : card_invoice_copy_label($idx + 1, $total, $textbotlang);
-                $copyBtn = ['text' => $label, 'copy_text' => ['text' => (string) ($c['number'] ?? '')]];
-                $color = card_invoice_btnstyle_color($lang, $which);
-                if ($color !== '') {
-                    $copyBtn['style'] = $color;
-                }
+                // name, emoji (and its side) and colour, as 🎨 set them
+                $copyBtn = topup_styled_button(card_invoice_copy_label($idx + 1, $total, $textbotlang), card_invoice_btnstyle_for($lang, $which), '', card_invoice_btnstyle_default_color($which));
+                $copyBtn['copy_text'] = ['text' => (string) ($c['number'] ?? '')];
                 $copyBtns[] = $copyBtn;
             }
             $copyRows = card_invoice_copy_rows($lang, $copyBtns);
@@ -7111,6 +7117,13 @@ if (!function_exists('topup_invoice_btnstyle_items')) {
     {
         if ($key === 'plisio') {
             plisio_invoice_btnstyle_set($lang, $which, $style);
+            return;
+        }
+        // card-to-card's buttons live in their own store - the one its
+        // invoice and topup_invoice_btnstyle_for() read; saving them to the
+        // shared one below made the 😀 tool's emoji vanish
+        if ($key === 'card') {
+            card_invoice_btnstyle_set($lang, $which, $style);
             return;
         }
         $map = topup_gwstore_btnstyle_map(true);

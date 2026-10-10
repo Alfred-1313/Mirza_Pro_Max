@@ -26,6 +26,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($card === 'status') {
         feature_setting_set('payg_unit', $lang, ($_POST['unit'] ?? '') === 'minute' ? 'minute' : 'hour');
         feature_setting_set('payg_start', $lang, ($_POST['start'] ?? '') === 'connect' ? 'connect' : 'create');
+        // 💡 روش ساخت نام کاربری, as the bot's ⏱ screen sets it
+        if (array_key_exists((string) ($_POST['uname'] ?? ''), payg_uname_modes())) {
+            feature_setting_set('payg_uname', $lang, (string) $_POST['uname']);
+        }
         if ($isOn('on') !== payg_cfg($lang)['on']) {
             $err = payg_admin_toggle($lang, 'on');
         }
@@ -203,6 +207,7 @@ echo web_lang_assets();
     <?= $switch('on', $cfg['on'], $t['pgOn'], $t['pgOnHint']) ?>
     <?= $field($t['pgUnit'], $select('unit', ['hour' => $t['pgUnitHour'], 'minute' => $t['pgUnitMinute']], $cfg['unit'])) ?>
     <?= $field($t['pgStart'], $select('start', ['create' => $t['pgStartCreate'], 'connect' => $t['pgStartConnect']], $cfg['start'])) ?>
+    <?= $field($t['pgUname'], $select('uname', array_combine(array_keys(payg_uname_modes()), array_map(fn($m) => payg_uname_label($m, panel_texts()), array_keys(payg_uname_modes()))), $cfg['uname']), $t['pgUnameHint']) ?>
   </div>
   <?= $saveBtn ?></form>
 </div>

@@ -222,6 +222,7 @@ if (!function_exists('payg_cfg')) {
             'warn' => $warn,
             'grace' => max(0, (int) $g('payg_grace', '24')),
             'convert' => $g('payg_convert', '1') === '1',
+            'uname' => array_key_exists($g('payg_uname', 'payg'), payg_uname_modes()) ? $g('payg_uname', 'payg') : 'payg',
         ];
     }
     // a group's own price, or a customer's when it has none of its own
@@ -561,6 +562,74 @@ if (!function_exists('payg_row')) {
             }
         }
     }
+    // 💡 روش ساخت نام کاربری of ⏱, per language: 'payg' = payg_<id>_<n> as
+    // it always was, or one of the panels' own 💡 methods (generateUsername).
+    // Stored by these keys, shown by the panels' own labels.
+    function payg_uname_modes()
+    {
+        return [
+            'payg' => null,
+            'idrandom' => 'numericIdRandom',
+            'idseq' => 'numericIdSequential',
+            'usernameseq' => 'usernameSequential',
+            'custom' => 'customUsername',
+            'customrandom' => 'customUsernameRandom',
+            'textrandom' => 'customTextRandom',
+            'textseq' => 'customTextSequential',
+            'agentseq' => 'agentCustomTextSequential',
+        ];
+    }
+    function payg_uname_label($mode, $tx)
+    {
+        $k = payg_uname_modes()[$mode] ?? null;
+        return $k === null ? (string) $tx['Admin']['Payg']['unamePayg'] : (string) ($tx['keyboard'][$k] ?? $mode);
+    }
+    // «نام کاربری دلخواه»: the customer is asked for the name first
+    function payg_uname_asks($lang)
+    {
+        return in_array(payg_cfg($lang)['uname'], ['custom', 'customrandom'], true);
+    }
+    // a name typed for it is taken as a purchase takes one
+    function payg_name_ok($name)
+    {
+        return (bool) preg_match('~(?!_)^[a-z][a-z\d_]{2,32}(?<!_)$~i', (string) $name);
+    }
+    // The account's name by $mode ($typed: what the customer sent, for the
+    // «دلخواه» ones). One already taken - in the bot or on the panel - gets a
+    // random number in front, as a purchase does.
+    function payg_make_username(array $u, array $panel, $mode, $typed = null)
+    {
+        global $pdo, $ManagePanel;
+        $k = payg_uname_modes()[$mode] ?? null;
+        if ($k === null || (in_array($mode, ['custom', 'customrandom'], true) && !payg_name_ok($typed))) {
+            return payg_username($u['id']);
+        }
+        $tg = (string) ($u['username'] ?? '');
+        $name = strtolower((string) generateUsername((string) $u['id'], lang_tab_texts('fa')['keyboard'][$k], in_array($tg, ['', 'none'], true) ? 'NOT_USERNAME' : $tg, bin2hex(random_bytes(2)), strtolower((string) $typed), (string) ($panel['namecustom'] ?? 'vpn'), (string) ($u['namecustom'] ?? 'none')));
+        if ($name === '') {
+            return payg_username($u['id']);
+        }
+        $st = $pdo->prepare("SELECT COUNT(*) FROM invoice WHERE username = ?");
+        $st->execute([$name]);
+        $onPanel = is_object($ManagePanel) ? $ManagePanel->DataUser($panel['name_panel'], $name) : null;
+        if ((int) $st->fetchColumn() > 0 || isset($onPanel['username'])) {
+            $name = rand(1000000, 9999999) . '_' . $name;
+        }
+        return $name;
+    }
+    // ...and a sequential one's counters move on, as after a purchase
+    function payg_uname_count($uid, $mode)
+    {
+        if (!in_array($mode, ['idseq', 'usernameseq', 'textseq', 'agentseq'], true)) {
+            return;
+        }
+        $u = select("user", "*", "id", (string) $uid, "select", ['cache' => false]);
+        update("user", "number_username", intval($u['number_username'] ?? 0) + 1, "id", (string) $uid);
+        if (in_array($mode, ['textseq', 'agentseq'], true)) {
+            $s = select("setting", "*", null, null, "select");
+            update("setting", "numbercount", intval($s['numbercount'] ?? 0) + 1);
+        }
+    }
     // «🛍 سرویس‌های من»'s button for an hourly service; null for any other
     function payg_list_label($row, $tx)
     {
@@ -684,7 +753,9 @@ if (!function_exists('payg_create')) {
     // panel offered to them, the 💰 minimum, the 🔢 count, the panel's room),
     // the panel user with what the wallet covers, the invoice («🛍 سرویس‌های
     // من») and its row. ['ok' => true, ...] or ['error' => why, ...].
-    function payg_create($uid, $code)
+    // $typed: the name the customer sent (💡 «نام کاربری دلخواه»);
+    // $checkOnly: the checks alone - before asking them for one.
+    function payg_create($uid, $code, $typed = null, $checkOnly = false)
     {
         global $pdo, $ManagePanel;
         payg_ensure_schema();
@@ -726,6 +797,9 @@ if (!function_exists('payg_create')) {
                 return ['error' => 'full'];
             }
         }
+        if ($checkOnly) {
+            return ['ok' => true];
+        }
         $now = time();
         $waiting = $cfg['start'] === 'connect';
         [$expire, $limit] = payg_caps($rates, $have, 0, $now);
@@ -734,7 +808,7 @@ if (!function_exists('payg_create')) {
         if ($waiting) {
             $expire = 0;
         }
-        $username = payg_username($uid);
+        $username = payg_make_username($u, $panel, $cfg['uname'], $typed);
         $out = $ManagePanel->createUser($panel['name_panel'], 'customvolume', $username, [
             'expire' => $expire,
             'data_limit' => $limit,
@@ -758,6 +832,7 @@ if (!function_exists('payg_create')) {
         $pdo->prepare("INSERT INTO payg_service (id_invoice, user_id, lang, currency, panel, username, status, created_at, started_at, billed_until, cap_expire, cap_limit, polled_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
             ->execute([$id, (string) $uid, $lang, $cur, $panel['name_panel'], $out['username'], $waiting ? 'waiting' : 'active', $now, $waiting ? 0 : $now, $now, $expire, $limit, $now]);
         $svc = payg_row($id);
+        payg_uname_count($uid, $cfg['uname']);
         payg_report('created', $svc);
         return ['ok' => true, 'id_invoice' => $id, 'username' => $out['username'], 'out' => $out, 'panel' => $panel, 'svc' => $svc, 'rates' => $rates, 'cfg' => $cfg];
     }
@@ -1472,6 +1547,7 @@ if (!function_exists('payg_admin_screen')) {
             '{warn}' => $cfg['warn'] ? implode('، ', array_map(fn($a) => money($a, $cur), $cfg['warn'])) : $r['none'],
             '{grace}' => $grace,
             '{convert}' => $cfg['convert'] ? $r['convertOn'] : $r['convertOff'],
+            '{uname}' => payg_uname_label($cfg['uname'], panel_texts()),
             '{open}' => number_format($stats['open']),
             '{income}' => money($stats['income'], $cur),
         ]);
@@ -1485,6 +1561,7 @@ if (!function_exists('payg_admin_screen')) {
         $rows[] = [$btn(strtr($r['btnMinbal'], ['{v}' => $cfg['minbal'] > 0 ? money($cfg['minbal'], $cur) : $r['minbalAuto']]), "paygask:{$lang}:minbal")];
         $rows[] = [$btn(strtr($r['btnMax'], ['{v}' => (string) $cfg['max']]), "paygask:{$lang}:max")];
         $rows[] = [$btn(strtr($r['btnStart'], ['{v}' => $cfg['start'] === 'connect' ? $r['startConnect'] : $r['startCreate']]), "paygtog:{$lang}:start")];
+        $rows[] = [$btn(strtr($r['btnUname'], ['{v}' => payg_uname_label($cfg['uname'], panel_texts())]), "paygun:{$lang}")];
         $rows[] = [$btn(strtr($r['btnMinage'], ['{v}' => $minage]), "paygask:{$lang}:minage")];
         $rows[] = [$btn(strtr($r['btnDelmode'], ['{v}' => $cfg['delmode'] === 'keep' ? $r['delKeep'] : $r['delRemove']]), "paygtog:{$lang}:delmode")];
         $rows[] = [$btn($r['btnWarn'], "paygask:{$lang}:warn"), $btn(strtr($r['btnGrace'], ['{v}' => $grace]), "paygask:{$lang}:grace")];
@@ -1494,6 +1571,18 @@ if (!function_exists('payg_admin_screen')) {
         // opened from 🏬 تنظیمات فروشگاه's own keyboard: nothing inline to go back to
         $rows[] = [$btn($r['close'], 'paygclose', 'danger')];
         return [$text, json_encode(['inline_keyboard' => $rows])];
+    }
+    // 💡 روش ساخت نام کاربری: every way, ✅ on this language's
+    function payg_admin_uname_screen($lang)
+    {
+        $r = payg_admin_texts();
+        $cur = payg_cfg($lang)['uname'];
+        $rows = [];
+        foreach (array_keys(payg_uname_modes()) as $m) {
+            $rows[] = [['text' => ($cur === $m ? '✅ ' : '') . payg_uname_label($m, panel_texts()), 'callback_data' => "paygunset:{$lang}:{$m}", 'style' => $cur === $m ? 'success' : 'primary']];
+        }
+        $rows[] = [['text' => $r['back'], 'callback_data' => "paygsec:{$lang}", 'style' => 'danger']];
+        return [strtr($r['unameCaption'], ['{lang}' => payg_lang_name($lang)]), json_encode(['inline_keyboard' => $rows])];
     }
     // 💵 / 📦: one row per group - the price, ♾ for free, ↩️ for the customers' price
     function payg_admin_price_screen($lang, $dim)
