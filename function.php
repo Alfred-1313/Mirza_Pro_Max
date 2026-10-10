@@ -2143,6 +2143,8 @@ if (!function_exists('refv_cfg')) {
         // 🚪 a free config paused by a leave: this invite fills the gap
         affrw_refill($inviterId, $uid);
         aff_notify_new_referral($inviterId, $display, 'r', $uid);
+        // 🎁 and in the report group, before any request or config it brings
+        affrw_report_referral($inviterId, $uid);
         affrw_check($inviterId);
     }
     // 👋 the newcomer, once they count for everything: the welcome of the
@@ -19069,6 +19071,38 @@ if (!function_exists('affrw_cfg')) {
             ]) . $extra);
         } catch (Throwable $e) {
             error_log('affrw_report_made: ' . $e->getMessage());
+        }
+    }
+    // 🎁 a new referral of $inviterId's, in the report group's 🎁 topic - like
+    // 💼's in 💰 پورسانت: the inviter, the newcomer and where the inviter's
+    // count stands now. One who was a member before the count began is said
+    // not to count. Only while 🎁 is on for the inviter's language.
+    function affrw_report_referral($inviterId, $memberId)
+    {
+        $inv = select("user", "*", "id", (string) $inviterId, "select");
+        $lang = is_array($inv) ? ($inv['lang'] ?? 'fa') : 'fa';
+        $cfg = affrw_live($lang);
+        if ($cfg === null) {
+            return;
+        }
+        // only a report: the referral is counted whatever happens here
+        try {
+            $t = panel_texts()['Admin']['AffReward'];
+            $row = affrw_row($inviterId);
+            $since = affrw_since($cfg, $row);
+            $m = select("user", "*", "id", (string) $memberId, "select");
+            $stats = affrw_used_up($row)
+                ? strtr($t['refRUsedUp'], ['{max}' => $cfg['max']])
+                : strtr($t['refRStats'], ['{count}' => affrw_count($inviterId, $since), '{need}' => $cfg['need'], '{round}' => affrw_times($row) + 1, '{max}' => $cfg['max']]);
+            $stats .= "\n" . strtr($t['refRServices'], ['{services}' => affrw_services_text($inviterId)]);
+            $wasMember = is_array($m) && (int) ($m['register'] ?? 0) <= $since;
+            affrw_topic($lang, strtr($t['newReferralR'], [
+                '{inviter}' => aff_user_block($inviterId, $inv),
+                '{member}' => aff_user_block($memberId, $m),
+                '{stats}' => $stats,
+            ]) . ($wasMember ? "\n\n" . $t['refRWasMember'] : ''));
+        } catch (Throwable $e) {
+            error_log('affrw_report_referral: ' . $e->getMessage());
         }
     }
     // $extra: a line for the report (who approved it)

@@ -4408,10 +4408,7 @@ f,n.n2',
     'reportgroup' =>
     array (
       'userLangLine' => '🌐 زبان کاربر: %s',
-      'newUser' => '🎉یک کاربر جدید ربات را استارت کرد
- نام : %s
-نام کاربری : @%s
-آیدی عددی : %s',
+      'newUser' => "🎉 <b>یه کاربر جدید ربات رو استارت کرد</b>\n➖➖➖➖➖➖➖➖➖➖\n\n👤 <b>کاربر جدید</b>\n▫️ اسم: %s\n▫️ یوزرنیم: %s\n▫️ آیدی: %s",
       'adminAdded' => '👨‍💼 کاربر با مشخصات زیر یک ادمین اضافه کرده است.
 
 نام کاربری %s
@@ -6873,6 +6870,16 @@ nowpayments.io
       'adminSpent' => "🛡 به سقف «🔁 چند بار» کانفیگ رایگان (<b>{max}</b> بار) رسیدی، برای همین «🎁 کانفیگ رایگان با دعوت بدون محدودیت» خاموش شد (برای همه‌ی ادمین‌ها).\n\nبرای گرفتن دوباره: 🎁 کانفیگ رایگان با دعوت ← «🔄 صفر کردن دعوت‌های یک کاربر» ← آیدی خودت، بعد از «🛡 دسترسی ادمین» دوباره روشنش کن.",
       // the report group's own topic for these (made when first needed)
       'topicName' => '🎁 کانفیگ رایگان زیرمجموعه',
+      // under «🎉 a new user started the bot», when they came through
+      // someone's invite link
+      'newUserInviter' => "\n\n🔗 <b>معرف</b> — با لینک دعوتش اومده\n{inviter}",
+      // 🎁 a new referral, in the report group's 🎁 topic: the inviter's
+      // count as it stands now
+      'newReferralR' => "🎁 <b>زیرمجموعه‌ی جدید</b> — کانفیگ رایگان با دعوت\n➖➖➖➖➖➖➖➖➖➖\n\n👤 <b>معرف</b>\n{inviter}\n\n🆕 <b>زیرمجموعه‌ی جدید</b>\n{member}\n\n📊 <b>آمار معرف</b>\n{stats}",
+      'refRStats' => "▫️ دعوت‌های معتبر: <b>{count}</b> از {need}\n▫️ بار چندم: <b>{round}</b> از {max}",
+      'refRUsedUp' => '🔒 به سقف «🔁 چند بار» رسیده (<b>{max}</b> بار)؛ کانفیگ رایگان دیگه‌ای نمی‌گیره.',
+      'refRServices' => '▫️ کانفیگ‌های رایگانش: {services}',
+      'refRWasMember' => '⚠️ از قبل عضو ربات بوده؛ برای کانفیگ رایگان حساب نمی‌شه.',
       // 💼 a new referral counted, in the report group's 💰 پورسانت topic
       'newReferral' => "💼 <b>زیرمجموعه‌ی جدید</b> — زیرمجموعه‌گیری و هدیه خوش‌آمد\n➖➖➖➖➖➖➖➖➖➖\n\n👤 <b>معرف</b>\n{inviter}\n\n🆕 <b>زیرمجموعه‌ی جدید</b>\n{member}\n\n📊 <b>آمار معرف</b>\n▫️ زیرمجموعه‌ی شماره‌ی <b>{n}</b>\n▫️ سرویس‌هایی که زیرمجموعه‌هاش خریدن: <b>{buys}</b>\n\n👥 <b>آخرین زیرمجموعه‌هاش</b> (جدیدترها اول)\n{list}",
     ),

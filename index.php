@@ -99,25 +99,6 @@ clearSelectCache('user');
 #-------------Variable----------#
 $users_ids = select("user", "id", null, null, "FETCH_COLUMN");
 $otherreport = select("topicid", "idreport", "report", "otherreport", "select")['idreport'];
-if (!in_array($from_id, $users_ids) && $setting['statusnewuser'] == "onnewuser") {
-    $Response = json_encode([
-        'inline_keyboard' => [
-            [
-                ['text' => $textbotlang['Admin']['manageUser']['manageUserBtn'], 'callback_data' => 'manageuser_' . $from_id],
-            ],
-        ]
-    ]);
-    $newuser = sprintf($textbotlang['Admin']['reportgroup']['newUser'], $first_name, $username, "<a href = \"tg://user?id=$from_id\">$from_id</a>");
-    if (strlen($setting['Channel_Report']) > 0) {
-        telegram('sendmessage', [
-            'chat_id' => $setting['Channel_Report'],
-            'message_thread_id' => $otherreport,
-            'text' => $newuser,
-            'reply_markup' => $Response,
-            'parse_mode' => "HTML"
-        ]);
-    }
-}
 $date = time();
 if ($from_id != 0) {
     // A new user has no language yet, so this cannot ask theirs. If ANY
@@ -142,6 +123,33 @@ if ($from_id != 0) {
     $stmt->bindParam(':verifycode', $valueverify);
     $stmt->bindParam(':codeInvitation', $randomString);
     $stmt->execute();
+}
+// 🎉 a new user, to the report group - sent once they are saved, so its
+// language line is theirs and not their inviter's, whose id it may carry too
+if (!in_array($from_id, $users_ids) && $setting['statusnewuser'] == "onnewuser") {
+    $Response = json_encode([
+        'inline_keyboard' => [
+            [
+                ['text' => $textbotlang['Admin']['manageUser']['manageUserBtn'], 'callback_data' => 'manageuser_' . $from_id],
+            ],
+        ]
+    ]);
+    [$nu_name, $nu_user] = aff_name_parts($from_id, ['first_name' => $first_name, 'username' => $username]);
+    $newuser = sprintf($textbotlang['Admin']['reportgroup']['newUser'], $nu_name !== '' ? $nu_name : '—', $nu_user !== '' ? $nu_user : '—', "<code>$from_id</code>");
+    // 👥 came through someone's invite link (/start <their id>): who
+    if (preg_match('/^\/start (\d+)$/', (string) $text, $nu_m) && $nu_m[1] !== (string) $from_id && in_array($nu_m[1], $users_ids)
+        && feature_value('affiliatesstatus', 'fa', $setting['affiliatesstatus']) != "offaffiliates") {
+        $newuser .= strtr($textbotlang['Admin']['AffReward']['newUserInviter'], ['{inviter}' => aff_user_block($nu_m[1], select("user", "*", "id", $nu_m[1], "select"))]);
+    }
+    if (strlen($setting['Channel_Report']) > 0) {
+        telegram('sendmessage', [
+            'chat_id' => $setting['Channel_Report'],
+            'message_thread_id' => $otherreport,
+            'text' => $newuser,
+            'reply_markup' => $Response,
+            'parse_mode' => "HTML"
+        ]);
+    }
 }
 $user = select("user", "*", "id", $from_id, "select");
 if ($user == false) {

@@ -71,6 +71,17 @@ try {
 } catch (Exception $e) {
 }
 
+// 🔗 whose invite link they came with (💼's link, else 🎁's): their name and page
+$inviterId = (string) ($user['affiliates'] ?? '');
+if ($inviterId === '' || $inviterId === '0') {
+    $inviterId = (string) ($user['aff_rw'] ?? '');
+}
+$inviterRow = $inviterId !== '' && $inviterId !== '0' ? db_fetch($pdo, "SELECT * FROM user WHERE id = ?", [$inviterId]) : null;
+$inviterName = trim((string) ($inviterRow['first_name'] ?? ''));
+if ($inviterName === '' && !in_array((string) ($inviterRow['username'] ?? ''), ['', 'none', 'NOT_USERNAME'], true)) {
+    $inviterName = '@' . $inviterRow['username'];
+}
+
 $balance = (int) ($user['Balance'] ?? 0);
 $totalSpent = array_sum(array_column($invoices, 'price_product'));
 $activeServices = count(array_filter($invoices, fn($inv) => ($inv['Status'] ?? '') === 'active'));
@@ -190,10 +201,16 @@ include __DIR__ . '/inc/layout_head.php';
                     <span class="kv-key"><?= $textbotlang['panel']['userServicesTabLabel'] ?></span>
                     <span class="kv-val"><?= safe_date($user['register'] ?? null) ?></span>
                 </div>
-                <?php if (!empty($user['affiliates']) && $user['affiliates'] !== '0'): ?>
+                <?php if ($inviterId !== '' && $inviterId !== '0'): ?>
                     <div class="kv">
                         <span class="kv-key"><?= $textbotlang['panel']['userTransactionsTabLabel'] ?></span>
-                        <span class="kv-val cm" style="color:var(--ac)"><?= htmlspecialchars($user['affiliates']) ?></span>
+                        <span class="kv-val">
+                            <?php if ($inviterRow): ?>
+                                <a href="user.php?id=<?= (int) $inviterId ?>" style="color:var(--ac)"><?php if ($inviterName !== ''): ?><?= htmlspecialchars($inviterName) ?> · <?php endif; ?><span class="cm"><?= htmlspecialchars($inviterId) ?></span></a>
+                            <?php else: ?>
+                                <span class="cm" style="color:var(--ac)"><?= htmlspecialchars($inviterId) ?></span>
+                            <?php endif; ?>
+                        </span>
                     </div>
                 <?php endif; ?>
                 <?php if ((int) ($user['affiliatescount'] ?? 0) > 0): ?>
