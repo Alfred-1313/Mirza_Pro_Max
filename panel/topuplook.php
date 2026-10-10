@@ -119,7 +119,7 @@ if (in_array('btnstyle', $has, true)) {
     if ($key === 'card') {
         // the ones the bot's card-invoice screens restyle
         foreach (card_invoice_btnstyle_items($tx, $lang) as $which => $name) {
-            if (preg_match('/^(copyCard\d*|paidReceipt|reissue)$/', (string) $which)) {
+            if (preg_match('/^(copyamt|copyCard\d*|paidReceipt|reissue)$/', (string) $which)) {
                 $invItems[$which] = [$name, card_invoice_btnstyle_default_color($which), card_invoice_btnstyle_for($lang, $which)];
             }
         }

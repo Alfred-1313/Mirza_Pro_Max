@@ -4652,7 +4652,7 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'confirmStartProcess' => '✅ Confirm and start the process',
                 'confirmTransferService' => '✅ Confirm service transfer',
                 'confirmed' => '✅ Approved',
-                'copyAmount' => 'Copy amount',
+                'copyAmount' => 'Copy amount (rial)',
                 'copyCard' => '💳 Copy card number',
                 'copyCardNumber' => 'Copy card number',
                 'createDiscountCode' => '🎁 Create discount code',

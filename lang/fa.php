@@ -8233,6 +8233,9 @@ nowpayments.io
     'confirmed' => '✅ تایید شده',
     'copyCard' => '💳 کپی شماره کارت',
     'copyCardNumber' => 'کپی شماره کارت',
+    // above the card numbers on a card-to-card invoice: copies the amount in
+    // rials, digits only - what bank apps take
+    'copyAmount' => 'کپی مبلغ (ریال)',
     // appended to the copy button only when more than one card is shown, so two
     // unnamed cards never render the same button text
     'cardOrdinals' => array('اول', 'دوم', 'سوم', 'چهارم', 'پنجم', 'ششم', 'هفتم', 'هشتم', 'نهم', 'دهم'),

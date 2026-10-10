@@ -2819,6 +2819,8 @@ if (!function_exists('card_invoice_btnstyle_default_color')) {
     function card_invoice_btnstyle_default_color($which)
     {
         $defaults = [
+            // the amount's copy button is white (no style) - the owner's choice
+            'copyamt' => '',
             'copyCard' => 'primary',
             'paidReceipt' => 'success',
             'reissue' => 'danger',
@@ -4579,6 +4581,11 @@ if (!function_exists('topup_card_invoice_generate')) {
         $payment_Status = "Unpaid";
         $Payment_Method = "cart to cart";
         $stmt->execute([$from_id, $randomString, $dateacc, $amount, $payment_Status, $Payment_Method, $idInvoice]);
+        // 📋 the amount, on a row of its own above the card numbers, like every
+        // other gateway's - in rials and digits only (100,863 toman → 1008630),
+        // what bank apps take; white unless the admin colours it
+        $amountBtn = topup_styled_button($textbotlang['keyboard']['copyAmount'], card_invoice_btnstyle_for($lang, 'copyamt'), '', card_invoice_btnstyle_default_color('copyamt'));
+        $amountBtn['copy_text'] = ['text' => (string) (int) round($amount * 10)];
         if (feature_value('statuscopycart', $lang, $setting['statuscopycart']) == "1") {
             // one style entry per card (copyCard, copyCard2, ...) so each row can
             // carry its own colour and name - a single shared entry rendered
@@ -4601,11 +4608,11 @@ if (!function_exists('topup_card_invoice_generate')) {
             $copyRows = card_invoice_copy_rows($lang, $copyBtns);
             $receiptStyle = card_invoice_btnstyle_for($lang, 'paidReceipt');
             $receiptBtn = topup_styled_button($textbotlang['keyboard']['paidSendReceipt'], $receiptStyle, "sendresidcart-" . $randomString, card_invoice_btnstyle_default_color('paidReceipt'));
-            $sendresidcart = json_encode(['inline_keyboard' => array_merge($copyRows, [[$receiptBtn]])]);
+            $sendresidcart = json_encode(['inline_keyboard' => array_merge([[$amountBtn]], $copyRows, [[$receiptBtn]])]);
         } else {
             $receiptStyle = card_invoice_btnstyle_for($lang, 'paidReceipt');
             $receiptBtn = topup_styled_button($textbotlang['keyboard']['paidSendReceipt'], $receiptStyle, "sendresidcart-" . $randomString, card_invoice_btnstyle_default_color('paidReceipt'));
-            $sendresidcart = json_encode(['inline_keyboard' => [[$receiptBtn]]]);
+            $sendresidcart = json_encode(['inline_keyboard' => [[$amountBtn], [$receiptBtn]]]);
         }
         return [
             'text' => $textcart,
@@ -7056,7 +7063,8 @@ if (!function_exists('topup_invoice_btnstyle_items')) {
             // blue copy buttons, a green receipt button, a red reissue - and the
             // styling screens have to show the customer's colours, not ours
             $c = card_invoice_btnstyle_default_color($which);
-            if ($c !== '') {
+            // ...and the amount's copy button is white on purpose, not unset
+            if ($c !== '' || $which === 'copyamt') {
                 return $c;
             }
             // 'paid' is not one of card's own buttons - the shared map below
@@ -7575,7 +7583,8 @@ if (!function_exists('card_invoice_btnstyle_items')) {
         if ($lang !== null) {
             $textbotlang = lang_tab_texts($lang);
         }
-        $items = [];
+        // the amount's copy button sits above the cards' on the invoice, so here too
+        $items = ['copyamt' => $textbotlang['keyboard']['copyAmount']];
         $cards = ($lang !== null && function_exists('gw_cards_for_lang')) ? gw_cards_for_lang($lang) : [];
         $total = count($cards);
         if ($total < 1) {

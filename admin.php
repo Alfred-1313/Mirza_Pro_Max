@@ -12432,7 +12432,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['GatewayLang']['cardBtnStyleCaption'], card_invoice_btnstyle_hub_payload($cb_m[1], $textbotlang), 'HTML');
 } elseif (preg_match('/^cardbtncol:([a-z]{2})$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['colorCaption'], card_invoice_btncolor_payload($cb_m[1], $textbotlang), 'HTML');
-} elseif (preg_match('/^cardbtncolpick:([a-z]{2}):(copyCard\d*|paidReceipt|reissue)$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^cardbtncolpick:([a-z]{2}):(copyamt|copyCard\d*|paidReceipt|reissue)$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
     $cb_colorOrder = ['', 'primary', 'success', 'danger'];
     $cb_style = card_invoice_btnstyle_for($cb_m[1], $cb_m[2]);
     $cb_curPos = array_search((string) ($cb_style['color'] ?? ''), $cb_colorOrder, true);
@@ -12463,7 +12463,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Help']['layoutCaption'], card_invoice_btnlayout_payload($cb_m[1], $textbotlang), 'HTML');
 } elseif (preg_match('/^cardbtnren:([a-z]{2})$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['BtnStyle']['renameCaption'], card_invoice_btnrename_payload($cb_m[1], $textbotlang), 'HTML');
-} elseif (preg_match('/^cardbtnrenpick:([a-z]{2}):(copyCard\d*|paidReceipt|reissue)$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^cardbtnrenpick:([a-z]{2}):(copyamt|copyCard\d*|paidReceipt|reissue)$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
     $cb_style = card_invoice_btnstyle_for($cb_m[1], $cb_m[2]);
     $cb_items = card_invoice_btnstyle_items($textbotlang, $cb_m[1]);
     $cb_label = topup_styled_button($cb_items[$cb_m[2]] ?? $cb_m[2], $cb_style, '')['text'];
@@ -12473,11 +12473,11 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     $cb_prompt = sendmessage($from_id, sprintf($textbotlang['Admin']['BtnStyle']['askRenameForItem'], $cb_label), $cb_cancelKb, 'HTML');
     $cb_promptId = (int) ($cb_prompt['result']['message_id'] ?? 0);
     step("cardbtnreni:{$cb_m[1]}:{$cb_m[2]}:{$message_id}:{$cb_promptId}", $from_id);
-} elseif (preg_match('/^cardbtnrencancel:([a-z]{2}):(copyCard\d*|paidReceipt|reissue):([0-9]+)$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
+} elseif (preg_match('/^cardbtnrencancel:([a-z]{2}):(copyamt|copyCard\d*|paidReceipt|reissue):([0-9]+)$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
     step('home', $from_id);
     deletemessage($from_id, $message_id);
     Editmessagetext($from_id, (int) $cb_m[3], $textbotlang['Admin']['BtnStyle']['renameCaption'], card_invoice_btnrename_payload($cb_m[1], $textbotlang), 'HTML');
-} elseif (preg_match('/^cardbtnreni:([a-z]{2}):(copyCard\d*|paidReceipt|reissue):([0-9]+):([0-9]+)$/', (string) $user['step'], $cb_m) && $datain == '') {
+} elseif (preg_match('/^cardbtnreni:([a-z]{2}):(copyamt|copyCard\d*|paidReceipt|reissue):([0-9]+):([0-9]+)$/', (string) $user['step'], $cb_m) && $datain == '') {
     deletemessage($from_id, $message_id);
     $cb_newName = trim((string) $text) === '0' ? '' : trim((string) $text);
     $cb_style = card_invoice_btnstyle_for($cb_m[1], $cb_m[2]);
@@ -12487,7 +12487,7 @@ SMS Forward پرداخت رو با پیامک واقعی بانک تایید م�
     deletemessage($from_id, (int) $cb_m[4]);
     Editmessagetext($from_id, (int) $cb_m[3], $textbotlang['Admin']['BtnStyle']['renameCaption'], card_invoice_btnrename_payload($cb_m[1], $textbotlang), 'HTML');
 } elseif (preg_match('/^cardbtnrenreset:([a-z]{2})$/', $datain, $cb_m) && $adminrulecheck['rule'] == "administrator") {
-    foreach (['copyCard', 'paidReceipt'] as $cb_which) {
+    foreach (['copyamt', 'copyCard', 'paidReceipt'] as $cb_which) {
         $cb_style = card_invoice_btnstyle_for($cb_m[1], $cb_which);
         $cb_style['label'] = '';
         card_invoice_btnstyle_set($cb_m[1], $cb_which, $cb_style);
