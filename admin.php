@@ -7780,14 +7780,8 @@ if (preg_match('/^layoutfull-([a-z]{2})-(\d+)-(\d+)$/', $datain, $ly_m) && $admi
 if (preg_match('/^layoutreset-([a-z]{2})$/', $datain, $ly_m) && $adminrulecheck['rule'] == "administrator") {
     $ly_lang = $ly_m[1];
     $ly_layout = mainmenu_layout_get($ly_lang);
-    $ly_default = [
-        ['text_sell', 'text_extend'],
-        ['text_usertest', 'text_wheel_luck'],
-        ['text_Purchased_services', 'accountwallet'],
-        ['addbalance'],
-        ['text_affiliates', 'text_Tariff_list'],
-        ['text_support', 'text_help'],
-    ];
+    // the rows the bot ships with - the 🌏 change-language one included
+    $ly_default = array_map(static fn($ly_frow) => array_column($ly_frow, 'text'), mainmenu_factory_layout()['keyboard']);
     $ly_bykey = [];
     if (is_array($ly_layout) && isset($ly_layout['keyboard']) && is_array($ly_layout['keyboard'])) {
         foreach ($ly_layout['keyboard'] as $ly_row) {

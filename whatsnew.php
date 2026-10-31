@@ -774,4 +774,16 @@ return [
             . "• If anything fails on the way, whatever this transfer made there is taken back out and the bot here starts again. A copy of this same bot left there by an earlier try is backed up first and put back if it fails.\n"
             . "• Bots on one server no longer delete each other's scheduled jobs, and their job locks are their own.</blockquote>",
     ],
+    [
+        'n' => 57,
+        'date' => '2026-10-31',
+        'fa' => "<blockquote>🧩 <b>بکاپ ربات میرزای اصلی: منو کامل و دیتابیس خودکار به‌روز</b>\n"
+            . "• دکمه‌های 💰 افزایش موجودی و 🌏 تغییر زبان که در منوی ذخیره‌شدهٔ ربات‌های قدیمی نبودند، خودکار برمی‌گردند (افزایش موجودی روشن، تغییر زبان مثل نصب تازه پنهان؛ از ✏️ نام و نمایش دکمه‌ها روشنش کن). دکمه‌های قدیمی که این ربات ندارد (مثل text_agentpanel) دیگر نشان داده نمی‌شوند. رنگ و ترتیبی که روی دکمه‌ها گذاشته بودی می‌ماند.\n"
+            . "• «🔄 ریست به پیش‌فرض» در ✏️ و 📐 حالا همهٔ دکمه‌ها را دارد؛ ریست 📐 دکمهٔ تغییر زبان را هم سر جایش می‌گذارد.\n"
+            . "• دیتابیسی که دستی (مثلاً با phpMyAdmin) از یک ربات قدیمی‌تر ریخته شود، با اولین پیام به ربات خودش به‌روز می‌شود: جدول‌ها و ستون‌های لازم اضافه می‌شوند و چیزی پاک نمی‌شود. ریستور از اسکریپت (گزینهٔ ۷)، آپدیت (گزینهٔ ۲) و /update هم همین کار را می‌کنند.</blockquote>",
+        'en' => "<blockquote>🧩 <b>Backups of the original Mirza bot: a whole menu and a database brought up to date by itself</b>\n"
+            . "• The 💰 Increase balance and 🌏 Change language buttons, missing from older bots' saved menus, come back by themselves (Increase balance shown, Change language hidden as on a fresh install - show it from ✏️ button names and visibility). Old buttons this bot does not have (like text_agentpanel) are no longer shown. The colours and order you gave the buttons stay.\n"
+            . "• «🔄 Reset to default» in ✏️ and 📐 now has every button; the 📐 reset puts the change-language button back in its place too.\n"
+            . "• A database imported by hand (phpMyAdmin, say) from an older bot brings itself up to date on the first message to the bot: the tables and columns it needs are added, nothing is removed. Restoring from the script (option 7), updating (option 2) and /update do the same.</blockquote>",
+    ],
 ];

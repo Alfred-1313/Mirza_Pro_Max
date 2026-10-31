@@ -100,6 +100,40 @@ function getCrontabBinary()
     return null;
 }
 
+// The database this code expects is the one table.php leaves: it writes this
+// fingerprint of itself into setting.schema_mark when it finishes. A database
+// it never ran on - a backup of the original project, or of an older Ciro,
+// imported by hand (phpMyAdmin) - does not carry it.
+function ciro_schema_mark()
+{
+    static $mark = null;
+    if ($mark === null) {
+        $mark = substr((string) @md5_file(__DIR__ . '/table.php'), 0, 16);
+    }
+    return $mark;
+}
+// Called by index.php on each update: a database behind this code gets
+// table.php run on it - in the background, at most once in ten minutes, so a
+// failing run is not retried on every message. table.php only ever adds
+// tables and columns and repairs the main menu; nothing is dropped.
+function ciro_schema_selfheal($setting)
+{
+    if (PHP_SAPI === 'cli' || ciro_schema_mark() === '') {
+        return false;
+    }
+    if (is_array($setting) && ($setting['schema_mark'] ?? '') === ciro_schema_mark()) {
+        return false;
+    }
+    $flag = __DIR__ . '/.schema_heal';
+    if (@filemtime($flag) > time() - 600) {
+        return false;
+    }
+    @touch($flag);
+    error_log('Database is behind this code (no or old schema_mark) - running table.php');
+    runShellCommand('cd ' . escapeshellarg(__DIR__) . ' && nohup php table.php > /dev/null 2>&1 &');
+    return true;
+}
+
 function runShellCommand($command)
 {
     if (!isShellExecAvailable()) {
@@ -12014,6 +12048,101 @@ if (!function_exists('mainmenu_layout_get')) {
     {
         return json_decode('{"keyboard":[[{"text":"text_sell"},{"text":"text_extend","hidden":true}],[{"text":"text_usertest"},{"text":"text_wheel_luck","hidden":true}],[{"text":"text_Purchased_services"},{"text":"accountwallet"}],[{"text":"addbalance"}],[{"text":"text_affiliates","hidden":true},{"text":"text_Tariff_list","hidden":true}],[{"text":"text_support","hidden":true},{"text":"text_help"}],[{"text":"text_change_language","hidden":true}]]}', true);
     }
+    // The menu every screen reads, made whole. A menu saved by an older bot -
+    // the original project's, restored from its backup - can lack buttons this
+    // one has (💰 افزایش موجودی, 🌏 تغییر زبان) and carry ones it does not
+    // (the original's agent buttons, which this bot adds by itself and would
+    // otherwise show as raw "text_agentpanel"). No screen can put a missing
+    // button back - they only hide and show - so it is done here: an unknown
+    // or repeated button goes, and a missing one comes back as it ships
+    // (shown or hidden), right after the row holding the button that comes
+    // before it in the factory menu. Everything the admin set on the other
+    // buttons, and their order, stays.
+    function mainmenu_normalize_rows($rows)
+    {
+        $factory = mainmenu_factory_layout()['keyboard'];
+        $known = [];
+        foreach ($factory as $frow) {
+            foreach ($frow as $fbtn) {
+                $known[$fbtn['text']] = true;
+            }
+        }
+        $out = [];
+        $seen = [];
+        foreach ((array) $rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $kept = [];
+            foreach ($row as $btn) {
+                $tok = is_array($btn) ? ($btn['text'] ?? null) : null;
+                if (!is_string($tok) || !isset($known[$tok]) || isset($seen[$tok])) {
+                    continue;
+                }
+                $seen[$tok] = true;
+                $kept[] = $btn;
+            }
+            if ($kept) {
+                $out[] = $kept;
+            }
+        }
+        if (count($seen) === count($known)) {
+            return $out;
+        }
+        $order = array_keys($known);
+        foreach ($factory as $frow) {
+            $missing = [];
+            foreach ($frow as $fbtn) {
+                if (!isset($seen[$fbtn['text']])) {
+                    $missing[] = $fbtn;
+                }
+            }
+            if (!$missing) {
+                continue;
+            }
+            $before = array_slice($order, 0, (int) array_search($missing[0]['text'], $order, true));
+            $at = 0;
+            foreach ($out as $i => $row) {
+                foreach ($row as $btn) {
+                    if (in_array($btn['text'], $before, true)) {
+                        $at = $i + 1;
+                    }
+                }
+            }
+            array_splice($out, $at, 0, [$missing]);
+            foreach ($missing as $fbtn) {
+                $seen[$fbtn['text']] = true;
+            }
+        }
+        return $out;
+    }
+    // Writes the made-whole menu back for Persian and every other language, so
+    // code that reads setting.keyboardmain as it is sees it too. table.php
+    // calls it - after an update, and after a restored backup.
+    function mainmenu_repair_saved()
+    {
+        $fixed = [];
+        $langs = array_unique(array_merge(['fa'], array_keys(mainmenu_lang_map(true))));
+        foreach ($langs as $lang) {
+            $setting = select("setting", "*", null, null, "select");
+            if ($lang === 'fa') {
+                $raw = json_decode((string) ($setting['keyboardmain'] ?? ''), true);
+            } else {
+                $raw = mainmenu_lang_map(true)[$lang] ?? null;
+            }
+            if (!is_array($raw) || !isset($raw['keyboard']) || !is_array($raw['keyboard'])) {
+                continue;
+            }
+            $whole = mainmenu_normalize_rows($raw['keyboard']);
+            if ($whole !== $raw['keyboard']) {
+                $raw['keyboard'] = $whole;
+                if (mainmenu_layout_save($lang, $raw)) {
+                    $fixed[] = $lang;
+                }
+            }
+        }
+        return $fixed;
+    }
     function mainmenu_lang_map($fresh = false)
     {
         static $cache = null;
@@ -12038,7 +12167,7 @@ if (!function_exists('mainmenu_layout_get')) {
         if (!is_array($layout) || !isset($layout['keyboard']) || !is_array($layout['keyboard'])) {
             $layout = mainmenu_factory_layout();
         }
-        $out = ['keyboard' => $layout['keyboard']];
+        $out = ['keyboard' => mainmenu_normalize_rows($layout['keyboard'])];
         foreach (['simple_emoji', 'emoji_pos_global'] as $sw) {
             if (isset($layout[$sw])) {
                 $out[$sw] = $layout[$sw];

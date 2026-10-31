@@ -1688,6 +1688,13 @@ try {
 if ($check && $check->rowCount() != 0) {
     $pdo->exec("ALTER TABLE `user` DROP `ref_code`");
 }
+// a main menu saved by an older bot (a restored backup of the original
+// project) gets the buttons this one has - 💰 افزایش موجودی, 🌏 تغییر زبان
+try {
+    mainmenu_repair_saved();
+} catch (\Throwable $e) {
+    error_log('mainmenu repair: ' . $e->getMessage());
+}
 // with its secret, and asking for chat_member too
 webhook_register();
 // 🆕 tell the admins what this update added (whatsnew.php), once
@@ -1695,4 +1702,12 @@ try {
     bot_whatsnew_announce(!empty($mz_fresh_install));
 } catch (\Throwable $e) {
     error_log('whatsnew: ' . $e->getMessage());
+}
+// last: this database now matches this code (see ciro_schema_selfheal)
+try {
+    addFieldToTable("setting", "schema_mark", "", "VARCHAR(40)");
+    update("setting", "schema_mark", ciro_schema_mark(), null, null);
+    @unlink(__DIR__ . '/.schema_heal');
+} catch (\Throwable $e) {
+    error_log('schema_mark: ' . $e->getMessage());
 }

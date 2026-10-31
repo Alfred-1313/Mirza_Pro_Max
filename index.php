@@ -22,6 +22,8 @@ if ($is_bot)
 // object did not exist yet there: the request died right after the inviter's
 // «3 / 3» and the config was never made nor sent to anyone.
 $setting = select("setting", "*");
+// a database restored by hand from an older bot is brought up to this code
+ciro_schema_selfheal($setting);
 $ManagePanel = new ManagePanel();
 if (isset($update['chat_member'])) {
     $status = $update['chat_member']['new_chat_member']['status'];
