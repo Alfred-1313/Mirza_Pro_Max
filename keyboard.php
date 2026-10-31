@@ -2003,9 +2003,15 @@ function KeyboardProduct($location, $query, $pricediscount, $datakeyboard, $stat
     // deletemessage() the moment the target screen replaces this one
     // red by default like every other "go back" in the bot, and recolourable
     // from 🎨 شخصی‌سازی like every other button item
-    if (!bt_button_hidden($kp_userlang, 'users.sell.backToPreviousBtn')) {
+    //
+    // Named for where it goes: the category list, or - with the category step
+    // off, when the panels are the step before the products - the panel
+    // selection ('buybacktow' is the panel list's own re-entry). It said
+    // «بازگشت به لیست دسته بندی» on a trip back to the panels.
+    $kp_backItem = in_array($backuser, ['buybacktow', 'buyfresh'], true) ? 'backToPanelSelectBtn' : 'backToPreviousBtn';
+    if (!bt_button_hidden($kp_userlang, 'users.sell.' . $kp_backItem)) {
         $product['inline_keyboard'][] = [
-            bt_button($kp_userlang, 'users.sell.backToPreviousBtn', $textbotlang['users']['sell']['backToPreviousBtn'], $backuser),
+            bt_button($kp_userlang, 'users.sell.' . $kp_backItem, $textbotlang['users']['sell'][$kp_backItem], $backuser),
         ];
     }
     return json_encode($product);

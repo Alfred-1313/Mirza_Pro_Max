@@ -868,4 +868,18 @@ return [
             . "• The web panel has it too: under «More» of each node, a custom version box; after the check it asks for a confirmation at the top of the page.\n"
             . "• «📊 Node report picture» got a «🔄 Refresh» button: the picture and caption of that very message change to the current CPU, RAM and speed (no new message), and «❌ Close» deletes it. The web panel has a refresh button beside the report as well.</blockquote>",
     ],
+    [
+        'n' => 64,
+        'date' => '2026-10-31',
+        'fa' => "<blockquote>🔐 <b>مراحل خرید: ادیت روی همان پیام و بازگشت درست به انتخاب پنل؛ پنل وب: اسکرول لمسی و لیست‌های همیشه تازه</b>\n"
+            . "• خرید اشتراک (پنل ← دسته‌بندی ← سرویس): اگر مرحلهٔ مقصد استیکر نداشته باشد، کپشن و دکمه‌ها روی همان پیام ادیت می‌شوند و چیزی پاک یا دوباره فرستاده نمی‌شود. فقط وقتی مرحلهٔ مقصد استیکر دارد، پیام و استیکر قبلی می‌روند و استیکر و کپشن تازه می‌آیند. (قبلاً برگشتن از لیست سرویس‌ها به لیست پنل‌ها، وقتی دسته‌بندی خاموش بود، همیشه پیام را پاک می‌کرد و دوباره می‌فرستاد.) اگر موقع برگشتن، استیکرِ مرحله‌ای که جلوتر بوده روی صفحه مانده باشد همان استیکر برداشته می‌شود؛ وقتی جلو می‌روی استیکر می‌ماند.\n"
+            . "• وقتی دسته‌بندی خاموش است، دکمهٔ زیر لیست سرویس‌ها «🔙 بازگشت به انتخاب پنل» است و واقعاً به انتخاب پنل برمی‌گردد (قبلاً نوشته بود «بازگشت به لیست دسته بندی»). این دکمه در 🎨 آیتم جدا دارد (اسم، ایموجی، رنگ، مخفی کردن؛ برای هر زبان جدا). اگر دکمهٔ «بازگشت به لیست دسته بندی» را قبلاً مخفی کرده بودی و این یکی را هم نمی‌خواهی، از 🎨 مخفی‌اش کن.\n"
+            . "• پنل وب، اسکرول لمسی: روی تبلت یا گوشی خوابیده، جایی که جدول از عرض صفحه عریض‌تر است (محصولات، کیبورد، منو، ظاهر دکمه‌ها)، انگشت روی ردیف‌ها صفحه را اسکرول نمی‌کرد. درست شد؛ کشیدن افقی خود جدول مثل قبل کار می‌کند.\n"
+            . "• پنل وب، بعد از افزودن یا ویرایش (محصول، دسته‌بندی و ...) لازم نیست صفحه را رفرش کنی: اگر ذخیره چیزی بیرون از فرم عوض کند (لیست، شمارنده، پیش‌نمایش)، صفحه همان‌جا و با همان اسکرول دوباره بارگذاری می‌شود. فرم‌های تنظیمات مثل قبل بدون بارگذاری ذخیره می‌شوند.</blockquote>",
+        'en' => "<blockquote>🔐 <b>Purchase steps: edited in place, and a back button that says where it goes; web panel: touch scrolling and lists that are always current</b>\n"
+            . "• Buying a subscription (panel → category → service): when the step you are going to has no sticker, its caption and buttons are edited on the same message - nothing is deleted or sent again. Only when that step has a sticker of its own do the old message and sticker go and the new sticker and caption come. (Before, going back from the service list to the panel list with categories off always deleted the message and sent a new one.) Going back past the step that put a sticker up removes that sticker; going forward keeps it.\n"
+            . "• With categories off, the button under the service list is now «🔙 Back to panel selection» and really goes back to the panels (it used to say «Back to the category list»). It is an item of its own in 🎨 (name, emoji, colour, hide; separate per language). If you had hidden «Back to the category list» before and do not want this one either, hide it in 🎨.\n"
+            . "• Web panel, touch scrolling: on a tablet or a phone held sideways, where a table is wider than the screen (products, keyboard, menu, button looks), a finger on the rows would not scroll the page. Fixed; dragging the table sideways works as before.\n"
+            . "• Web panel, after adding or editing (a product, a category ...) there is no need to refresh: when a save changes anything outside the form (a list, a counter, a preview) the page loads again where it stands, with the same scroll. Settings forms still save without loading.</blockquote>",
+    ],
 ];

@@ -1527,6 +1527,7 @@ Support account : @%s',
                         'noPaymentMethod' => '⛔️ Top-up is temporarily unavailable.',
                         'buySubscriptionBtn' => 'Buy a subscription',
                         'backToPanelListBtn' => '🔙 Back to the panel list',
+                        'backToPanelSelectBtn' => '🔙 Back to panel selection',
                         'backToPreviousBtn' => '🔙 Back to the category list',
                         'selectUsernamePrompt' => 'Would you like to choose the service name yourself, or use the default one?
 

@@ -13,6 +13,11 @@
  * Anything this cannot do safely (the answer is another page, the number of
  * forms changed because a row was added or deleted, the session ended) goes the
  * old way - the page loads - with the message carried over to it.
+ * A save can also change what the page shows OUTSIDE the form - a product added
+ * from a dialog belongs in the list behind it, a counter moves, a preview
+ * changes. The answer is compared with the page on screen without its forms; if
+ * they differ the page is reloaded where it stands (same address, same scroll)
+ * so it never shows a list that is one save behind.
  *
  * Opt out: data-ajax="off" on the form. data-autosave: save when a choice
  * changes (radio, checkbox, select) - no button to press.
@@ -35,6 +40,19 @@
         sessionStorage.removeItem(KEY);
         if (kept && kept.length && window.toast) {
             kept.forEach(function (m) { window.toast(m[0], m[1]); });
+        }
+    } catch (e) {}
+
+    // the same page loaded again after a save that changed its list: back to
+    // where it was (the address the server sent may differ a little from the one
+    // on screen, which is a new page load, and a new page starts at the top)
+    var SKEY = 'panelScroll';
+    try {
+        var held = JSON.parse(sessionStorage.getItem(SKEY) || 'null');
+        sessionStorage.removeItem(SKEY);
+        if (held && held.p === location.pathname && held.y > 0 && Date.now() - held.t < 20000) {
+            var scrollBack = function () { window.scrollTo(0, held.y); };
+            if (document.readyState === 'complete') scrollBack(); else window.addEventListener('load', scrollBack);
         }
     } catch (e) {}
 
@@ -69,6 +87,27 @@
         try { return new URL(url, location.href).pathname; } catch (e) { return String(url); }
     }
 
+    // the same address, bar the #hash
+    function sameAddress(a, b) {
+        try {
+            var x = new URL(a, location.href), y = new URL(b, location.href);
+            return x.origin === y.origin && x.pathname === y.pathname && x.search === y.search;
+        } catch (e) { return false; }
+    }
+
+    // What a page says outside its forms - its lists, tables, counters - as one
+    // line of text. Forms are left out because the saved one is swapped by hand
+    // and the others are compared by shape; so are the messages (they differ on
+    // purpose). Flag emoji are dropped: the page turns them into pictures after
+    // it loads, so the live page never has them and the server's copy does.
+    function outsideSig(root) {
+        var c = root.querySelector('.content');
+        if (!c) return '';
+        var clone = c.cloneNode(true);
+        clone.querySelectorAll('form, script, style, noscript, .notice, .toast, [data-ajax-ignore]').forEach(function (n) { n.remove(); });
+        return clone.textContent.replace(/\uD83C[\uDDE6-\uDDFF]/g, '').replace(/\s+/g, ' ').trim();
+    }
+
     // the fields a form holds, by name: the same set means the same form, whatever
     // default parameter the redirect added to the address (?kind=panel, ?gw=card)
     function shapeOf(f) {
@@ -99,6 +138,7 @@
         var quiet = f.getAttribute('data-ajax') === 'quiet';
         var forms = formsOf(document);
         var at = forms.indexOf(f);
+        var before = outsideSig(document);
         var ae = document.activeElement;
         var focusName = ae && f.contains(ae) ? ae.name : '';
         var focusValue = ae && f.contains(ae) ? ae.value : undefined;
@@ -124,11 +164,21 @@
             }
             var next = formsOf(doc);
             var same = at >= 0 && next.length === forms.length && next[at] && next[at].id === f.id
-                && pathnameOf(res.url) === pathnameOf(location.href) && shapeOf(next[at]) === shapeOf(f);
+                && pathnameOf(res.url) === pathnameOf(location.href) && shapeOf(next[at]) === shapeOf(f)
+                && outsideSig(doc) === before;
             if (!same) {
-                // another page, or rows came or went: the page loads, the message follows it
+                // another page, rows came or went, or the list behind the form
+                // changed: the page loads, the message follows it. The same
+                // address is reloaded in place so the scroll stays where it was.
                 stash(notes);
-                location.href = res.url;
+                if (sameAddress(res.url, location.href)) {
+                    location.reload();
+                } else {
+                    if (pathnameOf(res.url) === location.pathname) {
+                        try { sessionStorage.setItem(SKEY, JSON.stringify({ p: location.pathname, y: window.pageYOffset, t: Date.now() })); } catch (e) {}
+                    }
+                    location.href = res.url;
+                }
                 return;
             }
             if (!quiet) {

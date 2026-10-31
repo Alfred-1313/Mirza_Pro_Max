@@ -10785,38 +10785,65 @@ if (!function_exists('sell_sticker_retire')) {
         }
     }
 }
+if (!function_exists('sell_sticker_owner')) {
+    // The sticker a purchase screen has on display, and the step that put it
+    // there: [message id, step]. It is kept in bt_sticker_id as «id:step» (1 the
+    // panels, 2 the categories, 3 the products); a sticker another flow put up
+    // (the test account's) is a bare id and has no step - 0.
+    function sell_sticker_owner($chat_id)
+    {
+        $so_user = select("user", "*", "id", $chat_id, "select");
+        $so_raw = (string) ($so_user['bt_sticker_id'] ?? '');
+        $so_at = strpos($so_raw, ':');
+        return [(int) $so_raw, $so_at !== false ? (int) substr($so_raw, $so_at + 1) : 0];
+    }
+}
 if (!function_exists('sell_screen')) {
     // One choke point for the three screens of 🔐 خرید اشتراک (panel → category
     // → product). What decides how to move between them is whether the screen
     // being opened has a sticker OF ITS OWN:
     //
-    //   no sticker of its own -> edit the open message in place and leave any
-    //                            sticker already on screen exactly where it is.
-    //                            So a sticker set only on the panel step stays
-    //                            up across category and product, and a flow with
-    //                            no stickers at all never deletes or re-sends
-    //                            anything - it is one screen changing.
+    //   no sticker of its own -> edit the open message in place: the caption and
+    //                            its buttons change, nothing is deleted or sent.
+    //                            A flow with no stickers at all is therefore one
+    //                            message that changes under the customer's finger.
     //   has its own sticker   -> a sticker cannot live inside a text message and
     //                            a new one would land BELOW the caption, so the
     //                            screen is REPLACED: the previous sticker and
     //                            caption go, then the new sticker is sent with
     //                            the new caption underneath it.
     //
-    // The sticker that is up is therefore only ever taken away by a screen that
-    // brings its own, or by sell_sticker_retire() when the flow is left - which
-    // is what stops stickers from piling up down the chat. Pass $message_id = 0
-    // when there is no open bot message to replace (the reply keyboard tap,
-    // where $message_id is the user's own message).
-    function sell_screen($chat_id, $message_id, $text, $keyboard)
+    // A sticker already on screen when a screen WITHOUT one opens:
+    //   going forward  (panel → category → product) it stays - a sticker set only
+    //                  on the panel step is the flow's banner and stays up;
+    //   going back, past the step that put it up, it goes - the panel list does
+    //                  not wear the product list's sticker. Only that sticker
+    //                  message is removed; the caption is still edited in place.
+    // $step is the screen's place in the flow (1 panels, 2 categories, 3
+    // products); 0 (⏱'s screens) never removes anything on its own.
+    //
+    // A sticker is also taken away by sell_sticker_retire() when the flow is
+    // left, which is what stops stickers from piling up down the chat. Pass
+    // $message_id = 0 when there is no open bot message to replace (the reply
+    // keyboard tap, where $message_id is the user's own message).
+    function sell_screen($chat_id, $message_id, $text, $keyboard, $step = 0)
     {
         $ss_mid = (int) $message_id;
+        $ss_step = (int) $step;
         $ss_extras = function_exists('bottext_extras_for_text') ? bottext_extras_for_text($text) : null;
         $ss_hasSticker = is_array($ss_extras) && ($ss_extras['sticker'] ?? '') !== '';
         if (!$ss_hasSticker) {
             // $ss_mid === 0 means the flow is being ENTERED fresh rather than
             // navigated, so a sticker left behind by an abandoned run is an
-            // orphan and goes; mid-flow the sticker on screen is kept.
+            // orphan and goes; mid-flow the sticker on screen is kept, unless
+            // this is a step back past the one that showed it.
             if ($ss_mid > 0) {
+                if ($ss_step > 0) {
+                    list($ss_oldId, $ss_owner) = sell_sticker_owner($chat_id);
+                    if ($ss_oldId > 0 && $ss_owner > $ss_step) {
+                        sell_sticker_retire($chat_id);
+                    }
+                }
                 Editmessagetext($chat_id, $ss_mid, $text, $keyboard, 'HTML');
             } else {
                 sell_sticker_retire($chat_id);
@@ -10833,7 +10860,7 @@ if (!function_exists('sell_screen')) {
         // above its own caption rather than under it
         $ss_res = sendmessage($chat_id, $text, $keyboard, 'HTML');
         $ss_new = (int) ($ss_res['_sticker_message_id'] ?? 0);
-        update("user", "bt_sticker_id", $ss_new > 0 ? (string) $ss_new : "0", "id", $chat_id);
+        update("user", "bt_sticker_id", $ss_new > 0 ? (string) $ss_new . ($ss_step > 0 ? ':' . $ss_step : '') : "0", "id", $chat_id);
     }
 }
 if (!function_exists('statusbtn_defs')) {
@@ -13878,6 +13905,8 @@ if (!function_exists('genbtn_alias_map')) {
             // is the button itself.
             'rc' => 'users.sell.backToPreviousBtn',
             'rp' => 'users.sell.backToPanelListBtn',
+            // ...and the product list's trip back to the panels (category step off)
+            'rs' => 'users.sell.backToPanelSelectBtn',
             'bu' => 'bottext.btnCloseBuy',
             'tp' => 'bottext.btnCloseTopup',
             'ac' => 'bottext.btnCloseAccount',
@@ -14100,6 +14129,9 @@ if (!function_exists('genbtn_defs')) {
         }
         if ($alias === 'rp') {
             return [0 => ['name' => '🔙 بازگشت به لیست پنل‌ها (زیر لیست دسته‌بندی)', 'text' => $textbotlang['users']['sell']['backToPanelListBtn'], 'style' => 'danger', 'callback_data' => 'none']];
+        }
+        if ($alias === 'rs') {
+            return [0 => ['name' => '🔙 بازگشت به انتخاب پنل (زیر لیست محصولات، وقتی دسته‌بندی خاموشه)', 'text' => $textbotlang['users']['sell']['backToPanelSelectBtn'], 'style' => 'danger', 'callback_data' => 'none']];
         }
         if ($alias === 'bu') {
             return [0 => ['name' => '❌ دکمه بستن (خرید اشتراک)', 'text' => $textbotlang['bottext']['btnCloseBuy'], 'style' => 'danger', 'callback_data' => 'none']];
@@ -15389,7 +15421,7 @@ if (!function_exists('genbtn_hub_payload')) {
     // back/close buttons, the other sections' close buttons and the 🎯 ones.
     function genbtn_preview_aliases()
     {
-        return ['rc', 'rp', 'bu', 'tp', 'ac', 'at', 'ts', 'he', 'sp', 'ar', 'mg', 'sl', 'gb', 'kb'];
+        return ['rc', 'rp', 'rs', 'bu', 'tp', 'ac', 'at', 'ts', 'he', 'sp', 'ar', 'mg', 'sl', 'gb', 'kb'];
     }
     // The button exactly as this language's customer receives it - built by
     // genbtn_render(), the same function that builds the real one, so rename,
@@ -20245,6 +20277,7 @@ if (!function_exists('bt_button')) {
         return [
             'users.sell.backToPreviousBtn',
             'users.sell.backToPanelListBtn',
+            'users.sell.backToPanelSelectBtn',
             'bottext.btnCloseBuy',
             'bottext.btnCloseTopup',
             'bottext.btnCloseAccount',
@@ -20296,6 +20329,7 @@ if (!function_exists('bt_button')) {
         $groups = [
             'users.sell.backToPreviousBtn' => 'buyflow',
             'users.sell.backToPanelListBtn' => 'buyflow',
+            'users.sell.backToPanelSelectBtn' => 'buyflow',
             'bottext.btnCloseBuy' => 'buyflow',
             'bottext.btnCloseTopup' => 'topup',
             'bottext.btnCloseAccount' => 'account',

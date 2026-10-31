@@ -1651,9 +1651,16 @@ button,
   -webkit-touch-callout: none;
 }
 .sidebar-nav,
-.modal,
-.tbl-wrap {
+.modal {
   overscroll-behavior: contain;
+}
+/* A wide table scrolls sideways inside its wrapper, and only the sideways part
+   stays in it. «contain» on both axes made a finger resting on a row unable to
+   scroll the page whenever the table was wider than the screen (a tablet, a
+   phone on its side): the wrapper took the gesture and had nowhere to take it. */
+.tbl-wrap {
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: auto;
 }
 /* iOS zooms the page into any field under 16px and does not zoom back */
 @media (pointer: coarse) {

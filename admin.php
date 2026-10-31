@@ -1686,6 +1686,7 @@ if (!function_exists('bt_inline_block_keys')) {
             // their own colour row takes the place of one
             'users.sell.backToPreviousBtn',
             'users.sell.backToPanelListBtn',
+            'users.sell.backToPanelSelectBtn',
             'bottext.btnCloseBuy',
             'bottext.btnCloseTopup',
             'bottext.btnCloseAccount',
@@ -9633,7 +9634,7 @@ if (preg_match('/^gbs\|(hub|lay|layp|layc|lays|layw|layr|col|colp|emo|emop|emos|
             if ($gs_nowHidden) {
                 // hiding a close/back button takes away the only way OFF that
                 // screen - say so once, on the tap that does it
-                $gs_isExit = in_array($gs_alias, ['rc', 'rp', 'bu', 'tp', 'ac', 'ts', 'he', 'hb', 'hv', 'sc'], true) || ($gs_alias === 'td' && $gs_i === 1) || (preg_match('/^k[btrh]$/', $gs_alias) && $gs_i === subapp_back_idx());
+                $gs_isExit = in_array($gs_alias, ['rc', 'rp', 'rs', 'bu', 'tp', 'ac', 'ts', 'he', 'hb', 'hv', 'sc'], true) || ($gs_alias === 'td' && $gs_i === 1) || (preg_match('/^k[btrh]$/', $gs_alias) && $gs_i === subapp_back_idx());
                 telegram('answerCallbackQuery', [
                     'callback_query_id' => $callback_query_id,
                     'text' => '🚫 این دکمه دیگه به کاربر نشون داده نمی‌شه.' . ($gs_isExit ? ' اگه تنها راه بستن/برگشت اون صفحه بوده، کاربر باید از منوی اصلی یا /start بیرون بیاد.' : ''),

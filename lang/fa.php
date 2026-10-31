@@ -361,6 +361,15 @@ return array (
         'group' => 'buyflow',
         'section' => 'panel',
       ),
+      // the same trip back to the panels, from the product list when the
+      // category step is off - worded as the choice it returns to
+      'sell_backpanelselbtn' =>
+      array (
+        'label' => '🔙 بازگشت به انتخاب پنل (بدون دسته‌بندی)',
+        'key' => 'users.sell.backToPanelSelectBtn',
+        'group' => 'buyflow',
+        'section' => 'panel',
+      ),
       'sell_closebtn' =>
       array (
         'label' => '❌ دکمه بستن (خرید اشتراک)',
@@ -2719,6 +2728,7 @@ n2  = نماینده با قابلیت های بیشتر',
       'selectCategoryShort' => '📌 یک دسته را انتخاب نمایید',
       'selectCategory' => '📌 دسته بندی خود را انتخاب نمایید!',
       'backToPanelListBtn' => "🔙 بازگشت به لیست پنل‌ها",
+      'backToPanelSelectBtn' => '🔙 بازگشت به انتخاب پنل',
       'backToPreviousBtn' => '🔙 بازگشت به لیست دسته بندی',
       'panelUnavailable' => '❌ این پنل در دسترس نیست لطفا از پنل دیگری خرید را انجام دهید.',
       'restartProcess' => '❌ لطفا مراحل خرید را مجددا انجام دهید',

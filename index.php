@@ -4470,7 +4470,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
                 } else {
                     $backuser = "backuser";
                 }
-                sell_screen($from_id, $datain == "buy" ? $message_id : 0, $textbotlang['users']['sell']['selectCategory'], KeyboardCategory($location, $user['agent'], $backuser));
+                sell_screen($from_id, $datain == "buy" ? $message_id : 0, $textbotlang['users']['sell']['selectCategory'], KeyboardCategory($location, $user['agent'], $backuser), 2);
             } else {
                 $query = "SELECT * FROM product WHERE (Location = '$location' OR Location = '/all')AND agent= '{$user['agent']}' AND (FIND_IN_SET('{$user['lang']}', lang) OR lang = 'all' OR lang IS NULL OR lang = '')";
                 $marzban_list_get = select("marzban_panel", "*", "name_panel", $location, "select");
@@ -4491,7 +4491,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
                 } else {
                     $backuser = "backuser";
                 }
-                sell_screen($from_id, $datain == "buy" ? $message_id : 0, $textproduct, KeyboardProduct($marzban_list_get['name_panel'], $query, $user['pricediscount'], $datakeyboard, $statuscustom, $backuser));
+                sell_screen($from_id, $datain == "buy" ? $message_id : 0, $textproduct, KeyboardProduct($marzban_list_get['name_panel'], $query, $user['pricediscount'], $datakeyboard, $statuscustom, $backuser), 3);
             }
         } else {
             $nullproduct = products_available_count($user['lang'] ?? 'fa', $user['agent']);
@@ -4543,9 +4543,9 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     // step 1 of the purchase flow - sell_screen() edits in place when the panel
     // caption has no sticker, and replaces the screen when it has one
     if ($datain == "buy" || $datain == "buybacktow" || $datain == "buyback") {
-        sell_screen($from_id, $message_id, $textbotlang['textbot']['selectLocation'], $list_marzban_panel_user);
+        sell_screen($from_id, $message_id, $textbotlang['textbot']['selectLocation'], $list_marzban_panel_user, 1);
     } else {
-        sell_screen($from_id, 0, $textbotlang['textbot']['selectLocation'], $list_marzban_panel_user);
+        sell_screen($from_id, 0, $textbotlang['textbot']['selectLocation'], $list_marzban_panel_user, 1);
     }
 } elseif (preg_match('/^location_(.*)/', $datain, $dataget) || $datain == "backproduct") {
     // the 🔐 خرید اشتراک sticker belongs to the panel list only - once a panel
@@ -4599,7 +4599,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     if (shop_feature_value('categorytime', $user['lang'] ?? 'fa', $setting['statuscategory']) == "offcategory") {
         if (shop_feature_value('categroygenral', $user['lang'] ?? 'fa', $setting['statuscategorygenral']) == "oncategorys") {
             $marzban_list_get = select("marzban_panel", "*", "name_panel", $location, "select");
-            sell_screen($from_id, $message_id, $textbotlang['users']['sell']['selectCategory'], KeyboardCategory($location, $user['agent'], "buybacktow"));
+            sell_screen($from_id, $message_id, $textbotlang['users']['sell']['selectCategory'], KeyboardCategory($location, $user['agent'], "buybacktow"), 2);
         } else {
             $query = "SELECT * FROM product WHERE (Location = '$location' OR Location = '/all')AND agent= '{$user['agent']}' AND (FIND_IN_SET('{$user['lang']}', lang) OR lang = 'all' OR lang IS NULL OR lang = '')";
             $statuscustomvolume = json_decode($marzban_list_get['customvolume'], true)[$user['agent']];
@@ -4613,11 +4613,13 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
             } else {
                 $statuscustom = false;
             }
-            // back here restarts the panel step cleanly: buyfresh drops this
-            // message and re-sends the sticker + panel menu, rather than editing
-            // this message in place (which showed no sticker)
-            $back = "buyfresh";
-            sell_screen($from_id, $message_id, $textbotlang['users']['sell']['serviceSelect'], KeyboardProduct($marzban_list_get['name_panel'], $query, $user['pricediscount'], $datakeyboard, $statuscustom, $back));
+            // back to the panels: buybacktow, like the category list's back. The
+            // panel screen decides how it arrives (sell_screen) - edited in place
+            // when it has no sticker, replaced together with its sticker when it
+            // has one. This used to be buyfresh, which always deleted the message
+            // and sent a new one, sticker or not.
+            $back = "buybacktow";
+            sell_screen($from_id, $message_id, $textbotlang['users']['sell']['serviceSelect'], KeyboardProduct($marzban_list_get['name_panel'], $query, $user['pricediscount'], $datakeyboard, $statuscustom, $back), 3);
         }
     } else {
         $nullproduct = products_available_count($user['lang'] ?? 'fa', $user['agent']);
@@ -4655,7 +4657,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     }
     // picking a category used to delete this screen and post a brand new one,
     // which broke the "one screen changing" feel of the two steps before it
-    sell_screen($from_id, $message_id, $textbotlang['users']['sell']['serviceSelectFirst'], KeyboardProduct($marzban_list_get['name_panel'], $query, $user['pricediscount'], $datakeyboard, $statuscustom, "location_{$marzban_list_get['code_panel']}"));
+    sell_screen($from_id, $message_id, $textbotlang['users']['sell']['serviceSelectFirst'], KeyboardProduct($marzban_list_get['name_panel'], $query, $user['pricediscount'], $datakeyboard, $statuscustom, "location_{$marzban_list_get['code_panel']}"), 3);
 } elseif (preg_match('/^productmonth_(\w+)/', $datain, $dataget)) {
     $monthenumber = $dataget[1];
     $userdate = json_decode($user['Processing_value'], true);
@@ -4671,7 +4673,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         } else {
             $back = "location_{$marzban_list_get['code_panel']}";
         }
-        sell_screen($from_id, $message_id, $textbotlang['users']['sell']['selectCategory'], KeyboardCategory($marzban_list_get['name_panel'], $user['agent'], $back));
+        sell_screen($from_id, $message_id, $textbotlang['users']['sell']['selectCategory'], KeyboardCategory($marzban_list_get['name_panel'], $user['agent'], $back), 2);
     } else {
         $query = "SELECT * FROM product WHERE (Location = '{$userdate['name_panel']}' OR Location = '/all') AND agent= '{$user['agent']}' AND Service_time = '$monthenumber' AND (FIND_IN_SET('{$user['lang']}', lang) OR lang = 'all' OR lang IS NULL OR lang = '')";
         $marzban_list_get = select("marzban_panel", "*", "name_panel", $userdate['name_panel'], "select");
@@ -4686,7 +4688,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         } else {
             $statuscustom = false;
         }
-        sell_screen($from_id, $message_id, $textbotlang['users']['sell']['serviceSelectFirst'], KeyboardProduct($marzban_list_get['name_panel'], $query, $user['pricediscount'], $datakeyboard, $statuscustom, "location_{$marzban_list_get['code_panel']}"));
+        sell_screen($from_id, $message_id, $textbotlang['users']['sell']['serviceSelectFirst'], KeyboardProduct($marzban_list_get['name_panel'], $query, $user['pricediscount'], $datakeyboard, $statuscustom, "location_{$marzban_list_get['code_panel']}"), 3);
     }
 } elseif ($datain == "customsellvolume") {
     $userdate = json_decode($user['Processing_value'], true);
