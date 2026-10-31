@@ -150,6 +150,10 @@ if (!function_exists('report_topic_id')) {
                 $pdo->prepare("INSERT INTO topicid (idreport, report) VALUES (?, ?)")->execute([$id, $key]);
             }
             clearSelectCache('topicid');
+            // on the bot's own record, so a copy of it can be told apart later
+            if (function_exists('report_topic_ledger_add')) {
+                report_topic_ledger_add($group, $id, $key);
+            }
             return $id;
         } finally {
             if ($got) {

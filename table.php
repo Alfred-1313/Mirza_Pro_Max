@@ -1695,6 +1695,15 @@ try {
 } catch (\Throwable $e) {
     error_log('mainmenu repair: ' . $e->getMessage());
 }
+// the report group's topics: the ones in use go on the bot's own record, and
+// copies it made beyond them - say on a fresh install that set the group up
+// before this backup was put back - are deleted
+try {
+    report_topic_ledger_seed();
+    report_topics_dedupe();
+} catch (\Throwable $e) {
+    error_log('report topics: ' . $e->getMessage());
+}
 // with its secret, and asking for chat_member too
 webhook_register();
 // 🆕 tell the admins what this update added (whatsnew.php), once

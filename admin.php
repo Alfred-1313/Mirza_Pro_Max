@@ -12602,136 +12602,20 @@ elseif ($datain == "systemsms") {
         sendmessage($from_id, $texterror, null, 'HTML');
         return;
     }
-    $createForumTopic = telegram('createForumTopic', [
-        'chat_id' => $text,
-        'name' => $textbotlang['Admin']['report']['btnPurchaseReports']
-    ]);
-    if (!$createForumTopic['ok']) {
-        $texterror = $textbotlang['Admin']['Channel']['botNotGroupAdmin'];
-        sendmessage($from_id, $texterror, null, 'HTML');
+    // the topics there are used; only the missing ones are made, and the
+    // bot's own extra copies (from setting the group up before) are deleted
+    $rt_res = report_topics_setup($text, $textbotlang);
+    if ($rt_res['error'] !== null) {
+        $rt_why = stripos($rt_res['error'], 'rights') !== false || stripos($rt_res['error'], 'admin') !== false
+            ? $textbotlang['Admin']['Channel']['botNotGroupAdmin']
+            : "⚠️ تلگرام اجازه نداد همه‌ی تاپیک‌ها ساخته بشن: <code>" . htmlspecialchars($rt_res['error']) . "</code>\nچند لحظه بعد دوباره آیدی گروه رو بفرست - تاپیک‌هایی که ساخته شدن دوباره ساخته نمی‌شن.";
+        sendmessage($from_id, $rt_why, null, 'HTML');
         return;
     }
-    if ($buyreport != $createForumTopic['result']['message_thread_id']) {
-        update("topicid", "idreport", $createForumTopic['result']['message_thread_id'], "report", "buyreport");
-    }
-    $createForumTopic = telegram('createForumTopic', [
-        'chat_id' => $text,
-        'name' => $textbotlang['Admin']['report']['btnServicePurchase']
-    ]);
-    if (!$createForumTopic['ok']) {
-        $texterror = $textbotlang['Admin']['Channel']['botNotGroupAdmin'];
-        sendmessage($from_id, $texterror, null, 'HTML');
-        return;
-    }
-    if ($otherservice != $createForumTopic['result']['message_thread_id']) {
-        update("topicid", "idreport", $createForumTopic['result']['message_thread_id'], "report", "otherservice");
-    }
-    $createForumTopic = telegram('createForumTopic', [
-        'chat_id' => $text,
-        'name' => $textbotlang['Admin']['report']['btnTestAccount']
-    ]);
-    if (!$createForumTopic['ok']) {
-        $texterror = $textbotlang['Admin']['Channel']['botNotGroupAdmin'];
-        sendmessage($from_id, $texterror, null, 'HTML');
-        return;
-    }
-    if ($reporttest != $createForumTopic['result']['message_thread_id']) {
-        update("topicid", "idreport", $createForumTopic['result']['message_thread_id'], "report", "reporttest");
-    }
-    $createForumTopic = telegram('createForumTopic', [
-        'chat_id' => $text,
-        'name' => $textbotlang['Admin']['report']['btnOther']
-    ]);
-    if (!$createForumTopic['ok']) {
-        $texterror = $textbotlang['Admin']['Channel']['botNotGroupAdmin'];
-        sendmessage($from_id, $texterror, null, 'HTML');
-        return;
-    }
-    if ($otherreport != $createForumTopic['result']['message_thread_id']) {
-        update("topicid", "idreport", $createForumTopic['result']['message_thread_id'], "report", "otherreport");
-    }
-    $createForumTopic = telegram('createForumTopic', [
-        'chat_id' => $text,
-        'name' => $textbotlang['Admin']['report']['btnErrors']
-    ]);
-    if (!$createForumTopic['ok']) {
-        $texterror = $textbotlang['Admin']['Channel']['botNotGroupAdmin'];
-        sendmessage($from_id, $texterror, null, 'HTML');
-        return;
-    }
-    if ($errorreport != $createForumTopic['result']['message_thread_id']) {
-        update("topicid", "idreport", $createForumTopic['result']['message_thread_id'], "report", "errorreport");
-    }
-    $createForumTopic = telegram('createForumTopic', [
-        'chat_id' => $text,
-        'name' => $textbotlang['Admin']['report']['btnFinancial']
-    ]);
-    if (!$createForumTopic['ok']) {
-        $texterror = $textbotlang['Admin']['Channel']['botNotGroupAdmin'];
-        sendmessage($from_id, $texterror, null, 'HTML');
-        return;
-    }
-
-    if ($paymentreports != $createForumTopic['result']['message_thread_id']) {
-        update("topicid", "idreport", $createForumTopic['result']['message_thread_id'], "report", "paymentreport");
-    }
-    $createForumTopic = telegram('createForumTopic', [
-        'chat_id' => $text,
-        'name' => $textbotlang['Admin']['affiliates']['titleTopic']
-    ]);
-    if (!$createForumTopic['ok']) {
-        $texterror = $textbotlang['Admin']['Channel']['botNotGroupAdmin'];
-        sendmessage($from_id, $texterror, null, 'HTML');
-        return;
-    }
-
-    if ($porsantreport != $createForumTopic['result']['message_thread_id']) {
-        update("topicid", "idreport", $createForumTopic['result']['message_thread_id'], "report", "porsantreport");
-    }
-    $createForumTopic = telegram('createForumTopic', [
-        'chat_id' => $text,
-        'name' => $textbotlang['Admin']['report']['reportNight']
-    ]);
-    if (!$createForumTopic['ok']) {
-        $texterror = $textbotlang['Admin']['Channel']['botNotGroupAdmin'];
-        sendmessage($from_id, $texterror, null, 'HTML');
-        return;
-    }
-
-    if ($reportnight != $createForumTopic['result']['message_thread_id']) {
-        update("topicid", "idreport", $createForumTopic['result']['message_thread_id'], "report", "reportnight");
-    }
-    $createForumTopic = telegram('createForumTopic', [
-        'chat_id' => $text,
-        'name' => $textbotlang['Admin']['report']['reportCron']
-    ]);
-    if (!$createForumTopic['ok']) {
-        $texterror = $textbotlang['Admin']['Channel']['botNotGroupAdmin'];
-        sendmessage($from_id, $texterror, null, 'HTML');
-        return;
-    }
-
-    if ($reportcron != $createForumTopic['result']['message_thread_id']) {
-        update("topicid", "idreport", $createForumTopic['result']['message_thread_id'], "report", "reportcron");
-    }
-    $createForumTopic = telegram('createForumTopic', [
-        'chat_id' => $text,
-        'name' => $textbotlang['Admin']['report']['btnBackup']
-    ]);
-    if (!$createForumTopic['ok']) {
-        $texterror = $textbotlang['Admin']['Channel']['botNotGroupAdmin'];
-        sendmessage($from_id, $texterror, null, 'HTML');
-        return;
-    }
-
-    if ($reportbackup != $createForumTopic['result']['message_thread_id']) {
-        update("topicid", "idreport", $createForumTopic['result']['message_thread_id'], "report", "backupfile");
-    }
-    // the topics made when first needed (⏱ اکانت ساعتی, 🎁 کانفیگ رایگان)
-    // belonged to the old group: made again, in this one, on their next report
-    report_topic_reset(['paygreport', 'affrwreport']);
-    sendmessage($from_id, $textbotlang['Admin']['Channel']['setChannelReport'], $setting_panel, 'HTML');
     update("setting", "Channel_Report", $text);
+    $rt_note = "\n\n🗂 تاپیک‌ها: {$rt_res['kept']} تا از قبل بود و همون موند، {$rt_res['made']} تا ساخته شد"
+        . ($rt_res['removed'] > 0 ? "، {$rt_res['removed']} تاپیک تکراری حذف شد." : ".");
+    sendmessage($from_id, $textbotlang['Admin']['Channel']['setChannelReport'] . $rt_note, $setting_panel, 'HTML');
     step('home', $from_id);
 } elseif (($text == $textbotlang['keyboard']['shopSettings'] || $text == "/shop") && $adminrulecheck['rule'] == "administrator") {
     sendmessage($from_id, $textbotlang['Admin']['shopSettingsCaption'], $shopkeyboard, 'HTML');

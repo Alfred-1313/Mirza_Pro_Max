@@ -23263,6 +23263,8 @@ function parseConfigs($input)
 
 // ⏱ اکانت ساعتی - its own file, needed by the bot, the crons and the web panel alike
 require_once __DIR__ . '/payg.php';
+// the report group's topics, made once (setting the group again reuses them)
+require_once __DIR__ . '/report_topics.php';
 // 🎁 حجم یا زمان گروهی - the same
 require_once __DIR__ . '/bulkgift.php';
 // 🚀 سرعت گروهی (Rebecca panels) - the same, on 🎁's helpers

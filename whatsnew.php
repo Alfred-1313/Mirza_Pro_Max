@@ -786,4 +786,18 @@ return [
             . "• «🔄 Reset to default» in ✏️ and 📐 now has every button; the 📐 reset puts the change-language button back in its place too. Each tap now shows a short note at the top: «back to default» or «already at default» - before, a tap that changed nothing did nothing at all.\n"
             . "• A database imported by hand (phpMyAdmin, say) from an older bot brings itself up to date on the first message to the bot: the tables and columns it needs are added, nothing is removed. Restoring from the script (option 7), updating (option 2) and /update do the same.</blockquote>",
     ],
+    [
+        'n' => 58,
+        'date' => '2026-10-31',
+        'fa' => "<blockquote>🗂 <b>تاپیک‌های گروه گزارش‌ها دیگر تکراری ساخته نمی‌شوند</b>\n"
+            . "• وقتی گروه گزارش‌ها را دوباره تنظیم می‌کنی (مثلاً بعد از بردن ربات به سرور دیگر)، ربات اول تاپیک‌هایی را که دارد چک می‌کند: همان‌ها را نگه می‌دارد و فقط تاپیکی را که نیست (یا دستی پاک شده) می‌سازد. آخرش هم می‌گوید چند تا از قبل بود، چند تا ساخته شد و چند تا تکراری حذف شد.\n"
+            . "• اگر تلگرام وسط ساختن تاپیک‌ها بگوید «زیادی سریع» (Too Many Requests)، ربات کمی صبر می‌کند و ادامه می‌دهد؛ اگر باز هم نشد، دلیلش را می‌گوید و دفعهٔ بعد فقط باقی‌مانده‌ها را می‌سازد.\n"
+            . "• ربات تاپیک‌هایی را که خودش می‌سازد یادداشت می‌کند. اگر روی سرور تازه گروه را تنظیم کنی و بعد بکاپ قدیمی را بریزی، تاپیک‌های اضافه‌ای که روی سرور تازه ساخته شده بود خودکار حذف می‌شوند و تاپیک‌های اصلی می‌مانند. تاپیک‌هایی که خودت دستی ساخته‌ای هیچ‌وقت پاک نمی‌شوند.\n"
+            . "• تاپیک‌های تکراری‌ای که قبل از این آپدیت ساخته شده‌اند را ربات نمی‌شناسد (تلگرام به ربات لیست تاپیک‌ها را نمی‌دهد)؛ آن‌ها را یک بار دستی در تلگرام پاک کن.</blockquote>",
+        'en' => "<blockquote>🗂 <b>The report group's topics are no longer made twice</b>\n"
+            . "• Setting the report group again (after moving the bot to another server, say) checks the topics the bot already has: those are kept, and only a missing one (or one deleted by hand) is made. It then says how many were there, how many were made and how many duplicates went.\n"
+            . "• When Telegram says «Too Many Requests» half way, the bot waits and carries on; if it still cannot, it says why, and the next try makes only the rest.\n"
+            . "• The bot keeps a note of the topics it makes. Set the group up on a fresh server and then put the old backup back, and the extra topics the fresh server made are deleted by themselves; the original ones stay. Topics you made by hand are never deleted.\n"
+            . "• Duplicates made before this update are unknown to the bot (Telegram gives bots no list of topics) - delete those once, by hand, in Telegram.</blockquote>",
+    ],
 ];

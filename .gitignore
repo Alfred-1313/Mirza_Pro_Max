@@ -27,6 +27,7 @@ cronbot/backup_*.sql
 
 # runtime cache
 /storage/cache/
+/storage/report_topics.json
 
 # stray temp files from earlier ad hoc scripts
 *.findinsettmp
