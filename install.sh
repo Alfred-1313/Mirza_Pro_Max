@@ -1169,6 +1169,21 @@ function renew_ssl() {
         sleep 1; show_menu; return 1
     fi
 
+    # this bot's certificate, or a new domain for it
+    if [ -n "${PICKED_DIR:-}" ] && [ -f "$PICKED_DIR/config.php" ]; then
+        echo ""
+        printf "    ${C_KEY}[1]${CR} ${C_TXT}Renew the certificate of %s${CR}\n" "$domain"
+        printf "    ${C_KEY}[2]${CR} ${C_TXT}Change this bot's domain${CR} ${C_DIM}(a new domain and certificate)${CR}\n"
+        printf "    ${C_KEY}[0]${CR} ${C_TXT}Back to menu${CR}\n"
+        printf "  ${C_PROMPT}❯${CR} Choose ${C_DIM}[1]${CR}: "
+        local _ssl_what; read -r _ssl_what
+        case "$_ssl_what" in
+            0) show_menu; return 0 ;;
+            2) change_bot_domain "$PICKED_DIR" "${name:-Bot}" "$domain"; return $? ;;
+        esac
+        echo ""
+    fi
+
     # Show current expiry, if a certificate already exists
     local certfile="/etc/letsencrypt/live/${domain}/cert.pem"
     if [ -f "$certfile" ]; then
@@ -1220,6 +1235,269 @@ function renew_ssl() {
     else
         _kv "Auto-renew" "${C_BAD}off${CR} ${C_DIM}· run this option again before the date above${CR}"
     fi
+    echo ""
+    printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "
+    read -r _
+    show_menu
+}
+
+# ── A bot's domain, changed ───────────────────────────────────
+# The bot in DIR answers on a new domain: Apache's sites for it (made from
+# the bot's own, so anything set in them stays), a certificate for it, its
+# config.php and registry entry, phpMyAdmin's own-port site, its scheduled
+# jobs, its webhook and its agents' bots' webhooks. The old domain keeps
+# answering until the new one has its certificate; Apache is put back as it
+# was if it refuses the new sites. Every other bot is left as it is.
+change_bot_domain() {
+    local dir="$1" name="$2" old="$3"
+    local cfg="$dir/config.php" sa="/etc/apache2/sites-available"
+    local hosts token port newd newhosts k rc other
+    hosts=$(grep '^\$domainhosts' "$cfg" | head -1 | cut -d"'" -f2)
+    token=$(grep '^\$APIKEY' "$cfg" | head -1 | cut -d"'" -f2)
+    [ -z "$old" ] && old=$(hosts_domain "$hosts")
+    if [ -z "$old" ] || [ -z "$dir" ]; then
+        printf "    ${C_BAD}●${CR} ${C_BAD}Could not read this bot's domain from %s.${CR}\n" "$cfg"
+        sleep 2; show_menu; return 1
+    fi
+    port=$(bots_registry_bot_port "$dir"); [ -z "$port" ] && port=$(hosts_port "$hosts")
+    _cd_back() {
+        echo ""
+        printf "    ${C_BAD}●${CR} ${C_BAD}%s${CR}\n" "$1"
+        [ -n "${2:-}" ] && printf "    ${C_DIM}%s${CR}\n" "$2"
+        echo ""
+        printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "
+        read -r _
+        show_menu
+    }
+
+    echo ""
+    _sec "New domain for ${name}"
+    _kv "Now" "${C_KEY}${old}${CR} ${C_DIM}· ${dir}${CR}"
+    echo ""
+    # 1) the new domain: a real one, and nobody else's here
+    while :; do
+        printf "  ${C_PROMPT}❯${CR} New domain ${C_DIM}[0 = back]${CR}: "
+        read -r newd
+        newd=$(printf '%s' "$newd" | tr '[:upper:]' '[:lower:]' | sed -E 's#^https?://##; s#[/:].*$##; s/^[[:space:]]+//; s/[[:space:]]+$//')
+        if [ -z "$newd" ] || [ "$newd" = "0" ]; then show_menu; return 0; fi
+        if ! validate_domain "$newd"; then
+            printf "    ${C_FAINT_BAD}That is not a domain (like bot.example.com).${CR}\n"; continue
+        fi
+        if [ "$newd" = "$old" ]; then
+            printf "    ${C_FAINT_BAD}That is this bot's domain now.${CR}\n"; continue
+        fi
+        if jq -e --arg d "$newd" --arg o "$dir" 'any(.[]; .domain == $d and .dir != $o)' "$BOTS_REGISTRY" >/dev/null 2>&1; then
+            printf "    ${C_FAINT_BAD}Another bot on this server uses %s.${CR}\n" "$newd"; continue
+        fi
+        other=$(grep -lsE "^[[:space:]]*Server(Name|Alias)([[:space:]]+[^[:space:]]+)*[[:space:]]+${newd//./\\.}(:[0-9]+)?([[:space:]]|\$)" /etc/apache2/sites-enabled/* 2>/dev/null \
+            | grep -v -e "/${old}\.conf\$" -e "/${old}-ssl\.conf\$" -e "/${old}-pma\.conf\$" | head -1)
+        if [ -n "$other" ]; then
+            printf "    ${C_FAINT_BAD}Apache here already serves %s (%s).${CR}\n" "$newd" "$(basename "$other")"; continue
+        fi
+        break
+    done
+    newhosts=$(hosts_of "$newd" "$port")
+
+    # 2) it has to point here, or Let's Encrypt says no
+    echo ""
+    printf "    Point the A record of ${C_KEY}%s${CR} at ${C_KEY}%s${CR} ${C_DIM}(on Cloudflare: \"DNS only\")${CR}\n" "$newd" "$(get_server_ip)"
+    while :; do
+        domain_points_here "$newd"; rc=$?
+        if [ "$rc" -eq 0 ]; then
+            printf "    ${C_OK}●${CR} ${C_OK}%s points at this server${CR}\n" "$newd"; break
+        fi
+        if [ "$rc" -eq 2 ]; then
+            printf "    ${C_FAINT_BAD}%s does not resolve yet - DNS can take a few minutes.${CR}\n" "$newd"
+        else
+            printf "    ${C_FAINT_BAD}%s points at %s, not here.${CR}\n" "$newd" "$(getent ahostsv4 "$newd" 2>/dev/null | awk '{print $1; exit}')"
+        fi
+        printf "  ${C_PROMPT}❯${CR} ${C_DIM}Enter = check again, c = continue anyway, 0 = back${CR}: "
+        read -r k
+        [ "$k" = "0" ] && { show_menu; return 0; }
+        [[ "$k" =~ ^[Cc]$ ]] && break
+    done
+
+    echo ""
+    _kv "Bot" "${C_KEY}${name}${CR}"
+    _kv "Domain" "${C_DIM}${old}${CR} ${C_DIM}→${CR} ${C_KEY}${newd}${CR}"
+    _kv "Address" "${C_DIM}https://${newhosts}${CR}"
+    printf "    ${C_DIM}The old domain keeps working until the new one has its certificate.${CR}\n"
+    printf "    ${C_DIM}Then the bot, its webhook, its scheduled jobs and its agents' bots${CR}\n"
+    printf "    ${C_DIM}move to the new domain. Links sent with the old domain stop working.${CR}\n"
+    printf "  ${C_PROMPT}❯${CR} Change it now? ${C_DIM}[y/N]${CR}: "
+    read -r k
+    [[ "$k" =~ ^[Yy]$ ]] || { printf "\n    ${C_DIM}Nothing was changed.${CR}\n"; sleep 1; show_menu; return 0; }
+    echo ""
+
+    # what is there now, to put back if Apache says no
+    local abak; abak=$(mktemp -d)
+    cp -a /etc/apache2/sites-available /etc/apache2/sites-enabled /etc/apache2/conf-available /etc/apache2/conf-enabled "$abak"/
+    cp -a /etc/apache2/ports.conf "$abak/" 2>/dev/null
+    cp -a "$cfg" "$abak/config.php"
+    _cd_undo() {
+        _pma_restore "${abak:?}"
+        cp -a "${abak:?}/config.php" "$cfg"
+        systemctl reload apache2 >/dev/null 2>&1 || systemctl restart apache2 >/dev/null 2>&1
+        rm -rf "${abak:?}"
+    }
+    local oe; oe=$(printf '%s' "$old" | sed 's/[.[\*^$/]/\\&/g')
+
+    # 3) the new domain's plain-HTTP site, a copy of the bot's own - the old
+    #    one stays on, so the bot keeps answering meanwhile
+    if [ -f "$sa/${old}.conf" ]; then
+        sed -E "s/\b${oe}\b/${newd}/g" "$sa/${old}.conf" > "$sa/${newd}.conf"
+    else
+        tee "$sa/${newd}.conf" >/dev/null <<EOF
+<VirtualHost *:80>
+    ServerName $newd
+    DocumentRoot $dir
+    <Directory $dir>
+        Options FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+    ErrorLog \${APACHE_LOG_DIR}/${newd}-error.log
+    CustomLog \${APACHE_LOG_DIR}/${newd}-access.log combined
+</VirtualHost>
+EOF
+    fi
+    a2ensite "${newd}.conf" >/dev/null 2>&1
+    if ! apache2ctl configtest >/dev/null 2>&1 || ! { systemctl reload apache2 >/dev/null 2>&1 || systemctl restart apache2 >/dev/null 2>&1; }; then
+        _cd_undo
+        _cd_back "Apache would not take a site for ${newd} - nothing was changed."
+        return 1
+    fi
+
+    # 4) its certificate (one that is already there is used)
+    if [ ! -f "/etc/letsencrypt/live/${newd}/fullchain.pem" ]; then
+        if ! certbot plugins 2>/dev/null | grep -qi apache; then
+            run_step "Installing Apache certbot plugin" "apt-get install -y python3-certbot-apache" || show_step_error
+        fi
+        if ! run_step "Getting a certificate for ${newd}" \
+            "certbot certonly --apache --non-interactive --agree-tos --register-unsafely-without-email --preferred-challenges http --cert-name '${newd}' -d '${newd}'"; then
+            show_step_error
+            _cd_undo
+            _cd_back "Let's Encrypt did not issue a certificate for ${newd} - nothing was changed." \
+                "Does ${newd} point at this server, and is port 80 open? The bot still answers on ${old}."
+            return 1
+        fi
+    fi
+
+    # 5) the HTTPS site on the new domain; the old domain's sites go off
+    if [ -f "$sa/${old}-ssl.conf" ]; then
+        sed -E "s/\b${oe}\b/${newd}/g" "$sa/${old}-ssl.conf" > "$sa/${newd}-ssl.conf"
+    else
+        tee "$sa/${newd}-ssl.conf" >/dev/null <<EOF
+<VirtualHost *:${port}>
+    ServerName $newd
+    DocumentRoot $dir
+    SSLEngine on
+    SSLCertificateFile /etc/letsencrypt/live/$newd/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/$newd/privkey.pem
+    <Directory $dir>
+        Options FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+    Include /etc/apache2/conf-available/phpmyadmin.conf
+    ErrorLog \${APACHE_LOG_DIR}/${newd}-error.log
+    CustomLog \${APACHE_LOG_DIR}/${newd}-access.log combined
+</VirtualHost>
+EOF
+    fi
+    a2ensite "${newd}-ssl.conf" >/dev/null 2>&1
+    for k in "${old}.conf" "${old}-ssl.conf" "${old}-pma.conf"; do
+        a2dissite "$k" >/dev/null 2>&1
+    done
+    local aout
+    if ! aout=$(apache2ctl configtest 2>&1); then
+        _cd_undo
+        printf '%s\n' "$aout" | tail -n 3 | sed 's/^/      /'
+        _cd_back "Apache refused the new site - everything was put back as it was."
+        return 1
+    fi
+    systemctl reload apache2 >/dev/null 2>&1 || systemctl restart apache2 >/dev/null 2>&1
+    sleep 1
+    if ! systemctl is-active --quiet apache2; then
+        _cd_undo
+        systemctl restart apache2 >/dev/null 2>&1
+        _cd_back "Apache would not run with the new site - everything was put back as it was."
+        return 1
+    fi
+    printf "    ${C_OK}✔${CR} ${C_DIM}Apache serves the bot on %s${CR}\n" "$newd"
+
+    # 6) the bot itself: its address, its registry entry, phpMyAdmin's own-port site
+    sed -i "s#^\(\$domainhosts = '\)[^']*'#\1${newhosts}'#" "$cfg"
+    chown www-data:www-data "$cfg" 2>/dev/null
+    bots_registry_add "$name" "$dir" "$newd"
+    rm -f "${sa:?}/${old:?}.conf" "${sa:?}/${old:?}-ssl.conf" "${sa:?}/${old:?}-pma.conf"
+    local pma; pma=$(bots_registry_pma_port "$dir")
+    if [ -n "$pma" ] && [ "$pma" != "$port" ]; then
+        pma_sync_all >/dev/null 2>&1 || printf "    ${C_WARN}!${CR} ${C_WARN}phpMyAdmin's port could not be set up again - set it from menu 9.${CR}\n"
+    fi
+    rm -rf "${abak:?}"
+
+    # 7) scheduled jobs: the old address out, the new one in
+    _bot_crons_remove "$hosts"
+    local crons_ok=0
+    cat > /tmp/ciro_cron_setup.php <<PHPEOF
+<?php
+chdir('$dir');
+require 'config.php';
+require 'botapi.php';
+require 'panels.php';
+require 'function.php';
+require 'jdf.php';
+require 'vendor/autoload.php';
+if (!function_exists('activecron')) { exit(3); }
+activecron();
+PHPEOF
+    chmod 644 /tmp/ciro_cron_setup.php
+    ( cd "$dir" && runuser -u www-data -- php /tmp/ciro_cron_setup.php ) >/dev/null 2>&1 && crons_ok=1
+    rm -f /tmp/ciro_cron_setup.php
+
+    # 8) Telegram: the bot, then every agent's bot
+    local secret hook hook_ok=0 agents=0 agents_ok=0 dbhost dbname dbuser dbpass _tok _uid _uname
+    secret=$(_bot_webhook_secret "$dir")
+    hook=$(curl -s --max-time 20 -F "url=https://${newhosts}/index.php" -F "secret_token=${secret}" \
+        "https://api.telegram.org/bot${token}/setWebhook" 2>/dev/null)
+    printf '%s' "$hook" | grep -q '"ok":true' && hook_ok=1
+    dbhost=$(grep '^\$dbhost' "$cfg" | head -1 | cut -d"'" -f2); [ -z "$dbhost" ] && dbhost=localhost
+    dbname=$(grep '^\$dbname' "$cfg" | head -1 | cut -d"'" -f2)
+    dbuser=$(grep '^\$usernamedb' "$cfg" | head -1 | cut -d"'" -f2)
+    dbpass=$(grep '^\$passworddb' "$cfg" | head -1 | cut -d"'" -f2)
+    while IFS=$'\t' read -r _tok _uid _uname; do
+        [ -n "$_tok" ] && [ -d "$dir/vpnbot/${_uid}${_uname}" ] || continue
+        agents=$((agents + 1))
+        curl -s --max-time 20 "https://api.telegram.org/bot${_tok}/setWebhook?url=https://${newhosts}/vpnbot/${_uid}${_uname}/index.php" \
+            | grep -q '"ok":true' && agents_ok=$((agents_ok + 1))
+    done < <(mysql -N -B -h "$dbhost" -u "$dbuser" -p"$dbpass" "$dbname" -e "SELECT bot_token, id_user, username FROM botsaz;" 2>/dev/null)
+
+    # 9) renewing by itself; the old certificate goes once nothing uses it
+    ssl_renewal_ensure "$newd" >/dev/null
+    local old_cert="kept"
+    if [ -d "/etc/letsencrypt/live/${old}" ] && ! grep -rqsF "/live/${old}/" /etc/apache2/sites-enabled/ /etc/apache2/sites-available/; then
+        certbot delete --non-interactive --cert-name "$old" >/dev/null 2>&1 && old_cert="removed"
+    fi
+
+    _sec "Domain changed"
+    _kv "Bot" "${C_KEY}${name}${CR}"
+    _kv "Address" "${C_OK}https://${newhosts}${CR}"
+    if [ "$hook_ok" -eq 1 ]; then
+        _kv "Webhook" "$(_dot ok) ${C_OK}set${CR}"
+    else
+        _kv "Webhook" "$(_dot bad) ${C_BAD}not set${CR} ${C_DIM}· run option 2 (Update) once to retry${CR}"
+    fi
+    [ "$agents" -gt 0 ] && _kv "Agents' bots" "${C_DIM}${agents_ok} of ${agents} moved${CR}"
+    if [ "$crons_ok" -eq 1 ]; then
+        _kv "Jobs" "$(_dot ok) ${C_OK}on the new domain${CR}"
+    else
+        _kv "Jobs" "$(_dot warn) ${C_WARN}open the bot's admin panel once to set them up${CR}"
+    fi
+    if [ -f "/etc/letsencrypt/live/${newd}/cert.pem" ]; then
+        _kv "Valid until" "${C_DIM}$(openssl x509 -enddate -noout -in "/etc/letsencrypt/live/${newd}/cert.pem" 2>/dev/null | cut -d= -f2)${CR}"
+    fi
+    [ "$old_cert" = "removed" ] && _kv "Old certificate" "${C_DIM}${old} · removed${CR}"
     echo ""
     printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "
     read -r _
@@ -2023,7 +2301,7 @@ function show_menu() {
     _mi "1" "Install"   "set up the bot on a clean server"
     _mi "2" "Update"    "newest code, keeps all your data"
     _mi "3" "Remove"    "delete the bot and its packages"
-    _mi "5" "Renew SSL" "reissue the domain certificate"
+    _mi "5" "Renew SSL" "renew a certificate, or change a bot's domain"
     _mi "6" "Backup"    "database dump, sent to Telegram"
     _mi "7" "Restore"   "a database or bot folder backup ${C_WARN}(beta)${CR}"
     _mi "8" "Help"      "commands and flags for scripts"

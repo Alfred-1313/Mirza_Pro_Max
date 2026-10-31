@@ -812,4 +812,18 @@ return [
             . "• Its database stays and is only added to; the database and files are backed up first, and a failure on the way puts the old bot back. Agents' bots move along.\n"
             . "• The bot's scheduled jobs (payment checks, notices ...) are set up right away - no need to open the admin panel first.</blockquote>",
     ],
+    [
+        'n' => 60,
+        'date' => '2026-10-31',
+        'fa' => "<blockquote>🌐 <b>عوض کردن دامنهٔ هر ربات از اسکریپت</b>\n"
+            . "• در گزینهٔ ۵ (Renew SSL) اول رباتی را که می‌خواهی انتخاب می‌کنی، بعد بین «تمدید گواهی همین دامنه» و «عوض کردن دامنهٔ این ربات» یکی را می‌زنی. روی سروری که چند ربات دارد، فقط همان ربات عوض می‌شود.\n"
+            . "• اسکریپت دامنهٔ جدید را چک می‌کند (درست باشد، مال ربات یا سایت دیگری روی سرور نباشد، به همین سرور اشاره کند)، گواهی SSL تازه می‌گیرد، و بعد سایت Apache، config.php، وبهوک ربات، وبهوک ربات‌های نماینده، کرون‌ها و پورت phpMyAdmin را به دامنهٔ جدید می‌برد. پورت ربات همان می‌ماند. گواهی دامنهٔ قبلی هم پاک می‌شود.\n"
+            . "• تا وقتی گواهی دامنهٔ جدید گرفته نشده، ربات روی دامنهٔ قبلی کار می‌کند. اگر گواهی گرفته نشود یا Apache تنظیمات جدید را قبول نکند، همه‌چیز همان‌طور که بود برمی‌گردد.\n"
+            . "• لینک‌هایی که قبلاً با دامنهٔ قدیمی برای کاربرها فرستاده شده، بعد از تغییر دیگر باز نمی‌شوند.</blockquote>",
+        'en' => "<blockquote>🌐 <b>Change any bot's domain from the script</b>\n"
+            . "• Option 5 (Renew SSL) asks which bot first, then whether to renew its certificate or change its domain. On a server with several bots, only that bot changes.\n"
+            . "• The new domain is checked (a real domain, not another bot's or another site's here, pointing at this server), gets its own certificate, and then the Apache site, config.php, the bot's webhook, its agents' bots' webhooks, its scheduled jobs and phpMyAdmin's port move to it. The bot keeps its port. The old domain's certificate is removed.\n"
+            . "• The bot keeps answering on the old domain until the new one has its certificate; if no certificate comes, or Apache refuses the new site, everything is put back as it was.\n"
+            . "• Links sent to customers with the old domain stop working after the change.</blockquote>",
+    ],
 ];
