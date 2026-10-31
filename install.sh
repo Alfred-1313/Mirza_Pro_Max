@@ -235,7 +235,7 @@ function self_update_script() {
     # watcher gets its new copy the normal way, from the package update_bot
     # unpacks (step 9), not from here.
     for _a in "$@"; do
-        case "$_a" in -h|--help|-v|--version|version|selfupdate-watch) return 0 ;; esac
+        case "$_a" in -h|--help|-v|--version|version|selfupdate-watch|transfer-probe|transfer-receive) return 0 ;; esac
     done
     local MASTER_PATH="/root/install.sh"
     local BIN_LINK="/usr/local/bin/Ciro"
@@ -318,7 +318,7 @@ self_update_script "$@"
 CIRO_PREREQS="zip"
 function ensure_prerequisites() {
     for _a in "$@"; do
-        case "$_a" in -h|--help|-v|--version|version|selfupdate-watch) return 0 ;; esac
+        case "$_a" in -h|--help|-v|--version|version|selfupdate-watch|transfer-probe|transfer-receive) return 0 ;; esac
     done
     local missing="" t
     for t in $CIRO_PREREQS; do
@@ -2462,6 +2462,15 @@ pma_port_problem() {
 # argument, 443 when not given). Sets PMA_PORT.
 ask_pma_port() {
     local p why bp="${1:-443}"
+    # --pma-port (Transfer checked it free on this server already): no question
+    if [ -n "$ARG_PMA_PORT" ]; then
+        if why=$(pma_port_problem "$ARG_PMA_PORT" "$bp"); then
+            PMA_PORT="$ARG_PMA_PORT"
+            echo -e "\e[33m[+] \e[36mphpMyAdmin port (from --pma-port):\e[0m ${PMA_PORT}"
+            return 0
+        fi
+        echo -e "\e[91m--pma-port ${ARG_PMA_PORT}: ${why}\033[0m"
+    fi
     while true; do
         printf "\e[33m[+] \e[36mphpMyAdmin port ${CR}${C_DIM}(can be the same as the bot port) [default: ${bp}]${CR}: "
         read -r p
@@ -3536,6 +3545,9 @@ EOF
         # table.php ran as root; files it created (log.txt) must stay writable by Apache
         chown -R www-data:www-data "$BOT_DIR" 2>/dev/null
         secrettoken="$(_bot_webhook_secret "$BOT_DIR")"
+        # A transfer sets the webhook itself, once the moved data is in: a
+        # webhook now would hand the users' messages to an empty bot.
+        if [ -z "${CIRO_TRANSFER:-}" ]; then
         # Only now - Apache is up and the schema is migrated - tell Telegram
         # about the webhook and invite the admin to send /start. Doing this
         # earlier risked a real update arriving before table.php had run.
@@ -3545,6 +3557,7 @@ EOF
 
         MESSAGE="✅ The Ciro bot is installed! Send /start to the bot to begin."
         curl -s -X POST "https://api.telegram.org/bot${YOUR_BOT_TOKEN}/sendMessage" -d chat_id="${YOUR_CHAT_ID}" -d text="$MESSAGE" > /dev/null 2>&1
+        fi
         mark_phase WEBHOOK
     fi
     # ╰─────────────────────────────────────────────────────────────╯
@@ -5125,15 +5138,34 @@ EOF
 }
 
 # ── Transfer one bot to another server ────────────────────────
-# Moves a bot - its database, its folder (agents' bots included) and its SSL
-# certificate - to a clean server over SSH. The new server is set up by this
-# very installer, run there in the admin's own terminal so every step and
-# question is visible; then the database and files are laid over that fresh
-# install. The bot here is only ever read from until the admin says to
-# remove it, except for its scheduled jobs: once the domain points at the
-# new server they would reach IT, and run every job twice.
+# Moves a bot - its database, its folder (agents' bots and vendor/ included)
+# and its SSL certificate - to another server over SSH, without touching
+# what that server already runs.
+#
+#   1. The destination is surveyed first (transfer-probe, read only): other
+#      Ciro bots, Apache sites, MySQL databases, Docker containers, panels,
+#      every listening port.
+#   2. How the bot lands there follows from it:
+#        fresh   nothing is in use there: the installer sets the server up,
+#                as on any new server, and the data goes over it;
+#        new     something is: the bot is placed beside it (transfer-receive)
+#                - its own folder, database, DB user and vhosts, under names
+#                nobody there uses; only missing packages are added; no MySQL
+#                password, Apache site or PHP version there changes;
+#        resume  this very bot (same token) is already there from an earlier
+#                try: its data is laid over again, after a dump of what it held.
+#   3. Ports: the bot keeps its port and phpMyAdmin its own when they are free
+#      there - no question; only a port in use asks, on a board of free (green)
+#      and taken (red) ports, and a picked port is checked on the server again.
+#   4. This bot is frozen only now - its scheduled jobs here stop and its
+#      webhook is taken down (Telegram keeps the messages) - so the final dump
+#      misses nothing; the files go over with checksums, are checked there,
+#      and only once the data is in does the webhook point at the new server.
+#      Anything failing on the way puts the jobs and the webhook back here.
 TR_SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -o ServerAliveInterval=15 -o LogLevel=ERROR"
 C_FAINT_BAD=$'\033[2;31m'
+# phpMyAdmin ports offered when its own is taken there (any other can be typed)
+TR_PMA_SUGGEST="2083 2087 2096 8080 8888 9443"
 
 # _tr_ssh [-t] CMD... - run on the destination (TR_HOST/TR_PORT/TR_PASS)
 _tr_ssh() {
@@ -5163,40 +5195,278 @@ _tr_back() {
     show_menu
 }
 
-# Runs on the destination after its installer has finished: the transferred
-# database replaces the fresh one, and the transferred folder is laid over
-# the fresh install - keeping that install's own config.php and vendor/.
-# Its settings arrive in the lines written above it.
-_tr_import_script() {
-    cat <<'EOF'
-cd /root/ciro_transfer || exit 9
-BOT=/var/www/html/Ciro
-ROOTPASS=$(grep '$pass' /root/Ciro/dbroot.txt 2>/dev/null | cut -d"'" -f2)
-DB=$(grep '^\$dbname' "$BOT/config.php" | cut -d"'" -f2)
-[ -n "$ROOTPASS" ] && [ -n "$DB" ] || { echo "RESULT=NO_DB_ACCESS"; exit 2; }
-drop=$(mysql -u root -p"$ROOTPASS" -N -B "$DB" -e 'SHOW FULL TABLES' 2>/dev/null \
-    | while IFS=$'\t' read -r t ty; do
-        if [ "$ty" = "VIEW" ]; then echo "DROP VIEW IF EXISTS \`$t\`;"; else echo "DROP TABLE IF EXISTS \`$t\`;"; fi
-      done)
-if ! { echo 'SET FOREIGN_KEY_CHECKS=0;'; printf '%s\n' "$drop"; gunzip -c db.sql.gz | sed -E '/^(CREATE DATABASE |USE `)/d'; } \
-        | mysql -u root -p"$ROOTPASS" "$DB" 2>/root/ciro_transfer/import.err; then
-    echo "RESULT=IMPORT_FAILED"; tail -n 3 /root/ciro_transfer/import.err; exit 3
-fi
-tar -xzf files.tar.gz -C "$BOT" || { echo "RESULT=FILES_FAILED"; exit 4; }
-if [ "$SRC_DIR" != "$BOT" ]; then
-    for c in "$BOT"/vpnbot/*/config.php; do
-        [ -f "$c" ] && sed -i "s#${SRC_DIR}/#${BOT}/#g" "$c"
+# ── On the destination: what is there (read only) ─────────────
+# One KEY=value per line; a key may repeat (BOT, SITE, DB, CONTAINER, LISTEN).
+# $1 the domain being moved, $2 the sha256 of its bot token: a bot already
+# there with the same token is this very bot, from an earlier try.
+transfer_probe() {
+    local domain="${1:-}" tokensum="${2:-}" f sn dr line
+    . /etc/os-release 2>/dev/null
+    echo "OS=${ID:-}"
+    echo "OSVER=${VERSION_ID:-}"
+    echo "FREE=$(df -Pm / 2>/dev/null | awk 'NR==2{print $4}')"
+    # Ciro: its registry, its MySQL login, an install left unfinished
+    if [ -f "$BOTS_REGISTRY" ] || [ -f /root/Ciro/dbroot.txt ] || [ -f "$CONFIG_FILE_DEFAULT" ]; then
+        echo "CIRO=yes"
+    else
+        echo "CIRO=no"
+    fi
+    if [ -f "$STATE_FILE" ] && ! grep -qx "PHASE:COMPLETE" "$STATE_FILE" 2>/dev/null; then
+        echo "CIRO_PARTIAL=$(grep '^DOMAIN=' "$STATE_FILE" 2>/dev/null | head -1 | cut -d= -f2-)"
+    fi
+    if [ -f /root/Ciro/dbroot.txt ]; then
+        local ru rp
+        ru=$(grep '$user' /root/Ciro/dbroot.txt | cut -d"'" -f2); [ -z "$ru" ] && ru=root
+        rp=$(grep '$pass' /root/Ciro/dbroot.txt | cut -d"'" -f2)
+        if mysql -u "$ru" -p"$rp" -N -e 'SELECT 1' >/dev/null 2>&1; then echo "CIRO_ROOT=ok"; else echo "CIRO_ROOT=bad"; fi
+    fi
+    # every Ciro bot: dir|domain|port|same token as the one moved (1/0)
+    local d dom port tok same
+    for d in $( { [ -f "$BOTS_REGISTRY" ] && grep -o '"dir"[^,}]*' "$BOTS_REGISTRY" | cut -d'"' -f4; [ -f "$CONFIG_FILE_DEFAULT" ] && echo "$BOT_DIR_DEFAULT"; } | sort -u); do
+        [ -f "$d/config.php" ] || continue
+        dom=$(grep '^\$domainhosts' "$d/config.php" | head -1 | cut -d"'" -f2)
+        port=$(hosts_port "$dom")
+        tok=$(grep '^\$APIKEY' "$d/config.php" | head -1 | cut -d"'" -f2)
+        same=0; [ -n "$tokensum" ] && [ "$(printf '%s' "$tok" | sha256sum | cut -d' ' -f1)" = "$tokensum" ] && same=1
+        echo "BOT=${d}|$(hosts_domain "$dom")|${port}|${same}"
     done
-fi
-chown -R www-data:www-data "$BOT"
-( cd "$BOT" && php table.php >/dev/null 2>&1 ) || echo "TABLE_WARN=1"
-chown -R www-data:www-data "$BOT"
-systemctl reload apache2 >/dev/null 2>&1
-# its scheduled jobs (payment checks, notices...) - registered the way its
-# admin panel does, as www-data, instead of waiting for the admin to open it
-cat > /tmp/ciro_cron_setup.php <<PHPEOF
+    # web servers and their sites
+    if _pkg_installed apache2; then
+        if systemctl is-active apache2 >/dev/null 2>&1; then echo "APACHE=active"; else echo "APACHE=installed"; fi
+        for f in /etc/apache2/sites-enabled/*; do
+            [ -f "$f" ] || continue
+            sn=$(grep -iE '^[[:space:]]*Server(Name|Alias)[[:space:]]' "$f" 2>/dev/null | awk '{for(i=2;i<=NF;i++) printf "%s ", $i}' | xargs)
+            dr=$(grep -iE '^[[:space:]]*DocumentRoot[[:space:]]' "$f" 2>/dev/null | head -1 | awk '{print $2}')
+            echo "SITE=$(basename "$f")|${sn:--}|${dr:--}"
+        done
+        if php -r 'exit(0);' >/dev/null 2>&1 && apache2ctl -M 2>/dev/null | grep -qi 'php'; then echo "APACHE_PHP=mod"; fi
+    else
+        echo "APACHE=none"
+    fi
+    # a vhost already answering for this domain
+    if [ -n "$domain" ] && [ -d /etc/apache2/sites-available ]; then
+        for f in /etc/apache2/sites-available/*; do
+            [ -f "$f" ] || continue
+            if grep -qiE "^[[:space:]]*Server(Name|Alias)[[:space:]].*(^|[[:space:]])${domain//./\\.}([[:space:]]|$)" "$f" 2>/dev/null; then
+                echo "DOMAIN_SITE=$(basename "$f")|$(grep -iE '^[[:space:]]*DocumentRoot[[:space:]]' "$f" | head -1 | awk '{print $2}')"
+            fi
+        done
+        [ -d "/etc/letsencrypt/live/$domain" ] && echo "DOMAIN_CERT=1"
+    fi
+    if systemctl is-active nginx >/dev/null 2>&1; then echo "NGINX=active"; elif _pkg_installed nginx; then echo "NGINX=installed"; fi
+    # MySQL: there or not, reachable as root without a password (socket), its databases
+    if command -v mysqld >/dev/null 2>&1 || _pkg_installed mysql-server || _pkg_installed mariadb-server; then
+        if systemctl is-active mysql >/dev/null 2>&1 || systemctl is-active mariadb >/dev/null 2>&1; then echo "MYSQL=active"; else echo "MYSQL=installed"; fi
+        if mysql -N -e 'SELECT 1' >/dev/null 2>&1; then
+            echo "MYSQL_SOCKET=ok"
+            mysql -N -B -e 'SHOW DATABASES' 2>/dev/null | grep -vxE '(mysql|information_schema|performance_schema|sys|phpmyadmin)' | sed 's/^/DB=/'
+        fi
+    else
+        echo "MYSQL=none"
+    fi
+    _pkg_installed phpmyadmin && echo "PMA=yes"
+    if command -v php >/dev/null 2>&1; then echo "PHP=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null)"; else echo "PHP=none"; fi
+    # Docker and VPN panels
+    if command -v docker >/dev/null 2>&1; then
+        echo "DOCKER=yes"
+        docker ps --format '{{.Names}}|{{.Ports}}' 2>/dev/null | head -20 | sed 's/^/CONTAINER=/'
+    fi
+    { [ -d /opt/marzban ] || [ -d /var/lib/marzban ]; } && echo "PANEL=Marzban"
+    { [ -d /opt/rebecca ] || [ -d /var/lib/rebecca ]; } && echo "PANEL=Rebecca"
+    { [ -d /opt/hiddify-manager ] || [ -d /opt/hiddify-config ]; } && echo "PANEL=Hiddify"
+    { [ -d /etc/x-ui ] || [ -d /usr/local/x-ui ]; } && echo "PANEL=x-ui"
+    # every TCP port listened on, and by what
+    ss -ltnpH 2>/dev/null | while read -r line; do
+        port=$(printf '%s' "$line" | awk '{print $4}' | sed 's/.*://')
+        who=$(printf '%s' "$line" | grep -o 'users:(("[^"]*"' | head -1 | cut -d'"' -f2)
+        [ -n "$port" ] && echo "${port}|${who:-?}"
+    done | sort -t'|' -k1,1n -u | sed 's/^/LISTEN=/'
+    # nothing in use that the full installer would take over
+    if [ ! -f "$BOTS_REGISTRY" ] && [ ! -f /root/Ciro/dbroot.txt ] && precheck_fresh_server >/dev/null 2>&1; then
+        echo "FRESH=yes"
+    else
+        echo "FRESH=no"
+    fi
+}
+
+# ── On the destination: the bot, placed beside what is there ──
+# $1 the transfer's folder: manifest.env (written by the source), SHA256SUMS,
+# db.sql.gz, files.tar.gz, cert.tar.gz. TR_TARGET says where it goes:
+#   fresh   into the bot the installer just made here (its folder, database
+#           and config.php stay; the data replaces its empty tables);
+#   resume  into this same bot left here by an earlier try (TR_DIR) - its
+#           database is dumped first, the dump kept in /root/Ciro-backups;
+#   new     beside everything here: new folder, database, user, vhosts.
+# Prints KEY=value lines and RESULT=OK, or RESULT=<why> after undoing what
+# this run made.
+transfer_receive() {
+    local rdir="${1:-}"
+    [ -f "$rdir/manifest.env" ] || { echo "RESULT=NO_MANIFEST"; return 9; }
+    cd "$rdir" || { echo "RESULT=NO_DIR"; return 9; }
+    # shellcheck disable=SC1091
+    . ./manifest.env
+    if ! sha256sum -c --quiet SHA256SUMS >/dev/null 2>&1; then
+        echo "RESULT=CHECKSUM"; return 3
+    fi
+    export DEBIAN_FRONTEND=noninteractive
+    local dir="" db="" dbuser="" dbpass="" made_dir=0 made_db=0 made_user=0 made_vhost="" note="" before="" emptied=0
+    local RU RP PHP_V PHP_MODE="mod" APACHE_NEW=0 NO80=0 PMA_OK=0 MYSQL_NEW=0
+    _trr_fail() {
+        echo "RESULT=$1"
+        [ -n "${2:-}" ] && echo "WHY=$2"
+        # undo what this run made - nothing that was here before
+        if [ -n "$made_vhost" ]; then
+            local v; for v in $made_vhost; do a2dissite "$v" >/dev/null 2>&1; rm -f "/etc/apache2/sites-available/$v"; done
+            if [ -d "$rdir/apache_before" ]; then
+                cp -a "$rdir/apache_before/ports.conf" /etc/apache2/ports.conf 2>/dev/null
+                if [ -f "$rdir/apache_before/ciro-pma-ports.conf" ]; then
+                    cp -a "$rdir/apache_before/ciro-pma-ports.conf" "$PMA_PORTS_CONF"
+                else
+                    a2disconf ciro-pma-ports >/dev/null 2>&1; rm -f "$PMA_PORTS_CONF"
+                fi
+            fi
+            systemctl reload apache2 >/dev/null 2>&1
+        fi
+        if [ "$made_db" -eq 1 ] && [ -n "$db" ]; then _trr_mysql -e "DROP DATABASE IF EXISTS \`$db\`;" >/dev/null 2>&1; fi
+        if [ "$made_user" -eq 1 ] && [ -n "$dbuser" ]; then _trr_mysql -e "DROP USER IF EXISTS '$dbuser'@'localhost'; DROP USER IF EXISTS '$dbuser'@'%';" >/dev/null 2>&1; fi
+        # the bot that was here gets its own data back
+        if [ "$emptied" -eq 1 ] && [ -n "$before" ] && [ -s "$before" ]; then
+            _trr_empty_db
+            if { echo 'SET FOREIGN_KEY_CHECKS=0;'; gunzip -c "$before"; } | _trr_mysql "$db" >/dev/null 2>&1; then
+                echo "RESTORED=$before"
+            fi
+        fi
+        [ "$made_dir" -eq 1 ] && [ -n "$dir" ] && rm -rf "$dir"
+        return 1
+    }
+    # no password (socket login) must not stop at a password prompt
+    _trr_mysql() { if [ -n "$RP" ]; then mysql -u "$RU" -p"$RP" "$@"; else mysql -u "$RU" "$@"; fi; }
+    _trr_mysqldump() { if [ -n "$RP" ]; then mysqldump -u "$RU" -p"$RP" "$@"; else mysqldump -u "$RU" "$@"; fi; }
+    # only this bot's own tables go - the database itself, its user and grants stay
+    _trr_empty_db() {
+        local drop
+        drop=$(_trr_mysql -N -B "$db" -e 'SHOW FULL TABLES' 2>/dev/null | while IFS=$'\t' read -r t ty; do
+            if [ "$ty" = "VIEW" ]; then echo "DROP VIEW IF EXISTS \`$t\`;"; else echo "DROP TABLE IF EXISTS \`$t\`;"; fi
+        done)
+        printf 'SET FOREIGN_KEY_CHECKS=0;\n%s\n' "$drop" | _trr_mysql "$db" 2>/dev/null
+    }
+
+    # ── 1. The stack: what is missing is added; nothing there is reconfigured ──
+    if [ "$TR_TARGET" = "new" ]; then
+        _trr_stack || return 1
+    fi
+    if [ -z "$RU" ]; then
+        RU=$(grep '$user' /root/Ciro/dbroot.txt 2>/dev/null | cut -d"'" -f2); [ -z "$RU" ] && RU=root
+        RP=$(grep '$pass' /root/Ciro/dbroot.txt 2>/dev/null | cut -d"'" -f2)
+    fi
+    _trr_mysql -N -e 'SELECT 1' >/dev/null 2>&1 || { _trr_fail NO_DB_ACCESS "MySQL did not accept the login in /root/Ciro/dbroot.txt"; return 1; }
+
+    # ── 2. Where: the folder and database ──
+    if [ "$TR_TARGET" = "new" ]; then
+        local n="" base="Ciro"
+        while [ -e "/var/www/html/${base}${n}" ] \
+            || [ -n "$(_trr_mysql -N -e "SHOW DATABASES LIKE '${base}${n}'" 2>/dev/null)" ] \
+            || grep -q "\"/var/www/html/${base}${n}\"" "$BOTS_REGISTRY" 2>/dev/null; do
+            n=$(( ${n:-1} + 1 ))
+        done
+        dir="/var/www/html/${base}${n}"; db="${base}${n}"
+        # its own DB user: the old name when nobody here has it, else a new one
+        dbuser="$TR_SRC_DBUSER"
+        if ! printf '%s' "$dbuser" | grep -qE '^[A-Za-z0-9_]{1,32}$' \
+            || [ "$(_trr_mysql -N -e "SELECT COUNT(*) FROM mysql.user WHERE user='${dbuser}'" 2>/dev/null)" != "0" ]; then
+            dbuser="ciro_$(openssl rand -hex 3)"
+        fi
+        dbpass=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | cut -c1-16)
+    else
+        dir="$TR_DIR"
+        [ -f "$dir/config.php" ] || { _trr_fail NO_TARGET "$dir/config.php is missing"; return 1; }
+        db=$(grep '^\$dbname' "$dir/config.php" | head -1 | cut -d"'" -f2)
+        [ -n "$db" ] || { _trr_fail NO_TARGET "no database in $dir/config.php"; return 1; }
+    fi
+    echo "DIR=$dir"
+    echo "DB=$db"
+
+    # ── 3. The files ──
+    if [ "$TR_TARGET" = "new" ]; then
+        mkdir -p "$dir" && made_dir=1
+        tar -xzf files.tar.gz -C "$dir" || { _trr_fail FILES_FAILED; return 1; }
+        if [ ! -f "$dir/vendor/autoload.php" ]; then
+            install_php_deps "$dir" >/dev/null 2>&1 || { _trr_fail FILES_FAILED "composer could not install vendor/"; return 1; }
+        fi
+        cat > "$dir/config.php" <<EOF
 <?php
-chdir('$BOT');
+// This variable added for high load panels which their response time is long and bot can't communicate with online panel!
+// null for default settings
+\$request_exec_timeout = null;
+\$dbhost = 'localhost';
+\$dbname = '$db';
+\$usernamedb = '$dbuser';
+\$passworddb = '$dbpass';
+\$connect = mysqli_connect(\$dbhost, \$usernamedb, \$passworddb, \$dbname);
+if (\$connect->connect_error) { die("error" . \$connect->connect_error); }
+mysqli_set_charset(\$connect, "utf8mb4");
+\$options = [ PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC, PDO::ATTR_EMULATE_PREPARES => false, ];
+\$dsn = "mysql:host=\$dbhost;dbname=\$dbname;charset=utf8mb4";
+try { \$pdo = new PDO(\$dsn, \$usernamedb, \$passworddb, \$options); } catch (\PDOException \$e) { error_log("Database connection failed: " . \$e->getMessage()); }
+\$APIKEY = '${TR_TOKEN}';
+\$adminnumber = '${TR_ADMIN}';
+\$domainhosts = '$(hosts_of "$TR_DOMAIN" "$TR_BOT_PORT")';
+\$usernamebot = '${TR_BOTNAME}';
+?>
+EOF
+    else
+        # what the bot here held, kept before it is replaced
+        mkdir -p /root/Ciro-backups
+        if [ "$TR_TARGET" = "resume" ] && [ -n "$(_trr_mysql -N -e "SHOW TABLES FROM \`$db\`" 2>/dev/null | head -1)" ]; then
+            before="/root/Ciro-backups/${db}_before_transfer_$(date +%Y-%m-%d_%H-%M-%S).sql.gz"
+            if ( set -o pipefail; _trr_mysqldump --single-transaction --no-tablespaces "$db" 2>/dev/null | gzip > "$before" ); then
+                echo "BEFORE=$before"
+            else
+                rm -f "$before"
+                _trr_fail BACKUP_FAILED "could not save what $db holds now - nothing was replaced"; return 1
+            fi
+        fi
+        tar -xzf files.tar.gz -C "$dir" || { _trr_fail FILES_FAILED; return 1; }
+    fi
+    # agents' bots keep the source's path in their own config.php
+    if [ -n "$TR_SRC_DIR" ] && [ "$TR_SRC_DIR" != "$dir" ]; then
+        local c; for c in "$dir"/vpnbot/*/config.php; do
+            [ -f "$c" ] && sed -i "s#${TR_SRC_DIR}/#${dir}/#g" "$c"
+        done
+    fi
+    chown -R www-data:www-data "$dir"
+
+    # ── 4. The database: its own, then the data, then a count ──
+    if [ "$TR_TARGET" = "new" ]; then
+        _trr_mysql -e "CREATE DATABASE \`$db\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" || { _trr_fail DB_FAILED "could not create $db"; return 1; }
+        made_db=1
+        _trr_mysql -e "CREATE USER '$dbuser'@'localhost' IDENTIFIED BY '$dbpass'; GRANT ALL PRIVILEGES ON \`$db\`.* TO '$dbuser'@'localhost'; CREATE USER '$dbuser'@'%' IDENTIFIED BY '$dbpass'; GRANT ALL PRIVILEGES ON \`$db\`.* TO '$dbuser'@'%'; FLUSH PRIVILEGES;" \
+            || { _trr_fail DB_FAILED "could not create the user $dbuser"; return 1; }
+        made_user=1
+    else
+        _trr_empty_db; emptied=1
+    fi
+    if ! { echo 'SET FOREIGN_KEY_CHECKS=0;'; gunzip -c db.sql.gz | sed -E '/^(CREATE DATABASE |USE `)/d'; } | _trr_mysql "$db" 2>"$rdir/import.err"; then
+        _trr_fail IMPORT_FAILED "$(tail -n 2 "$rdir/import.err" | tr '\n' ' ')"; return 1
+    fi
+    local tables
+    tables=$(_trr_mysql -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$db'" 2>/dev/null)
+    echo "TABLES=${tables:-0}"
+    if [ -n "$TR_TABLES" ] && [ "${tables:-0}" -lt "$TR_TABLES" ]; then
+        _trr_fail IMPORT_SHORT "${tables:-0} of $TR_TABLES tables arrived"; return 1
+    fi
+
+    # ── 5. Certificate, sites and ports (a new place only) ──
+    if [ "$TR_TARGET" = "new" ]; then
+        _trr_site || return 1
+    fi
+
+    # ── 6. Its schema, jobs, registry entry and - last - its webhook ──
+    ( cd "$dir" && php table.php >/dev/null 2>&1 ) || echo "TABLE_WARN=1"
+    chown -R www-data:www-data "$dir"
+    cat > /tmp/ciro_cron_setup.php <<PHPEOF
+<?php
+chdir('$dir');
 require 'config.php';
 require 'botapi.php';
 require 'panels.php';
@@ -5206,13 +5476,363 @@ require 'vendor/autoload.php';
 if (!function_exists('activecron')) { exit(3); }
 activecron();
 PHPEOF
-chmod 644 /tmp/ciro_cron_setup.php
-if ( cd "$BOT" && runuser -u www-data -- php /tmp/ciro_cron_setup.php ) >/dev/null 2>&1; then echo "CRONS=1"; fi
-rm -f /tmp/ciro_cron_setup.php
-# the address (and port) the install there gave the bot
-echo "HOSTS=$(grep '^\$domainhosts' "$BOT/config.php" | cut -d"'" -f2)"
-echo "RESULT=OK"
+    chmod 644 /tmp/ciro_cron_setup.php
+    if ( cd "$dir" && runuser -u www-data -- php /tmp/ciro_cron_setup.php ) >/dev/null 2>&1; then echo "CRONS=1"; fi
+    rm -f /tmp/ciro_cron_setup.php
+    if [ "$TR_TARGET" = "new" ]; then
+        bots_registry_add "${TR_NAME:-Bot}" "$dir" "$TR_DOMAIN"
+        bots_registry_set_bot_port "$dir" "$TR_BOT_PORT"
+        if [ "$PMA_OK" -eq 1 ] && [ -n "$TR_PMA_PORT" ] && [ "$TR_PMA_PORT" != "$TR_BOT_PORT" ]; then
+            pma_set_port "$dir" "$TR_PMA_PORT" >/dev/null 2>&1 || echo "PMA_WARN=1"
+        fi
+        [ "$PMA_OK" -eq 1 ] || echo "PMA_NONE=1"
+        echo "DBUSER=$dbuser"
+        echo "DBPASS=$dbpass"
+    fi
+    local hosts secret hook
+    hosts=$(grep '^\$domainhosts' "$dir/config.php" | head -1 | cut -d"'" -f2)
+    secret=$(_bot_webhook_secret "$dir")
+    hook=$(curl -s --max-time 20 -F "url=https://${hosts}/index.php" -F "secret_token=${secret}" "https://api.telegram.org/bot${TR_TOKEN}/setWebhook")
+    printf '%s' "$hook" | grep -q '"ok":true' && echo "WEBHOOK=1"
+    echo "HOSTS=$hosts"
+    [ "$NO80" -eq 1 ] && echo "NO80=1"
+    echo "RESULT=OK"
+}
+
+# The services a new place needs that this server does not have yet - added
+# without starting them on ports someone else holds; whatever is already here
+# (Apache, PHP, MySQL, phpMyAdmin) is used as it is. Sets RU/RP (the MySQL
+# login the bot's database is made with), PHP_V, PHP_MODE, APACHE_NEW, NO80,
+# PMA_OK, MYSQL_NEW.
+_trr_stack() {
+    local held80 held3306 pol="/usr/sbin/policy-rc.d" pol_had=0
+    _trr_quiet_start() {
+        # a package installed now does not start on its own: its ports are set first
+        [ -f "$pol" ] && { pol_had=1; cp -a "$pol" "$rdir/policy-rc.d.before"; }
+        printf '#!/bin/sh\nexit 101\n' > "$pol"; chmod +x "$pol"
+    }
+    _trr_quiet_end() {
+        if [ "$pol_had" -eq 1 ]; then cp -a "$rdir/policy-rc.d.before" "$pol"; else rm -f "$pol"; fi
+    }
+    _trr_held() { ss -ltnpH "( sport = :$1 )" 2>/dev/null | grep -o 'users:(("[^"]*"' | head -1 | cut -d'"' -f2; }
+    apt_recover >/dev/null 2>&1
+    apt-get update -o DPkg::Lock::Timeout=180 >/dev/null 2>&1
+    command -v jq >/dev/null 2>&1 || apt-get install -y jq >/dev/null 2>&1
+
+    # Apache
+    if ! _pkg_installed apache2; then
+        held80=$(_trr_held 80)
+        _trr_quiet_start
+        apt-get install -y -o DPkg::Lock::Timeout=180 apache2 >/dev/null 2>&1 || { _trr_quiet_end; _trr_fail STACK_FAILED "apache2 could not be installed"; return 1; }
+        _trr_quiet_end
+        APACHE_NEW=1
+        # port 80 belongs to someone else here: this Apache does not ask for it
+        if [ -n "$held80" ]; then
+            sed -i -E 's/^([[:space:]]*)(Listen 80([[:space:]]|$))/\1#ciro# \2/' /etc/apache2/ports.conf
+            a2dissite 000-default.conf >/dev/null 2>&1
+            NO80=1
+        fi
+    elif [ -n "$(_trr_held 80)" ] && [ "$(_trr_held 80)" != "apache2" ]; then
+        NO80=1
+    fi
+    mkdir -p "$rdir/apache_before" && cp -a /etc/apache2/ports.conf "$rdir/apache_before/" 2>/dev/null
+    [ -f "$PMA_PORTS_CONF" ] && cp -a "$PMA_PORTS_CONF" "$rdir/apache_before/"
+    a2enmod ssl rewrite >/dev/null 2>&1
+
+    # PHP - the version here is kept; only missing extensions are added for it
+    if command -v php >/dev/null 2>&1; then
+        PHP_V=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')
+    else
+        setup_php_repo >/dev/null 2>&1
+        PHP_V="$(resolve_php_ver)"; [ -z "$PHP_V" ] && PHP_V="8.2"
+        apt-get install -y -o DPkg::Lock::Timeout=180 "php${PHP_V}" "php${PHP_V}-cli" >/dev/null 2>&1 || { _trr_fail STACK_FAILED "PHP ${PHP_V} could not be installed"; return 1; }
+    fi
+    local ext pkg missing=""
+    for ext in mysqli:mysql pdo_mysql:mysql curl:curl mbstring:mbstring gd:gd zip:zip dom:xml intl:intl bcmath:bcmath; do
+        php -m 2>/dev/null | grep -qix "${ext%%:*}" || missing="$missing php${PHP_V}-${ext##*:}"
+    done
+    missing=$(printf '%s\n' $missing | sort -u | tr '\n' ' ')
+    if [ -n "${missing// /}" ]; then
+        apt-get install -y -o DPkg::Lock::Timeout=180 $missing >/dev/null 2>&1 || { _trr_fail STACK_FAILED "PHP extensions could not be installed:$missing"; return 1; }
+    fi
+    # how Apache runs PHP for this bot: its own module when Apache has one;
+    # a fresh Apache gets mod_php; one that runs without it serves this bot
+    # through PHP-FPM from inside the bot's own vhost - its MPM never changes
+    if [ "$APACHE_NEW" -eq 1 ]; then
+        apt-get install -y -o DPkg::Lock::Timeout=180 "libapache2-mod-php${PHP_V}" >/dev/null 2>&1
+        a2dismod mpm_event mpm_worker >/dev/null 2>&1; a2enmod mpm_prefork "php${PHP_V}" >/dev/null 2>&1
+        PHP_MODE="mod"
+    elif apache2ctl -M 2>/dev/null | grep -qi 'php'; then
+        PHP_MODE="mod"
+    else
+        apt-get install -y -o DPkg::Lock::Timeout=180 "php${PHP_V}-fpm" >/dev/null 2>&1 || { _trr_fail STACK_FAILED "php${PHP_V}-fpm could not be installed"; return 1; }
+        systemctl enable --now "php${PHP_V}-fpm" >/dev/null 2>&1
+        a2enmod proxy_fcgi setenvif >/dev/null 2>&1
+        PHP_MODE="fpm"
+    fi
+    echo "PHP=${PHP_V} (${PHP_MODE})"
+
+    # MySQL: Ciro's own login; or this server's MySQL through a login of its
+    # own (root's password is never changed); or a new MySQL beside a busy 3306
+    if [ -f /root/Ciro/dbroot.txt ]; then
+        RU=$(grep '$user' /root/Ciro/dbroot.txt | cut -d"'" -f2); [ -z "$RU" ] && RU=root
+        RP=$(grep '$pass' /root/Ciro/dbroot.txt | cut -d"'" -f2)
+    elif command -v mysqld >/dev/null 2>&1 || _pkg_installed mysql-server || _pkg_installed mariadb-server; then
+        systemctl is-active mysql >/dev/null 2>&1 || systemctl is-active mariadb >/dev/null 2>&1 \
+            || systemctl start mysql >/dev/null 2>&1 || systemctl start mariadb >/dev/null 2>&1
+        local admin_cmd=""
+        if mysql -N -e 'SELECT 1' >/dev/null 2>&1; then
+            admin_cmd="mysql"
+        elif [ -n "$TR_MYSQL_PASS" ] && mysql -u root -p"$TR_MYSQL_PASS" -N -e 'SELECT 1' >/dev/null 2>&1; then
+            admin_cmd="mysql -u root -p$TR_MYSQL_PASS"
+        else
+            _trr_fail NO_DB_ACCESS "MySQL here needs its root password"; return 1
+        fi
+        RU="ciro_admin"
+        RP=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | cut -c1-16)
+        $admin_cmd -e "CREATE USER IF NOT EXISTS '${RU}'@'localhost' IDENTIFIED BY '${RP}'; ALTER USER '${RU}'@'localhost' IDENTIFIED BY '${RP}'; GRANT ALL PRIVILEGES ON *.* TO '${RU}'@'localhost' WITH GRANT OPTION; FLUSH PRIVILEGES;" >/dev/null 2>&1 \
+            || { _trr_fail NO_DB_ACCESS "could not make the ciro_admin login"; return 1; }
+        mkdir -p /root/Ciro && chmod 700 /root/Ciro
+        { echo "\$user = '${RU}';"; echo "\$pass = '${RP}';"; echo "\$path = '$(openssl rand -base64 12 | tr -dc 'a-zA-Z0-9' | cut -c1-12)';"; } > /root/Ciro/dbroot.txt
+        chmod 600 /root/Ciro/dbroot.txt
+    else
+        held3306=$(_trr_held 3306)
+        if [ -n "$held3306" ]; then
+            # someone (a container's MySQL) has 3306: this one listens elsewhere
+            mkdir -p /etc/mysql/conf.d
+            printf '[mysqld]\nport = 3307\nbind-address = 127.0.0.1\n' > /etc/mysql/conf.d/zz-ciro-port.cnf
+            echo "MYSQL_PORT=3307"
+        fi
+        _trr_quiet_start
+        apt-get install -y -o DPkg::Lock::Timeout=180 mysql-server >/dev/null 2>&1 || { _trr_quiet_end; _trr_fail STACK_FAILED "mysql-server could not be installed"; return 1; }
+        _trr_quiet_end
+        systemctl enable --now mysql >/dev/null 2>&1
+        setup_mysql_root >/dev/null 2>&1 || { _trr_fail STACK_FAILED "MySQL root could not be set up"; return 1; }
+        RU=root
+        RP=$(grep '$pass' /root/Ciro/dbroot.txt | cut -d"'" -f2)
+        MYSQL_NEW=1
+    fi
+
+    # phpMyAdmin: the one here is used; a new one only next to a MySQL made now
+    if _pkg_installed phpmyadmin && [ -e /etc/apache2/conf-available/phpmyadmin.conf ]; then
+        PMA_OK=1
+    elif [ "$MYSQL_NEW" -eq 1 ]; then
+        echo 'phpmyadmin phpmyadmin/dbconfig-install boolean true' | debconf-set-selections
+        echo "phpmyadmin phpmyadmin/mysql/admin-pass password ${RP}" | debconf-set-selections
+        echo "phpmyadmin phpmyadmin/mysql/app-pass password $(openssl rand -hex 8)" | debconf-set-selections
+        # not for every site here: only the bot's own vhost includes it
+        echo 'phpmyadmin phpmyadmin/reconfigure-webserver multiselect' | debconf-set-selections
+        if apt-get install -y -o DPkg::Lock::Timeout=180 phpmyadmin >/dev/null 2>&1; then
+            [ -e /etc/apache2/conf-available/phpmyadmin.conf ] || ln -s /etc/phpmyadmin/apache.conf /etc/apache2/conf-available/phpmyadmin.conf
+            a2disconf phpmyadmin >/dev/null 2>&1
+            PMA_OK=1
+        fi
+    fi
+    command -v certbot >/dev/null 2>&1 || apt-get install -y -o DPkg::Lock::Timeout=180 certbot python3-certbot-apache >/dev/null 2>&1
+    return 0
+}
+
+# The bot's certificate and its two vhosts, beside every other site: Apache's
+# config is checked before it is reloaded, and a config Apache refuses is
+# taken back out.
+_trr_site() {
+    local d="$TR_DOMAIN" port="$TR_BOT_PORT" sa=/etc/apache2/sites-available handler="" pmainc=""
+    if [ ! -f "/etc/letsencrypt/live/$d/fullchain.pem" ] && [ -f cert.tar.gz ]; then
+        # another site's files with the same names are never overwritten
+        mkdir -p /etc/letsencrypt && tar -xzf cert.tar.gz --skip-old-files -C /etc/letsencrypt 2>/dev/null
+    fi
+    if [ ! -f "/etc/letsencrypt/live/$d/fullchain.pem" ]; then
+        if [ "$NO80" -eq 1 ]; then
+            _trr_fail NO_CERT "no certificate came with the bot, and port 80 here is someone else's"; return 1
+        fi
+        certbot certonly --apache --non-interactive --agree-tos --register-unsafely-without-email -d "$d" >/dev/null 2>&1 \
+            || { _trr_fail NO_CERT "Let's Encrypt refused $d - does it point at this server?"; return 1; }
+    fi
+    [ "$PHP_MODE" = "fpm" ] && handler="    <FilesMatch \"\\.php\$\">
+        SetHandler \"proxy:unix:/run/php/php${PHP_V}-fpm.sock|fcgi://localhost\"
+    </FilesMatch>"
+    [ "$PMA_OK" -eq 1 ] && pmainc="    IncludeOptional /etc/apache2/conf-available/phpmyadmin.conf"
+    if [ "$NO80" -ne 1 ]; then
+        cat > "$sa/${d}.conf" <<EOF
+<VirtualHost *:80>
+    ServerName $d
+    DocumentRoot $dir
+    <Directory $dir>
+        Options FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+${handler}
+${pmainc}
+    ErrorLog \${APACHE_LOG_DIR}/${d}-error.log
+    CustomLog \${APACHE_LOG_DIR}/${d}-access.log combined
+</VirtualHost>
 EOF
+        made_vhost="${d}.conf"
+    fi
+    cat > "$sa/${d}-ssl.conf" <<EOF
+<VirtualHost *:${port}>
+    ServerName $d
+    DocumentRoot $dir
+    SSLEngine on
+    SSLCertificateFile /etc/letsencrypt/live/$d/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/$d/privkey.pem
+    <Directory $dir>
+        Options FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+${handler}
+${pmainc}
+    ErrorLog \${APACHE_LOG_DIR}/${d}-error.log
+    CustomLog \${APACHE_LOG_DIR}/${d}-access.log combined
+</VirtualHost>
+EOF
+    made_vhost="$made_vhost ${d}-ssl.conf"
+    local v; for v in $made_vhost; do a2ensite "$v" >/dev/null 2>&1; done
+    ciro_listen_sync "$port"
+    if ! apache2ctl configtest >/dev/null 2>&1; then
+        _trr_fail APACHE_CONFIG "$(apache2ctl configtest 2>&1 | grep -v '^Syntax OK' | tail -n 2 | tr '\n' ' ')"; return 1
+    fi
+    local was_up=0
+    if systemctl is-active apache2 >/dev/null 2>&1; then
+        was_up=1
+        systemctl reload apache2 >/dev/null 2>&1
+    else
+        systemctl enable --now apache2 >/dev/null 2>&1
+    fi
+    # an Apache that served other sites must still be serving them
+    sleep 2
+    if [ "$was_up" -eq 1 ] && ! systemctl is-active apache2 >/dev/null 2>&1; then
+        _trr_fail APACHE_DOWN "Apache stopped on the new config - it was put back"
+        systemctl start apache2 >/dev/null 2>&1
+        return 1
+    fi
+    # a reload does not always open a brand-new port
+    [ -z "$(ss -ltn "( sport = :${port} )" 2>/dev/null | tail -n +2)" ] && systemctl restart apache2 >/dev/null 2>&1
+    [ -n "$(ss -ltn "( sport = :${port} )" 2>/dev/null | tail -n +2)" ] || { _trr_fail APACHE_PORT "Apache did not open port $port"; return 1; }
+    return 0
+}
+
+# ── Ports, as the destination sees them ───────────────────────
+# What holds PORT there now ('' = free), asked live, not from the survey
+_tr_port_holder() {
+    _tr_ssh "ss -ltnpH '( sport = :$1 )' 2>/dev/null | grep -o 'users:((\"[^\"]*\"' | head -1 | cut -d'\"' -f2" 2>/dev/null | tr -d '\r'
+}
+# Can the bot (or its phpMyAdmin) use PORT there? Free, or Apache's - which
+# serves sites side by side on one port - when the bot joins that Apache.
+_tr_port_usable() {
+    local who; who=$(_tr_port_holder "$1")
+    [ -z "$who" ] && return 0
+    [ "$who" = "apache2" ] && [ "$TR_TARGET" != "fresh" ] && return 0
+    return 1
+}
+# One row of the board: free in green, Apache-shared in green, taken in red
+_tr_port_row() {
+    local p="$1" note="${2:-}" who
+    who=$(printf '%s\n' "$TR_INFO" | sed -n "s/^LISTEN=${p}|//p" | head -1)
+    if [ -z "$who" ]; then
+        printf "      ${C_KEY}%-6s${CR} $(_dot ok) ${C_OK}free${CR}%b\n" "$p" "$note"
+    elif [ "$who" = "apache2" ] && [ "$TR_TARGET" != "fresh" ]; then
+        printf "      ${C_KEY}%-6s${CR} $(_dot ok) ${C_OK}shared with the Apache there${CR}%b\n" "$p" "$note"
+    else
+        printf "      ${C_BAD}%-6s${CR} $(_dot bad) ${C_BAD}in use · %s${CR}%b\n" "$p" "$who" "$note"
+    fi
+}
+_tr_port_free_listed() {
+    local who; who=$(printf '%s\n' "$TR_INFO" | sed -n "s/^LISTEN=${1}|//p" | head -1)
+    [ -z "$who" ] || { [ "$who" = "apache2" ] && [ "$TR_TARGET" != "fresh" ]; }
+}
+
+# The bot's port there: its own when usable - no question - else a board of
+# 443 / 8443 / 88 (the only ports Telegram reaches) and a choice, checked again.
+_tr_pick_bot_port() {
+    local want="$1" p def="" who
+    if _tr_port_usable "$want"; then
+        TR_BOT_PORT="$want"
+        printf "    ${C_OK}●${CR} ${C_DIM}Bot port ${CR}${C_KEY}%s${CR}${C_DIM} is free on %s${CR}\n" "$want" "$TR_HOST"
+        return 0
+    fi
+    who=$(_tr_port_holder "$want")
+    printf "    ${C_BAD}●${CR} ${C_BAD}Port %s is in use on %s by %s.${CR}\n" "$want" "$TR_HOST" "${who:-another program}"
+    printf "    ${C_DIM}Telegram reaches a bot on these ports only:${CR}\n"
+    for p in $BOT_PORTS_ALLOWED; do
+        _tr_port_row "$p"
+        [ -z "$def" ] && _tr_port_free_listed "$p" && def="$p"
+    done
+    if [ -z "$def" ]; then
+        printf "    ${C_BAD}●${CR} ${C_BAD}443, 8443 and 88 are all taken on %s - free one of them first.${CR}\n" "$TR_HOST"
+        return 1
+    fi
+    while :; do
+        printf "  ${C_PROMPT}❯${CR} Bot port ${C_DIM}[%s]${CR}: " "$def"
+        read -r p
+        [ -z "$p" ] && p="$def"
+        case " $BOT_PORTS_ALLOWED " in
+            *" $p "*) ;;
+            *) printf "    ${C_FAINT_BAD}Telegram only reaches a bot on 443, 8443 or 88.${CR}\n"; continue ;;
+        esac
+        if _tr_port_usable "$p"; then
+            TR_BOT_PORT="$p"
+            printf "    ${C_OK}●${CR} ${C_OK}Port %s is free on %s${CR}\n" "$p" "$TR_HOST"
+            return 0
+        fi
+        printf "    ${C_FAINT_BAD}Port %s is in use on %s by %s - pick another.${CR}\n" "$p" "$TR_HOST" "$(_tr_port_holder "$p")"
+    done
+}
+
+# phpMyAdmin's port there: its own when usable (or the bot's) - no question -
+# else a board: the bot's port (always fine) and a few others, free or taken.
+_tr_pick_pma_port() {
+    local want="$1" p def="$TR_BOT_PORT" who
+    if [ "$want" = "$TR_BOT_PORT" ] || _tr_port_usable "$want"; then
+        TR_PMA_PORT="$want"
+        [ "$want" != "$TR_BOT_PORT" ] && printf "    ${C_OK}●${CR} ${C_DIM}phpMyAdmin port ${CR}${C_KEY}%s${CR}${C_DIM} is free on %s${CR}\n" "$want" "$TR_HOST"
+        return 0
+    fi
+    who=$(_tr_port_holder "$want")
+    printf "    ${C_BAD}●${CR} ${C_BAD}phpMyAdmin's port %s is in use on %s by %s.${CR}\n" "$want" "$TR_HOST" "${who:-another program}"
+    _tr_port_row "$TR_BOT_PORT" "  ${C_DIM}· the bot's own address${CR}"
+    for p in $TR_PMA_SUGGEST; do
+        [ "$p" = "$TR_BOT_PORT" ] && continue
+        _tr_port_row "$p"
+    done
+    while :; do
+        printf "  ${C_PROMPT}❯${CR} phpMyAdmin port ${C_DIM}[%s · or any 1024-65535]${CR}: " "$def"
+        read -r p
+        [ -z "$p" ] && p="$def"
+        if ! [[ "$p" =~ ^[1-9][0-9]{0,4}$ ]] || { [ "$p" != "$TR_BOT_PORT" ] && [ "$p" != 443 ] && { [ "$p" -lt 1024 ] || [ "$p" -gt 65535 ]; }; }; then
+            printf "    ${C_FAINT_BAD}Use the bot's port (%s), 443, or a port from 1024 to 65535.${CR}\n" "$TR_BOT_PORT"
+            continue
+        fi
+        if [ "$p" = "$TR_BOT_PORT" ] || _tr_port_usable "$p"; then
+            TR_PMA_PORT="$p"
+            printf "    ${C_OK}●${CR} ${C_OK}phpMyAdmin will answer on port %s${CR}\n" "$p"
+            return 0
+        fi
+        printf "    ${C_FAINT_BAD}Port %s is in use on %s by %s - pick another.${CR}\n" "$p" "$TR_HOST" "$(_tr_port_holder "$p")"
+    done
+}
+
+# This bot here, frozen for the final copy: its jobs stopped (kept to put
+# back) and its webhook taken down - Telegram holds the messages meanwhile
+# and hands them to whichever webhook is set next.
+_tr_freeze_here() {
+    TR_HERE_CRONS=$(crontab -u www-data -l 2>/dev/null | grep -F "://${hosts}/cronbot/")
+    _bot_crons_remove "$hosts" >/dev/null 2>&1
+    curl -s --max-time 15 "https://api.telegram.org/bot${token}/deleteWebhook?drop_pending_updates=false" >/dev/null 2>&1
+    TR_FROZEN=1
+}
+# ...and back as it was, when the move does not go through
+_tr_thaw_here() {
+    [ "${TR_FROZEN:-0}" -eq 1 ] || return 0
+    if [ -n "$TR_HERE_CRONS" ]; then
+        { crontab -u www-data -l 2>/dev/null; printf '%s\n' "$TR_HERE_CRONS"; } | awk '!seen[$0]++' | crontab -u www-data -
+    fi
+    curl -s --max-time 15 -F "url=https://${hosts}/index.php" -F "secret_token=$(_bot_webhook_secret "$dir")" \
+        "https://api.telegram.org/bot${token}/setWebhook" >/dev/null 2>&1
+    TR_FROZEN=0
+    printf "    ${C_OK}●${CR} ${C_DIM}This bot's jobs and webhook are back as they were here.${CR}\n"
 }
 
 # Menu 10
@@ -5279,46 +5899,100 @@ function transfer_bot() {
         [ "$again" = "0" ] && { show_menu; return 0; }
     done
 
-    # 2) Only onto a clean Ubuntu/Debian server, with room for it. An install
-    #    left unfinished by an earlier try resumes; one that finished for THIS
-    #    domain (the data move failed last time) only gets the data again.
-    local info os has_ciro their_domain free need skip_install=0
-    # $1 there is LEGACY_NAME: that server may have been set up under the old name
-    info=$(_tr_ssh "bash -s -- $LEGACY_NAME" <<'EOF'
-. /etc/os-release 2>/dev/null; echo "OS=$ID"
-L="$1"
-if grep -qx "PHASE:COMPLETE" /root/Ciro/.install_state /root/ciro/.install_state "/root/conf$L/.${L}_install_state" 2>/dev/null \
-    || grep -q '"dir"' /root/Ciro/bots.json /root/ciro/bots.json "/root/conf$L/bots.json" 2>/dev/null; then
-    echo "CIRO=yes"
-    echo "DOMAIN=$(grep -h '^\$domainhosts' /var/www/html/Ciro/config.php /var/www/html/ciro/config.php "/var/www/html/${L}probotconfig/config.php" 2>/dev/null | head -1 | cut -d"'" -f2)"
-    echo "BOTS=$(cat /root/Ciro/bots.json /root/ciro/bots.json "/root/conf$L/bots.json" 2>/dev/null | grep -o '"dir"' | wc -l)"
-else
-    echo "CIRO=no"
-fi
-echo "FREE=$(df -Pm / | awk 'NR==2{print $4}')"
-EOF
-)
-    os=$(printf '%s\n' "$info" | sed -n 's/^OS=//p')
-    has_ciro=$(printf '%s\n' "$info" | sed -n 's/^CIRO=//p')
-    their_domain=$(hosts_domain "$(printf '%s\n' "$info" | sed -n 's/^DOMAIN=//p')")
-    free=$(printf '%s\n' "$info" | sed -n 's/^FREE=//p')
+    # 2) What the new server already runs - read only. This script goes over
+    #    first (to a folder of this transfer's own) and looks for itself.
+    local stamp; stamp=$(date +%Y-%m-%d_%H-%M-%S)
+    local RDIR="/root/ciro_transfer_${stamp}"
+    local script_src="/root/install.sh"
+    [ -f "$script_src" ] || script_src=$(readlink -f "$0")
+    if ! _tr_ssh "mkdir -p '$RDIR' && chmod 700 '$RDIR'" || ! _tr_scp "$script_src" "$RDIR/install.sh"; then
+        _tr_back "Could not prepare $TR_HOST."; return 1
+    fi
+    local TR_INFO tokensum
+    tokensum=$(printf '%s' "$token" | sha256sum | cut -d' ' -f1)
+    TR_INFO=$(_tr_ssh "CIRO_TRANSFER=1 bash '$RDIR/install.sh' transfer-probe '$domain' '$tokensum'" 2>/dev/null | tr -d '\r')
+    local os free need TR_TARGET="" TR_DIR=""
+    os=$(printf '%s\n' "$TR_INFO" | sed -n 's/^OS=//p')
+    free=$(printf '%s\n' "$TR_INFO" | sed -n 's/^FREE=//p')
     need=$(( $(du -sm "$dir" 2>/dev/null | cut -f1) + 3000 ))
     case "$os" in
         ubuntu|debian) ;;
-        *) _tr_back "The new server must run Ubuntu or Debian (it runs: ${os:-unknown})."; return 1 ;;
+        *) _tr_ssh "rm -rf '$RDIR'" >/dev/null 2>&1; _tr_back "The new server must run Ubuntu or Debian (it runs: ${os:-unknown})."; return 1 ;;
     esac
-    if [ "$has_ciro" = "yes" ]; then
-        if [ "$their_domain" = "$domain" ] && [ "$(printf '%s\n' "$info" | sed -n 's/^BOTS=//p')" -le 1 ] 2>/dev/null; then
-            skip_install=1
-            printf "    ${C_DIM}%s already has this bot's install from an earlier try - only the data moves again.${CR}\n" "$TR_HOST"
-        else
-            _tr_back "Ciro is already installed on $TR_HOST." "Transfer goes to a clean server - nothing was changed."
-            return 1
-        fi
-    fi
     if [ -n "$free" ] && [ "$free" -lt "$need" ]; then
+        _tr_ssh "rm -rf '$RDIR'" >/dev/null 2>&1
         _tr_back "Not enough disk space on $TR_HOST (${free} MB free, about ${need} MB needed)."
         return 1
+    fi
+    # where it lands: this very bot from an earlier try, the clean-server
+    # install, or beside whatever runs there
+    local row same_dir="" other_dir=""
+    while IFS= read -r row; do
+        [ -z "$row" ] && continue
+        if [ "$(printf '%s' "$row" | cut -d'|' -f2)" = "$domain" ]; then
+            if [ "$(printf '%s' "$row" | cut -d'|' -f4)" = "1" ]; then same_dir=$(printf '%s' "$row" | cut -d'|' -f1); else other_dir=$(printf '%s' "$row" | cut -d'|' -f1); fi
+        fi
+    done < <(printf '%s\n' "$TR_INFO" | sed -n 's/^BOT=//p')
+    if [ -n "$other_dir" ]; then
+        _tr_ssh "rm -rf '$RDIR'" >/dev/null 2>&1
+        _tr_back "Another bot already runs on ${domain} at ${TR_HOST} (${other_dir})." "It was left as it is. Give this bot another domain, or move that one away first."
+        return 1
+    fi
+    local site_row
+    site_row=$(printf '%s\n' "$TR_INFO" | sed -n 's/^DOMAIN_SITE=//p' | head -1)
+    if [ -n "$same_dir" ]; then
+        TR_TARGET="resume"; TR_DIR="$same_dir"
+    elif [ -n "$site_row" ]; then
+        _tr_ssh "rm -rf '$RDIR'" >/dev/null 2>&1
+        _tr_back "${TR_HOST} already serves ${domain} (${site_row%%|*})." "Nothing there was changed. That site has to stop answering for this domain first."
+        return 1
+    elif [ "$(printf '%s\n' "$TR_INFO" | sed -n 's/^CIRO_PARTIAL=//p')" = "$domain" ] \
+        || { [ "$(printf '%s\n' "$TR_INFO" | sed -n 's/^FRESH=//p')" = "yes" ] && [ -z "$(printf '%s\n' "$TR_INFO" | grep -E '^LISTEN=80\|' | grep -v '|apache2$')" ]; }; then
+        TR_TARGET="fresh"; TR_DIR="$BOT_DIR_DEFAULT"
+    else
+        TR_TARGET="new"
+    fi
+
+    # what is there, so the admin sees nothing of it is in the way
+    echo ""
+    _sec "On ${TR_HOST}"
+    local bots_there sites_there dbs_there ctrs_there panels_there
+    bots_there=$(printf '%s\n' "$TR_INFO" | sed -n 's/^BOT=//p' | cut -d'|' -f2 | paste -sd',' - | sed 's/,/, /g')
+    sites_there=$(printf '%s\n' "$TR_INFO" | sed -n 's/^SITE=//p' | grep -vE '^(000-default|default-ssl)' | wc -l)
+    dbs_there=$(printf '%s\n' "$TR_INFO" | grep -c '^DB=')
+    ctrs_there=$(printf '%s\n' "$TR_INFO" | sed -n 's/^CONTAINER=//p' | cut -d'|' -f1 | paste -sd',' - | sed 's/,/, /g')
+    panels_there=$(printf '%s\n' "$TR_INFO" | sed -n 's/^PANEL=//p' | paste -sd',' - | sed 's/,/, /g')
+    _kv "System" "${C_DIM}${os} $(printf '%s\n' "$TR_INFO" | sed -n 's/^OSVER=//p') · ${free:-?} MB free${CR}"
+    [ -n "$bots_there" ] && _kv "Ciro bots" "${C_DIM}${bots_there}${CR}"
+    [ "$sites_there" -gt 0 ] && _kv "Web sites" "${C_DIM}${sites_there} served by Apache${CR}"
+    [ "$dbs_there" -gt 0 ] && _kv "Databases" "${C_DIM}${dbs_there}${CR}"
+    [ -n "$ctrs_there" ] && _kv "Containers" "${C_DIM}${ctrs_there}${CR}"
+    [ -n "$panels_there" ] && _kv "Panels" "${C_DIM}${panels_there}${CR}"
+    case "$TR_TARGET" in
+        fresh)  _kv "Plan" "${C_OK}clean server - set up from scratch${CR}" ;;
+        resume) _kv "Plan" "${C_OK}this bot is already there (${TR_DIR}) - its data is laid over again${CR}" ;;
+        new)    _kv "Plan" "${C_OK}placed beside what runs there - none of it is changed${CR}" ;;
+    esac
+
+    # MySQL there without a way in for this script: its root password is
+    # asked - only to make a login of the bot's own; it is never changed
+    local TR_MYSQL_PASS=""
+    if [ "$TR_TARGET" = "new" ] && [ "$(printf '%s\n' "$TR_INFO" | sed -n 's/^CIRO_ROOT=//p')" != "ok" ] \
+        && printf '%s\n' "$TR_INFO" | grep -qE '^MYSQL=(active|installed)' \
+        && ! printf '%s\n' "$TR_INFO" | grep -qx 'MYSQL_SOCKET=ok'; then
+        echo ""
+        printf "    ${C_DIM}MySQL there is password-protected. Its root password is used once, to make${CR}\n"
+        printf "    ${C_DIM}a login of the bot's own - it is not changed or kept.${CR}\n"
+        while :; do
+            printf "  ${C_PROMPT}❯${CR} MySQL root password on %s ${C_DIM}[hidden · 0 = back]${CR}: " "$TR_HOST"
+            read -rs TR_MYSQL_PASS; echo ""
+            [ "$TR_MYSQL_PASS" = "0" ] && { _tr_ssh "rm -rf '$RDIR'" >/dev/null 2>&1; show_menu; return 0; }
+            if _tr_ssh "mysql -u root -p$(printf '%q' "$TR_MYSQL_PASS") -N -e 'SELECT 1'" >/dev/null 2>&1; then
+                printf "    ${C_OK}●${CR} ${C_OK}MySQL accepted it${CR}\n"
+                break
+            fi
+            printf "    ${C_FAINT_BAD}MySQL did not accept that password - try again.${CR}\n"
+        done
     fi
 
     # 3) The domain has to point at the new server
@@ -5331,7 +6005,7 @@ EOF
     while :; do
         printf "  ${C_PROMPT}❯${CR} Press Enter when done ${C_DIM}[0 = back]${CR}: "
         read -r k
-        [ "$k" = "0" ] && { show_menu; return 0; }
+        [ "$k" = "0" ] && { _tr_ssh "rm -rf '$RDIR'" >/dev/null 2>&1; show_menu; return 0; }
         resolved=$(getent ahostsv4 "$domain" 2>/dev/null | awk '{print $1; exit}')
         if [ "$resolved" = "$TR_HOST" ]; then
             printf "    ${C_OK}●${CR} ${C_OK}%s now points at %s${CR}\n" "$domain" "$TR_HOST"
@@ -5340,110 +6014,147 @@ EOF
         printf "    ${C_FAINT_BAD}%s still points at %s - DNS can take a few minutes.${CR}\n" "$domain" "${resolved:-nothing}"
         printf "  ${C_PROMPT}❯${CR} ${C_DIM}Enter = check again, c = continue anyway, 0 = back${CR}: "
         read -r k
-        [ "$k" = "0" ] && { show_menu; return 0; }
+        [ "$k" = "0" ] && { _tr_ssh "rm -rf '$RDIR'" >/dev/null 2>&1; show_menu; return 0; }
         [[ "$k" =~ ^[Cc]$ ]] && break
     done
 
-    # 4) Keep a copy here?
+    # 4) Ports there: kept when free, asked only when taken
+    local TR_BOT_PORT TR_PMA_PORT here_pma
+    here_pma=$(bots_registry_pma_port "$dir"); [ -z "$here_pma" ] && here_pma=$(hosts_port "$hosts")
+    if [ "$TR_TARGET" = "resume" ]; then
+        TR_BOT_PORT=$(printf '%s\n' "$TR_INFO" | sed -n 's/^BOT=//p' | awk -F'|' -v d="$TR_DIR" '$1==d{print $3; exit}')
+        TR_PMA_PORT="$TR_BOT_PORT"
+    else
+        echo ""
+        _tr_pick_bot_port "$(hosts_port "$hosts")" || { _tr_ssh "rm -rf '$RDIR'" >/dev/null 2>&1; _tr_back "" ""; return 1; }
+        # phpMyAdmin inside the bot's own site here stays inside it there
+        [ "$here_pma" = "$(hosts_port "$hosts")" ] && here_pma="$TR_BOT_PORT"
+        _tr_pick_pma_port "$here_pma"
+    fi
+
+    # 5) Keep a copy here?
     echo ""
     printf "  ${C_PROMPT}❯${CR} Save a copy of the database and bot files in /root? ${C_DIM}[Y/n]${CR}: "
     local keep; read -r keep
     local keep_copy=1; [[ "$keep" =~ ^[Nn]$ ]] && keep_copy=0
     echo ""
 
-    # 5) Pack it: database, folder (its own config.php and vendor/ stay behind -
-    #    the new install makes its own), certificate
+    # the certificate goes over before anything is set up there, which then
+    # uses it as it is; the web ports open in its firewall
     local work; work=$(mktemp -d /root/.ciro_transfer.XXXXXX)
-    run_step "Saving the database" \
-        "set -o pipefail; mysqldump -h '$dbhost' -u '$dbuser' -p'$dbpass' --no-tablespaces '$dbname' | gzip > '$work/db.sql.gz' && [ \$(gunzip -c '$work/db.sql.gz' | head -c 100 | wc -c) -gt 0 ]" \
-        || { show_step_error; rm -rf "$work"; _tr_back "Could not save the database." "Nothing was changed."; return 1; }
-    run_step "Packing the bot folder" \
-        "tar --anchored --exclude=./config.php --exclude=./vendor --exclude=./update_request --exclude=./update_request.running --exclude=./rollback_request --exclude=./update_progress.json --exclude=./update_status.json --exclude=./update_backups.json -czf '$work/files.tar.gz' -C '$dir' ." \
-        || { show_step_error; rm -rf "$work"; _tr_back "Could not pack the bot folder." "Nothing was changed."; return 1; }
     local have_cert=0
     if [ -f "/etc/letsencrypt/live/${domain}/fullchain.pem" ]; then
         tar -czf "$work/cert.tar.gz" -C /etc/letsencrypt accounts "archive/${domain}" "live/${domain}" "renewal/${domain}.conf" 2>/dev/null \
             && have_cert=1
     fi
-    local stamp; stamp=$(date +%Y-%m-%d_%H-%M-%S)
+    if [ "$have_cert" -eq 1 ] && ! printf '%s\n' "$TR_INFO" | grep -qx 'DOMAIN_CERT=1'; then
+        _tr_scp "$work/cert.tar.gz" "$RDIR/cert.tar.gz" \
+            && _tr_ssh "mkdir -p /etc/letsencrypt && tar -xzf '$RDIR/cert.tar.gz' --skip-old-files -C /etc/letsencrypt" >/dev/null 2>&1
+    fi
+    _tr_ssh "if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q 'Status: active'; then ufw allow 80/tcp >/dev/null; ufw allow ${TR_BOT_PORT}/tcp >/dev/null; [ '${TR_PMA_PORT}' != '${TR_BOT_PORT}' ] && ufw allow ${TR_PMA_PORT}/tcp >/dev/null; fi" >/dev/null 2>&1
+
+    # 6) A clean server is set up first - the real installer, in this terminal.
+    #    It sets no webhook: that waits for the data.
+    if [ "$TR_TARGET" = "fresh" ]; then
+        echo ""
+        _sec "Installing on ${TR_HOST}"
+        printf "    ${C_DIM}The installer now runs on the new server. Its answers are filled in;${CR}\n"
+        printf "    ${C_DIM}if it asks anything (bot name), answer as usual.${CR}\n"
+        echo ""
+        local icmd
+        icmd=$(printf 'CIRO_TRANSFER=1 bash %q install --name %q --token %q --admin %q --domain %q --port %q --pma-port %q --db-user %q --db-pass %q' \
+            "$RDIR/install.sh" "$botname" "$token" "$admin" "$domain" "$TR_BOT_PORT" "$TR_PMA_PORT" "$dbuser" "$dbpass")
+        _tr_ssh -t "$icmd"
+        if ! _tr_ssh 'grep -qx "PHASE:COMPLETE" /root/Ciro/.install_state 2>/dev/null && [ -f /var/www/html/Ciro/config.php ]'; then
+            rm -rf "$work"
+            _tr_back "The install on $TR_HOST did not finish." \
+                "Nothing here was changed. Fix what it reported, then run Transfer again (it resumes)."
+            return 1
+        fi
+    fi
+
+    # 7) Only now this bot stops here - jobs off, webhook down (Telegram keeps
+    #    the messages) - so the copy below misses nothing
+    _tr_freeze_here
+    printf "    ${C_OK}●${CR} ${C_DIM}This bot is paused here: scheduled jobs off, webhook down (Telegram keeps the messages)${CR}\n"
+    local src_tables
+    src_tables=$(mysql -h "$dbhost" -u "$dbuser" -p"$dbpass" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$dbname'" 2>/dev/null)
+    run_step "Saving the database" \
+        "set -o pipefail; mysqldump -h '$dbhost' -u '$dbuser' -p'$dbpass' --single-transaction --no-tablespaces '$dbname' | gzip > '$work/db.sql.gz' && [ \$(gunzip -c '$work/db.sql.gz' | head -c 100 | wc -c) -gt 0 ]" \
+        || { show_step_error; rm -rf "$work"; _tr_thaw_here; _tr_back "Could not save the database." "Nothing was changed."; return 1; }
+    run_step "Packing the bot folder" \
+        "tar --anchored --exclude=./config.php --exclude=./update_request --exclude=./update_request.running --exclude=./rollback_request --exclude=./update_progress.json --exclude=./update_status.json --exclude=./update_backups.json -czf '$work/files.tar.gz' -C '$dir' ." \
+        || { show_step_error; rm -rf "$work"; _tr_thaw_here; _tr_back "Could not pack the bot folder." "Nothing was changed."; return 1; }
     if [ "$keep_copy" -eq 1 ]; then
         cp "$work/db.sql.gz" "/root/ciro_transfer_${dbname}_${stamp}.sql.gz"
         cp "$work/files.tar.gz" "/root/ciro_transfer_files_${dbname}_${stamp}.tar.gz"
         printf "    ${C_OK}✔${CR} ${C_DIM}Copies kept in /root (ciro_transfer_*_%s)${CR}\n" "$stamp"
     fi
 
-    # 6) Send it
-    local script_src="/root/install.sh"
-    [ -f "$script_src" ] || script_src=$(readlink -f "$0")
-    if ! _tr_ssh 'rm -rf /root/ciro_transfer && mkdir -p /root/ciro_transfer && chmod 700 /root/ciro_transfer'; then
-        rm -rf "$work"; _tr_back "Could not prepare $TR_HOST."; return 1
-    fi
-    { printf 'SRC_DIR=%q\n' "$dir"; _tr_import_script; } > "$work/import.sh"
+    # 8) Send it, with what the other side needs to know and to check
+    {
+        printf 'TR_TARGET=%q\n' "$TR_TARGET"
+        printf 'TR_DIR=%q\n' "$TR_DIR"
+        printf 'TR_NAME=%q\n' "$name"
+        printf 'TR_BOTNAME=%q\n' "$botname"
+        printf 'TR_TOKEN=%q\n' "$token"
+        printf 'TR_ADMIN=%q\n' "$admin"
+        printf 'TR_DOMAIN=%q\n' "$domain"
+        printf 'TR_BOT_PORT=%q\n' "$TR_BOT_PORT"
+        printf 'TR_PMA_PORT=%q\n' "$TR_PMA_PORT"
+        printf 'TR_SRC_DIR=%q\n' "$dir"
+        printf 'TR_SRC_DBUSER=%q\n' "$dbuser"
+        printf 'TR_TABLES=%q\n' "$src_tables"
+        printf 'TR_MYSQL_PASS=%q\n' "$TR_MYSQL_PASS"
+    } > "$work/manifest.env"
+    chmod 600 "$work/manifest.env"
+    ( cd "$work" && sha256sum db.sql.gz files.tar.gz > SHA256SUMS )
     local f sent=1
     printf "    ${C_DIM}Sending to %s...${CR}\n" "$TR_HOST"
-    for f in db.sql.gz files.tar.gz import.sh; do
-        _tr_scp "$work/$f" /root/ciro_transfer/ || sent=0
+    for f in db.sql.gz files.tar.gz manifest.env SHA256SUMS; do
+        _tr_scp "$work/$f" "$RDIR/" || sent=0
     done
-    [ "$have_cert" -eq 1 ] && { _tr_scp "$work/cert.tar.gz" /root/ciro_transfer/ || sent=0; }
-    _tr_scp "$script_src" /root/ciro_transfer/install.sh || sent=0
+    [ "$have_cert" -eq 1 ] && { _tr_scp "$work/cert.tar.gz" "$RDIR/" || sent=0; }
     if [ "$sent" -ne 1 ]; then
-        rm -rf "$work"; _tr_back "Sending the files to $TR_HOST failed." "Nothing was changed here."; return 1
+        rm -rf "$work"; _tr_thaw_here
+        _tr_back "Sending the files to $TR_HOST failed." "Nothing was changed there; this bot runs here again."; return 1
     fi
-    printf "    ${C_OK}✔${CR} ${C_DIM}Database, bot folder%s sent${CR}\n" "$([ "$have_cert" -eq 1 ] && echo " and SSL certificate")"
-    # the certificate goes in before the install, which then uses it as it is
-    # (no new certificate needed), and both web ports are open
-    _tr_ssh 'bash -s' <<'EOF'
-if [ -f /root/ciro_transfer/cert.tar.gz ]; then mkdir -p /etc/letsencrypt && tar -xzf /root/ciro_transfer/cert.tar.gz -C /etc/letsencrypt; fi
-if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then ufw allow 80/tcp >/dev/null; ufw allow 443/tcp >/dev/null; fi
-EOF
+    if ! _tr_ssh "cd '$RDIR' && sha256sum -c --quiet SHA256SUMS" >/dev/null 2>&1; then
+        rm -rf "$work"; _tr_thaw_here
+        _tr_back "The files arrived damaged on $TR_HOST (checksum)." "Nothing was changed there; this bot runs here again. Run Transfer again."; return 1
+    fi
+    printf "    ${C_OK}✔${CR} ${C_DIM}Database, bot folder%s sent and checked${CR}\n" "$([ "$have_cert" -eq 1 ] && echo " and SSL certificate")"
 
-    # 7) Install on the new server - the real installer, in this terminal
-    if [ "$skip_install" -ne 1 ]; then
-        echo ""
-        _sec "Installing on ${TR_HOST}"
-        printf "    ${C_DIM}The installer now runs on the new server. Its answers are filled in;${CR}\n"
-        printf "    ${C_DIM}if it asks anything (bot name, phpMyAdmin port), answer as usual.${CR}\n"
-        printf "    ${C_DIM}The bot keeps port %s if it is free there; if not, it asks for another.${CR}\n" "$(hosts_port "$hosts")"
-        echo ""
-        local icmd
-        icmd=$(printf 'bash /root/ciro_transfer/install.sh install --name %q --token %q --admin %q --domain %q --port %q --db-user %q --db-pass %q' \
-            "$botname" "$token" "$admin" "$domain" "$(hosts_port "$hosts")" "$dbuser" "$dbpass")
-        _tr_ssh -t "$icmd"
-    fi
-    # an install left there by an earlier try may still carry the old names
-    [ "$skip_install" -eq 1 ] && _tr_ssh 'bash /root/ciro_transfer/install.sh rename-legacy' >/dev/null 2>&1
-    if ! _tr_ssh 'grep -qx "PHASE:COMPLETE" /root/Ciro/.install_state 2>/dev/null && [ -f /var/www/html/Ciro/config.php ]'; then
-        rm -rf "$work"
-        _tr_back "The install on $TR_HOST did not finish." \
-            "Nothing here was changed. Fix what it reported, then run Transfer again (it resumes)."
-        return 1
-    fi
-
-    # 8) The bot's own data over the fresh install
+    # 9) The bot's own data in its place there - then, last, its webhook
     echo ""
     local res
-    res=$(_tr_ssh 'bash /root/ciro_transfer/import.sh' 2>&1)
+    printf "    ${C_DIM}Placing the bot on %s...${CR}\n" "$TR_HOST"
+    res=$(_tr_ssh "CIRO_TRANSFER=1 bash '$RDIR/install.sh' transfer-receive '$RDIR'" 2>&1 | tr -d '\r')
     if ! printf '%s\n' "$res" | grep -qx "RESULT=OK"; then
         rm -rf "$work"
-        printf '%s\n' "$res" | tail -n 4 | sed 's/^/      /'
+        printf '%s\n' "$res" | grep -E '^(RESULT|WHY)=' | sed 's/^/      /'
+        _tr_thaw_here
         _tr_back "Moving the data onto $TR_HOST failed." \
-            "The bot here is untouched and still has everything. The files are left in /root/ciro_transfer on $TR_HOST."
+            "What this run made there was taken back out; nothing else there was touched. The files are left in $RDIR on $TR_HOST."
         return 1
     fi
-    printf "    ${C_OK}✔${CR} ${C_DIM}Database and bot folder in place on %s${CR}\n" "$TR_HOST"
+    TR_FROZEN=0
+    printf "    ${C_OK}✔${CR} ${C_DIM}Database and bot folder in place on %s (%s, %s tables)${CR}\n" "$TR_HOST" \
+        "$(printf '%s\n' "$res" | sed -n 's/^DIR=//p')" "$(printf '%s\n' "$res" | sed -n 's/^TABLES=//p')"
     printf '%s\n' "$res" | grep -q '^TABLE_WARN=1' \
         && printf "    ${C_WARN}!${CR} ${C_WARN}table.php reported a problem there - run option 2 (Update) on it once.${CR}\n"
-    _tr_ssh 'rm -rf /root/ciro_transfer' >/dev/null 2>&1
+    # what the bot there held before, when it was there already
+    printf '%s\n' "$res" | grep -q '^BEFORE=' \
+        && printf "    ${C_DIM}Its earlier data there is kept in %s${CR}\n" "$(printf '%s\n' "$res" | sed -n 's/^BEFORE=//p')"
+    _tr_ssh "rm -f '$RDIR/db.sql.gz' '$RDIR/files.tar.gz' '$RDIR/cert.tar.gz' '$RDIR/manifest.env' && rm -rf '$RDIR'" >/dev/null 2>&1
     rm -rf "$work"
 
-    # 9) Is it the live one now? (on the port the new server gave it)
+    # 10) Is it the live one now? (on the port the new server gave it)
     local code hook new_hosts
     new_hosts=$(printf '%s\n' "$res" | sed -n 's/^HOSTS=//p')
     [ -z "$new_hosts" ] && new_hosts="$domain"
     code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 --resolve "${domain}:$(hosts_port "$new_hosts"):${TR_HOST}" "https://${new_hosts}/" 2>/dev/null)
     hook=$(curl -s --max-time 10 "https://api.telegram.org/bot${token}/getWebhookInfo" 2>/dev/null)
-    # its jobs here would now reach the new server and run everything twice
-    _bot_crons_remove "$hosts" >/dev/null 2>&1
 
     _sec "Transferred"
     _kv "Bot" "${C_KEY}${name}${CR}"
@@ -5463,10 +6174,21 @@ EOF
     else
         _kv "Jobs" "$(_dot warn) ${C_WARN}not registered${CR} ${C_DIM}· open the bot's admin panel once${CR}"
     fi
+    if [ "$TR_TARGET" = "new" ]; then
+        _kv "Folder" "${C_DIM}$(printf '%s\n' "$res" | sed -n 's/^DIR=//p')${CR}"
+        _kv "Database" "${C_KEY}$(printf '%s\n' "$res" | sed -n 's/^DB=//p')${CR} ${C_DIM}· user${CR} ${C_KEY}$(printf '%s\n' "$res" | sed -n 's/^DBUSER=//p')${CR} ${C_DIM}· pass${CR} ${C_KEY}$(printf '%s\n' "$res" | sed -n 's/^DBPASS=//p')${CR}"
+        if printf '%s\n' "$res" | grep -qx 'PMA_NONE=1'; then
+            _kv "phpMyAdmin" "${C_DIM}not installed there - left so${CR}"
+        else
+            _kv "phpMyAdmin" "${C_DIM}$(pma_url "$domain" "$TR_PMA_PORT")${CR}"
+        fi
+        printf '%s\n' "$res" | grep -qx 'NO80=1' \
+            && printf "    ${C_WARN}!${CR} ${C_WARN}Port 80 there belongs to another program: the certificate cannot renew itself${CR}\n    ${C_WARN}  over HTTP - renew it by DNS, or free port 80, before it runs out.${CR}\n"
+    fi
     _kv "Here" "${C_DIM}scheduled jobs stopped; files and database left as they were${CR}"
     echo ""
 
-    # 10) This server's copy: stopped by default - if the new server does not
+    # 11) This server's copy: stopped by default - if the new server does not
     #     work out, point the domain back and start it with option 11 - or
     #     deleted for good
     printf "  ${C_TXT}What should happen to %s on THIS server?${CR}\n" "$name"
@@ -5639,7 +6361,7 @@ function startstop_menu() {
 # ── Command-line argument parsing ────────────────────────────
 # Globals filled from flags (consumed by install/update where relevant)
 ARG_NAME=""     ARG_TOKEN=""   ARG_ADMIN=""    ARG_DOMAIN=""
-ARG_DBUSER=""   ARG_DBPASS=""  ARG_PORT=""
+ARG_DBUSER=""   ARG_DBPASS=""  ARG_PORT=""     ARG_PMA_PORT=""
 
 print_usage() {
     cat <<USAGE
@@ -5676,6 +6398,7 @@ print_usage() {
     --domain  <fqdn>   Domain already pointed at this server, e.g. bot.example.com
     --port    <port>   The bot's HTTPS port: 443, 8443 or 88 (Telegram allows
                        only these). Use 8443 or 88 when Xray already has 443.
+    --pma-port <port>  phpMyAdmin's port (the bot's port, 443, or 1024-65535)
     --db-user <user>   Database user to create
     --db-pass <pass>   Database password (letters, digits, underscore; 6-64)
     -h, --help         Show this help
@@ -5973,6 +6696,7 @@ process_arguments() {
             --admin)   ARG_ADMIN="$2";   shift 2 ;;
             --domain)  ARG_DOMAIN="$2";  shift 2 ;;
             --port)    ARG_PORT="$2";    shift 2 ;;
+            --pma-port) ARG_PMA_PORT="$2"; shift 2 ;;
             --db-user) ARG_DBUSER="$2";  shift 2 ;;
             --db-pass) ARG_DBPASS="$2";  shift 2 ;;
             -h|--help) print_usage; exit 0 ;;
@@ -5998,15 +6722,23 @@ process_arguments() {
 # A server set up under the old name has its files renamed before anything
 # reads a path (the watcher does it from its own tick, under its own lock).
 case "${1:-}" in
-    -h|--help|-v|--version|version|selfupdate-watch) ;;
+    -h|--help|-v|--version|version|selfupdate-watch|transfer-probe|transfer-receive) ;;
     *)
-        _legacy_migrate
-        if [ $? -eq 2 ] && _legacy_state_left; then
-            echo -e "\e[93mAn update is running on this server right now - run the command again in a minute.\033[0m"
-            exit 1
+        # a transfer only adds a bot: what this server already runs is not renamed
+        if [ -z "${CIRO_TRANSFER:-}" ]; then
+            _legacy_migrate
+            if [ $? -eq 2 ] && _legacy_state_left; then
+                echo -e "\e[93mAn update is running on this server right now - run the command again in a minute.\033[0m"
+                exit 1
+            fi
         fi
         ;;
 esac
 # internal: the transfer runs only the renaming on the new server
 [ "${1:-}" = "rename-legacy" ] && exit 0
+# internal: Transfer's two halves on the destination (see transfer_probe)
+case "${1:-}" in
+    transfer-probe)   shift; transfer_probe "$@"; exit $? ;;
+    transfer-receive) shift; transfer_receive "$@"; exit $? ;;
+esac
 process_arguments "$@"

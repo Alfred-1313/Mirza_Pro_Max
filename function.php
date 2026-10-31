@@ -10022,7 +10022,7 @@ function bot_cron_commands()
     // difference is silently added alongside rather than replacing - which is
     // precisely how the box ended up running two competing sets of the same
     // jobs. Change the schedule here, never only in the crontab.
-    return [
+    $lines = [
         // --- money path: still every minute ---
         "*/1 * * * * flock -n /tmp/mz_croncard.lock curl -s --max-time 55 https://$domainhosts/cronbot/croncard.php > /dev/null 2>&1",
         "*/1 * * * * flock -n /tmp/mz_iranpay1.lock curl -s --max-time 55 https://$domainhosts/cronbot/iranpay1.php > /dev/null 2>&1",
@@ -10057,6 +10057,64 @@ function bot_cron_commands()
         "14,29,44,59 * * * * flock -n /tmp/mz_uptime_panel.lock curl -s --max-time 600 https://$domainhosts/cronbot/uptime_panel.php > /dev/null 2>&1",
         "9,39 * * * * flock -n /tmp/mz_expireagent.lock curl -s --max-time 1700 https://$domainhosts/cronbot/expireagent.php > /dev/null 2>&1",
     ];
+    // One server can run several bots, each with these same jobs: every bot
+    // gets locks of its own, or one bot's long run would make the other's
+    // same job skip, time after time.
+    $tag = bot_cron_lock_tag();
+    return array_map(static fn($l) => preg_replace('#/tmp/mz_([A-Za-z0-9_]+)\.lock#', '/tmp/mz_$1_' . $tag . '.lock', $l), $lines);
+}
+
+// the part of this bot's lock files that is its own (from its address)
+function bot_cron_lock_tag()
+{
+    global $domainhosts;
+    return substr(md5((string) $domainhosts), 0, 8);
+}
+
+// Lines of THIS bot's own jobs that are not exactly what bot_cron_commands()
+// says now - the shape before the per-bot locks, a changed schedule - go,
+// so the right ones are not added beside them. Another bot's lines (another
+// address) and anything else in the crontab are left alone; so is the backup
+// line, which updateBackupCronSchedule() keeps.
+if (!function_exists('pruneStaleBotCrons')) {
+    function pruneStaleBotCrons(array $commands)
+    {
+        global $domainhosts;
+        if (!isShellExecAvailable() || (string) $domainhosts === '') {
+            return false;
+        }
+        $crontabBinary = getCrontabBinary();
+        if ($crontabBinary === null) {
+            return false;
+        }
+        $existing = trim((string) runShellCommand(sprintf('%s -l 2>/dev/null', escapeshellarg($crontabBinary))));
+        if ($existing === '') {
+            return true;
+        }
+        $mine = '://' . $domainhosts . '/cronbot/';
+        $kept = [];
+        $removed = 0;
+        foreach (preg_split('/\r?\n/', $existing) as $line) {
+            $t = trim($line);
+            if ($t !== '' && strpos($t, '#') !== 0 && strpos($t, $mine) !== false
+                && strpos($t, 'cronbot/backupbot.php') === false && !in_array($t, $commands, true)) {
+                $removed++;
+                continue;
+            }
+            $kept[] = $line;
+        }
+        if ($removed === 0) {
+            return true;
+        }
+        $tmp = tempnam(sys_get_temp_dir(), 'cron');
+        if ($tmp === false) {
+            return false;
+        }
+        file_put_contents($tmp, implode(PHP_EOL, $kept) . PHP_EOL);
+        runShellCommand(sprintf('%s %s', escapeshellarg($crontabBinary), escapeshellarg($tmp)));
+        unlink($tmp);
+        return true;
+    }
 }
 
 // ⏱ وضعیت کرون‌ها: the crons are curl calls, so nothing else knows whether
@@ -10151,6 +10209,7 @@ function activecron()
         return $m[1] ?? '';
     }, $cronCommands));
 
+    pruneStaleBotCrons($cronCommands);
     addCronIfNotExists($cronCommands);
 
     // backupbot.php's schedule is admin-configurable (🗄 تنظیمات بکاپ), so it's
@@ -10185,16 +10244,18 @@ if (!function_exists('updateBackupCronSchedule')) {
 
         // guarded like every other job: a database dump is the heaviest thing
         // this bot does, and two of them at once is what a slow disk turns into
-        $targetLine = "0 */$intervalHours * * * flock -n /tmp/mz_backupbot.lock curl -s --max-time 3000 https://$domainhosts/cronbot/backupbot.php > /dev/null 2>&1";
-        $backupLines = array_values(array_filter($cronLines, static function ($line) {
-            return strpos($line, 'cronbot/backupbot.php') !== false;
+        $targetLine = "0 */$intervalHours * * * flock -n /tmp/mz_backupbot_" . bot_cron_lock_tag() . ".lock curl -s --max-time 3000 https://$domainhosts/cronbot/backupbot.php > /dev/null 2>&1";
+        // only THIS bot's backup line: another bot on this server keeps its own
+        $mine = "://$domainhosts/cronbot/backupbot.php";
+        $backupLines = array_values(array_filter($cronLines, static function ($line) use ($mine) {
+            return strpos($line, $mine) !== false;
         }));
         if ($backupLines === [$targetLine]) {
             return true;
         }
 
-        $cronLines = array_values(array_filter($cronLines, static function ($line) {
-            return strpos($line, 'cronbot/backupbot.php') === false;
+        $cronLines = array_values(array_filter($cronLines, static function ($line) use ($mine) {
+            return strpos($line, $mine) === false;
         }));
         $cronLines[] = $targetLine;
         $cronLines = array_values(array_unique($cronLines));

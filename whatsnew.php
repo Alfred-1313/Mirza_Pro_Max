@@ -756,4 +756,22 @@ return [
             . "• 📮 Where reports go, per panel: the report group (the «❌ errors» topic), a channel or group of its own (with a test message), inside the bot (the admins' chats), or nowhere (history only). Asked the first time a panel's nodes are opened; changed later with «📮 Report destination» and in the web panel.\n"
             . "• Shared panels: one Rebecca panel added to the bot twice or more - on the same address, or another address with the very same nodes - counts as one: watched once, reported once with all its names, one history and one destination.</blockquote>",
     ],
+    [
+        'n' => 56,
+        'date' => '2026-10-31',
+        'fa' => "<blockquote>🚚 <b>انتقال ربات (گزینهٔ ۱۰ در Ciro): روی سروری که چیزهای دیگری دارد، بدون دست زدن به آن‌ها</b>\n"
+            . "• سرور مقصد اول فقط خوانده می‌شود: ربات‌ها، سایت‌ها، دیتابیس‌ها، کانتینرها، پنل‌ها و پورت‌های درگیر نشان داده می‌شوند و بعد تصمیم گرفته می‌شود.\n"
+            . "• کنار بقیه نصب می‌شود: پوشه و دیتابیس با اسم آزاد (Ciro، Ciro2، ...)، یوزر دیتابیس جدا با رمز تازه (به دیتابیس ربات‌های دیگر دسترسی ندارد)، رمز root در MySQL عوض نمی‌شود، نسخهٔ PHP و تنظیمات Apache و سایت‌های دیگر دست نمی‌خورند.\n"
+            . "• پورت‌ها: اگر پورت ربات و phpMyAdmin در مقصد آزاد باشند بدون هیچ سؤالی همان‌ها می‌مانند. فقط اگر یکی درگیر باشد، جدولی می‌آید: پورت‌های آزاد سبز، پورت‌های درگیر قرمز (با اسم برنامه‌ای که گرفته)، و پورتی که وارد می‌کنی دوباره زنده چک می‌شود.\n"
+            . "• هیچ پیامی گم نمی‌شود: ربات اینجا درست قبل از پشتیبان آخر متوقف می‌شود (کرون‌ها خاموش، وبهوک برداشته ولی پیام‌ها پیش تلگرام می‌مانند). پشتیبان کامل با checksum در مقصد چک می‌شود، تعداد جدول‌ها شمرده می‌شود و وبهوک فقط آخر کار، بعد از رسیدن کامل داده‌ها ست می‌شود.\n"
+            . "• اگر وسط کار خطایی پیش بیاید، هر چیزی که این انتقال در مقصد ساخته بود پاک می‌شود و ربات اینجا دوباره روشن می‌شود. اگر همین ربات از دفعهٔ قبل در مقصد مانده باشد، اول از داده‌اش پشتیبان گرفته می‌شود و در صورت خطا همان برمی‌گردد.\n"
+            . "• ربات‌های مختلف روی یک سرور دیگر کرون همدیگر را پاک نمی‌کنند و قفل کرون‌هایشان جداست.</blockquote>",
+        'en' => "<blockquote>🚚 <b>Moving a bot (option 10 in Ciro): onto a server that runs other things, leaving them alone</b>\n"
+            . "• The new server is only read first: its bots, sites, databases, containers, panels and busy ports are shown, then the plan is made.\n"
+            . "• It goes in beside them: a free folder and database name (Ciro, Ciro2, ...), a database user of its own with a fresh password (it cannot see other bots' databases), MySQL's root password is never changed, and the PHP version, Apache's setup and the other sites stay as they are.\n"
+            . "• Ports: when the bot's and phpMyAdmin's ports are free there, they are kept with no questions. Only when one is taken, a board comes up: free ports in green, busy ones in red (with what holds them), and the port you type is checked again, live.\n"
+            . "• No message is lost: the bot here pauses just before the final backup (jobs off, webhook down - Telegram keeps the messages). The backup is checked by checksum on the other side, its tables are counted, and the webhook is set last, after all the data is in.\n"
+            . "• If anything fails on the way, whatever this transfer made there is taken back out and the bot here starts again. A copy of this same bot left there by an earlier try is backed up first and put back if it fails.\n"
+            . "• Bots on one server no longer delete each other's scheduled jobs, and their job locks are their own.</blockquote>",
+    ],
 ];
