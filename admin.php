@@ -7811,8 +7811,11 @@ if (preg_match('/^layoutreset-([a-z]{2})$/', $datain, $ly_m) && $adminrulecheck[
     if (!is_array($ly_layout)) {
         $ly_layout = [];
     }
+    $ly_changed = $ly_newrows !== $ly_layout['keyboard'];
     $ly_layout['keyboard'] = $ly_newrows;
     mainmenu_layout_save($ly_lang, $ly_layout);
+    telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'cache_time' => 1,
+        'text' => $ly_changed ? '🔄 چیدمان به پیش‌فرض برگشت' : '✅ چیدمان از قبل روی پیش‌فرض بود']);
     $ly_kb = layout_editor_payload($textbotlang, null, $ly_lang);
     Editmessagetext($from_id, $message_id, "🔄 چیدمان به پیش‌فرض برگشت (رنگ و ایموجی و استیکرها حفظ شدن)" . mainmenu_tab_note($ly_lang) . "\n\n📐 <b>چیدمان دکمه‌های منو</b> 👇", $ly_kb, 'HTML');
     return;
@@ -7927,8 +7930,13 @@ if (preg_match('/^renamereset-([a-z]{2})$/', $datain, $rn_m) && $adminrulecheck[
         }
         // shared by every language - one tab's reset leaves it as it was
         $rn_layout['keyboard'] = mainmenu_langbtn_mark($rn_layout['keyboard'], mainmenu_langbtn_hidden());
+        $rn_changed = $rn_layout['keyboard'] !== mainmenu_layout_get($rn_lang)['keyboard'];
         mainmenu_layout_save($rn_lang, $rn_layout);
     }
+    // a tap that changes nothing redraws the same message, which Telegram
+    // refuses ("message is not modified") - the toast is the answer then
+    telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'cache_time' => 1,
+        'text' => !empty($rn_changed) ? '🔄 نام و نمایش دکمه‌ها به پیش‌فرض برگشت' : '✅ همه‌ی دکمه‌ها از قبل روی پیش‌فرض بودن']);
     $rn_kb = rename_editor_payload($textbotlang, null, $rn_lang);
     Editmessagetext($from_id, $message_id, "🔄 نام و نمایش دکمه‌ها به پیش‌فرض برگشت (رنگ و ایموجی و استیکرها حفظ شدن)" . mainmenu_tab_note($rn_lang) . mainmenu_langbtn_note() . "\n\n✏️ <b>نام و نمایش دکمه‌های منو</b> 👇", $rn_kb, 'HTML');
     return;
