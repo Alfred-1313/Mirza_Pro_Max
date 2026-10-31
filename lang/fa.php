@@ -8236,10 +8236,10 @@ nowpayments.io
     // 🖥 نودهای ربکا (rbnodes.php) - 🛠 قابلیت های پنل ← پنل ربکا ← 🖥 مدیریت نود ها
     'RbNodes' =>
     array (
-      'hubTitle' => '🖥 <b>نودهای پنل {panel}</b>
+      'hubTitle' => '🖥 <b>نودهای ربکا · {panel}</b>
 🌐 <code>{host}</code>',
       'hubTwin' => '🔗 این پنل همان «{twins}» است (آدرس یا نودهایشان یکی است)؛ پایش و گزارش‌ها برای همه‌شان یک بار انجام می‌شود.',
-      'hubDest' => '📮 گزارش‌ها: {dest}',
+      'hubDest' => '📮 مقصد گزارش‌ها: <b>{dest}</b>',
       'btnDest' => '📮 مقصد گزارش‌ها',
       'destTitle' => '📮 <b>گزارش‌های پایش پنل {panel}</b> کجا فرستاده بشه؟
 🌐 <code>{host}</code>
@@ -8250,13 +8250,13 @@ nowpayments.io
       'destFirst' => '👋 قبل از دیدن نودها، بگو گزارش‌های پایش این پنل کجا بره:',
       'destTwinNote' => '
 🔗 این پنل همان «{twins}» است؛ این تنظیم برای همه‌شان یکی است و هر گزارش فقط یک بار فرستاده می‌شه.',
-      'destGroup' => '👥 گروه گزارش‌ها (تاپیک «❌ گزارش خطا ها»)',
+      'destGroup' => '👥 گروه گزارش‌ها (تاپیک «🖥 گزارش نودها (ربکا)»)',
       'destChat' => '📢 یه کانال یا گروه جدا',
       'destBot' => '🤖 داخل خود ربات (پیوی ادمین‌ها)',
       'destOff' => '🔕 هیچ‌جا (فقط تاریخچه)',
       'destLater' => '⏭ بعداً (فعلاً پیش‌فرض)',
       'destTestBtn' => '🧪 پیام آزمایشی',
-      'destGroupLabel' => 'گروه گزارش‌ها',
+      'destGroupLabel' => 'گروه گزارش‌ها · تاپیک «🖥 گزارش نودها (ربکا)»',
       'destBotLabel' => 'داخل ربات (پیوی ادمین‌ها)',
       'destOffLabel' => 'هیچ‌جا (فقط تاریخچه)',
       'destAutoLabel' => 'پیش‌فرض (گروه گزارش‌ها، وگرنه پیوی ادمین اصلی)',
@@ -8279,10 +8279,10 @@ nowpayments.io
       'destTestSent' => '🧪 پیام آزمایشی فرستاده شد ({n} جا).',
       'destTestNone' => 'مقصد «هیچ‌جا» است؛ پیامی فرستاده نمی‌شه.',
       'destTestFail' => 'پیام آزمایشی نرسید: {why}',
-      'hubCounts' => '🟢 وصل: {up} · 🔴 مشکل‌دار: {down} · ⚪️ خاموش: {off}',
-      'hubWatch' => '🔔 پایش قطع و وصل: {state}',
+      'hubCounts' => '🟢 وصل <b>{up}</b>   🔴 مشکل‌دار <b>{down}</b>   ⚪️ خاموش <b>{off}</b>',
+      'hubWatch' => '🔔 پایش قطع و وصل: <b>{state}</b>',
       'hubLine' => '{icon} <b>{name}</b> — CPU {cpu} · RAM {ram} · Xray {xray}',
-      'hubUpdated' => '🕒 به‌روز شده: {when}',
+      'hubUpdated' => '🕒 <i>این اعداد مال همین لحظه‌اند · {when}</i>',
       'hubEmpty' => 'هنوز نودی روی این پنل نیست. با «➕ افزودن نود» اولی رو بساز.',
       'hubError' => '❌ پنل جواب نداد:
 {why}',
@@ -8301,16 +8301,18 @@ nowpayments.io
       'btnYes' => '✅ بله، انجام بده',
       'btnCancel' => '❌ انصراف',
       'closed' => '🖥 بسته شد.',
-      'nodeTitle' => '{icon} <b>{name}</b> — {status}',
+      'nodeTitle' => '{icon} <b>{name}</b>  ·  {status}',
       'nodeAddress' => '📍 آدرس: <code>{address}</code> · پورت {port} · API {api}',
       'nodeVersions' => '⚙️ Xray: <b>{xray}</b> · سرویس نود: <b>{svc}</b>',
       'nodeCpu' => '🧠 CPU: <b>{cpu}</b>{cores}',
-      'nodeCores' => ' ({n} هسته)',
+      'nodeCores' => ' · {n} هسته',
       'nodeRam' => '💾 RAM: <b>{pct}</b> ({used} از {total})',
-      'nodeUptime' => '⏱ روشن از: {uptime}',
+      'nodeUptime' => '
+⏱ روشن از {uptime}',
       'nodeSpeed' => '🚀 سرعت الان: ⬆️ {up}/s · ⬇️ {down}/s',
-      'nodeTraffic' => '📦 ترافیک کل: ⬆️ {up} · ⬇️ {down} · ضریب مصرف {coef}',
-      'nodeSince' => '🕒 در این وضعیت از: {when}',
+      'nodeTraffic' => '<blockquote>📦 ترافیک کل: ⬆️ <b>{up}</b>  ·  ⬇️ <b>{down}</b>
+⚖️ ضریب مصرف: <b>{coef}</b></blockquote>',
+      'nodeSince' => '🕒 <i>در این وضعیت از {when}</i>',
       'nodeMessage' => '💬 <code>{message}</code>',
       'act' => 
       array (
@@ -8353,15 +8355,17 @@ nowpayments.io
       'coreAsk' => 'Xray نسخهٔ <b>{ver}</b> روی نود <b>{name}</b> نصب بشه؟ چند ثانیه کاربرهای این نود قطع می‌شن.',
       'coreStarted' => '⏳ نصب Xray {ver} روی نود <b>{name}</b> شروع شد. یکی دو دقیقه بعد «🔄 بروزرسانی» رو بزن.',
       'chartWait' => '⏳ دارم نمودار رو می‌سازم…',
-      'chartCaption' => '📈 <b>{name}</b> — مصرف روزانهٔ ۳۰ روز اخیر
-📦 جمع: <b>{total}</b> · میانگین روزانه: {avg}',
+      'chartCaption' => '📈 <b>{name}</b>  ·  مصرف روزانهٔ ۳۰ روز اخیر
+<blockquote>📦 جمع: <b>{total}</b>
+📊 میانگین روزانه: <b>{avg}</b></blockquote>',
       'chartFail' => '❌ نمودار ساخته نشد: {why}',
       'noGd' => 'روی سرور کتابخانهٔ تصویر (php-gd) نصب نیست.',
-      'reportCaption' => '📊 <b>گزارش نودهای {panel}</b> — {when}
-🟢 وصل: {up} از {total}',
-      'reportLine' => '{icon} <b>{name}</b> · <code>{address}</code>
-    CPU {cpu} · RAM {ram} · Xray {xray}
-    ⬆️ {upl} ⬇️ {dnl} · الان ⬆️ {ups}/s ⬇️ {dns}/s',
+      'reportCaption' => '📊 <b>گزارش نودهای ربکا · {panel}</b>
+🕒 {when}     🟢 وصل <b>{up}</b> از <b>{total}</b>',
+      'reportLine' => '<blockquote>{icon} <b>{name}</b>  ·  <code>{address}</code>
+🧠 CPU <b>{cpu}</b>   💾 RAM <b>{ram}</b>
+🚀 ⬆️ <b>{ups}/s</b>   ⬇️ <b>{dns}/s</b>
+📦 کل: ⬆️ {upl}   ⬇️ {dnl}</blockquote>',
       'historyTitle' => '📜 <b>تاریخچهٔ قطع و وصل — {panel}</b>
 (صفحهٔ {page} از {pages})',
       'historyEmpty' => '📜 هنوز تغییری ثبت نشده. پایش هر ۲ دقیقه نودها رو چک می‌کنه و هر قطع و وصلی همین‌جا می‌آد.',
@@ -8428,25 +8432,80 @@ nowpayments.io
         'unreachable' => 'پنل در دسترس نیست',
       ),
       'alertDown' => '🔴 <b>نود قطع شد</b>
-🖥 پنل: <b>{panel}</b>
+<blockquote>🖥 پنل: <b>{panel}</b>
 🌐 <code>{host}</code>
-📍 نود: <b>{node}</b>
-وضعیت: {status}{message}
+📍 نود: <b>{node}</b></blockquote>
+وضعیت: <b>{status}</b>{message}
 🕒 {when}',
       'alertUp' => '🟢 <b>نود دوباره وصل شد</b>
-🖥 پنل: <b>{panel}</b>
+<blockquote>🖥 پنل: <b>{panel}</b>
 🌐 <code>{host}</code>
-📍 نود: <b>{node}</b>
-⏱ مدت قطعی: {down}
+📍 نود: <b>{node}</b></blockquote>
+⏱ مدت قطعی: <b>{down}</b>
 🕒 {when}',
       'alertPanelDown' => '🔴 <b>پنل ربکا جواب نمی‌ده</b>
-🖥 پنل: <b>{panel}</b>
-🌐 <code>{host}</code>{message}
+<blockquote>🖥 پنل: <b>{panel}</b>
+🌐 <code>{host}</code></blockquote>{message}
 🕒 {when}',
       'alertPanelUp' => '🟢 <b>پنل ربکا دوباره جواب می‌ده</b>
-🖥 پنل: <b>{panel}</b>
+<blockquote>🖥 پنل: <b>{panel}</b>
+🌐 <code>{host}</code></blockquote>
+⏱ مدت قطعی: <b>{down}</b>
+🕒 {when}',
+      'hubLoad' => '🚨 هشدار مصرف بالا: <b>{state}</b>{limits}',
+      'hubLoadLimits' => ' · CPU {cpu}٪ · RAM {ram}٪',
+      'hubNode' => '<blockquote>{icon} <b>{name}</b>  ·  <code>{address}</code>
+🧠 CPU <b>{cpu}</b>     💾 RAM <b>{ram}</b>
+⬆️ <b>{up}/s</b>     ⬇️ <b>{down}/s</b>     ⚙️ Xray <code>{xray}</code></blockquote>',
+      'hubNodeOff' => '<blockquote>{icon} <b>{name}</b>  ·  <code>{address}</code>
+{status}{message}</blockquote>',
+      'hubMore' => '<i>… و {n} نود دیگر (از دکمه‌های پایین باز کن)</i>',
+      'btnLoad' => '🚨 هشدار مصرف بالا (CPU / RAM)',
+      'topicName' => '🖥 گزارش نودها (ربکا)',
+      'nodeNet' => '<blockquote>📍 <code>{address}</code>
+🔌 پورت <code>{port}</code>  ·  API <code>{api}</code>
+⚙️ Xray <b>{xray}</b>  ·  سرویس نود <b>{svc}</b></blockquote>',
+      'nodeLoad' => '<blockquote>🧠 CPU <b>{cpu}</b>{cores}
+💾 RAM <b>{ram}</b>  ·  {used} از {total}
+🚀 سرعت الان: ⬆️ <b>{up}/s</b>  ·  ⬇️ <b>{down}/s</b>{uptime}</blockquote>',
+      'nodeLoadNone' => '<blockquote>🧠 CPU و 💾 RAM: <i>نود الان جواب نداد</i></blockquote>',
+      'reportLineOff' => '<blockquote>{icon} <b>{name}</b>  ·  <code>{address}</code>
+{status}</blockquote>',
+      'loadTitle' => '🚨 <b>هشدار مصرف بالای نودها</b>
+
+<blockquote>وقتی CPU یا RAM یکی از نودهای ربکا از حدی که اینجا می‌ذاری بالاتر بره و حدود ۴ دقیقه همون‌جا بمونه، ربات خبر می‌ده؛ وقتی دوباره پایین اومد هم خبر می‌ده.
+خبرها همون‌جایی می‌ره که «📮 مقصد گزارش‌ها»ی پنل گفته.</blockquote>
+
+🔔 وضعیت: <b>{state}</b>
+🧠 حد CPU: <b>{cpu}٪</b>
+💾 حد RAM: <b>{ram}٪</b>
+
+<i>این تنظیم مال همین رباته (ربات‌های دیگهٔ سرور تنظیم خودشون رو دارن) و روی همهٔ پنل‌های ربکای این ربات اعمال می‌شه.</i>',
+      'loadBtnOn' => '✅ هشدار مصرف بالا: روشن',
+      'loadBtnOff' => '❌ هشدار مصرف بالا: خاموش',
+      'loadCpuHead' => '🧠 حد CPU 👇',
+      'loadRamHead' => '💾 حد RAM 👇',
+      'loadCustom' => '✏️ عدد دلخواه برای {what}',
+      'loadAsk' => '✏️ حد هشدار {what} رو به درصد بفرست؛ یه عدد از ۱ تا ۱۰۰ (مثل <code>90</code>).
+
+الان: <b>{now}٪</b>',
+      'loadBad' => '⚠️ یه عدد از ۱ تا ۱۰۰ بفرست، مثل <code>90</code>.',
+      'loadSaved' => '✅ حد هشدار {what}: <b>{v}٪</b>',
+      'loadCPU' => '🧠 CPU',
+      'loadRAM' => '💾 RAM',
+      'loadHigh' => '🚨 <b>مصرف بالای نود</b>
+<blockquote>🖥 پنل: <b>{panel}</b>
 🌐 <code>{host}</code>
-⏱ مدت قطعی: {down}
+📍 نود: <b>{node}</b>  ·  <code>{address}</code></blockquote>
+{what}: <b>{value}</b>{detail}
+🎯 حد هشدار: <b>{limit}</b>
+🕒 {when}',
+      'loadOk' => '✅ <b>مصرف نود عادی شد</b>
+<blockquote>🖥 پنل: <b>{panel}</b>
+🌐 <code>{host}</code>
+📍 نود: <b>{node}</b>  ·  <code>{address}</code></blockquote>
+{what}: <b>{value}</b>{detail}
+🎯 حد هشدار: <b>{limit}</b>
 🕒 {when}',
       'errConnect' => 'به پنل وصل نشد (%s)',
       'errToken' => 'توکن پنل رد شد؛ توکن ربکا رو در «✏️ مدیریت پنل» دوباره بذار.',
@@ -9747,7 +9806,7 @@ nowpayments.io
     'locationChangeLimit' => '🌍 محدودیت تغییر لوکیشن',
     'lotteryWinAmount' => '🎲 مبلغ برنده شدن کاربر',
     'manageCategory' => '🗂 مدیریت دسته بندی',
-    'manageNodes' => '🖥 مدیریت نود ها',
+    'manageNodes' => '🖥 مدیریت نودها (ربکا)',
     'manageProducts' => '🛍 مدیریت محصولات',
     'manageUser' => '👤 مدیریت کاربر',
     'management' => 'مدیریت',
@@ -10300,6 +10359,11 @@ nowpayments.io
     'clnJobColWhy' => 'دلیل',
     'rbnPageTitle' => '🖥 نودهای ربکا',
     'rbnPageLede' => 'نودهای پنل‌های ربکا: وضعیت، CPU و رم، سرعت و ترافیک، افزودن و ویرایش، آپدیت هسته و سرویس، گزارش تصویری و تاریخچهٔ قطع و وصل — همان «🖥 مدیریت نود ها» در ربات',
+    'rbnLoadTitle' => 'هشدار مصرف بالا (CPU / RAM)',
+    'rbnLoadSub' => 'وقتی CPU یا RAM یکی از نودهای ربکا از این حد بالاتر بره و حدود ۴ دقیقه بمونه، ربات خبر می‌ده (و وقتی پایین اومد هم). مال همین رباته و روی همهٔ پنل‌های ربکای آن اعمال می‌شه؛ پیش‌فرض ۹۰٪.',
+    'rbnLoadOn' => 'هشدار',
+    'rbnLoadCpu' => 'حد CPU (٪)',
+    'rbnLoadRam' => 'حد RAM (٪)',
     'rbnNoPanel' => 'هنوز هیچ پنل ربکایی به ربات وصل نیست. این بخش فقط برای پنل‌های ربکاست.',
     'rbnUp' => 'وصل',
     'rbnDown' => 'مشکل‌دار',

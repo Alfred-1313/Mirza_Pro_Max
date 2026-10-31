@@ -4,7 +4,7 @@ require_once __DIR__ . '/inc/icons.php';
 require_auth();
 
 // 🖥 نودهای ربکا - the very screens of the bot's 🛠 قابلیت های پنل ← a Rebecca
-// panel ← 🖥 مدیریت نود ها (rbnodes.php): every node with its state, CPU, RAM,
+// panel ← 🖥 مدیریت نودها (ربکا) (rbnodes.php): every node with its state, CPU, RAM,
 // speed and traffic, its actions, a new node, the report picture, a node's
 // traffic chart and the history of ups and downs. Rebecca panels only.
 $t = $textbotlang['panel'];
@@ -73,6 +73,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $panel !== null) {
         rbn_watch_set(!rbn_watch_on());
         $ok = true;
         $label = $t['rbnWatch'];
+    } elseif ($do === 'load') {
+        // 🚨 high CPU/RAM: this bot's own setting, for every Rebecca panel
+        $label = $t['rbnLoadTitle'];
+        $cpu = rbn_load_value($_POST['cpu'] ?? '');
+        $ram = rbn_load_value($_POST['ram'] ?? '');
+        if ($cpu === null || $ram === null) {
+            $why = $plain($rt['loadBad']);
+        } else {
+            rbn_load_set(!empty($_POST['on']));
+            rbn_load_limit_set('cpu', $cpu);
+            rbn_load_limit_set('ram', $ram);
+            $ok = true;
+        }
     } elseif ($do === 'sua') {
         [$nodes, $why] = rbn_nodes($panel);
         $ids = array_map(fn($n) => (int) $n['id'], array_filter($nodes ?? [], fn($n) => ($n['status'] ?? '') !== 'disabled'));
@@ -136,7 +149,8 @@ $nodes = null;
 $why = '';
 $releases = [];
 if ($panel !== null) {
-    [$nodes, $why] = rbn_nodes($panel);
+    // CPU, RAM and speed as they are this moment (Rebecca's list leaves them out)
+    [$nodes, $why] = rbn_nodes_live($panel);
     if ($nodes) {
         [$releases] = rbn_xray_releases($panel);
     }
@@ -248,6 +262,18 @@ include __DIR__ . '/inc/layout_head.php';
     <?php if ($nodes): ?><?= $form('sua', 0, $rt['btnUpdateAll'], 'btn', $plain(strtr($rt['ask']['sua'], ['{n}' => count($nodes)]))) ?><?php endif; ?>
   </div>
 
+  <div class="card fade-up" id="load" style="margin-bottom:14px">
+    <div class="card-head"><div><div class="card-title">🚨 <?= htmlspecialchars($t['rbnLoadTitle']) ?> <span class="tag <?= rbn_load_on() ? 'tag-ok' : 'tag-plain' ?>"><?= htmlspecialchars(rbn_load_on() ? $t['rbnOn'] : $t['rbnOffWord']) ?></span></div>
+      <div class="card-subtitle"><?= htmlspecialchars($t['rbnLoadSub']) ?></div></div></div>
+    <form method="POST" action="<?= htmlspecialchars($here()) ?>#load" data-ajax="off" class="rbn-form" style="padding-top:12px">
+      <?= $csrf ?><input type="hidden" name="do" value="load">
+      <label><?= htmlspecialchars($t['rbnLoadOn']) ?><span><input type="checkbox" name="on" value="1"<?= rbn_load_on() ? ' checked' : '' ?>> <?= htmlspecialchars($t['rbnOn']) ?></span></label>
+      <label><?= htmlspecialchars($t['rbnLoadCpu']) ?><input class="input" type="number" name="cpu" min="1" max="100" dir="ltr" value="<?= rbn_load_limit('cpu') ?>"></label>
+      <label><?= htmlspecialchars($t['rbnLoadRam']) ?><input class="input" type="number" name="ram" min="1" max="100" dir="ltr" value="<?= rbn_load_limit('ram') ?>"></label>
+      <label>&nbsp;<button type="submit" class="btn btn-sm btn-primary"><?= icon('check', 13) ?> <?= htmlspecialchars($t['rbnDestSave']) ?></button></label>
+    </form>
+  </div>
+
   <div class="rbn-grid">
   <?php if (!$nodes): ?>
     <div class="card fade-up"><div class="card-body"><div class="empty" style="padding:24px"><p><?= htmlspecialchars($plain($rt['hubEmpty'])) ?></p></div></div></div>
@@ -258,12 +284,13 @@ include __DIR__ . '/inc/layout_head.php';
         <div class="card-subtitle"><span class="rbn-v"><?= htmlspecialchars((string) ($n['address'] ?? '')) ?> · <?= (int) ($n['port'] ?? 0) ?> / API <?= (int) ($n['api_port'] ?? 0) ?></span><?= $since !== null ? ' · ' . htmlspecialchars(sprintf($t['rbnSince'], rbn_when($since))) : '' ?></div></div></div>
       <div class="card-body">
         <?php if (!empty($n['message']) && $st !== 'connected'): ?><div class="rbn-msg"><?= htmlspecialchars((string) $n['message']) ?></div><?php endif; ?>
-        <div><div class="rbn-k">CPU<?= !empty($n['cpu_cores']) ? ' · ' . (int) $n['cpu_cores'] . ' ' . htmlspecialchars($t['rbnCores']) : '' ?></div><?= $bar($n['cpu_usage_percent'] ?? null) ?></div>
-        <div><div class="rbn-k">RAM<?= isset($n['memory_total']) ? ' · ' . rbn_bytes($n['memory_used'] ?? 0) . ' / ' . rbn_bytes($n['memory_total']) : '' ?></div><?= $bar($n['memory_usage_percent'] ?? null) ?></div>
-        <div><div class="rbn-k"><?= htmlspecialchars($t['rbnSpeed']) ?></div><div class="rbn-v">↑ <?= rbn_bytes($n['upload_speed'] ?? 0) ?>/s · ↓ <?= rbn_bytes($n['download_speed'] ?? 0) ?>/s</div></div>
+        <?php $live = rbn_has_metrics($n); ?>
+        <div><div class="rbn-k">CPU<?= $live && !empty($n['cpu_cores']) ? ' · ' . (int) $n['cpu_cores'] . ' ' . htmlspecialchars($t['rbnCores']) : '' ?></div><?= $bar($live ? ($n['cpu_usage_percent'] ?? null) : null) ?></div>
+        <div><div class="rbn-k">RAM<?= $live ? ' · ' . rbn_bytes($n['memory_used'] ?? 0) . ' / ' . rbn_bytes($n['memory_total']) : '' ?></div><?= $bar($live ? ($n['memory_usage_percent'] ?? null) : null) ?></div>
+        <div><div class="rbn-k"><?= htmlspecialchars($t['rbnSpeed']) ?></div><div class="rbn-v"><?= $live ? '↑ ' . rbn_bytes($n['upload_speed'] ?? 0) . '/s · ↓ ' . rbn_bytes($n['download_speed'] ?? 0) . '/s' : '<span class="rbn-mute">—</span>' ?></div></div>
         <div><div class="rbn-k"><?= htmlspecialchars($t['rbnTraffic']) ?><?= (float) ($n['usage_coefficient'] ?? 1) != 1 ? ' · x' . (float) $n['usage_coefficient'] : '' ?></div><div class="rbn-v">↑ <?= rbn_bytes($n['uplink'] ?? 0) ?> · ↓ <?= rbn_bytes($n['downlink'] ?? 0) ?></div></div>
         <div><div class="rbn-k"><?= htmlspecialchars($t['rbnVersions']) ?></div><div class="rbn-v">Xray <?= htmlspecialchars((string) (($n['xray_version'] ?? '') ?: '—')) ?> · node <?= htmlspecialchars((string) (($n['node_service_version'] ?? '') ?: '—')) ?></div></div>
-        <div><div class="rbn-k"><?= htmlspecialchars($t['rbnUptime']) ?></div><div class="rbn-v"><?= !empty($n['uptime_seconds']) ? htmlspecialchars(rbn_duration((int) $n['uptime_seconds'])) : '—' ?></div></div>
+        <div><div class="rbn-k"><?= htmlspecialchars($t['rbnUptime']) ?></div><div class="rbn-v"><?= $live && !empty($n['uptime_seconds']) ? htmlspecialchars(rbn_duration((int) $n['uptime_seconds'])) : '—' ?></div></div>
       </div>
       <div class="rbn-actions">
         <?= $form('rc', $id, $rt['act']['rc']) ?>

@@ -826,4 +826,20 @@ return [
             . "• The bot keeps answering on the old domain until the new one has its certificate; if no certificate comes, or Apache refuses the new site, everything is put back as it was.\n"
             . "• Links sent to customers with the old domain stop working after the change.</blockquote>",
     ],
+    [
+        'n' => 61,
+        'date' => '2026-10-31',
+        'fa' => "<blockquote>🖥 <b>مدیریت نودها (ربکا): مصرف لحظه‌ای، هشدار مصرف بالا و ظاهر تازه</b>\n"
+            . "• اسم دکمه شد «🖥 مدیریت نودها (ربکا)» و فقط روی پنل‌های ربکا نشان داده می‌شود؛ در پنل وب هم صفحهٔ نودها فقط وقتی پنل ربکا هست می‌آید.\n"
+            . "• باگ رفع شد: CPU، RAM و سرعت (پهنای باند) هر نود حالا در صفحهٔ نودها، صفحهٔ هر نود، گزارش تصویری (هم عکس و هم کپشن) و پنل وب نشان داده می‌شود؛ همان مقدار لحظه‌ای که موقع باز کردن صفحه دارد. (ربکا در فهرست کلی نودها این اعداد را نمی‌فرستد؛ حالا ربات از هر نود جدا و همزمان می‌پرسد.)\n"
+            . "• 🚨 هشدار مصرف بالا (زیر «آپدیت سرویس همهٔ نودها»): اگر CPU یا RAM یک نود از حد تعیین‌شده بالاتر برود و حدود ۴ دقیقه بماند، ربات خبر می‌دهد و وقتی پایین آمد هم خبر می‌دهد. حد پیش‌فرض ۹۰٪ است و از دکمه‌های آماده (۷۰ تا ۹۵) یا با تایپ عدد دلخواه عوض می‌شود. این تنظیم برای هر ربات روی سرور جداست.\n"
+            . "• اگر مقصد گزارش‌ها «گروه گزارش‌ها» باشد، گزارش نودها در تاپیک جدای «🖥 گزارش نودها (ربکا)» می‌آید.\n"
+            . "• متن صفحه‌ها، کپشن گزارش تصویری و پیام‌های قطع و وصل مرتب شد: اسم نود بولد، IP جلوی آن، و هر نود در یک قاب نقل‌قول.</blockquote>",
+        'en' => "<blockquote>🖥 <b>Node management (Rebecca): usage right now, a high-usage alert and a tidier look</b>\n"
+            . "• The button is now «🖥 Node management (Rebecca)» and shows on Rebecca panels only; the web panel's node page appears only when there is a Rebecca panel.\n"
+            . "• Fixed: each node's CPU, RAM and speed (bandwidth) now show on the node list, each node's screen, the report (picture and caption) and the web panel - as they are when the page opens. (Rebecca's node list leaves these out; the bot now asks each node, all at once.)\n"
+            . "• 🚨 High usage alert (under «Update every node's service»): when a node's CPU or RAM stays over its limit for about 4 minutes the bot says so, and again when it is back down. The limit is 90% by default and can be changed with ready buttons (70 to 95) or any number typed in. Each bot on a server has its own setting.\n"
+            . "• With «report group» as the destination, node reports go to a topic of their own: «🖥 گزارش نودها (ربکا)».\n"
+            . "• The screens, the report caption and the up/down messages read better: the node's name in bold with its IP beside it, each node in its own quote block.</blockquote>",
+    ],
 ];

@@ -1854,7 +1854,7 @@ $tronnowpayments = json_encode([
 ]);
 $optionathmarzban = json_encode([
     'keyboard' => [
-        [['text' => $textbotlang['keyboard']['manualCreateConfig']], ['text' => $textbotlang['keyboard']['manageNodes']]],
+        [['text' => $textbotlang['keyboard']['manualCreateConfig']]],
         [['text' => $textbotlang['Admin']['backAdminBtn']], ['text' => $textbotlang['Admin']['backMenuBtn']]]
     ],
     'resize_keyboard' => true

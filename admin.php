@@ -4753,8 +4753,8 @@ if (!function_exists('panel_feature_keyboard')) {
 }
 if (!function_exists('panel_features_keyboard')) {
     // 🛠 قابلیت های پنل: what one panel offers there - «ساخت کانفیگ دستی» on every
-    // panel type ManagePanel->createUser makes accounts on, and «مدیریت نود ها»
-    // on Marzban (Marzban.php's node calls) and Rebecca (rbnodes.php). null: nothing.
+    // panel type ManagePanel->createUser makes accounts on, and «🖥 مدیریت نودها
+    // (ربکا)» on Rebecca alone (rbnodes.php). null: nothing.
     function panel_features_keyboard($panel, $textbotlang)
     {
         $type = is_array($panel) ? (string) ($panel['type'] ?? '') : '';
@@ -4763,8 +4763,9 @@ if (!function_exists('panel_features_keyboard')) {
         if (in_array($type, $creatable, true)) {
             $row[] = ['text' => $textbotlang['keyboard']['manualCreateConfig']];
         }
-        // Rebecca's open its own node screens (rbnodes.php)
-        if ($type === 'marzban' || $type === 'rebecca') {
+        // 🖥 مدیریت نودها (ربکا): Rebecca's own node screens (rbnodes.php) -
+        // for now on Rebecca alone, so no other panel shows the button
+        if ($type === 'rebecca') {
             $row[] = ['text' => $textbotlang['keyboard']['manageNodes']];
         }
         if (!$row) {
@@ -7946,7 +7947,7 @@ if (preg_match('/^renamereset-([a-z]{2})$/', $datain, $rn_m) && $adminrulecheck[
 // rbnodes.php: a Rebecca panel's nodes - their state, actions, the core and
 // service updates, a new node, editing one, the report picture, a node's
 // traffic chart and the history of their ups and downs. Administrators only.
-if (preg_match('/^rbn\|(close|hub|nd|ask|do|core|cv|cvgo|ch|rep|ev|wt|sua|suago|add|addgo|ed|ef|dst|dset|dtest)(?:\|(\d+))?(?:\|(\d+))?(?:\|([A-Za-z0-9_.\-]{1,40}))?$/', $datain, $rbn_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^rbn\|(close|hub|nd|ask|do|core|cv|cvgo|ch|rep|ev|wt|sua|suago|add|addgo|ed|ef|dst|dset|dtest|ld|ldt|ldv|ldk)(?:\|(\d+))?(?:\|(\d+))?(?:\|([A-Za-z0-9_.\-]{1,40}))?$/', $datain, $rbn_m) && $adminrulecheck['rule'] == "administrator") {
     $rbn_t = $textbotlang['Admin']['RbNodes'];
     $rbn_show = function ($screen) use ($from_id, $message_id) {
         Editmessagetext($from_id, $message_id, $screen[0], $screen[1], 'HTML');
@@ -7954,7 +7955,7 @@ if (preg_match('/^rbn\|(close|hub|nd|ask|do|core|cv|cvgo|ch|rep|ev|wt|sua|suago|
     $rbn_alert = function ($text, $alert = false) use ($callback_query_id) {
         telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $text, 'show_alert' => $alert]);
     };
-    if (in_array($user['step'], ['rbn_add', 'rbn_edit', 'rbn_dest'], true)) {
+    if (in_array($user['step'], ['rbn_add', 'rbn_edit', 'rbn_dest', 'rbn_load'], true)) {
         step('home', $from_id);
     }
     if ($rbn_m[1] === 'close') {
@@ -8067,6 +8068,30 @@ if (preg_match('/^rbn\|(close|hub|nd|ask|do|core|cv|cvgo|ch|rep|ev|wt|sua|suago|
         case 'ev':
             $rbn_show(rbn_history_screen($rbn_panel, max(1, $rbn_id)));
             break;
+        // 🚨 high CPU/RAM: on/off and the two limits (this bot's own)
+        case 'ld':
+            $rbn_show(rbn_load_screen($rbn_panel));
+            break;
+        case 'ldt':
+            rbn_load_set(!rbn_load_on());
+            $rbn_alert(rbn_load_on() ? $rbn_t['loadBtnOn'] : $rbn_t['loadBtnOff']);
+            $rbn_show(rbn_load_screen($rbn_panel));
+            break;
+        case 'ldv':
+            if (preg_match('/^(cpu|ram)-(\d{1,3})$/', $rbn_arg, $rbn_lv) && rbn_load_limit_set($rbn_lv[1], (int) $rbn_lv[2])) {
+                $rbn_what = $rbn_t['load' . strtoupper($rbn_lv[1])];
+                $rbn_alert(strip_tags(strtr($rbn_t['loadSaved'], ['{what}' => $rbn_what, '{v}' => (int) $rbn_lv[2]])));
+                $rbn_show(rbn_load_screen($rbn_panel));
+            }
+            break;
+        case 'ldk':
+            if (!in_array($rbn_arg, ['cpu', 'ram'], true)) {
+                break;
+            }
+            savedata("clear", "rbn", ['p' => $rbn_p, 'f' => $rbn_arg]);
+            step('rbn_load', $from_id);
+            $rbn_show([strtr($rbn_t['loadAsk'], ['{what}' => $rbn_t['load' . strtoupper($rbn_arg)], '{now}' => rbn_load_limit($rbn_arg)]), rbn_kb([[rbn_btn($rbn_t['btnCancel'], "rbn|ld|{$rbn_p}", 'danger')]])]);
+            break;
         case 'wt':
             rbn_watch_set(!rbn_watch_on());
             $rbn_show(rbn_hub_screen($rbn_panel));
@@ -8122,6 +8147,29 @@ if (preg_match('/^rbn\|(close|hub|nd|ask|do|core|cv|cvgo|ch|rep|ev|wt|sua|suago|
             $rbn_show([strtr($rbn_t['editAsk'], ['{field}' => $rbn_t['field'][$rbn_arg], '{now}' => htmlspecialchars(rbn_field_now($rbn_node, $rbn_arg))]), rbn_kb([[rbn_btn($rbn_t['btnCancel'], "rbn|ed|{$rbn_p}|{$rbn_id}", 'danger')]])]);
             break;
     }
+    return;
+}
+// ...a 🚨 limit typed in (1-100)
+if ($user['step'] === 'rbn_load' && $datain === '' && $adminrulecheck['rule'] == "administrator"
+    && !in_array($text, [$textbotlang['Admin']['backAdminBtn'], $textbotlang['Admin']['backMenuBtn']], true)) {
+    $rbn_t = $textbotlang['Admin']['RbNodes'];
+    $rbn_d = (json_decode((string) $user['Processing_value'], true) ?: [])['rbn'] ?? null;
+    $rbn_panel = is_array($rbn_d) ? rbn_panel($rbn_d['p'] ?? 0) : null;
+    $rbn_f = is_array($rbn_d) ? (string) ($rbn_d['f'] ?? '') : '';
+    if ($rbn_panel === null || !in_array($rbn_f, ['cpu', 'ram'], true)) {
+        step('home', $from_id);
+        sendmessage($from_id, $rbn_t['stale'], null, 'HTML');
+        return;
+    }
+    $rbn_v = rbn_load_value($text);
+    if ($rbn_v === null) {
+        sendmessage($from_id, $rbn_t['loadBad'], rbn_kb([[rbn_btn($rbn_t['btnCancel'], "rbn|ld|" . (int) $rbn_panel['id'], 'danger')]]), 'HTML');
+        return;
+    }
+    step('home', $from_id);
+    rbn_load_limit_set($rbn_f, $rbn_v);
+    [$rbn_text, $rbn_kb] = rbn_load_screen($rbn_panel, strtr($rbn_t['loadSaved'], ['{what}' => $rbn_t['load' . strtoupper($rbn_f)], '{v}' => $rbn_v]));
+    sendmessage($from_id, $rbn_text, $rbn_kb, 'HTML');
     return;
 }
 // ...the channel or group a panel's reports go to, typed in

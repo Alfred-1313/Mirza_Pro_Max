@@ -2,8 +2,10 @@
 // 🖥 نودهای ربکا: the nodes of a Rebecca panel, run from the bot (🛠 قابلیت های
 // پنل ← a Rebecca panel ← 🖥 مدیریت نود ها) and the web panel (🖥 نودهای ربکا).
 // Rebecca only - its node API is its own (rebeccapanel/Rebecca,
-// internal/app/api): one list that already carries every node's CPU, RAM,
-// speed, traffic and versions, and an action route per node.
+// internal/app/api): a list of the nodes and an action route per node. The
+// list carries no CPU, RAM or speed - Rebecca asks no node for them there;
+// GET /api/node/{id} does, so rbn_nodes_live() asks every node that way, all
+// at once.
 //
 //   list / add / edit / delete        GET /api/nodes, POST /api/node, PUT|DELETE /api/node/{id}
 //   reconnect, restart the core,      POST /api/node/{id}/{reconnect|restart|sync|
@@ -56,6 +58,13 @@ if (!function_exists('rbn_ensure_schema')) {
             at INT NOT NULL,
             KEY panel_at (panel_id, at)
         ) DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_unicode_ci");
+        // 🚨 high CPU/RAM: per node, what has been seen and told (rbn_load_check)
+        $pdo->query("CREATE TABLE IF NOT EXISTS rbn_load (
+            panel_id INT NOT NULL,
+            node_id INT NOT NULL,
+            flags INT NOT NULL DEFAULT 0,
+            PRIMARY KEY (panel_id, node_id)
+        ) DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_unicode_ci");
     }
 
     // ---------------------------------------------------------------- API
@@ -76,6 +85,17 @@ if (!function_exists('rbn_ensure_schema')) {
     // One call: ['code' => HTTP status, 'json' => decoded body, 'error' => '' or why it never got there]
     function rbn_req(array $panel, $method, $path, $body = null, $timeout = 20)
     {
+        $ch = rbn_curl($panel, $method, $path, $body, $timeout);
+        $raw = curl_exec($ch);
+        $error = $raw === false ? (string) curl_error($ch) : '';
+        $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        return ['code' => $code, 'json' => is_string($raw) ? json_decode($raw, true) : null, 'error' => $error];
+    }
+
+    // a curl handle for one call to the panel, not yet made
+    function rbn_curl(array $panel, $method, $path, $body = null, $timeout = 20)
+    {
         $ch = curl_init(rtrim((string) $panel['url_panel'], '/') . $path);
         $headers = ['accept: application/json', 'Authorization: Bearer ' . $panel['password_panel']];
         $opts = [
@@ -93,11 +113,7 @@ if (!function_exists('rbn_ensure_schema')) {
         }
         $opts[CURLOPT_HTTPHEADER] = $headers;
         curl_setopt_array($ch, $opts);
-        $raw = curl_exec($ch);
-        $error = $raw === false ? (string) curl_error($ch) : '';
-        $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        return ['code' => $code, 'json' => is_string($raw) ? json_decode($raw, true) : null, 'error' => $error];
+        return $ch;
     }
 
     function rbn_ok(array $r)
@@ -154,6 +170,65 @@ if (!function_exists('rbn_ensure_schema')) {
     {
         $r = rbn_req($panel, 'GET', '/api/node/' . (int) $nodeId);
         return rbn_ok($r) && is_array($r['json']) ? [$r['json'], ''] : [null, rbn_why($r)];
+    }
+
+    // the fields only a node of its own carries: what it uses right now
+    function rbn_metric_keys()
+    {
+        return ['cpu_usage_percent', 'cpu_cores', 'cpu_frequency_hz', 'memory_used', 'memory_total', 'memory_usage_percent',
+            'upload_speed', 'download_speed', 'uptime_seconds', 'xray_cpu_usage_percent', 'xray_memory_used',
+            'status', 'message', 'xray_version', 'node_service_version'];
+    }
+
+    // The list, with each node's CPU, RAM and speed as they are this moment.
+    // Rebecca's list leaves those out (it asks no node anything); each node's
+    // own GET /api/node/{id} asks it. All asked at once, so this waits for the
+    // slowest node, not for all of them in a row. A node switched off or out
+    // of traffic is not asked - Rebecca does not ask those either.
+    function rbn_nodes_live(array $panel, $timeout = 12)
+    {
+        [$nodes, $why] = rbn_nodes($panel);
+        if ($nodes === null || !$nodes || !function_exists('curl_multi_init')) {
+            return [$nodes, $why];
+        }
+        $mh = curl_multi_init();
+        $hs = [];
+        foreach ($nodes as $i => $n) {
+            if (in_array((string) ($n['status'] ?? ''), ['disabled', 'limited'], true)) {
+                continue;
+            }
+            $hs[$i] = rbn_curl($panel, 'GET', '/api/node/' . (int) $n['id'], null, $timeout);
+            curl_multi_add_handle($mh, $hs[$i]);
+        }
+        do {
+            $st = curl_multi_exec($mh, $running);
+            if ($running) {
+                curl_multi_select($mh, 1.0);
+            }
+        } while ($running && $st === CURLM_OK);
+        foreach ($hs as $i => $ch) {
+            $raw = curl_multi_getcontent($ch);
+            $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_multi_remove_handle($mh, $ch);
+            curl_close($ch);
+            $j = is_string($raw) ? json_decode($raw, true) : null;
+            if ($code >= 200 && $code < 300 && is_array($j) && (int) ($j['id'] ?? 0) === (int) $nodes[$i]['id']) {
+                foreach (rbn_metric_keys() as $k) {
+                    if (array_key_exists($k, $j)) {
+                        $nodes[$i][$k] = $j[$k];
+                    }
+                }
+                $nodes[$i]['_live'] = true;
+            }
+        }
+        curl_multi_close($mh);
+        return [$nodes, ''];
+    }
+
+    // does this node carry real numbers for now (connected, and asked)?
+    function rbn_has_metrics(array $n)
+    {
+        return ($n['status'] ?? '') === 'connected' && (float) ($n['memory_total'] ?? 0) > 0;
     }
 
     // the actions a node takes with no more than its id
@@ -472,8 +547,9 @@ if (!function_exists('rbn_ensure_schema')) {
         }
         $group = rbn_report_group();
         if (($dest === 'group' || $dest === 'auto' || $dest === '') && $group !== '') {
-            $topic = select("topicid", "idreport", "report", "errorreport", "select");
-            return [[$group, is_array($topic) ? (int) $topic['idreport'] : 0]];
+            // a topic of its own there, made the first time a report goes
+            $topic = function_exists('report_topic_id') ? (int) report_topic_id('rbnodereport', panel_texts()['Admin']['RbNodes']['topicName']) : 0;
+            return [[$group, $topic]];
         }
         if ($dest === 'bot') {
             $ids = [];
@@ -549,7 +625,9 @@ if (!function_exists('rbn_ensure_schema')) {
     {
         global $pdo;
         rbn_ensure_schema();
-        if (!rbn_watch_on()) {
+        $watch = rbn_watch_on();
+        $load = rbn_load_on();
+        if (!$watch && !$load) {
             return;
         }
         $now = time();
@@ -565,7 +643,8 @@ if (!function_exists('rbn_ensure_schema')) {
         }
         $looked = [];
         foreach ($groups as $gid => $panel) {
-            $looked[$gid] = rbn_nodes($panel);
+            // CPU and RAM only when something looks at them
+            $looked[$gid] = $load ? rbn_nodes_live($panel) : rbn_nodes($panel);
         }
         // two addresses whose nodes are the very same: one panel, reached two ways
         $twins = [];
@@ -606,6 +685,12 @@ if (!function_exists('rbn_ensure_schema')) {
             }
             [$nodes, $why] = $looked[$gid];
             $pid = rbn_canon($panel);
+            if ($load && $nodes !== null) {
+                rbn_load_check($panel, $pid, $nodes, $now);
+            }
+            if (!$watch) {
+                continue;
+            }
             $get->execute([$pid]);
             $known = [];
             foreach ($get->fetchAll(PDO::FETCH_ASSOC) as $row) {
@@ -666,6 +751,109 @@ if (!function_exists('rbn_ensure_schema')) {
         $pdo->prepare("DELETE FROM rbn_event WHERE at < ?")->execute([$now - 60 * 86400]);
         // a panel removed from the bot leaves nothing behind
         $pdo->query("DELETE FROM rbn_state WHERE panel_id NOT IN (SELECT id FROM marzban_panel WHERE type = 'rebecca')");
+        $pdo->query("DELETE FROM rbn_load WHERE panel_id NOT IN (SELECT id FROM marzban_panel WHERE type = 'rebecca')");
+    }
+
+    // ---------------------------------------------------------------- 🚨
+    // High CPU or RAM on a node: told once it has lasted two looks in a row
+    // (about four minutes - a short spike is not news), and told again when it
+    // is back 5 points under the limit. One setting for every Rebecca panel of
+    // this bot; another bot on the server has its own.
+    function rbn_load_on()
+    {
+        return (string) feature_setting_value('rbn_load', 'all', '1') !== '0';
+    }
+    function rbn_load_set($on)
+    {
+        feature_setting_set('rbn_load', 'all', $on ? '1' : '0');
+    }
+    // the limit for 'cpu' or 'ram', in percent (90 unless the admin set one)
+    function rbn_load_limit($what)
+    {
+        $v = (int) feature_setting_value('rbn_load_' . $what, 'all', '90');
+        return $v >= 1 && $v <= 100 ? $v : 90;
+    }
+    function rbn_load_limit_set($what, $pct)
+    {
+        $pct = (int) $pct;
+        if (!in_array($what, ['cpu', 'ram'], true) || $pct < 1 || $pct > 100) {
+            return false;
+        }
+        feature_setting_set('rbn_load_' . $what, 'all', (string) $pct);
+        return true;
+    }
+    // a percent typed in: 1-100, with or without %, Persian digits too
+    function rbn_load_value($text)
+    {
+        $s = strtr(trim((string) $text), ['۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4', '۵' => '5', '۶' => '6', '۷' => '7', '۸' => '8', '۹' => '9', '%' => '', '٪' => '']);
+        $s = trim($s);
+        return ctype_digit($s) && (int) $s >= 1 && (int) $s <= 100 ? (int) $s : null;
+    }
+
+    function rbn_load_check(array $panel, $pid, array $nodes, $now)
+    {
+        global $pdo;
+        $get = $pdo->prepare("SELECT node_id, flags FROM rbn_load WHERE panel_id = ?");
+        $get->execute([$pid]);
+        $flags = [];
+        foreach ($get->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $flags[(int) $row['node_id']] = (int) $row['flags'];
+        }
+        $put = $pdo->prepare("REPLACE INTO rbn_load (panel_id, node_id, flags) VALUES (?, ?, ?)");
+        // bits: 1 cpu high once, 2 cpu told; 4 ram high once, 8 ram told
+        $kinds = ['cpu' => [1, 2, 'cpu_usage_percent'], 'ram' => [4, 8, 'memory_usage_percent']];
+        foreach ($nodes as $n) {
+            if (!rbn_has_metrics($n)) {
+                continue;
+            }
+            $nid = (int) $n['id'];
+            $f = $flags[$nid] ?? 0;
+            $was = $f;
+            foreach ($kinds as $what => [$seen, $told, $key]) {
+                $v = (float) ($n[$key] ?? 0);
+                $limit = rbn_load_limit($what);
+                if ($v >= $limit) {
+                    if ($f & $told) {
+                        continue;
+                    }
+                    if ($f & $seen) {
+                        rbn_alert($panel, rbn_load_text($panel, $n, $what, $v, $limit, true, $now));
+                        $f |= $told;
+                    } else {
+                        $f |= $seen;
+                    }
+                } elseif ($f & $told) {
+                    if ($v < $limit - 5) {
+                        rbn_alert($panel, rbn_load_text($panel, $n, $what, $v, $limit, false, $now));
+                        $f &= ~($seen | $told);
+                    }
+                } else {
+                    $f &= ~$seen;
+                }
+            }
+            if ($f !== $was) {
+                $put->execute([$pid, $nid, $f]);
+            }
+        }
+    }
+
+    function rbn_load_text(array $panel, array $n, $what, $value, $limit, $high, $now)
+    {
+        $t = panel_texts()['Admin']['RbNodes'];
+        $detail = $what === 'ram' && !empty($n['memory_total'])
+            ? ' · ' . rbn_bytes($n['memory_used'] ?? 0) . ' / ' . rbn_bytes($n['memory_total'])
+            : (!empty($n['cpu_cores']) && $what === 'cpu' ? strtr($t['nodeCores'], ['{n}' => (int) $n['cpu_cores']]) : '');
+        return strtr($t[$high ? 'loadHigh' : 'loadOk'], [
+            '{panel}' => htmlspecialchars(rbn_names($panel)),
+            '{host}' => htmlspecialchars(rbn_host($panel)),
+            '{node}' => htmlspecialchars((string) $n['name']),
+            '{address}' => htmlspecialchars((string) ($n['address'] ?? '')),
+            '{what}' => $t['load' . strtoupper($what)],
+            '{value}' => rbn_pct($value),
+            '{detail}' => $detail,
+            '{limit}' => (int) $limit . '٪',
+            '{when}' => rbn_when($now),
+        ]);
     }
 
     // one change, kept under the real panel; $tell 'down' | 'up' reports it as well
@@ -971,14 +1159,14 @@ if (!function_exists('rbn_ensure_schema')) {
             }
             $cpu = $n['cpu_usage_percent'] ?? null;
             $mem = $n['memory_usage_percent'] ?? null;
-            $memTxt = isset($n['memory_used'], $n['memory_total']) ? rbn_bytes($n['memory_used']) . ' / ' . rbn_bytes($n['memory_total']) : ($mem !== null ? number_format((float) $mem, 1) . '%' : '—');
+            $memTxt = isset($n['memory_used'], $n['memory_total']) ? number_format((float) $mem, 1) . '%  ·  ' . rbn_bytes($n['memory_used']) . ' / ' . rbn_bytes($n['memory_total']) : ($mem !== null ? number_format((float) $mem, 1) . '%' : '—');
             $cores = isset($n['cpu_cores']) && $n['cpu_cores'] ? ' · ' . (int) $n['cpu_cores'] . ' cores' : '';
             rbn_meter($im, 470, $y + 34, 300, $cpu, 'CPU' . $cores, $cpu !== null ? number_format((float) $cpu, 1) . '%' : '—', $c);
             rbn_meter($im, 470, $y + 84, 300, $mem, 'RAM', $memTxt, $c);
             $sx = 820;
             rbn_text($im, 11, $sx, $y + 34, $c['mute'], 'Speed');
             // the font has no arrows: words instead
-            rbn_text($im, 13, $sx, $y + 58, $c['text'], 'Up ' . rbn_bytes($n['upload_speed'] ?? 0) . '/s   Down ' . rbn_bytes($n['download_speed'] ?? 0) . '/s');
+            rbn_text($im, 13, $sx, $y + 58, $c['text'], ($n['upload_speed'] ?? null) === null ? '—' : 'Up ' . rbn_bytes($n['upload_speed']) . '/s   Down ' . rbn_bytes($n['download_speed'] ?? 0) . '/s');
             rbn_text($im, 11, $sx, $y + 84, $c['mute'], 'Traffic' . (isset($n['usage_coefficient']) && (float) $n['usage_coefficient'] != 1 ? ' (x' . (float) $n['usage_coefficient'] . ')' : ''));
             rbn_text($im, 13, $sx, $y + 108, $c['text'], 'Up ' . rbn_bytes($n['uplink'] ?? 0) . '   Down ' . rbn_bytes($n['downlink'] ?? 0));
             if (isset($n['uptime_seconds']) && $n['uptime_seconds']) {
@@ -1075,9 +1263,17 @@ if (!function_exists('rbn_ensure_schema')) {
     // the report picture of a panel, with its traffic: [path, nodes, why]
     function rbn_build_report(array $panel)
     {
-        [$nodes, $why] = rbn_nodes($panel);
+        [$nodes, $why] = rbn_nodes_live($panel);
         if ($nodes === null) {
             return [null, null, $why];
+        }
+        // a node not asked (off, or did not answer) has no numbers, not zeros
+        foreach ($nodes as $i => $n) {
+            if (!rbn_has_metrics($n)) {
+                foreach (['cpu_usage_percent', 'memory_usage_percent', 'memory_used', 'memory_total', 'upload_speed', 'download_speed'] as $k) {
+                    $nodes[$i][$k] = null;
+                }
+            }
         }
         $series = [];
         foreach (array_slice($nodes, 0, 8) as $n) {
@@ -1127,23 +1323,30 @@ if (!function_exists('rbn_ensure_schema')) {
     {
         $t = panel_texts()['Admin']['RbNodes'];
         $p = (int) $panel['id'];
-        [$nodes, $why] = rbn_nodes($panel);
+        // CPU, RAM and speed as they are this moment - asked once, now
+        [$nodes, $why] = rbn_nodes_live($panel);
         $head = strtr($t['hubTitle'], ['{panel}' => htmlspecialchars((string) $panel['name_panel']), '{host}' => htmlspecialchars(rbn_host($panel))]);
         $others = array_filter(rbn_twins($panel), fn($x) => (int) $x['id'] !== $p);
         if ($others) {
             $head .= "\n" . strtr($t['hubTwin'], ['{twins}' => htmlspecialchars(implode('، ', array_map(fn($x) => (string) $x['name_panel'], $others)))]);
         }
-        $head .= "\n" . strtr($t['hubDest'], ['{dest}' => htmlspecialchars(rbn_dest_label(rbn_dest($panel)))]);
+        $loadOn = rbn_load_on();
+        $info = [
+            strtr($t['hubWatch'], ['{state}' => rbn_watch_on() ? $t['on'] : $t['off']]),
+            strtr($t['hubLoad'], ['{state}' => $loadOn ? $t['on'] : $t['off'], '{limits}' => $loadOn ? strtr($t['hubLoadLimits'], ['{cpu}' => rbn_load_limit('cpu'), '{ram}' => rbn_load_limit('ram')]) : '']),
+            strtr($t['hubDest'], ['{dest}' => htmlspecialchars(rbn_dest_label(rbn_dest($panel)))]),
+        ];
         $tail = [
             [rbn_btn($t['btnHistory'], "rbn|ev|{$p}|1"), rbn_btn(rbn_watch_on() ? $t['btnWatchOn'] : $t['btnWatchOff'], "rbn|wt|{$p}", rbn_watch_on() ? 'success' : 'danger')],
             [rbn_btn($t['btnDest'], "rbn|dst|{$p}")],
             [rbn_btn($t['btnRefresh'], "rbn|hub|{$p}", 'primary'), rbn_btn($t['btnClose'], 'rbn|close', 'danger')],
         ];
+        $loadRow = [rbn_btn($t['btnLoad'], "rbn|ld|{$p}", $loadOn ? 'success' : null)];
         if ($nodes === null) {
-            return [($note !== '' ? $note . "\n\n" : '') . $head . "\n\n" . strtr($t['hubError'], ['{why}' => $why]), rbn_kb($tail)];
+            return [($note !== '' ? $note . "\n\n" : '') . $head . "\n\n" . strtr($t['hubError'], ['{why}' => $why]), rbn_kb(array_merge([$loadRow], $tail))];
         }
         $up = $down = $off = 0;
-        $lines = [];
+        $blocks = [];
         $btns = [];
         foreach ($nodes as $n) {
             $st = (string) ($n['status'] ?? '');
@@ -1154,26 +1357,87 @@ if (!function_exists('rbn_ensure_schema')) {
             } else {
                 $down++;
             }
-            $lines[] = strtr($t['hubLine'], [
-                '{icon}' => rbn_status_icon($st),
-                '{name}' => htmlspecialchars((string) $n['name']),
-                '{cpu}' => rbn_pct($n['cpu_usage_percent'] ?? null),
-                '{ram}' => rbn_pct($n['memory_usage_percent'] ?? null),
-                '{xray}' => htmlspecialchars((string) (($n['xray_version'] ?? '') ?: '—')),
-            ]) . ($st !== 'connected' && $st !== 'disabled' && !empty($n['message']) ? "\n    <i>" . htmlspecialchars(mb_substr((string) $n['message'], 0, 80)) . '</i>' : '');
             $btns[] = rbn_btn(rbn_status_icon($st) . ' ' . (string) $n['name'], "rbn|nd|{$p}|" . (int) $n['id']);
+            $blocks[] = rbn_node_block($n, $t);
         }
-        $text = ($note !== '' ? $note . "\n\n" : '') . $head . "\n\n"
-            . ($nodes ? strtr($t['hubCounts'], ['{up}' => $up, '{down}' => $down, '{off}' => $off]) . "\n" : '')
-            . strtr($t['hubWatch'], ['{state}' => rbn_watch_on() ? $t['on'] : $t['off']]) . "\n\n"
-            . ($lines ? implode("\n", $lines) : $t['hubEmpty']) . "\n\n"
-            . strtr($t['hubUpdated'], ['{when}' => rbn_when(time())]);
+        $top = ($note !== '' ? $note . "\n\n" : '') . $head . "\n\n"
+            . '<blockquote>' . ($nodes ? strtr($t['hubCounts'], ['{up}' => $up, '{down}' => $down, '{off}' => $off]) . "\n" : '') . implode("\n", $info) . '</blockquote>';
+        $foot = "\n\n" . strtr($t['hubUpdated'], ['{when}' => rbn_when(time())]);
+        // a message holds 4096 characters: the nodes that do not fit are still a tap away
+        $body = '';
+        $shown = 0;
+        foreach ($blocks as $b) {
+            if (mb_strlen($top . $body . $b . $foot) > 3900) {
+                break;
+            }
+            $body .= "\n\n" . $b;
+            $shown++;
+        }
+        if ($shown < count($blocks)) {
+            $body .= "\n\n" . strtr($t['hubMore'], ['{n}' => count($blocks) - $shown]);
+        }
+        $text = $top . ($blocks ? $body : "\n\n" . $t['hubEmpty']) . $foot;
         $rows = array_chunk($btns, 2);
         $rows[] = [rbn_btn($t['btnAdd'], "rbn|add|{$p}", 'success'), rbn_btn($t['btnReport'], "rbn|rep|{$p}", 'primary')];
         if ($nodes) {
             $rows[] = [rbn_btn($t['btnUpdateAll'], "rbn|sua|{$p}")];
         }
+        $rows[] = $loadRow;
         return [$text, rbn_kb(array_merge($rows, $tail))];
+    }
+
+    // one node in the hub: its numbers now, or why it has none
+    function rbn_node_block(array $n, array $t)
+    {
+        $st = (string) ($n['status'] ?? '');
+        $name = htmlspecialchars((string) $n['name']);
+        $addr = htmlspecialchars((string) (($n['address'] ?? '') ?: '—'));
+        if ($st === 'connected') {
+            $m = rbn_has_metrics($n);
+            return strtr($t['hubNode'], [
+                '{icon}' => rbn_status_icon($st), '{name}' => $name, '{address}' => $addr,
+                '{cpu}' => $m ? rbn_pct($n['cpu_usage_percent'] ?? null) : '—',
+                '{ram}' => $m ? rbn_pct($n['memory_usage_percent'] ?? null) : '—',
+                '{up}' => $m ? rbn_bytes($n['upload_speed'] ?? 0) : '—',
+                '{down}' => $m ? rbn_bytes($n['download_speed'] ?? 0) : '—',
+                '{xray}' => htmlspecialchars((string) (($n['xray_version'] ?? '') ?: '—')),
+            ]);
+        }
+        $msg = trim((string) ($n['message'] ?? ''));
+        return strtr($t['hubNodeOff'], [
+            '{icon}' => rbn_status_icon($st), '{name}' => $name, '{address}' => $addr,
+            '{status}' => '<b>' . htmlspecialchars(rbn_status_name($st)) . '</b>',
+            '{message}' => $msg !== '' && $st !== 'disabled' ? "\n<i>" . htmlspecialchars(mb_substr($msg, 0, 90)) . '</i>' : '',
+        ]);
+    }
+
+    // 🚨 the high CPU/RAM alert: on or off, and its two limits
+    function rbn_load_screen(array $panel, $note = '')
+    {
+        $t = panel_texts()['Admin']['RbNodes'];
+        $p = (int) $panel['id'];
+        $on = rbn_load_on();
+        $cpu = rbn_load_limit('cpu');
+        $ram = rbn_load_limit('ram');
+        $text = ($note !== '' ? $note . "\n\n" : '') . strtr($t['loadTitle'], ['{state}' => $on ? $t['on'] : $t['off'], '{cpu}' => $cpu, '{ram}' => $ram]);
+        $presets = function ($what, $now) use ($p) {
+            $row = [];
+            foreach ([70, 80, 85, 90, 95] as $v) {
+                $row[] = rbn_btn(($v === $now ? '✅ ' : '') . $v . '٪', "rbn|ldv|{$p}|0|{$what}-{$v}", $v === $now ? 'success' : null);
+            }
+            return $row;
+        };
+        $rows = [
+            [rbn_btn($on ? $t['loadBtnOn'] : $t['loadBtnOff'], "rbn|ldt|{$p}", $on ? 'success' : 'danger')],
+            [rbn_btn($t['loadCpuHead'], "rbn|ld|{$p}")],
+            $presets('cpu', $cpu),
+            [rbn_btn(strtr($t['loadCustom'], ['{what}' => 'CPU']), "rbn|ldk|{$p}|0|cpu", 'primary')],
+            [rbn_btn($t['loadRamHead'], "rbn|ld|{$p}")],
+            $presets('ram', $ram),
+            [rbn_btn(strtr($t['loadCustom'], ['{what}' => 'RAM']), "rbn|ldk|{$p}|0|ram", 'primary')],
+            [rbn_btn($t['btnBackHub'], "rbn|hub|{$p}", 'danger')],
+        ];
+        return [$text, rbn_kb($rows)];
     }
 
     // 📮 where this panel's reports go. $first: asked before the nodes are
@@ -1219,31 +1483,31 @@ if (!function_exists('rbn_ensure_schema')) {
         $t = panel_texts()['Admin']['RbNodes'];
         $st = (string) ($n['status'] ?? '');
         $x = fn($v) => htmlspecialchars((string) (($v ?? '') === '' ? '—' : $v));
-        $lines = [strtr($t['nodeTitle'], ['{icon}' => rbn_status_icon($st), '{name}' => htmlspecialchars((string) $n['name']), '{status}' => rbn_status_name($st)])];
+        $out = [strtr($t['nodeTitle'], ['{icon}' => rbn_status_icon($st), '{name}' => htmlspecialchars((string) $n['name']), '{status}' => rbn_status_name($st)])];
         if (!empty($n['message']) && $st !== 'connected') {
-            $lines[] = strtr($t['nodeMessage'], ['{message}' => htmlspecialchars(mb_substr((string) $n['message'], 0, 300))]);
+            $out[] = strtr($t['nodeMessage'], ['{message}' => htmlspecialchars(mb_substr((string) $n['message'], 0, 300))]);
         }
-        $lines[] = '';
-        $lines[] = strtr($t['nodeAddress'], ['{address}' => $x($n['address'] ?? ''), '{port}' => $x($n['port'] ?? ''), '{api}' => $x($n['api_port'] ?? '')]);
-        $lines[] = strtr($t['nodeVersions'], ['{xray}' => $x($n['xray_version'] ?? ''), '{svc}' => $x($n['node_service_version'] ?? '')]);
-        if (array_key_exists('cpu_usage_percent', $n)) {
-            $lines[] = strtr($t['nodeCpu'], ['{cpu}' => rbn_pct($n['cpu_usage_percent']), '{cores}' => !empty($n['cpu_cores']) ? strtr($t['nodeCores'], ['{n}' => (int) $n['cpu_cores']]) : '']);
+        $out[] = strtr($t['nodeNet'], ['{address}' => $x($n['address'] ?? ''), '{port}' => $x($n['port'] ?? ''), '{api}' => $x($n['api_port'] ?? ''), '{xray}' => $x($n['xray_version'] ?? ''), '{svc}' => $x($n['node_service_version'] ?? '')]);
+        if (rbn_has_metrics($n)) {
+            $out[] = strtr($t['nodeLoad'], [
+                '{cpu}' => rbn_pct($n['cpu_usage_percent'] ?? null),
+                '{cores}' => !empty($n['cpu_cores']) ? strtr($t['nodeCores'], ['{n}' => (int) $n['cpu_cores']]) : '',
+                '{ram}' => rbn_pct($n['memory_usage_percent'] ?? null),
+                '{used}' => rbn_bytes($n['memory_used'] ?? 0),
+                '{total}' => rbn_bytes($n['memory_total'] ?? 0),
+                '{up}' => rbn_bytes($n['upload_speed'] ?? 0),
+                '{down}' => rbn_bytes($n['download_speed'] ?? 0),
+                '{uptime}' => !empty($n['uptime_seconds']) ? strtr($t['nodeUptime'], ['{uptime}' => rbn_duration((int) $n['uptime_seconds'])]) : '',
+            ]);
+        } elseif ($st === 'connected') {
+            $out[] = $t['nodeLoadNone'];
         }
-        if (array_key_exists('memory_usage_percent', $n)) {
-            $lines[] = strtr($t['nodeRam'], ['{pct}' => rbn_pct($n['memory_usage_percent']), '{used}' => rbn_bytes($n['memory_used'] ?? 0), '{total}' => rbn_bytes($n['memory_total'] ?? 0)]);
-        }
-        if (!empty($n['uptime_seconds'])) {
-            $lines[] = strtr($t['nodeUptime'], ['{uptime}' => rbn_duration((int) $n['uptime_seconds'])]);
-        }
-        if (array_key_exists('upload_speed', $n)) {
-            $lines[] = strtr($t['nodeSpeed'], ['{up}' => rbn_bytes($n['upload_speed'] ?? 0), '{down}' => rbn_bytes($n['download_speed'] ?? 0)]);
-        }
-        $lines[] = strtr($t['nodeTraffic'], ['{up}' => rbn_bytes($n['uplink'] ?? 0), '{down}' => rbn_bytes($n['downlink'] ?? 0), '{coef}' => (float) ($n['usage_coefficient'] ?? 1)]);
+        $out[] = strtr($t['nodeTraffic'], ['{up}' => rbn_bytes($n['uplink'] ?? 0), '{down}' => rbn_bytes($n['downlink'] ?? 0), '{coef}' => (float) ($n['usage_coefficient'] ?? 1)]);
         $since = rbn_since($panel, (int) $n['id']);
         if ($since !== null) {
-            $lines[] = strtr($t['nodeSince'], ['{when}' => rbn_when($since)]);
+            $out[] = strtr($t['nodeSince'], ['{when}' => rbn_when($since)]);
         }
-        return implode("\n", $lines);
+        return implode("\n", $out);
     }
 
     function rbn_node_screen(array $panel, $nodeId, $note = '')
@@ -1356,25 +1620,27 @@ if (!function_exists('rbn_ensure_schema')) {
         $t = panel_texts()['Admin']['RbNodes'];
         $up = count(array_filter($nodes, fn($n) => ($n['status'] ?? '') === 'connected'));
         $out = strtr($t['reportCaption'], ['{panel}' => htmlspecialchars((string) $panel['name_panel']), '{when}' => rbn_when(time()), '{up}' => $up, '{total}' => count($nodes)]);
+        $shown = 0;
         foreach ($nodes as $n) {
-            $line = "\n\n" . strtr($t['reportLine'], [
-                '{icon}' => rbn_status_icon($n['status'] ?? ''),
-                '{name}' => htmlspecialchars((string) $n['name']),
-                '{address}' => htmlspecialchars((string) ($n['address'] ?? '')),
-                '{cpu}' => rbn_pct($n['cpu_usage_percent'] ?? null),
-                '{ram}' => rbn_pct($n['memory_usage_percent'] ?? null),
-                '{xray}' => htmlspecialchars((string) (($n['xray_version'] ?? '') ?: '—')),
-                '{upl}' => rbn_bytes($n['uplink'] ?? 0),
-                '{dnl}' => rbn_bytes($n['downlink'] ?? 0),
-                '{ups}' => rbn_bytes($n['upload_speed'] ?? 0),
-                '{dns}' => rbn_bytes($n['download_speed'] ?? 0),
-            ]);
-            // a photo's caption holds 1024 characters
-            if (mb_strlen($out . $line) > 1000) {
-                $out .= "\n…";
+            $st = (string) ($n['status'] ?? '');
+            $base = ['{icon}' => rbn_status_icon($st), '{name}' => htmlspecialchars((string) $n['name']), '{address}' => htmlspecialchars((string) (($n['address'] ?? '') ?: '—'))];
+            $line = "\n\n" . ($st === 'connected'
+                ? strtr($t['reportLine'], $base + [
+                    '{cpu}' => rbn_pct($n['cpu_usage_percent'] ?? null),
+                    '{ram}' => rbn_pct($n['memory_usage_percent'] ?? null),
+                    '{ups}' => ($n['upload_speed'] ?? null) === null ? '—' : rbn_bytes($n['upload_speed']),
+                    '{dns}' => ($n['download_speed'] ?? null) === null ? '—' : rbn_bytes($n['download_speed']),
+                    '{upl}' => rbn_bytes($n['uplink'] ?? 0),
+                    '{dnl}' => rbn_bytes($n['downlink'] ?? 0),
+                ])
+                : strtr($t['reportLineOff'], $base + ['{status}' => '<b>' . htmlspecialchars(rbn_status_name($st)) . '</b>']));
+            // a photo's caption holds 1024 characters, as they show (tags not counted)
+            if (mb_strlen(html_entity_decode(strip_tags($out . $line), ENT_QUOTES, 'UTF-8')) > 1000) {
+                $out .= "\n\n" . strtr($t['hubMore'], ['{n}' => count($nodes) - $shown]);
                 break;
             }
             $out .= $line;
+            $shown++;
         }
         return $out;
     }
