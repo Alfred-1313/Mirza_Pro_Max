@@ -108,6 +108,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $panel !== null) {
     } elseif ($do === 'cv') {
         [$ok, $why] = rbn_do($panel, $nid, 'cv', (string) ($_POST['version'] ?? ''));
         $label = $rt['act']['core'] . ' ' . (string) ($_POST['version'] ?? '');
+    } elseif ($do === 'cvc') {
+        // ✏️ a version typed in: it has to exist before anyone is asked to install it
+        $label = $rt['act']['core'];
+        $tag = rbn_xray_tag($_POST['version'] ?? '');
+        if ($tag === null) {
+            $why = $t['rbnCustomBad'];
+        } else {
+            [$state, $w, $recent] = rbn_xray_version_check($panel, $tag);
+            if ($state === 'yes') {
+                // asked once, in the box at the top of the page
+                $_SESSION['rbn_cv'] = ['p' => $pid, 'n' => $nid, 'tag' => $tag];
+                $ok = true;
+                $okText = sprintf($t['rbnCustomFound'], $tag);
+            } elseif ($state === 'no') {
+                $why = sprintf($t['rbnCustomNo'], $tag, $recent ? implode(' · ', $recent) : '—');
+            } else {
+                $why = sprintf($t['rbnCustomUnknown'], $tag, $plain($w));
+            }
+        }
+    } elseif ($do === 'cvok') {
+        $pc = $_SESSION['rbn_cv'] ?? null;
+        unset($_SESSION['rbn_cv']);
+        if (is_array($pc) && (int) ($pc['p'] ?? 0) === $pid && rbn_xray_tag($pc['tag'] ?? '') === $pc['tag']) {
+            $nid = (int) $pc['n'];
+            [$ok, $why] = rbn_do($panel, $nid, 'cv', $pc['tag']);
+            $label = $rt['act']['core'] . ' ' . $pc['tag'];
+        } else {
+            $why = $t['rbnCustomStale'];
+        }
+    } elseif ($do === 'cvno') {
+        unset($_SESSION['rbn_cv']);
+        header('Location: ' . $here());
+        exit;
     } elseif ($do === 'edit') {
         $label = $rt['act']['ed'];
         [$node, $why] = rbn_node($panel, $nid);
@@ -154,8 +187,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $panel !== null) {
     } elseif ($nid > 0 && ($do === 'dl' || $do === 'ds' || $do === 'en' || isset(rbn_actions()[$do]))) {
         [$ok, $why] = rbn_do($panel, $nid, $do);
     }
-    flash($ok ? 'success' : 'error', $ok ? $plain(strtr($rt['done'], ['{action}' => $label])) : $plain(strtr($rt['failed'], ['{action}' => $label, '{why}' => $why])));
-    header('Location: ' . $here() . ($nid > 0 && $do !== 'dl' ? '#node' . $nid : ''));
+    flash($ok ? 'success' : 'error', $ok ? (isset($okText) ? $plain($okText) : $plain(strtr($rt['done'], ['{action}' => $label]))) : $plain(strtr($rt['failed'], ['{action}' => $label, '{why}' => $why])));
+    header('Location: ' . $here() . ($do === 'cvc' && $ok ? '#cvconfirm' : ($nid > 0 && $do !== 'dl' ? '#node' . $nid : '')));
     exit;
 }
 
@@ -171,6 +204,17 @@ if ($panel !== null) {
 }
 $bundle = $_SESSION['rbn_bundle'] ?? null;
 unset($_SESSION['rbn_bundle']);
+// a typed version that was found and waits for a yes
+$pendingCv = $_SESSION['rbn_cv'] ?? null;
+if (!is_array($pendingCv) || (int) ($pendingCv['p'] ?? 0) !== $pid || rbn_xray_tag($pendingCv['tag'] ?? '') === null) {
+    $pendingCv = null;
+}
+$pendingName = '';
+foreach ($nodes ?? [] as $pn) {
+    if ($pendingCv && (int) $pn['id'] === (int) $pendingCv['n']) {
+        $pendingName = (string) $pn['name'];
+    }
+}
 $events = $panel !== null ? rbn_events($panel, 30) : [];
 
 $csrf = '<input type="hidden" name="_csrf" value="' . csrf_token() . '"><input type="hidden" name="p" value="' . $pid . '">';
@@ -249,6 +293,17 @@ include __DIR__ . '/inc/layout_head.php';
     <?php foreach ($panels as $pp): ?>
       <a class="lang-tab<?= (int) $pp['id'] === $pid ? ' on' : '' ?>" href="nodes.php?p=<?= (int) $pp['id'] ?>"><?= icon('server', 15) ?><?= htmlspecialchars((string) $pp['name_panel']) ?></a>
     <?php endforeach; ?>
+  </div>
+<?php endif; ?>
+
+<?php if ($pendingCv && $pendingName !== ''): ?>
+  <div class="card fade-up" id="cvconfirm" style="margin-bottom:14px;border-color:var(--ach)">
+    <div class="card-head"><div><div class="card-title"><?= htmlspecialchars($plain($rt['act']['core'])) ?> — <?= htmlspecialchars($pendingName) ?></div>
+      <div class="card-subtitle"><?= htmlspecialchars(sprintf($t['rbnCustomAsk'], $pendingCv['tag'], $pendingName)) ?></div></div></div>
+    <div class="rbn-actions" style="padding-top:12px">
+      <form method="POST" action="<?= htmlspecialchars($here()) ?>" data-ajax="off" style="display:inline"><?= $csrf ?><input type="hidden" name="do" value="cvok"><button type="submit" class="btn btn-sm btn-primary"><?= htmlspecialchars($t['rbnCustomYes']) ?> <?= htmlspecialchars($pendingCv['tag']) ?></button></form>
+      <form method="POST" action="<?= htmlspecialchars($here()) ?>" data-ajax="off" style="display:inline"><?= $csrf ?><input type="hidden" name="do" value="cvno"><button type="submit" class="btn btn-sm"><?= htmlspecialchars($t['rbnCustomCancel']) ?></button></form>
+    </div>
   </div>
 <?php endif; ?>
 
@@ -362,6 +417,12 @@ include __DIR__ . '/inc/layout_head.php';
         </form>
         <?php endif; ?>
         <form method="POST" action="<?= htmlspecialchars($here()) ?>" data-ajax="off" class="rbn-form">
+          <?= $csrf ?><input type="hidden" name="do" value="cvc"><input type="hidden" name="n" value="<?= $id ?>">
+          <label><?= htmlspecialchars($t['rbnCustomLabel']) ?>
+            <input class="input" name="version" dir="ltr" maxlength="30" autocomplete="off" placeholder="<?= htmlspecialchars($t['rbnCustomPh']) ?>"></label>
+          <label>&nbsp;<button type="submit" class="btn btn-sm"><?= htmlspecialchars($t['rbnCustomBtn']) ?></button></label>
+        </form>
+        <form method="POST" action="<?= htmlspecialchars($here()) ?>" data-ajax="off" class="rbn-form">
           <?= $csrf ?><input type="hidden" name="do" value="edit"><input type="hidden" name="n" value="<?= $id ?>">
           <?php foreach (['name', 'address', 'port', 'api_port', 'coef'] as $f): ?>
             <label><?= htmlspecialchars($plain($rt['field'][$f])) ?><input class="input" name="<?= $f ?>" value="<?= htmlspecialchars(rbn_field_now($n, $f)) ?>" dir="ltr"></label>
@@ -388,7 +449,8 @@ include __DIR__ . '/inc/layout_head.php';
   </div>
 
   <div class="card fade-up" id="report" style="margin-top:14px">
-    <div class="card-head"><div><div class="card-title">📊 <?= htmlspecialchars($t['rbnReportBtn']) ?></div><div class="card-subtitle"><?= htmlspecialchars($t['rbnReportSub']) ?></div></div></div>
+    <div class="card-head"><div><div class="card-title">📊 <?= htmlspecialchars($t['rbnReportBtn']) ?></div><div class="card-subtitle"><?= htmlspecialchars($t['rbnReportSub']) ?></div></div>
+      <a class="btn btn-sm" href="<?= htmlspecialchars($here()) ?>#report"><?= htmlspecialchars($plain($rt['btnRefresh'])) ?></a></div>
     <div class="card-body"><img class="rbn-img" loading="lazy" alt="" src="<?= htmlspecialchars($here(['img' => 'report'])) ?>"></div>
   </div>
 <?php endif; ?>

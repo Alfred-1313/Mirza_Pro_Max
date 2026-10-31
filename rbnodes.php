@@ -308,6 +308,63 @@ if (!function_exists('rbn_ensure_schema')) {
         return [array_values(array_filter($tags, fn($v) => is_string($v) && preg_match('/^v?\d[\w.\-]{0,30}$/', $v))), ''];
     }
 
+    // «25.10.15», «v25.10.15» or « V 25.10.15 » (Persian digits too) → «v25.10.15»,
+    // the tag Xray-core's releases carry; null when it is no version number
+    function rbn_xray_tag($text)
+    {
+        $s = strtr(preg_replace('/\s+/u', '', (string) $text), [
+            '۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4', '۵' => '5', '۶' => '6', '۷' => '7', '۸' => '8', '۹' => '9',
+            '٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4', '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
+        ]);
+        $s = preg_replace('/^[vV]/', '', $s);
+        return preg_match('/^\d{1,4}\.\d{1,6}\.\d{1,4}(?:-[0-9A-Za-z.]{1,16})?$/', $s) ? 'v' . $s : null;
+    }
+
+    // Is $tag (like v25.10.15) a published Xray-core release? Rebecca does not ask:
+    // it takes any version, answers «accepted» and fails later where nobody sees it,
+    // so the bot checks first. The panel's own list of the last 50 releases (its
+    // server reaches GitHub), then - for an older one, or when the panel could not
+    // say - Xray-core's release by that tag, from this server.
+    // ['yes' | 'no' | 'unknown', why (HTML, for 'unknown'), the newest few tags]
+    function rbn_xray_version_check(array $panel, $tag)
+    {
+        $t = panel_texts()['Admin']['RbNodes'];
+        $recent = [];
+        $r = rbn_req($panel, 'GET', '/api/core/xray/releases?limit=50', null, 25);
+        if (rbn_ok($r) && is_array($r['json']) && is_array($r['json']['tags'] ?? null)) {
+            $tags = array_values(array_filter($r['json']['tags'], 'is_string'));
+            $recent = array_slice($tags, 0, 5);
+            if (in_array($tag, $tags, true)) {
+                return ['yes', '', $recent];
+            }
+        }
+        // a mirror can be named in config.php (RBN_GITHUB_API) where api.github.com is not reachable
+        $base = defined('RBN_GITHUB_API') ? rtrim((string) RBN_GITHUB_API, '/') : 'https://api.github.com';
+        $ch = curl_init($base . '/repos/XTLS/Xray-core/releases/tags/' . rawurlencode($tag));
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CONNECTTIMEOUT => 8,
+            CURLOPT_TIMEOUT => 15,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_HTTPHEADER => ['Accept: application/vnd.github+json', 'User-Agent: Ciro'],
+        ]);
+        $raw = curl_exec($ch);
+        $err = $raw === false ? (string) curl_error($ch) : '';
+        $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($raw === false) {
+            return ['unknown', sprintf($t['errGithub'], htmlspecialchars(mb_substr($err, 0, 100))), $recent];
+        }
+        if ($code === 404) {
+            return ['no', '', $recent];
+        }
+        $j = json_decode((string) $raw, true);
+        if ($code === 200 && is_array($j)) {
+            return ($j['tag_name'] ?? '') === $tag && empty($j['draft']) ? ['yes', '', $recent] : ['no', '', $recent];
+        }
+        return ['unknown', sprintf($t['errGithubCode'], $code), $recent];
+    }
+
     // a new node: [node, why]. Its answer carries the node's certificate and
     // private key - the bundle its installer asks for, given out only now.
     function rbn_add(array $panel, array $d)
@@ -1501,6 +1558,28 @@ if (!function_exists('rbn_ensure_schema')) {
         return $r;
     }
 
+    // the keyboard under the report picture: refresh it where it stands, or close it
+    function rbn_report_kb(array $panel)
+    {
+        $t = panel_texts()['Admin']['RbNodes'];
+        $p = (int) $panel['id'];
+        return rbn_kb([[rbn_btn($t['btnRefresh'], "rbn|rfr|{$p}", 'primary'), rbn_btn($t['btnClose'], "rbn|rcl|{$p}", 'danger')]]);
+    }
+
+    // the picture and its caption replaced in the message they are in (a refresh)
+    function rbn_edit_report($chatId, $messageId, $path, $caption, $keyboard)
+    {
+        $r = telegram('editMessageMedia', [
+            'chat_id' => $chatId,
+            'message_id' => (int) $messageId,
+            'media' => json_encode(['type' => 'photo', 'media' => 'attach://photo', 'caption' => $caption, 'parse_mode' => 'HTML'], JSON_UNESCAPED_UNICODE),
+            'photo' => new CURLFile($path),
+            'reply_markup' => $keyboard,
+        ]);
+        @unlink($path);
+        return $r;
+    }
+
     // ---------------------------------------------------------------- 🤖
     // The bot's screens: [text, keyboard json]. Buttons carry the panel's id
     // (p) and the node's (n): rbn|hub|p, rbn|nd|p|n, rbn|ask|p|n|a, ...
@@ -1795,7 +1874,8 @@ if (!function_exists('rbn_ensure_schema')) {
         [$tags, $why] = rbn_xray_releases($panel);
         $back = [rbn_btn($t['btnBackNode'], "rbn|nd|{$p}|{$id}", 'danger')];
         if (!$tags) {
-            return [strtr($t['coreNone'], ['{why}' => $why]), rbn_kb([$back])];
+            // the list did not come, but a version typed in is checked on its own (GitHub too)
+            return [strtr($t['coreNone'], ['{why}' => $why]), rbn_kb([[rbn_btn($t['coreCustom'], "rbn|cvk|{$p}|{$id}", 'primary')], $back])];
         }
         $cur = (string) ($node['xray_version'] ?? '');
         $btns = [];
@@ -1804,8 +1884,24 @@ if (!function_exists('rbn_ensure_schema')) {
             $btns[] = rbn_btn(($same ? '✅ ' : '') . $tag, "rbn|cv|{$p}|{$id}|{$tag}", $same ? 'success' : null);
         }
         $rows = array_chunk($btns, 2);
+        $rows[] = [rbn_btn($t['coreCustom'], "rbn|cvk|{$p}|{$id}", 'primary')];
         $rows[] = $back;
         return [strtr($t['coreTitle'], ['{name}' => htmlspecialchars((string) $node['name']), '{xray}' => htmlspecialchars($cur !== '' ? $cur : '—')]), rbn_kb($rows)];
+    }
+
+    // «install this version on this node?» - the one question, for a listed version and a typed one
+    function rbn_core_ask_screen(array $panel, $nodeId, $tag, $name, $prefix = '')
+    {
+        $t = panel_texts()['Admin']['RbNodes'];
+        $p = (int) $panel['id'];
+        $id = (int) $nodeId;
+        return [
+            ($prefix !== '' ? $prefix . "\n\n" : '') . strtr($t['coreAsk'], ['{ver}' => htmlspecialchars((string) $tag), '{name}' => htmlspecialchars((string) $name)]),
+            rbn_kb([
+                [rbn_btn($t['btnYes'], "rbn|cvgo|{$p}|{$id}|{$tag}", 'danger')],
+                [rbn_btn($t['btnCancel'], "rbn|core|{$p}|{$id}", 'primary')],
+            ]),
+        ];
     }
 
     function rbn_edit_screen(array $panel, array $node)

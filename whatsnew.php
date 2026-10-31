@@ -856,4 +856,16 @@ return [
             . "• The same setting exists for the 🚨 high CPU/RAM alert (apart from the down one), with the «🔁 High usage reminders» button on that screen. Default: on, every 30 minutes, 3 messages.\n"
             . "• The web panel has both as two cards. Each bot on a server has its own settings.</blockquote>",
     ],
+    [
+        'n' => 63,
+        'date' => '2026-10-31',
+        'fa' => "<blockquote>⬆️ <b>نسخهٔ دلخواه Xray و بروزرسانی گزارش تصویری نودها (ربکا)</b>\n"
+            . "• در «آپدیت هستهٔ Xray» کنار هشت نسخهٔ آخر یک دکمهٔ «✏️ نسخهٔ دلخواه (Custom version)» آمد. نسخه را می‌نویسی (مثل <code>25.10.15</code>؛ حرف v را ربات خودش می‌گذارد)، ربات چک می‌کند چنین نسخه‌ای از Xray وجود دارد: اگر نبود می‌گوید «وجود ندارد» و چند نسخهٔ آخر را نشان می‌دهد، اگر بود یک بار می‌پرسد «نصب بشه؟» و با «بله» هسته عوض می‌شود. نسخه‌های قدیمی‌تر از ۵۰ تای آخر را هم از GitHub می‌پرسد. اگر نتواند چک کند (مثلاً GitHub جواب نداد) نصب نمی‌کند و دلیلش را می‌گوید. چرا چک؟ ربکا هر نسخه‌ای را «قبول شد» می‌گوید و اگر نسخه نباشد بی‌صدا شکست می‌خورد.\n"
+            . "• پنل وب هم همین را دارد: در بخش «بیشتر» هر نود، کادر نسخهٔ دلخواه؛ بعد از چک، بالای صفحه تأیید می‌گیرد.\n"
+            . "• زیر «📊 گزارش تصویری نودها» دکمهٔ «🔄 بروزرسانی» آمد: عکس و کپشن همان پیام با اعداد تازهٔ CPU، RAM و سرعت عوض می‌شود (پیام جدید نمی‌آید)، و دکمهٔ «❌ بستن» پیام را پاک می‌کند. در پنل وب هم کنار گزارش دکمهٔ بروزرسانی هست.</blockquote>",
+        'en' => "<blockquote>⬆️ <b>A custom Xray version, and a refresh for the node report picture (Rebecca)</b>\n"
+            . "• «Update the Xray core» has a «✏️ Custom version» button next to the newest eight. Write the version (like <code>25.10.15</code>; the bot adds the v), and the bot checks that such an Xray release exists: if not it says so and shows the newest few, if it does it asks once «install it?» and a «yes» changes the core. Versions older than the last 50 are looked up at GitHub. When it cannot check (GitHub does not answer, say) it installs nothing and says why. Why check? Rebecca answers «accepted» to any version and a missing one fails silently.\n"
+            . "• The web panel has it too: under «More» of each node, a custom version box; after the check it asks for a confirmation at the top of the page.\n"
+            . "• «📊 Node report picture» got a «🔄 Refresh» button: the picture and caption of that very message change to the current CPU, RAM and speed (no new message), and «❌ Close» deletes it. The web panel has a refresh button beside the report as well.</blockquote>",
+    ],
 ];

@@ -7947,7 +7947,7 @@ if (preg_match('/^renamereset-([a-z]{2})$/', $datain, $rn_m) && $adminrulecheck[
 // rbnodes.php: a Rebecca panel's nodes - their state, actions, the core and
 // service updates, a new node, editing one, the report picture, a node's
 // traffic chart and the history of their ups and downs. Administrators only.
-if (preg_match('/^rbn\|(close|hub|nd|ask|do|core|cv|cvgo|ch|rep|ev|wt|sua|suago|add|addgo|ed|ef|dst|dset|dtest|ld|ldt|ldv|ldk|rp|rpt|rpv|rpk|nop)(?:\|(\d+))?(?:\|(\d+))?(?:\|([A-Za-z0-9_.\-]{1,40}))?$/', $datain, $rbn_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^rbn\|(close|hub|nd|ask|do|core|cv|cvgo|ch|rep|ev|wt|sua|suago|add|addgo|ed|ef|dst|dset|dtest|ld|ldt|ldv|ldk|rp|rpt|rpv|rpk|nop|cvk|rfr|rcl)(?:\|(\d+))?(?:\|(\d+))?(?:\|([A-Za-z0-9_.\-]{1,40}))?$/', $datain, $rbn_m) && $adminrulecheck['rule'] == "administrator") {
     $rbn_t = $textbotlang['Admin']['RbNodes'];
     $rbn_show = function ($screen) use ($from_id, $message_id) {
         Editmessagetext($from_id, $message_id, $screen[0], $screen[1], 'HTML');
@@ -7955,11 +7955,16 @@ if (preg_match('/^rbn\|(close|hub|nd|ask|do|core|cv|cvgo|ch|rep|ev|wt|sua|suago|
     $rbn_alert = function ($text, $alert = false) use ($callback_query_id) {
         telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $text, 'show_alert' => $alert]);
     };
-    if (in_array($user['step'], ['rbn_add', 'rbn_edit', 'rbn_dest', 'rbn_load', 'rbn_repeat'], true)) {
+    if (in_array($user['step'], ['rbn_add', 'rbn_edit', 'rbn_dest', 'rbn_load', 'rbn_repeat', 'rbn_core'], true)) {
         step('home', $from_id);
     }
     if ($rbn_m[1] === 'close') {
         Editmessagetext($from_id, $message_id, $rbn_t['closed'], json_encode(['inline_keyboard' => []]), 'HTML');
+        return;
+    }
+    // the report is a picture: it cannot be edited into «closed», it is taken away
+    if ($rbn_m[1] === 'rcl') {
+        deletemessage($from_id, $message_id);
         return;
     }
     $rbn_panel = rbn_panel($rbn_m[2] ?? 0);
@@ -8030,10 +8035,21 @@ if (preg_match('/^rbn\|(close|hub|nd|ask|do|core|cv|cvgo|ch|rep|ev|wt|sua|suago|
             break;
         case 'cv':
             [$rbn_node] = rbn_node($rbn_panel, $rbn_id);
-            $rbn_show([strtr($rbn_t['coreAsk'], ['{ver}' => htmlspecialchars($rbn_arg), '{name}' => htmlspecialchars(is_array($rbn_node) ? (string) $rbn_node['name'] : '')]), rbn_kb([
-                [rbn_btn($rbn_t['btnYes'], "rbn|cvgo|{$rbn_p}|{$rbn_id}|{$rbn_arg}", 'danger')],
-                [rbn_btn($rbn_t['btnCancel'], "rbn|core|{$rbn_p}|{$rbn_id}", 'primary')],
-            ])]);
+            $rbn_show(rbn_core_ask_screen($rbn_panel, $rbn_id, $rbn_arg, is_array($rbn_node) ? (string) $rbn_node['name'] : ''));
+            break;
+        // ✏️ a version of the admin's own: asked for here, checked and confirmed when it is typed
+        case 'cvk':
+            [$rbn_node] = rbn_node($rbn_panel, $rbn_id);
+            if ($rbn_node === null) {
+                $rbn_show(rbn_node_screen($rbn_panel, $rbn_id));
+                break;
+            }
+            savedata("clear", "rbn", ['p' => $rbn_p, 'n' => $rbn_id]);
+            step('rbn_core', $from_id);
+            $rbn_show([
+                strtr($rbn_t['coreCustomAsk'], ['{name}' => htmlspecialchars((string) $rbn_node['name']), '{xray}' => htmlspecialchars((string) (($rbn_node['xray_version'] ?? '') ?: '—'))]),
+                rbn_kb([[rbn_btn($rbn_t['btnCancel'], "rbn|core|{$rbn_p}|{$rbn_id}", 'danger')]]),
+            ]);
             break;
         case 'cvgo':
             [$rbn_node] = rbn_node($rbn_panel, $rbn_id);
@@ -8062,7 +8078,27 @@ if (preg_match('/^rbn\|(close|hub|nd|ask|do|core|cv|cvgo|ch|rep|ev|wt|sua|suago|
             } elseif ($rbn_png === null) {
                 sendmessage($from_id, rbn_report_caption($rbn_panel, $rbn_nodes) . "\n\n⚠️ " . $rbn_t['noGd'], null, 'HTML');
             } else {
-                rbn_send_png($from_id, $rbn_png, rbn_report_caption($rbn_panel, $rbn_nodes));
+                rbn_send_png($from_id, $rbn_png, rbn_report_caption($rbn_panel, $rbn_nodes), rbn_report_kb($rbn_panel));
+            }
+            break;
+        // 🔄 the picture and the caption of this very message, with the numbers as they are now
+        case 'rfr':
+            [$rbn_png, $rbn_nodes, $rbn_why] = rbn_build_report($rbn_panel);
+            if ($rbn_nodes === null) {
+                $rbn_alert(html_entity_decode(strip_tags($rbn_why), ENT_QUOTES, 'UTF-8'), true);
+                break;
+            }
+            if ($rbn_png === null) {
+                $rbn_alert($rbn_t['noGd'], true);
+                break;
+            }
+            $rbn_res = rbn_edit_report($from_id, $message_id, $rbn_png, rbn_report_caption($rbn_panel, $rbn_nodes), rbn_report_kb($rbn_panel));
+            if (!empty($rbn_res['ok'])) {
+                $rbn_alert($rbn_t['repRefreshed']);
+            } elseif (stripos((string) ($rbn_res['description'] ?? ''), 'not modified') !== false) {
+                $rbn_alert($rbn_t['repFresh']);
+            } else {
+                $rbn_alert(strtr($rbn_t['failed'], ['{action}' => $rbn_t['btnRefresh'], '{why}' => (string) ($rbn_res['description'] ?? '')]), true);
             }
             break;
         case 'ev':
@@ -8179,6 +8215,55 @@ if (preg_match('/^rbn\|(close|hub|nd|ask|do|core|cv|cvgo|ch|rep|ev|wt|sua|suago|
             $rbn_show([strtr($rbn_t['editAsk'], ['{field}' => $rbn_t['field'][$rbn_arg], '{now}' => htmlspecialchars(rbn_field_now($rbn_node, $rbn_arg))]), rbn_kb([[rbn_btn($rbn_t['btnCancel'], "rbn|ed|{$rbn_p}|{$rbn_id}", 'danger')]])]);
             break;
     }
+    return;
+}
+// ...an Xray version typed in for a node: it has to exist before anyone is asked to install it
+if ($user['step'] === 'rbn_core' && $datain === '' && $adminrulecheck['rule'] == "administrator"
+    && !in_array($text, [$textbotlang['Admin']['backAdminBtn'], $textbotlang['Admin']['backMenuBtn']], true)) {
+    $rbn_t = $textbotlang['Admin']['RbNodes'];
+    $rbn_d = (json_decode((string) $user['Processing_value'], true) ?: [])['rbn'] ?? null;
+    $rbn_panel = is_array($rbn_d) ? rbn_panel($rbn_d['p'] ?? 0) : null;
+    $rbn_id = is_array($rbn_d) ? (int) ($rbn_d['n'] ?? 0) : 0;
+    if ($rbn_panel === null || $rbn_id <= 0) {
+        step('home', $from_id);
+        sendmessage($from_id, $rbn_t['stale'], null, 'HTML');
+        return;
+    }
+    $rbn_p = (int) $rbn_panel['id'];
+    $rbn_cancel = rbn_kb([[rbn_btn($rbn_t['btnCancel'], "rbn|core|{$rbn_p}|{$rbn_id}", 'danger')]]);
+    $rbn_tag = rbn_xray_tag($text);
+    if ($rbn_tag === null) {
+        sendmessage($from_id, $rbn_t['coreCustomBad'], $rbn_cancel, 'HTML');
+        return;
+    }
+    // the check asks the panel and GitHub, which takes a moment: say so, then answer in the same message
+    $rbn_wait = sendmessage($from_id, strtr($rbn_t['coreCustomChecking'], ['{ver}' => htmlspecialchars($rbn_tag)]), null, 'HTML');
+    $rbn_mid = (int) ($rbn_wait['result']['message_id'] ?? 0);
+    $rbn_reply = function ($rbn_msg, $rbn_markup) use ($from_id, $rbn_mid) {
+        if ($rbn_mid > 0) {
+            Editmessagetext($from_id, $rbn_mid, $rbn_msg, $rbn_markup, 'HTML');
+        } else {
+            sendmessage($from_id, $rbn_msg, $rbn_markup, 'HTML');
+        }
+    };
+    [$rbn_state, $rbn_why, $rbn_recent] = rbn_xray_version_check($rbn_panel, $rbn_tag);
+    if ($rbn_state === 'no') {
+        $rbn_list = $rbn_recent ? implode(' · ', array_map(fn($v) => '<code>' . htmlspecialchars($v) . '</code>', $rbn_recent)) : '—';
+        $rbn_reply(strtr($rbn_t['coreCustomNo'], ['{ver}' => htmlspecialchars($rbn_tag), '{recent}' => $rbn_list]), $rbn_cancel);
+        return;
+    }
+    if ($rbn_state !== 'yes') {
+        $rbn_reply(strtr($rbn_t['coreCustomUnknown'], ['{ver}' => htmlspecialchars($rbn_tag), '{why}' => $rbn_why]), $rbn_cancel);
+        return;
+    }
+    // it exists: asked once
+    step('home', $from_id);
+    [$rbn_node] = rbn_node($rbn_panel, $rbn_id);
+    $rbn_cur = is_array($rbn_node) ? (string) ($rbn_node['xray_version'] ?? '') : '';
+    $rbn_same = $rbn_cur !== '' && ltrim($rbn_cur, 'vV') === ltrim($rbn_tag, 'v');
+    [$rbn_text, $rbn_kb] = rbn_core_ask_screen($rbn_panel, $rbn_id, $rbn_tag, is_array($rbn_node) ? (string) $rbn_node['name'] : '',
+        strtr($rbn_t[$rbn_same ? 'coreCustomSame' : 'coreCustomFound'], ['{ver}' => htmlspecialchars($rbn_tag), '{xray}' => htmlspecialchars($rbn_cur !== '' ? $rbn_cur : '—')]));
+    $rbn_reply($rbn_text, $rbn_kb);
     return;
 }
 // ...a 🔁 reminder gap or count typed in
