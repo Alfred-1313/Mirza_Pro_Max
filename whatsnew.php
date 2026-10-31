@@ -800,4 +800,16 @@ return [
             . "• The bot keeps a note of the topics it makes. Set the group up on a fresh server and then put the old backup back, and the extra topics the fresh server made are deleted by themselves; the original ones stay. Topics you made by hand are never deleted.\n"
             . "• Duplicates made before this update are unknown to the bot (Telegram gives bots no list of topics) - delete those once, by hand, in Telegram.</blockquote>",
     ],
+    [
+        'n' => 59,
+        'date' => '2026-10-31',
+        'fa' => "<blockquote>🔄 <b>انتقال از میرزای اصلی خودکار شد</b>\n"
+            . "• اگر روی سرور ربات میرزای اصلی نصب باشد و Ciro نباشد، زدن «نصب» (گزینهٔ ۱) یا «آپدیت» (گزینهٔ ۲) در اسکریپت خودش آن را پیدا می‌کند و به Ciro منتقل می‌کند. دیگر لازم نیست گزینهٔ «Migrate» را انتخاب کنی؛ برای همین از منو برداشته شد (شماره‌های بقیهٔ گزینه‌ها عوض نشده).\n"
+            . "• دیتابیس قدیمی همان می‌ماند و فقط چیزهای لازم به آن اضافه می‌شود؛ قبلش از دیتابیس و فایل‌ها بکاپ گرفته می‌شود و اگر وسط کار خطایی پیش بیاید، ربات قدیمی سر جایش برمی‌گردد. ربات‌های نماینده هم با آن منتقل می‌شوند.\n"
+            . "• کرون‌های ربات (چک پرداخت‌ها، اطلاع‌رسانی‌ها و ...) همان موقع ساخته می‌شوند؛ دیگر لازم نیست اول پنل ادمین را باز کنی.</blockquote>",
+        'en' => "<blockquote>🔄 <b>Moving from the original Mirza bot is automatic</b>\n"
+            . "• When a server runs the original Mirza bot and no Ciro bot, Install (option 1) or Update (option 2) in the script finds it and moves it to Ciro by itself. Choosing «Migrate» is no longer needed, so it left the menu (the other options keep their numbers).\n"
+            . "• Its database stays and is only added to; the database and files are backed up first, and a failure on the way puts the old bot back. Agents' bots move along.\n"
+            . "• The bot's scheduled jobs (payment checks, notices ...) are set up right away - no need to open the admin panel first.</blockquote>",
+    ],
 ];

@@ -2023,7 +2023,6 @@ function show_menu() {
     _mi "1" "Install"   "set up the bot on a clean server"
     _mi "2" "Update"    "newest code, keeps all your data"
     _mi "3" "Remove"    "delete the bot and its packages"
-    _mi "4" "Migrate"   "move a bot of the original project to Ciro ${C_WARN}(beta)${CR}"
     _mi "5" "Renew SSL" "reissue the domain certificate"
     _mi "6" "Backup"    "database dump, sent to Telegram"
     _mi "7" "Restore"   "a database or bot folder backup ${C_WARN}(beta)${CR}"
@@ -2040,7 +2039,6 @@ function show_menu() {
         1) install_bot ;;
         2) update_bot ;;
         3) remove_bot ;;
-        4) migrate_to_ciro ;;
         5) renew_ssl ;;
         6) backup_bot ;;
         7) import_bot ;;
@@ -2062,7 +2060,7 @@ function show_help_screen() {
     _kv "install" "${C_DIM}Install Ciro${CR}"
     _kv "update" "${C_DIM}Update Ciro to the latest code${CR}"
     _kv "remove" "${C_DIM}Remove Ciro and its services${CR}"
-    _kv "migrate" "${C_DIM}Migrate a bot of the original project to Ciro${CR}"
+    _kv "migrate" "${C_DIM}Migrate a bot of the original project to Ciro (Install and Update do it by themselves)${CR}"
     _kv "addbot" "${C_DIM}Install a second, independent bot on this server${CR}"
     _kv "renew" "${C_DIM}Renew the bot domain SSL certificate${CR}"
     _kv "backup" "${C_DIM}Backup database & send to Telegram${CR}"
@@ -2946,6 +2944,11 @@ function install_bot() {
     BOT_DIR="/var/www/html/Ciro"
     PHP_VER="$(state_get PHP_VER)"
     [ -z "$PHP_VER" ] && PHP_VER="8.2"
+
+    # the original Mirza bot is here: it becomes this Ciro bot, data and all
+    if ! has_resumable_state && auto_migrate_original; then
+        return 0
+    fi
 
     # ── Guard: only block when a PREVIOUS install fully COMPLETED ──
     local _installed=""
@@ -3852,6 +3855,11 @@ EOF
 function update_bot() {
     clear 2>/dev/null || true
     banner
+    # the original Mirza bot is here and no Ciro bot yet: updating it means
+    # moving it over, data and all
+    if auto_migrate_original; then
+        return 0
+    fi
     if ! pick_bot_instance "update"; then
         # [0] in the bot list is "back", not "nothing installed"
         [ "$(bots_registry_count)" != "0" ] && { show_menu; return 1; }
@@ -4810,6 +4818,38 @@ _mig_fail() {
     show_menu
 }
 
+# A bot of the original project on this server: its folder, in one of the
+# places the original installers use, with a config.php and no version file
+# of ours. Nothing when there is none. (/var/www/html/Ciro holding the
+# original's code is not one of them: Update upgrades that in place.)
+original_bot_dir() {
+    local c
+    for c in "$LEGACY_ORIGINAL_DIR" "$LEGACY_BOT_DIR"; do
+        [ -f "$c/config.php" ] && [ ! -f "$c/version" ] && { echo "$c"; return 0; }
+    done
+    return 1
+}
+# Is a Ciro bot (one with our version file) installed here already?
+ciro_bot_present() {
+    local d
+    for d in "$BOT_DIR_DEFAULT" "$LEGACY_BOT_DIR" \
+        $( [ -f "$BOTS_REGISTRY" ] && jq -r '.[].dir' "$BOTS_REGISTRY" 2>/dev/null ); do
+        [ -f "$d/config.php" ] && [ -f "$d/version" ] && return 0
+    done
+    return 1
+}
+# Install and Update call this first: a server that runs the original
+# project's bot and no Ciro bot yet has that bot moved over (its database
+# kept and upgraded) instead - nobody has to know about Migrate. Returns 0
+# when it took over, 1 when there is nothing of the kind here.
+auto_migrate_original() {
+    { [ -n "${CIRO_NONINTERACTIVE:-}" ] || [ -n "${CIRO_TRANSFER:-}" ]; } && return 1
+    original_bot_dir >/dev/null || return 1
+    ciro_bot_present && return 1
+    CIRO_MIGRATE_AUTO=1 migrate_to_ciro
+    return 0
+}
+
 # Put the old bot's files back where they were ($1 = new dir, $2 = old dir)
 _mig_undo_files() {
     local target="$1" old="$2"
@@ -4824,7 +4864,12 @@ _mig_undo_files() {
 function migrate_to_ciro() {
     clear 2>/dev/null || true
     banner
-    _sec "Migrate to Ciro"
+    if [ -n "${CIRO_MIGRATE_AUTO:-}" ]; then
+        _sec "A bot of the original Mirza project is on this server"
+        printf "    ${C_DIM}It is moved to Ciro first - its database is kept and only added to.${CR}\n\n"
+    else
+        _sec "Migrate to Ciro"
+    fi
 
     # 1) The original install: a config.php and no version file of ours
     local OLD_BOT_DIR="" _cand _ours=""
@@ -4925,8 +4970,15 @@ function migrate_to_ciro() {
         printf '%s' "$others" | sed 's/^/      /'
     fi
     echo ""
-    printf "  ${C_PROMPT}❯${CR} Migrate now? ${C_DIM}[y/N]${CR}: "
-    local confirm; read -r confirm
+    local confirm
+    if [ -n "${CIRO_MIGRATE_AUTO:-}" ]; then
+        printf "  ${C_PROMPT}❯${CR} Move it to Ciro now? ${C_DIM}[Y/n]${CR}: "
+        read -r confirm
+        [ -z "$confirm" ] && confirm=y
+    else
+        printf "  ${C_PROMPT}❯${CR} Migrate now? ${C_DIM}[y/N]${CR}: "
+        read -r confirm
+    fi
     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
         printf "\n    ${C_DIM}Nothing was changed.${CR}\n"
         sleep 1; show_menu; return 0
@@ -5023,6 +5075,24 @@ EOF
         return 1
     fi
     chown -R www-data:www-data "$TARGET" 2>/dev/null
+    # its scheduled jobs (payment checks, notices...), made now as the web
+    # server's user would - not left for the first time the panel is opened
+    local mig_crons=0
+    cat > /tmp/ciro_cron_setup.php <<PHPEOF
+<?php
+chdir('$TARGET');
+require 'config.php';
+require 'botapi.php';
+require 'panels.php';
+require 'function.php';
+require 'jdf.php';
+require 'vendor/autoload.php';
+if (!function_exists('activecron')) { exit(3); }
+activecron();
+PHPEOF
+    chmod 644 /tmp/ciro_cron_setup.php
+    ( cd "$TARGET" && runuser -u www-data -- php /tmp/ciro_cron_setup.php ) >/dev/null 2>&1 && mig_crons=1
+    rm -f /tmp/ciro_cron_setup.php
 
     local abak; abak=$(mktemp -d)
     cp -a /etc/apache2/sites-available /etc/apache2/sites-enabled \
@@ -5127,9 +5197,12 @@ EOF
     [ "${#agents[@]}" -gt 0 ] && _kv "Agent bots" "${C_DIM}${#agents[@]} moved · ${agents_hooked} webhook(s) re-pointed${CR}"
     _kv "Copies" "${C_DIM}${DB_BK}${CR}"
     _kv "" "${C_DIM}${FILES_BK}${CR}"
+    [ "$mig_crons" -eq 1 ] && _kv "Jobs" "$(_dot ok) ${C_OK}scheduled${CR}"
     echo ""
-    printf "    ${C_WARN}!${CR} ${C_WARN}Open the admin panel in the bot once: that is when it sets up its${CR}\n"
-    printf "    ${C_WARN}  scheduled jobs (payment checks, notices).${CR}\n"
+    if [ "$mig_crons" -ne 1 ]; then
+        printf "    ${C_WARN}!${CR} ${C_WARN}Open the admin panel in the bot once: that is when it sets up its${CR}\n"
+        printf "    ${C_WARN}  scheduled jobs (payment checks, notices).${CR}\n"
+    fi
     printf "    ${C_DIM}Manage it with ${CR}${C_KEY}Ciro${CR}${C_DIM} from now on.${CR}\n"
     echo ""
     printf "  ${C_PROMPT}❯${CR} Press Enter to return to the menu... "
@@ -6381,7 +6454,8 @@ print_usage() {
                        Works on a bot of the original project too - it upgrades
                        in place, it does not reinstall.
     remove             Delete the bot directory and the packages it installed
-    migrate            Migrate a bot of the original project to Ciro (beta)
+    migrate            Migrate a bot of the original project to Ciro (Install and
+                       Update do this by themselves when they find one)
     addbot             Install a second, independent bot on this server
     renew              Reissue the domain's SSL certificate
     backup             Dump the database and send it to Telegram
