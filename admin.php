@@ -7947,7 +7947,7 @@ if (preg_match('/^renamereset-([a-z]{2})$/', $datain, $rn_m) && $adminrulecheck[
 // rbnodes.php: a Rebecca panel's nodes - their state, actions, the core and
 // service updates, a new node, editing one, the report picture, a node's
 // traffic chart and the history of their ups and downs. Administrators only.
-if (preg_match('/^rbn\|(close|hub|nd|ask|do|core|cv|cvgo|ch|rep|ev|wt|sua|suago|add|addgo|ed|ef|dst|dset|dtest|ld|ldt|ldv|ldk)(?:\|(\d+))?(?:\|(\d+))?(?:\|([A-Za-z0-9_.\-]{1,40}))?$/', $datain, $rbn_m) && $adminrulecheck['rule'] == "administrator") {
+if (preg_match('/^rbn\|(close|hub|nd|ask|do|core|cv|cvgo|ch|rep|ev|wt|sua|suago|add|addgo|ed|ef|dst|dset|dtest|ld|ldt|ldv|ldk|rp|rpt|rpv|rpk|nop)(?:\|(\d+))?(?:\|(\d+))?(?:\|([A-Za-z0-9_.\-]{1,40}))?$/', $datain, $rbn_m) && $adminrulecheck['rule'] == "administrator") {
     $rbn_t = $textbotlang['Admin']['RbNodes'];
     $rbn_show = function ($screen) use ($from_id, $message_id) {
         Editmessagetext($from_id, $message_id, $screen[0], $screen[1], 'HTML');
@@ -7955,7 +7955,7 @@ if (preg_match('/^rbn\|(close|hub|nd|ask|do|core|cv|cvgo|ch|rep|ev|wt|sua|suago|
     $rbn_alert = function ($text, $alert = false) use ($callback_query_id) {
         telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id, 'text' => $text, 'show_alert' => $alert]);
     };
-    if (in_array($user['step'], ['rbn_add', 'rbn_edit', 'rbn_dest', 'rbn_load'], true)) {
+    if (in_array($user['step'], ['rbn_add', 'rbn_edit', 'rbn_dest', 'rbn_load', 'rbn_repeat'], true)) {
         step('home', $from_id);
     }
     if ($rbn_m[1] === 'close') {
@@ -8092,6 +8092,38 @@ if (preg_match('/^rbn\|(close|hub|nd|ask|do|core|cv|cvgo|ch|rep|ev|wt|sua|suago|
             step('rbn_load', $from_id);
             $rbn_show([strtr($rbn_t['loadAsk'], ['{what}' => $rbn_t['load' . strtoupper($rbn_arg)], '{now}' => rbn_load_limit($rbn_arg)]), rbn_kb([[rbn_btn($rbn_t['btnCancel'], "rbn|ld|{$rbn_p}", 'danger')]])]);
             break;
+        // 🔁 reminders while a node stays down ('down') or stays over its limit ('load')
+        case 'rp':
+            $rbn_show(rbn_repeat_screen($rbn_panel, $rbn_arg));
+            break;
+        case 'rpt':
+            $rbn_kind = $rbn_arg === 'load' ? 'load' : 'down';
+            rbn_rep_set_on($rbn_kind, !rbn_rep_on($rbn_kind));
+            $rbn_alert(strip_tags(rbn_rep_on($rbn_kind) ? $rbn_t['repBtnOn'] : $rbn_t['repBtnOff']));
+            $rbn_show(rbn_repeat_screen($rbn_panel, $rbn_kind));
+            break;
+        case 'rpv':
+            if (preg_match('/^(down|load)-(e|n)-(\d{1,4})$/', $rbn_arg, $rbn_rv)
+                && rbn_rep_set($rbn_rv[1], $rbn_rv[2] === 'e' ? 'every' : 'max', (int) $rbn_rv[3])) {
+                $rbn_alert(strip_tags(strtr($rbn_t[$rbn_rv[2] === 'e' ? 'repSavedEvery' : 'repSavedMax'], ['{v}' => $rbn_rv[2] === 'e' ? (int) $rbn_rv[3] : rbn_rep_max_label((int) $rbn_rv[3])])));
+                $rbn_show(rbn_repeat_screen($rbn_panel, $rbn_rv[1]));
+            }
+            break;
+        case 'rpk':
+            if (!preg_match('/^(down|load)-(e|n)$/', $rbn_arg, $rbn_rk)) {
+                break;
+            }
+            savedata("clear", "rbn", ['p' => $rbn_p, 'f' => $rbn_arg]);
+            step('rbn_repeat', $from_id);
+            $rbn_show([
+                strtr($rbn_t[$rbn_rk[2] === 'e' ? 'repAskEvery' : 'repAskMax'], ['{now}' => $rbn_rk[2] === 'e' ? rbn_rep_every($rbn_rk[1]) : rbn_rep_max_label(rbn_rep_max($rbn_rk[1]))]),
+                rbn_kb([[rbn_btn($rbn_t['btnCancel'], "rbn|rp|{$rbn_p}|0|{$rbn_rk[1]}", 'danger')]]),
+            ]);
+            break;
+        // a header button: nothing to do, the tap is just answered
+        case 'nop':
+            telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id]);
+            break;
         case 'wt':
             rbn_watch_set(!rbn_watch_on());
             $rbn_show(rbn_hub_screen($rbn_panel));
@@ -8147,6 +8179,28 @@ if (preg_match('/^rbn\|(close|hub|nd|ask|do|core|cv|cvgo|ch|rep|ev|wt|sua|suago|
             $rbn_show([strtr($rbn_t['editAsk'], ['{field}' => $rbn_t['field'][$rbn_arg], '{now}' => htmlspecialchars(rbn_field_now($rbn_node, $rbn_arg))]), rbn_kb([[rbn_btn($rbn_t['btnCancel'], "rbn|ed|{$rbn_p}|{$rbn_id}", 'danger')]])]);
             break;
     }
+    return;
+}
+// ...a 🔁 reminder gap or count typed in
+if ($user['step'] === 'rbn_repeat' && $datain === '' && $adminrulecheck['rule'] == "administrator"
+    && !in_array($text, [$textbotlang['Admin']['backAdminBtn'], $textbotlang['Admin']['backMenuBtn']], true)) {
+    $rbn_t = $textbotlang['Admin']['RbNodes'];
+    $rbn_d = (json_decode((string) $user['Processing_value'], true) ?: [])['rbn'] ?? null;
+    $rbn_panel = is_array($rbn_d) ? rbn_panel($rbn_d['p'] ?? 0) : null;
+    if ($rbn_panel === null || !preg_match('/^(down|load)-(e|n)$/', (string) ($rbn_d['f'] ?? ''), $rbn_rk)) {
+        step('home', $from_id);
+        sendmessage($from_id, $rbn_t['stale'], null, 'HTML');
+        return;
+    }
+    $rbn_v = rbn_rep_value($rbn_rk[2], $text);
+    if ($rbn_v === null) {
+        sendmessage($from_id, $rbn_t[$rbn_rk[2] === 'e' ? 'repBadEvery' : 'repBadMax'], rbn_kb([[rbn_btn($rbn_t['btnCancel'], "rbn|rp|" . (int) $rbn_panel['id'] . "|0|{$rbn_rk[1]}", 'danger')]]), 'HTML');
+        return;
+    }
+    step('home', $from_id);
+    rbn_rep_set($rbn_rk[1], $rbn_rk[2] === 'e' ? 'every' : 'max', $rbn_v);
+    [$rbn_text, $rbn_kb] = rbn_repeat_screen($rbn_panel, $rbn_rk[1], strtr($rbn_t[$rbn_rk[2] === 'e' ? 'repSavedEvery' : 'repSavedMax'], ['{v}' => $rbn_rk[2] === 'e' ? $rbn_v : rbn_rep_max_label($rbn_v)]));
+    sendmessage($from_id, $rbn_text, $rbn_kb, 'HTML');
     return;
 }
 // ...a 🚨 limit typed in (1-100)

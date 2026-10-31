@@ -86,6 +86,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $panel !== null) {
             rbn_load_limit_set('ram', $ram);
             $ok = true;
         }
+    } elseif ($do === 'rep') {
+        // 🔁 reminders while a node stays down / over its limit: this bot's own setting, for every Rebecca panel
+        $kind = ($_POST['kind'] ?? '') === 'load' ? 'load' : 'down';
+        $label = $t[$kind === 'load' ? 'rbnRepTitleLoad' : 'rbnRepTitleDown'];
+        $every = rbn_rep_value('e', $_POST['every'] ?? '');
+        $max = rbn_rep_value('n', $_POST['max'] ?? '');
+        if ($every === null || $max === null) {
+            $why = $t['rbnRepBad'];
+        } else {
+            rbn_rep_set_on($kind, !empty($_POST['on']));
+            rbn_rep_set($kind, 'every', $every);
+            rbn_rep_set($kind, 'max', $max);
+            $ok = true;
+        }
     } elseif ($do === 'sua') {
         [$nodes, $why] = rbn_nodes($panel);
         $ids = array_map(fn($n) => (int) $n['id'], array_filter($nodes ?? [], fn($n) => ($n['status'] ?? '') !== 'disabled'));
@@ -176,6 +190,33 @@ $bar = function ($pct) {
     return '<div class="rbn-bar"><span class="' . $cls . '" style="width:' . round($p, 1) . '%"></span></div><small>' . number_format($p, 1) . '٪</small>';
 };
 
+// 🔁 the reminder form of 'down' or 'load': on/off, the gap, how many messages in all
+$repForm = function ($kind) use ($t, $here, $csrf) {
+    $every = rbn_rep_every($kind);
+    $max = rbn_rep_max($kind);
+    $everyOpts = [2, 5, 10, 15, 30, 60, 120, 360, 720, 1440];
+    $maxOpts = [2, 3, 5, 10, 20, 50, 100, 0];
+    if (!in_array($every, $everyOpts, true)) {
+        $everyOpts[] = $every;
+        sort($everyOpts);
+    }
+    if (!in_array($max, $maxOpts, true)) {
+        array_splice($maxOpts, -1, 0, [$max]);
+    }
+    $h = '<form method="POST" action="' . htmlspecialchars($here()) . '#rep' . $kind . '" data-ajax="off" class="rbn-form" style="padding-top:12px">' . $csrf
+        . '<input type="hidden" name="do" value="rep"><input type="hidden" name="kind" value="' . $kind . '">'
+        . '<label>' . htmlspecialchars($t['rbnRepOn']) . '<span><input type="checkbox" name="on" value="1"' . (rbn_rep_on($kind) ? ' checked' : '') . '> ' . htmlspecialchars($t['rbnOn']) . '</span></label>'
+        . '<label>' . htmlspecialchars($t['rbnRepEvery']) . '<select class="select" name="every">';
+    foreach ($everyOpts as $v) {
+        $h .= '<option value="' . $v . '"' . ($v === $every ? ' selected' : '') . '>' . htmlspecialchars(sprintf($t['rbnRepMinutes'], $v)) . '</option>';
+    }
+    $h .= '</select></label><label>' . htmlspecialchars($t['rbnRepMax']) . '<select class="select" name="max">';
+    foreach ($maxOpts as $v) {
+        $h .= '<option value="' . $v . '"' . ($v === $max ? ' selected' : '') . '>' . htmlspecialchars($v === 0 ? $t['rbnRepUnlimited'] : sprintf($t['rbnRepMessages'], $v)) . '</option>';
+    }
+    return $h . '</select></label><label>&nbsp;<button type="submit" class="btn btn-sm btn-primary">' . icon('check', 13) . ' ' . htmlspecialchars($t['bottextSaveBtn']) . '</button></label></form>';
+};
+
 $pageTitle = $t['rbnPageTitle'];
 $pageLede = $t['rbnPageLede'];
 $activeNav = 'nodes';
@@ -256,6 +297,12 @@ include __DIR__ . '/inc/layout_head.php';
     </form>
   </div>
 
+  <div class="card fade-up" id="repdown" style="margin-bottom:14px">
+    <div class="card-head"><div><div class="card-title">🔁 <?= htmlspecialchars($t['rbnRepTitleDown']) ?> <span class="tag <?= rbn_rep_on('down') ? 'tag-ok' : 'tag-plain' ?>"><?= htmlspecialchars(rbn_rep_on('down') ? $t['rbnOn'] : $t['rbnOffWord']) ?></span></div>
+      <div class="card-subtitle"><?= htmlspecialchars($t['rbnRepSubDown']) ?></div></div></div>
+    <?= $repForm('down') ?>
+  </div>
+
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
     <a class="btn btn-primary" href="#add"><?= icon('plus', 13) ?> <?= htmlspecialchars($plain($rt['btnAdd'])) ?></a>
     <a class="btn" href="#report">📊 <?= htmlspecialchars($t['rbnReportBtn']) ?></a>
@@ -270,8 +317,10 @@ include __DIR__ . '/inc/layout_head.php';
       <label><?= htmlspecialchars($t['rbnLoadOn']) ?><span><input type="checkbox" name="on" value="1"<?= rbn_load_on() ? ' checked' : '' ?>> <?= htmlspecialchars($t['rbnOn']) ?></span></label>
       <label><?= htmlspecialchars($t['rbnLoadCpu']) ?><input class="input" type="number" name="cpu" min="1" max="100" dir="ltr" value="<?= rbn_load_limit('cpu') ?>"></label>
       <label><?= htmlspecialchars($t['rbnLoadRam']) ?><input class="input" type="number" name="ram" min="1" max="100" dir="ltr" value="<?= rbn_load_limit('ram') ?>"></label>
-      <label>&nbsp;<button type="submit" class="btn btn-sm btn-primary"><?= icon('check', 13) ?> <?= htmlspecialchars($t['rbnDestSave']) ?></button></label>
+      <label>&nbsp;<button type="submit" class="btn btn-sm btn-primary"><?= icon('check', 13) ?> <?= htmlspecialchars($t['bottextSaveBtn']) ?></button></label>
     </form>
+    <div class="card-subtitle" id="repload" style="padding:6px 16px 0">🔁 <?= htmlspecialchars($t['rbnRepTitleLoad']) ?> <span class="tag <?= rbn_rep_on('load') ? 'tag-ok' : 'tag-plain' ?>"><?= htmlspecialchars(rbn_rep_on('load') ? $t['rbnOn'] : $t['rbnOffWord']) ?></span> — <?= htmlspecialchars($t['rbnRepSubLoad']) ?></div>
+    <?= $repForm('load') ?>
   </div>
 
   <div class="rbn-grid">

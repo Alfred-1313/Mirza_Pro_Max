@@ -22,7 +22,11 @@
 //
 // 🔔 پایش: cronbot/rbnodes.php looks every two minutes; every change of a
 // node's status is kept (rbn_event), and a node going down or coming back is
-// reported - to the report group, or to the main admin when there is none.
+// reported - to the report group (its own topic), or to the main admin when
+// there is none. A node that STAYS down is told again - and so is one that
+// stays over its CPU/RAM limit (rbn_load_check) - at a gap and up to a number
+// of messages the admin sets (rbn_rep_*; on by default), so nothing arrives
+// in a burst and nothing is forgotten.
 // 📊 گزارش: one picture of every node (rbn_report_png), and one of a node's
 // traffic by day (rbn_daily_png), drawn with GD and the bundled Vazirmatn.
 
@@ -46,6 +50,13 @@ if (!function_exists('rbn_ensure_schema')) {
             alerted TINYINT NOT NULL DEFAULT 0,
             PRIMARY KEY (panel_id, node_id)
         ) DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_unicode_ci");
+        // a reminder needs to know how many messages an outage has had so far and when the last one went
+        foreach (['alert_count', 'alert_at'] as $col) {
+            $has = $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rbn_state' AND COLUMN_NAME = '{$col}'")->fetchColumn();
+            if (!$has) {
+                $pdo->exec("ALTER TABLE rbn_state ADD {$col} INT NOT NULL DEFAULT 0");
+            }
+        }
         // every change: who, from what, to what, when
         $pdo->query("CREATE TABLE IF NOT EXISTS rbn_event (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -58,12 +69,22 @@ if (!function_exists('rbn_ensure_schema')) {
             at INT NOT NULL,
             KEY panel_at (panel_id, at)
         ) DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_unicode_ci");
-        // 🚨 high CPU/RAM: per node, what has been seen and told (rbn_load_check)
+        // 🚨 high CPU/RAM, per node and kind (cpu | ram): state 1 = high on one look, 2 = told;
+        // n messages so far, at = when the last went, since = when it was first seen high
+        // (the first version kept bit flags in one row: its few rows only held who had been told)
+        $old = $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rbn_load' AND COLUMN_NAME = 'flags'")->fetchColumn();
+        if ($old) {
+            $pdo->exec("DROP TABLE rbn_load");
+        }
         $pdo->query("CREATE TABLE IF NOT EXISTS rbn_load (
             panel_id INT NOT NULL,
             node_id INT NOT NULL,
-            flags INT NOT NULL DEFAULT 0,
-            PRIMARY KEY (panel_id, node_id)
+            what VARCHAR(4) NOT NULL,
+            state TINYINT NOT NULL DEFAULT 0,
+            n INT NOT NULL DEFAULT 0,
+            at INT NOT NULL DEFAULT 0,
+            since INT NOT NULL DEFAULT 0,
+            PRIMARY KEY (panel_id, node_id, what)
         ) DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_unicode_ci");
     }
 
@@ -621,6 +642,7 @@ if (!function_exists('rbn_ensure_schema')) {
     // once per real panel. Each change is kept. Going down is told at once -
     // but «connecting» only once it has lasted 5 minutes, so a reconnect does
     // not ring twice - and coming back is told only after a going-down was.
+    // Staying down is told again when a reminder is due (rbn_rep_due).
     function rbn_watch_tick()
     {
         global $pdo;
@@ -675,7 +697,7 @@ if (!function_exists('rbn_ensure_schema')) {
         }
         rbn_canon_map(true);
         $get = $pdo->prepare("SELECT * FROM rbn_state WHERE panel_id = ?");
-        $put = $pdo->prepare("REPLACE INTO rbn_state (panel_id, node_id, name, status, message, since, alerted) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $put = $pdo->prepare("REPLACE INTO rbn_state (panel_id, node_id, name, status, message, since, alerted, alert_count, alert_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $drop = $pdo->prepare("DELETE FROM rbn_state WHERE panel_id = ? AND node_id = ?");
         foreach ($groups as $gid => $panel) {
             if (isset($twins[$gid])) {
@@ -708,14 +730,28 @@ if (!function_exists('rbn_ensure_schema')) {
                 if ($prev === null) {
                     // first sight: what it is now, no news (a panel already unreachable is news)
                     $alerted = 0;
+                    $count = 0;
+                    $lastAt = 0;
                     if ($nid === 0 && $cur['status'] === 'unreachable') {
                         rbn_event($panel, 0, $cur['name'], 'connected', 'unreachable', $cur['message'], $now, $now, 'down');
                         $alerted = 1;
+                        $count = 1;
+                        $lastAt = $now;
                     }
-                    $put->execute([$pid, $nid, $cur['name'], $cur['status'], $cur['message'], $now, $alerted]);
+                    $put->execute([$pid, $nid, $cur['name'], $cur['status'], $cur['message'], $now, $alerted, $count, $lastAt]);
                     continue;
                 }
                 $alerted = (int) $prev['alerted'];
+                $count = (int) ($prev['alert_count'] ?? 0);
+                $lastAt = (int) ($prev['alert_at'] ?? 0);
+                $since = (int) $prev['since'];
+                // told before the counters existed: that one message counts, from when the outage began
+                if ($alerted && $count < 1) {
+                    $count = 1;
+                }
+                if ($alerted && $lastAt <= 0) {
+                    $lastAt = $since;
+                }
                 if ($prev['status'] !== $cur['status']) {
                     $tell = '';
                     if (rbn_is_down($cur['status']) && $cur['status'] !== 'connecting' && !$alerted) {
@@ -723,22 +759,31 @@ if (!function_exists('rbn_ensure_schema')) {
                     } elseif (!rbn_is_down($cur['status']) && $cur['status'] !== 'disabled' && $alerted) {
                         $tell = 'up';
                     }
-                    rbn_event($panel, $nid, $cur['name'], $prev['status'], $cur['status'], $cur['message'], $now, (int) $prev['since'], $tell);
+                    rbn_event($panel, $nid, $cur['name'], $prev['status'], $cur['status'], $cur['message'], $now, $since, $tell);
                     if ($tell === 'down') {
                         $alerted = 1;
+                        $count = 1;
+                        $lastAt = $now;
                     } elseif (!rbn_is_down($cur['status'])) {
                         $alerted = 0;
+                        $count = 0;
+                        $lastAt = 0;
                     }
                     // still down in another way: the time it went down still counts
-                    $since = rbn_is_down($cur['status']) && rbn_is_down($prev['status']) ? (int) $prev['since'] : $now;
-                    $put->execute([$pid, $nid, $cur['name'], $cur['status'], $cur['message'], $since, $alerted]);
-                    continue;
-                }
-                if ($cur['status'] === 'connecting' && !$alerted && $now - (int) $prev['since'] >= 300) {
-                    rbn_alert($panel, rbn_alert_text($panel, $nid, $cur['name'], $prev['status'], 'connecting', $cur['message'], $now, (int) $prev['since'], false));
+                    $since = rbn_is_down($cur['status']) && rbn_is_down($prev['status']) ? $since : $now;
+                } elseif ($cur['status'] === 'connecting' && !$alerted && $now - $since >= 300) {
+                    rbn_alert($panel, rbn_alert_text($panel, $nid, $cur['name'], $prev['status'], 'connecting', $cur['message'], $now, $since, false));
                     $alerted = 1;
+                    $count = 1;
+                    $lastAt = $now;
                 }
-                $put->execute([$pid, $nid, $cur['name'], $cur['status'], $cur['message'], (int) $prev['since'], $alerted]);
+                // still down - whichever way - and a reminder is due: told again, up to the count the admin set
+                if ($alerted && rbn_is_down($cur['status']) && rbn_rep_due('down', $count, $lastAt, $now)) {
+                    rbn_alert($panel, rbn_still_text($panel, $nid, $cur['name'], $cur['status'], $cur['message'], $since, $count + 1, $now));
+                    $count++;
+                    $lastAt = $now;
+                }
+                $put->execute([$pid, $nid, $cur['name'], $cur['status'], $cur['message'], $since, $alerted, $count, $lastAt]);
             }
             foreach ($known as $nid => $prev) {
                 if (!isset($seen[$nid]) && $nodes !== null) {
@@ -790,60 +835,196 @@ if (!function_exists('rbn_ensure_schema')) {
         return ctype_digit($s) && (int) $s >= 1 && (int) $s <= 100 ? (int) $s : null;
     }
 
+    // ---------------------------------------------------------------- 🔁
+    // Reminders while it lasts: a node that stays down ('down'), a node that
+    // stays over its limit ('load'). Each has its own on/off, gap in minutes
+    // and the number of messages one outage or one high spell may have in all
+    // (the first one counts; 0 = until it is over). On by default - 'down'
+    // every 10 minutes, 5 messages; 'load' every 30 minutes, 3 messages - and
+    // off means one message and one «back to normal». One setting for every
+    // Rebecca panel of this bot; another bot on the server has its own. The
+    // watch looks every two minutes, so a gap is met at the next look.
+    function rbn_rep_defaults($kind)
+    {
+        return $kind === 'load' ? ['on' => 1, 'every' => 30, 'max' => 3] : ['on' => 1, 'every' => 10, 'max' => 5];
+    }
+    function rbn_rep_on($kind)
+    {
+        return (string) feature_setting_value('rbn_rep_' . $kind, 'all', (string) rbn_rep_defaults($kind)['on']) !== '0';
+    }
+    function rbn_rep_every($kind)
+    {
+        $d = rbn_rep_defaults($kind);
+        $v = (int) feature_setting_value('rbn_rep_' . $kind . '_every', 'all', (string) $d['every']);
+        return $v >= 2 && $v <= 1440 ? $v : $d['every'];
+    }
+    function rbn_rep_max($kind)
+    {
+        $d = rbn_rep_defaults($kind);
+        $v = (int) feature_setting_value('rbn_rep_' . $kind . '_max', 'all', (string) $d['max']);
+        return $v === 0 || ($v >= 2 && $v <= 100) ? $v : $d['max'];
+    }
+    function rbn_rep_set_on($kind, $on)
+    {
+        feature_setting_set('rbn_rep_' . $kind, 'all', $on ? '1' : '0');
+    }
+    // $field 'every' (2-1440 minutes) or 'max' (0, or 2-100 messages)
+    function rbn_rep_set($kind, $field, $value)
+    {
+        $v = (int) $value;
+        if (!in_array($kind, ['down', 'load'], true)) {
+            return false;
+        }
+        if ($field === 'every' && $v >= 2 && $v <= 1440) {
+            feature_setting_set('rbn_rep_' . $kind . '_every', 'all', (string) $v);
+            return true;
+        }
+        if ($field === 'max' && ($v === 0 || ($v >= 2 && $v <= 100))) {
+            // 0 is kept as '0': feature_setting_value() reads an empty string as "never set"
+            feature_setting_set('rbn_rep_' . $kind . '_max', 'all', (string) $v);
+            return true;
+        }
+        return false;
+    }
+    // a number typed in, Persian digits too: 'e' the gap (2-1440), 'n' the count (0 or 2-100) - null when it does not fit
+    function rbn_rep_value($what, $text)
+    {
+        $s = trim(strtr(trim((string) $text), ['۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4', '۵' => '5', '۶' => '6', '۷' => '7', '۸' => '8', '۹' => '9']));
+        if (!ctype_digit($s) || strlen($s) > 4) {
+            return null;
+        }
+        $v = (int) $s;
+        if ($what === 'e') {
+            return $v >= 2 && $v <= 1440 ? $v : null;
+        }
+        return $v === 0 || ($v >= 2 && $v <= 100) ? $v : null;
+    }
+    // is a reminder due now? $count messages so far, the last at $lastAt
+    function rbn_rep_due($kind, $count, $lastAt, $now)
+    {
+        if (!rbn_rep_on($kind)) {
+            return false;
+        }
+        $max = rbn_rep_max($kind);
+        if ($max !== 0 && $count >= $max) {
+            return false;
+        }
+        // a little slack: the cron's own jitter must not cost a whole extra round
+        return $now - (int) $lastAt >= rbn_rep_every($kind) * 60 - 20;
+    }
+    function rbn_rep_max_label($max)
+    {
+        $t = panel_texts()['Admin']['RbNodes'];
+        return $max === 0 ? $t['repMaxOpen'] : strtr($t['repMax'], ['{n}' => (int) $max]);
+    }
+    // «every 10 minutes · 5 messages», or «no reminders»
+    function rbn_rep_summary($kind)
+    {
+        $t = panel_texts()['Admin']['RbNodes'];
+        return rbn_rep_on($kind) ? strtr($t['repSumOn'], ['{every}' => rbn_rep_every($kind), '{max}' => rbn_rep_max_label(rbn_rep_max($kind))]) : $t['repSumOff'];
+    }
+    // «message 2 of 5» for the $n-th message, and a line saying it is the last one
+    function rbn_rep_num($kind, $n)
+    {
+        $t = panel_texts()['Admin']['RbNodes'];
+        $max = rbn_rep_max($kind);
+        $num = $max === 0 ? strtr($t['repNumOpen'], ['{n}' => (int) $n]) : strtr($t['repNum'], ['{n}' => (int) $n, '{max}' => $max]);
+        $last = $max !== 0 && $n >= $max ? strtr($t['repLast'], ['{end}' => $t[$kind === 'load' ? 'repLastLoad' : 'repLastDown']]) : '';
+        return [$num, $last];
+    }
+
+    // a node (or the panel itself) that is still down: the $n-th message of this outage
+    function rbn_still_text(array $panel, $nodeId, $name, $status, $msg, $since, $n, $now)
+    {
+        $t = panel_texts()['Admin']['RbNodes'];
+        [$num, $last] = rbn_rep_num('down', $n);
+        return strtr($t[(int) $nodeId === 0 ? 'alertPanelStill' : 'alertStill'], [
+            '{num}' => $num,
+            '{last}' => $last,
+            '{panel}' => htmlspecialchars(rbn_names($panel)),
+            '{host}' => htmlspecialchars(rbn_host($panel)),
+            '{node}' => htmlspecialchars((string) $name),
+            '{status}' => rbn_status_icon($status) . ' ' . rbn_status_name($status),
+            '{message}' => $msg !== '' ? "\n💬 <code>" . htmlspecialchars(mb_substr((string) $msg, 0, 300)) . '</code>' : '',
+            '{when}' => rbn_when($now),
+            '{down}' => rbn_duration((int) $now - (int) $since),
+        ]);
+    }
+
     function rbn_load_check(array $panel, $pid, array $nodes, $now)
     {
         global $pdo;
-        $get = $pdo->prepare("SELECT node_id, flags FROM rbn_load WHERE panel_id = ?");
+        $get = $pdo->prepare("SELECT node_id, what, state, n, at, since FROM rbn_load WHERE panel_id = ?");
         $get->execute([$pid]);
-        $flags = [];
+        $known = [];
         foreach ($get->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $flags[(int) $row['node_id']] = (int) $row['flags'];
+            $known[(int) $row['node_id']][(string) $row['what']] = $row;
         }
-        $put = $pdo->prepare("REPLACE INTO rbn_load (panel_id, node_id, flags) VALUES (?, ?, ?)");
-        // bits: 1 cpu high once, 2 cpu told; 4 ram high once, 8 ram told
-        $kinds = ['cpu' => [1, 2, 'cpu_usage_percent'], 'ram' => [4, 8, 'memory_usage_percent']];
+        $put = $pdo->prepare("REPLACE INTO rbn_load (panel_id, node_id, what, state, n, at, since) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $del = $pdo->prepare("DELETE FROM rbn_load WHERE panel_id = ? AND node_id = ? AND what = ?");
         foreach ($nodes as $n) {
             if (!rbn_has_metrics($n)) {
                 continue;
             }
             $nid = (int) $n['id'];
-            $f = $flags[$nid] ?? 0;
-            $was = $f;
-            foreach ($kinds as $what => [$seen, $told, $key]) {
+            foreach (['cpu' => 'cpu_usage_percent', 'ram' => 'memory_usage_percent'] as $what => $key) {
+                $row = $known[$nid][$what] ?? ['state' => 0, 'n' => 0, 'at' => 0, 'since' => 0];
+                $state = (int) $row['state'];
+                $count = (int) $row['n'];
+                $at = (int) $row['at'];
+                $since = (int) $row['since'];
+                $was = [$state, $count, $at, $since];
                 $v = (float) ($n[$key] ?? 0);
                 $limit = rbn_load_limit($what);
                 if ($v >= $limit) {
-                    if ($f & $told) {
-                        continue;
-                    }
-                    if ($f & $seen) {
+                    if ($state === 0) {
+                        // over the limit on one look: not news yet
+                        $state = 1;
+                        $since = $now;
+                    } elseif ($state === 1) {
+                        // on two looks in a row: told
                         rbn_alert($panel, rbn_load_text($panel, $n, $what, $v, $limit, true, $now));
-                        $f |= $told;
-                    } else {
-                        $f |= $seen;
+                        $state = 2;
+                        $count = 1;
+                        $at = $now;
+                    } elseif (rbn_rep_due('load', $count, $at, $now)) {
+                        // still over it, and a reminder is due
+                        rbn_alert($panel, rbn_load_still_text($panel, $n, $what, $v, $limit, $since, $count + 1, $now));
+                        $count++;
+                        $at = $now;
                     }
-                } elseif ($f & $told) {
+                } elseif ($state === 2) {
+                    // back down: told once it is 5 points under, so a value on the edge does not ring twice
                     if ($v < $limit - 5) {
                         rbn_alert($panel, rbn_load_text($panel, $n, $what, $v, $limit, false, $now));
-                        $f &= ~($seen | $told);
+                        $state = 0;
+                        $count = 0;
+                        $at = 0;
+                        $since = 0;
                     }
-                } else {
-                    $f &= ~$seen;
+                } elseif ($state === 1) {
+                    $state = 0;
+                    $since = 0;
                 }
-            }
-            if ($f !== $was) {
-                $put->execute([$pid, $nid, $f]);
+                if ([$state, $count, $at, $since] !== $was) {
+                    if ($state === 0) {
+                        $del->execute([$pid, $nid, $what]);
+                    } else {
+                        $put->execute([$pid, $nid, $what, $state, $count, $at, $since]);
+                    }
+                }
             }
         }
     }
 
-    function rbn_load_text(array $panel, array $n, $what, $value, $limit, $high, $now)
+    // the parts the three load messages share
+    function rbn_load_fields(array $panel, array $n, $what, $value, $limit, $now)
     {
         $t = panel_texts()['Admin']['RbNodes'];
         $detail = $what === 'ram' && !empty($n['memory_total'])
             ? ' · ' . rbn_bytes($n['memory_used'] ?? 0) . ' / ' . rbn_bytes($n['memory_total'])
             : (!empty($n['cpu_cores']) && $what === 'cpu' ? strtr($t['nodeCores'], ['{n}' => (int) $n['cpu_cores']]) : '');
-        return strtr($t[$high ? 'loadHigh' : 'loadOk'], [
+        return [
             '{panel}' => htmlspecialchars(rbn_names($panel)),
             '{host}' => htmlspecialchars(rbn_host($panel)),
             '{node}' => htmlspecialchars((string) $n['name']),
@@ -853,6 +1034,24 @@ if (!function_exists('rbn_ensure_schema')) {
             '{detail}' => $detail,
             '{limit}' => (int) $limit . '٪',
             '{when}' => rbn_when($now),
+        ];
+    }
+
+    function rbn_load_text(array $panel, array $n, $what, $value, $limit, $high, $now)
+    {
+        $t = panel_texts()['Admin']['RbNodes'];
+        return strtr($t[$high ? 'loadHigh' : 'loadOk'], rbn_load_fields($panel, $n, $what, $value, $limit, $now));
+    }
+
+    // still over the limit: the $num-th message of this spell
+    function rbn_load_still_text(array $panel, array $n, $what, $value, $limit, $since, $num, $now)
+    {
+        $t = panel_texts()['Admin']['RbNodes'];
+        [$label, $last] = rbn_rep_num('load', $num);
+        return strtr($t['loadStill'], rbn_load_fields($panel, $n, $what, $value, $limit, $now) + [
+            '{num}' => $label,
+            '{last}' => $last,
+            '{dur}' => rbn_duration((int) $now - (int) $since),
         ]);
     }
 
@@ -1331,19 +1530,24 @@ if (!function_exists('rbn_ensure_schema')) {
             $head .= "\n" . strtr($t['hubTwin'], ['{twins}' => htmlspecialchars(implode('، ', array_map(fn($x) => (string) $x['name_panel'], $others)))]);
         }
         $loadOn = rbn_load_on();
-        $info = [
-            strtr($t['hubWatch'], ['{state}' => rbn_watch_on() ? $t['on'] : $t['off']]),
-            strtr($t['hubLoad'], ['{state}' => $loadOn ? $t['on'] : $t['off'], '{limits}' => $loadOn ? strtr($t['hubLoadLimits'], ['{cpu}' => rbn_load_limit('cpu'), '{ram}' => rbn_load_limit('ram')]) : '']),
-            strtr($t['hubDest'], ['{dest}' => htmlspecialchars(rbn_dest_label(rbn_dest($panel)))]),
-        ];
+        $info = [strtr($t['hubWatch'], ['{state}' => rbn_watch_on() ? $t['on'] : $t['off']])];
+        if (rbn_watch_on()) {
+            $info[] = strtr($t['hubRepDown'], ['{sum}' => rbn_rep_summary('down')]);
+        }
+        $info[] = strtr($t['hubLoad'], ['{state}' => $loadOn ? $t['on'] : $t['off'], '{limits}' => $loadOn ? strtr($t['hubLoadLimits'], ['{cpu}' => rbn_load_limit('cpu'), '{ram}' => rbn_load_limit('ram')]) : '']);
+        if ($loadOn) {
+            $info[] = strtr($t['hubRepLoad'], ['{sum}' => rbn_rep_summary('load')]);
+        }
+        $info[] = strtr($t['hubDest'], ['{dest}' => htmlspecialchars(rbn_dest_label(rbn_dest($panel)))]);
         $tail = [
             [rbn_btn($t['btnHistory'], "rbn|ev|{$p}|1"), rbn_btn(rbn_watch_on() ? $t['btnWatchOn'] : $t['btnWatchOff'], "rbn|wt|{$p}", rbn_watch_on() ? 'success' : 'danger')],
             [rbn_btn($t['btnDest'], "rbn|dst|{$p}")],
             [rbn_btn($t['btnRefresh'], "rbn|hub|{$p}", 'primary'), rbn_btn($t['btnClose'], 'rbn|close', 'danger')],
         ];
         $loadRow = [rbn_btn($t['btnLoad'], "rbn|ld|{$p}", $loadOn ? 'success' : null)];
+        $repRow = [rbn_btn($t['btnRepDown'], "rbn|rp|{$p}|0|down", rbn_rep_on('down') ? 'success' : null)];
         if ($nodes === null) {
-            return [($note !== '' ? $note . "\n\n" : '') . $head . "\n\n" . strtr($t['hubError'], ['{why}' => $why]), rbn_kb(array_merge([$loadRow], $tail))];
+            return [($note !== '' ? $note . "\n\n" : '') . $head . "\n\n" . strtr($t['hubError'], ['{why}' => $why]), rbn_kb(array_merge([$loadRow, $repRow], $tail))];
         }
         $up = $down = $off = 0;
         $blocks = [];
@@ -1383,6 +1587,7 @@ if (!function_exists('rbn_ensure_schema')) {
             $rows[] = [rbn_btn($t['btnUpdateAll'], "rbn|sua|{$p}")];
         }
         $rows[] = $loadRow;
+        $rows[] = $repRow;
         return [$text, rbn_kb(array_merge($rows, $tail))];
     }
 
@@ -1419,7 +1624,7 @@ if (!function_exists('rbn_ensure_schema')) {
         $on = rbn_load_on();
         $cpu = rbn_load_limit('cpu');
         $ram = rbn_load_limit('ram');
-        $text = ($note !== '' ? $note . "\n\n" : '') . strtr($t['loadTitle'], ['{state}' => $on ? $t['on'] : $t['off'], '{cpu}' => $cpu, '{ram}' => $ram]);
+        $text = ($note !== '' ? $note . "\n\n" : '') . strtr($t['loadTitle'], ['{state}' => $on ? $t['on'] : $t['off'], '{cpu}' => $cpu, '{ram}' => $ram, '{rep}' => rbn_rep_summary('load')]);
         $presets = function ($what, $now) use ($p) {
             $row = [];
             foreach ([70, 80, 85, 90, 95] as $v) {
@@ -1429,14 +1634,48 @@ if (!function_exists('rbn_ensure_schema')) {
         };
         $rows = [
             [rbn_btn($on ? $t['loadBtnOn'] : $t['loadBtnOff'], "rbn|ldt|{$p}", $on ? 'success' : 'danger')],
-            [rbn_btn($t['loadCpuHead'], "rbn|ld|{$p}")],
+            [rbn_btn($t['loadCpuHead'], "rbn|nop|{$p}")],
             $presets('cpu', $cpu),
             [rbn_btn(strtr($t['loadCustom'], ['{what}' => 'CPU']), "rbn|ldk|{$p}|0|cpu", 'primary')],
-            [rbn_btn($t['loadRamHead'], "rbn|ld|{$p}")],
+            [rbn_btn($t['loadRamHead'], "rbn|nop|{$p}")],
             $presets('ram', $ram),
             [rbn_btn(strtr($t['loadCustom'], ['{what}' => 'RAM']), "rbn|ldk|{$p}|0|ram", 'primary')],
+            [rbn_btn(strtr($t['btnRepLoad'], ['{sum}' => rbn_rep_summary('load')]), "rbn|rp|{$p}|0|load", rbn_rep_on('load') ? 'success' : null)],
             [rbn_btn($t['btnBackHub'], "rbn|hub|{$p}", 'danger')],
         ];
+        return [$text, rbn_kb($rows)];
+    }
+
+    // 🔁 reminders for $kind ('down' | 'load'): on/off, the gap, how many messages in all
+    function rbn_repeat_screen(array $panel, $kind, $note = '')
+    {
+        $t = panel_texts()['Admin']['RbNodes'];
+        $p = (int) $panel['id'];
+        $kind = $kind === 'load' ? 'load' : 'down';
+        $on = rbn_rep_on($kind);
+        $every = rbn_rep_every($kind);
+        $max = rbn_rep_max($kind);
+        $text = ($note !== '' ? $note . "\n\n" : '')
+            . strtr($t['repTitle'], ['{what}' => $t['repWhat_' . $kind]]) . "\n\n"
+            . $t['repIntro_' . $kind] . "\n\n"
+            . strtr($t['repState'], ['{state}' => $on ? $t['on'] : $t['off']])
+            . ($on ? strtr($t['repLines'], ['{every}' => $every, '{max}' => rbn_rep_max_label($max)]) : $t['repOffNote'])
+            . "\n\n" . $t['repFoot'];
+        $pick = fn($field, $value, $label, $now) => rbn_btn(($now ? '✅ ' : '') . $label, "rbn|rpv|{$p}|0|{$kind}-{$field}-{$value}", $now ? 'success' : null);
+        $rows = [[rbn_btn($on ? $t['repBtnOn'] : $t['repBtnOff'], "rbn|rpt|{$p}|0|{$kind}", $on ? 'success' : 'danger')]];
+        if ($on) {
+            $rows[] = [rbn_btn($t['repEveryHead'], "rbn|nop|{$p}")];
+            foreach (array_chunk([2, 5, 10, 15, 30, 60], 3) as $chunk) {
+                $rows[] = array_map(fn($v) => $pick('e', $v, $v . ' ' . $t['repMin'], $v === $every), $chunk);
+            }
+            $rows[] = [rbn_btn($t['repCustomEvery'], "rbn|rpk|{$p}|0|{$kind}-e", 'primary')];
+            $rows[] = [rbn_btn($t['repMaxHead'], "rbn|nop|{$p}")];
+            $rows[] = array_merge(array_map(fn($v) => $pick('n', $v, (string) $v, $v === $max), [2, 3, 5, 10]), [$pick('n', 0, $t['repUnlimitedBtn'], $max === 0)]);
+            $rows[] = [rbn_btn($t['repCustomMax'], "rbn|rpk|{$p}|0|{$kind}-n", 'primary')];
+        }
+        $rows[] = $kind === 'load'
+            ? [rbn_btn($t['btnBackLoad'], "rbn|ld|{$p}", 'danger')]
+            : [rbn_btn($t['btnBackHub'], "rbn|hub|{$p}", 'danger')];
         return [$text, rbn_kb($rows)];
     }
 

@@ -842,4 +842,18 @@ return [
             . "• With «report group» as the destination, node reports go to a topic of their own: «🖥 گزارش نودها (ربکا)».\n"
             . "• The screens, the report caption and the up/down messages read better: the node's name in bold with its IP beside it, each node in its own quote block.</blockquote>",
     ],
+    [
+        'n' => 62,
+        'date' => '2026-10-31',
+        'fa' => "<blockquote>🔁 <b>یادآوری قطعی نود و مصرف بالا: با فاصله و تعداد دلخواه، بدون رگبار پیام</b>\n"
+            . "• پایش هر ۲ دقیقه نودها را چک می‌کند. تا حالا برای هر قطعی فقط یک پیام «قطع شد» و یک پیام «وصل شد» می‌فرستاد؛ حالا اگر نودی قطع بماند، با فاصله‌ای که خودت تعیین می‌کنی دوباره یادآوری می‌فرستد، تا تعداد پیامی که تعیین می‌کنی؛ بعد ساکت می‌شود تا نود وصل شود.\n"
+            . "• در «🖥 مدیریت نودها (ربکا)» دکمهٔ «🔁 یادآوری قطعی نود»: روشن/خاموش، فاصلهٔ پیام‌ها (۲ تا ۱۴۴۰ دقیقه، با دکمه‌های آماده یا عدد دلخواه) و تعداد کل پیام‌ها برای هر قطعی (۲ تا ۱۰۰ یا نامحدود تا وصل شدن؛ پیام اول هم حساب می‌شود). خاموش یعنی فقط یک پیام. پیش‌فرض: روشن، هر ۱۰ دقیقه، ۵ پیام. پیام آخر می‌گوید «این آخرین یادآوری بود». خود پنل ربکا هم اگر جواب ندهد همین یادآوری را دارد.\n"
+            . "• همین تنظیم برای 🚨 هشدار مصرف بالای CPU و RAM هم هست (جدا از قطعی)، با دکمهٔ «🔁 یادآوری مصرف بالا» داخل همان صفحه. پیش‌فرض: روشن، هر ۳۰ دقیقه، ۳ پیام.\n"
+            . "• در پنل وب هم دو کارت یادآوری هست. تنظیم‌ها برای هر ربات روی سرور جداست.</blockquote>",
+        'en' => "<blockquote>🔁 <b>Reminders while a node is down or over its limit: your gap, your count, no burst of messages</b>\n"
+            . "• The watch looks at the nodes every 2 minutes. Until now it sent one «went down» and one «back up» per outage; now a node that stays down is reminded about at the gap you set, up to the number of messages you set, and then it goes quiet until the node is back.\n"
+            . "• In «🖥 Node management (Rebecca)», the «🔁 Down reminders» button: on/off, the gap between messages (2 to 1440 minutes, ready buttons or any number) and the messages in all for one outage (2 to 100, or unlimited until it is back; the first one counts). Off means a single message. Default: on, every 10 minutes, 5 messages. The last one says it is the last. The Rebecca panel itself has the same reminders when it stops answering.\n"
+            . "• The same setting exists for the 🚨 high CPU/RAM alert (apart from the down one), with the «🔁 High usage reminders» button on that screen. Default: on, every 30 minutes, 3 messages.\n"
+            . "• The web panel has both as two cards. Each bot on a server has its own settings.</blockquote>",
+    ],
 ];
